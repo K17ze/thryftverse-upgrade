@@ -141,8 +141,11 @@ export function CoOwnAssetDossier({
   const hasAny = provenance?.length || condition || storage || appraisal;
   if (!hasAny) return null;
 
+  // Flat composition — no rounded card. The parent CommerceDetailSection
+  // provides the section context; this renders as quiet sub-sections with
+  // hairline dividers. Spec 02: "no card-on-card composition."
   return (
-    <View style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.root}>
       {/* ── Provenance ── */}
       {provenance && provenance.length > 0 && (
         <View style={styles.section}>
@@ -247,13 +250,13 @@ export function CoOwnAssetDossier({
 
 const styles = StyleSheet.create({
   root: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
     gap: Space.md,
   },
   section: {
     gap: Space.sm,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'transparent',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -318,7 +321,7 @@ const styles = StyleSheet.create({
   provenanceDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     marginTop: 6,
   },
   provenanceContent: {

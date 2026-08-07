@@ -1,17 +1,41 @@
 import { z } from 'zod';
 import type { OutfitTag } from '../components/look/LookMediaComposer';
-import type { ComposerFrame } from '../components/poster/PosterFrameStrip';
+import type { PosterStickerType } from '../services/postersApi';
+
+// ── Legacy poster frame type (migrated from PosterFrameStrip.tsx) ──
+export interface ComposerFrame {
+  id: string;
+  mediaType: 'image' | 'video' | 'text';
+  mediaUri: string | null;
+  backgroundColor: string | null;
+  caption: string;
+  durationMs: number;
+  videoDurationMs?: number | null;
+  thumbnailUri?: string | null;
+  stickers: Array<{
+    id: string;
+    type: PosterStickerType;
+    x: number;
+    y: number;
+    scale: number;
+    rotation: number;
+    payload: Record<string, unknown>;
+    sortOrder: number;
+  }>;
+}
 
 // ── Layer payload schemas ──────────────────────────────────────────
 
 const TextLayerPayloadSchema = z.object({
   text: z.string().min(1).max(500),
-  textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten']).default('clean'),
+  textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten', 'bubble', 'deco', 'poster', 'squeeze', 'signature']).default('clean'),
   textColor: z.string().default('#ffffff'),
   backgroundColor: z.string().optional(),
   alignment: z.enum(['left', 'center', 'right']).default('center'),
   lineHeight: z.number().min(0.8).max(3).optional(),
   opacity: z.number().min(0).max(1).default(1),
+  textEffect: z.enum(['none', 'shadow', 'neon', 'outline', 'glow']).optional(),
+  textAnimation: z.enum(['none', 'typewriter', 'bounce', 'fade', 'slide']).optional(),
 });
 
 const MediaLayerPayloadSchema = z.object({
@@ -20,6 +44,9 @@ const MediaLayerPayloadSchema = z.object({
   contentFit: z.enum(['cover', 'contain', 'fill']).default('cover'),
   thumbnailUri: z.string().optional(),
   videoDurationMs: z.number().nullable().optional(),
+  filterId: z.string().optional(),
+  trimStartMs: z.number().min(0).optional(),
+  trimEndMs: z.number().min(0).optional(),
   opacity: z.number().min(0).max(1).default(1),
 });
 
@@ -45,12 +72,126 @@ const LookLayerPayloadSchema = z.object({
 
 const VoteLayerPayloadSchema = z.object({
   question: z.string().min(1).max(100),
-  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).length(2),
+  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).min(2).max(4),
+  votes: z.array(z.number()).optional(),
+  timerMs: z.number().min(1000).max(604800000).optional(),
+  backgroundColor: z.string().optional(),
+});
+
+// Quiz sticker — multiple-choice with a correct answer (Instagram 2026 parity)
+const QuizLayerPayloadSchema = z.object({
+  question: z.string().min(1).max(100),
+  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).min(2).max(4),
+  correctOptionId: z.string().min(1),
+  emoji: z.string().default('🎯'),
+  timerMs: z.number().min(1000).max(604800000).optional(),
+});
+
+// Question box sticker — open-ended text responses (Instagram 2026 parity)
+const QuestionLayerPayloadSchema = z.object({
+  prompt: z.string().min(1).max(100),
+  placeholder: z.string().max(80).default('Type something...'),
+  backgroundColor: z.string().default('#9b0202'),
+  textColor: z.string().default('#ffffff'),
+  timerMs: z.number().min(1000).max(604800000).optional(),
+});
+
+// Emoji slider sticker — intensity measurement (Instagram 2026 parity)
+const EmojiSliderLayerPayloadSchema = z.object({
+  question: z.string().min(1).max(80),
+  emoji: z.string().default('😍'),
+  endLabel: z.string().max(20).default(''),
+  sliderColor: z.string().default('#C9A46A'),
+});
+
+// Countdown sticker — count down to a date/time (Instagram 2026 parity)
+const CountdownLayerPayloadSchema = z.object({
+  label: z.string().min(1).max(40),
+  endDateTime: z.string().datetime(),
+  color: z.string().default('#C9A46A'),
+  textColor: z.string().default('#ffffff'),
+});
+
+// Link sticker — clickable URL with custom CTA text (Instagram 2026 parity)
+const LinkLayerPayloadSchema = z.object({
+  url: z.string().url(),
+  ctaText: z.string().max(40).default('Link'),
+  backgroundColor: z.string().default('#C9A46A'),
+  textColor: z.string().default('#ffffff'),
+});
+
+// Location sticker — place name with optional place ID (Instagram/Snapchat parity)
+const LocationLayerPayloadSchema = z.object({
+  placeName: z.string().min(1).max(80),
+  placeId: z.string().optional(),
+  countryCode: z.string().max(3).optional(),
+});
+
+// Hashtag sticker — clickable hashtag (Instagram parity)
+const HashtagLayerPayloadSchema = z.object({
+  tag: z.string().min(1).max(100),
+  backgroundColor: z.string().default('#C9A46A'),
+  textColor: z.string().default('#ffffff'),
+});
+
+// Time sticker — current timestamp, live-updating (Instagram/Snapchat parity)
+const TimeLayerPayloadSchema = z.object({
+  displayTime: z.string().default(() => new Date().toISOString()),
+  format: z.enum(['time', 'date', 'datetime']).default('time'),
+  textColor: z.string().default('#ffffff'),
+  backgroundColor: z.string().optional(),
+});
+
+// Weather sticker — current conditions at a location (Instagram/Snapchat parity)
+const WeatherLayerPayloadSchema = z.object({
+  temperature: z.number(),
+  condition: z.string().min(1).max(40),
+  locationName: z.string().max(80).default(''),
+  emoji: z.string().default('☀️'),
+  textColor: z.string().default('#ffffff'),
+  backgroundColor: z.string().optional(),
 });
 
 const DecorativeLayerPayloadSchema = z.object({
-  shape: z.enum(['circle', 'square', 'line', 'arrow', 'star', 'heart']),
+  shape: z.enum(['circle', 'square', 'line', 'arrow', 'star', 'heart', 'triangle', 'hexagon']),
   color: z.string().default('#ffffff'),
+  fillColor: z.string().optional(),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+// Draw layer — freehand strokes (Instagram/Snapchat parity: pen, marker,
+// highlighter, neon, eraser). Points are normalized 0-1 relative to layer bounds.
+const DrawStrokeSchema = z.object({
+  points: z.array(z.object({ x: z.number(), y: z.number() })),
+  color: z.string().default('#ffffff'),
+  width: z.number().min(1).max(50).default(4),
+  tool: z.enum(['pen', 'marker', 'highlighter', 'neon', 'eraser']).default('pen'),
+});
+
+const DrawLayerPayloadSchema = z.object({
+  strokes: z.array(DrawStrokeSchema).default([]),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+// GIF layer — animated sticker from GIPHY search
+const GifLayerPayloadSchema = z.object({
+  gifUrl: z.string(),
+  stillUrl: z.string().optional(),
+  altText: z.string().max(100).default(''),
+  source: z.string().optional(),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+// Music layer — track sticker (Instagram-style music sticker)
+const MusicLayerPayloadSchema = z.object({
+  trackName: z.string().min(1).max(120),
+  artistName: z.string().max(120).default(''),
+  artworkUrl: z.string().optional(),
+  previewUrl: z.string().optional(),
+  trackId: z.string().optional(),
+  startOffsetMs: z.number().min(0).optional(),
+  durationMs: z.number().min(1000).optional(),
+  isExplicit: z.boolean().optional(),
   opacity: z.number().min(0).max(1).default(1),
 });
 
@@ -79,7 +220,19 @@ export const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('mention'), payload: MentionLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('look'), payload: LookLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('vote'), payload: VoteLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('quiz'), payload: QuizLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('question'), payload: QuestionLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('emojiSlider'), payload: EmojiSliderLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('countdown'), payload: CountdownLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('decorative'), payload: DecorativeLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('draw'), payload: DrawLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('gif'), payload: GifLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('music'), payload: MusicLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('link'), payload: LinkLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('location'), payload: LocationLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('hashtag'), payload: HashtagLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('time'), payload: TimeLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('weather'), payload: WeatherLayerPayloadSchema }),
 ]);
 
 export type CreatorLayer = z.infer<typeof CreatorLayerSchema>;
@@ -111,7 +264,7 @@ export type CreatorBackground = z.infer<typeof CreatorBackgroundSchema>;
 export const CreatorMetadataSchema = z.object({
   caption: z.string().max(500).default(''),
   title: z.string().max(120).default(''),
-  visibility: z.enum(['public', 'private']).default('public'),
+  visibility: z.enum(['public', 'closeFriends', 'private']).default('public'),
   allowReplies: z.boolean().default(true),
   allowReactions: z.boolean().default(true),
   expiresInHours: z.number().int().min(1).max(168).optional(),
@@ -119,6 +272,7 @@ export const CreatorMetadataSchema = z.object({
   allowRemix: z.boolean().default(false),
   sourceDocumentId: z.string().optional(),
   sourceCreatorId: z.string().optional(),
+  scheduledFor: z.string().datetime().optional(),
 });
 
 export type CreatorMetadata = z.infer<typeof CreatorMetadataSchema>;
@@ -162,7 +316,7 @@ export function migrateLookToDocument(params: {
   imageMediaUrl?: string;
   caption: string;
   tags: OutfitTag[];
-  visibility: 'public' | 'private';
+  visibility: 'public' | 'closeFriends' | 'private';
 }): CreatorDocument {
   const layers: CreatorLayer[] = [];
 
@@ -231,6 +385,32 @@ export function migrateLookToDocument(params: {
     },
     updatedAt: new Date().toISOString(),
   };
+}
+
+// ── Payload extraction helpers for Record<string, unknown> sticker payloads ──
+function pStr(p: Record<string, unknown>, key: string, fallback = ''): string {
+  const v = p[key];
+  return typeof v === 'string' ? v : fallback;
+}
+
+function pStrOpt(p: Record<string, unknown>, key: string): string | undefined {
+  const v = p[key];
+  return typeof v === 'string' ? v : undefined;
+}
+
+function pNumOpt(p: Record<string, unknown>, key: string): number | undefined {
+  const v = p[key];
+  return typeof v === 'number' ? v : undefined;
+}
+
+function pOptions(p: Record<string, unknown>): Array<{ id: string; label: string }> {
+  const v = p['options'];
+  if (!Array.isArray(v)) return [];
+  return v.filter(
+    (item): item is { id: string; label: string } =>
+      typeof item === 'object' && item !== null &&
+      typeof item.id === 'string' && typeof item.label === 'string',
+  );
 }
 
 export function migratePosterFramesToDocument(params: {
@@ -313,11 +493,11 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'text',
             payload: {
-              text: (sticker.payload as any).text ?? '',
-              textStyle: mapTextStyle((sticker.payload as any).textStyle),
-              textColor: (sticker.payload as any).textColor ?? '#ffffff',
-              backgroundColor: (sticker.payload as any).backgroundColor,
-              alignment: (sticker.payload as any).alignment ?? 'center',
+              text: pStr(sticker.payload, 'text'),
+              textStyle: mapTextStyle(pStrOpt(sticker.payload, 'textStyle')),
+              textColor: pStr(sticker.payload, 'textColor', '#ffffff'),
+              backgroundColor: pStrOpt(sticker.payload, 'backgroundColor'),
+              alignment: pStr(sticker.payload, 'alignment', 'center') as 'left' | 'center' | 'right',
               opacity: 1,
             },
           });
@@ -327,8 +507,8 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'mention',
             payload: {
-              userId: (sticker.payload as any).userId ?? '',
-              username: (sticker.payload as any).username ?? '',
+              userId: pStr(sticker.payload, 'userId'),
+              username: pStr(sticker.payload, 'username'),
             },
           });
           break;
@@ -337,10 +517,10 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'product',
             payload: {
-              listingId: (sticker.payload as any).listingId ?? '',
-              snapshotTitle: (sticker.payload as any).snapshotTitle ?? '',
-              snapshotImageUrl: (sticker.payload as any).snapshotImageUrl,
-              snapshotPriceGbp: (sticker.payload as any).snapshotPriceGbp,
+              listingId: pStr(sticker.payload, 'listingId'),
+              snapshotTitle: pStr(sticker.payload, 'snapshotTitle'),
+              snapshotImageUrl: pStrOpt(sticker.payload, 'snapshotImageUrl'),
+              snapshotPriceGbp: pNumOpt(sticker.payload, 'snapshotPriceGbp'),
               availability: 'active',
             },
           });
@@ -350,9 +530,9 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'look',
             payload: {
-              lookId: (sticker.payload as any).lookId ?? '',
-              snapshotCaption: (sticker.payload as any).snapshotCaption ?? '',
-              snapshotImageUrl: (sticker.payload as any).snapshotImageUrl,
+              lookId: pStr(sticker.payload, 'lookId'),
+              snapshotCaption: pStr(sticker.payload, 'snapshotCaption'),
+              snapshotImageUrl: pStrOpt(sticker.payload, 'snapshotImageUrl'),
             },
           });
           break;
@@ -361,8 +541,8 @@ export function migratePosterFramesToDocument(params: {
             ...baseFields,
             type: 'vote',
             payload: {
-              question: (sticker.payload as any).question ?? '',
-              options: (sticker.payload as any).options ?? [],
+              question: pStr(sticker.payload, 'question'),
+              options: pOptions(sticker.payload),
             },
           });
           break;

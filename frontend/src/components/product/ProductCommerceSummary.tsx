@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { ListingCommerceContext } from '../../platform/product';
 import { NativeSheet } from '../../platform/native';
 import { ProductPolicySheet } from './ProductPolicySheet';
@@ -25,6 +25,8 @@ export function ProductCommerceSummary({
   formattedPrice,
   formattedProtectionTotal,
 }: ProductCommerceSummaryProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [activeSheet, setActiveSheet] = useState<{ title: string; body: string } | null>(null);
 
   const rows: CommerceRow[] = [];
@@ -134,7 +136,7 @@ export function ProductCommerceSummary({
           accessibilityLabel={`${row.label}: ${row.value}${row.sheetContent ? '. Tap for details.' : ''}`}
         >
           <View style={styles.rowLeft}>
-            <Ionicons name={row.icon} size={18} color={Colors.textSecondary} />
+            <Ionicons name={row.icon} size={18} color={colors.textSecondary} />
             <Text style={styles.rowLabel}>{row.label}</Text>
           </View>
           <View style={styles.rowRight}>
@@ -142,7 +144,7 @@ export function ProductCommerceSummary({
               {row.value}
             </Text>
             {row.sheetContent && (
-              <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
             )}
           </View>
         </Pressable>
@@ -163,19 +165,20 @@ export function ProductCommerceSummary({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.sm,
     letterSpacing: 0.2,
   },
@@ -188,7 +191,7 @@ const styles = StyleSheet.create({
   },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   rowLeft: {
     flexDirection: 'row',
@@ -197,9 +200,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rowLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   rowRight: {
     flexDirection: 'row',
@@ -208,13 +211,14 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   rowValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'right',
   },
   sheetContent: {
     paddingHorizontal: Space.lg,
     paddingBottom: Space.lg,
   },
-});
+  });
+}

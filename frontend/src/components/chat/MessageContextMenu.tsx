@@ -7,7 +7,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
@@ -37,6 +37,9 @@ export function MessageContextMenu({
   isFailed,
   isTranslated,
 }: MessageContextMenuProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const actions = React.useMemo<ActionDef[]>(() => {
     return deriveMessageActions({
       isOwnMessage: Boolean(isOwnMessage),
@@ -88,72 +91,74 @@ export function MessageContextMenu({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
-        <AnimatedPressable style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
-      </Animated.View>
+      <View style={StyleSheet.absoluteFill}>
+        <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
+          <AnimatedPressable style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
+        </Animated.View>
 
-      <Animated.View
-        style={[
-          styles.sheet,
-          { transform: [{ translateY: slideAnim }] },
-        ]}
-      >
-        <View style={styles.handle} />
-
-        {messageText ? (
-          <View style={styles.previewRow}>
-            <Caption color={Colors.textSecondary} numberOfLines={2}>
-              {messageText}
-            </Caption>
-          </View>
-        ) : null}
-
-        <View style={styles.actionsList}>
-          {actions.map((action, index) => (
-            <React.Fragment key={action.id}>
-              {action.destructive && index > 0 && <View style={styles.destructiveDivider} />}
-              <AnimatedPressable
-                style={styles.actionRow}
-                onPress={() => handleAction(action.id)}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                activeOpacity={0.7}
-                scaleValue={0.98}
-                hapticFeedback="light"
-              >
-                <Ionicons
-                  name={action.icon as any}
-                  size={22}
-                  color={action.destructive ? Colors.danger : Colors.textPrimary}
-                />
-                <BodyEmphasis
-                  color={action.destructive ? Colors.danger : Colors.textPrimary}
-                  style={styles.actionLabel}
-                >
-                  {action.label}
-                </BodyEmphasis>
-              </AnimatedPressable>
-            </React.Fragment>
-          ))}
-        </View>
-
-        <AnimatedPressable
-          style={styles.cancelBtn}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel"
-          activeOpacity={0.7}
-          scaleValue={0.98}
-          hapticFeedback="light"
+        <Animated.View
+          style={[
+            styles.sheet,
+            { transform: [{ translateY: slideAnim }] },
+          ]}
         >
-          <BodyEmphasis color={Colors.textPrimary}>Cancel</BodyEmphasis>
-        </AnimatedPressable>
-      </Animated.View>
+          <View style={styles.handle} />
+
+          {messageText ? (
+            <View style={styles.previewRow}>
+              <Caption color={colors.textSecondary} numberOfLines={2}>
+                {messageText}
+              </Caption>
+            </View>
+          ) : null}
+
+          <View style={styles.actionsList}>
+            {actions.map((action, index) => (
+              <React.Fragment key={action.id}>
+                {action.destructive && index > 0 && <View style={styles.destructiveDivider} />}
+                <AnimatedPressable
+                  style={styles.actionRow}
+                  onPress={() => handleAction(action.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
+                  activeOpacity={0.7}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
+                >
+                  <Ionicons
+                    name={action.icon}
+                    size={22}
+                    color={action.destructive ? colors.danger : colors.textPrimary}
+                  />
+                  <BodyEmphasis
+                    color={action.destructive ? colors.danger : colors.textPrimary}
+                    style={styles.actionLabel}
+                  >
+                    {action.label}
+                  </BodyEmphasis>
+                </AnimatedPressable>
+              </React.Fragment>
+            ))}
+          </View>
+
+          <AnimatedPressable
+            style={styles.cancelBtn}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            activeOpacity={0.7}
+            scaleValue={0.98}
+            hapticFeedback="light"
+          >
+            <BodyEmphasis color={colors.textPrimary}>Cancel</BodyEmphasis>
+          </AnimatedPressable>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -163,7 +168,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
@@ -178,19 +183,19 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: Colors.border,
-    borderRadius: 2,
+    backgroundColor: colors.border,
+    borderRadius: Radius.sm,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
   previewRow: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: Space.sm + 4,
     marginBottom: Space.sm + 4,
   },
   actionsList: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     marginBottom: Space.sm + 4,
@@ -202,20 +207,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   actionLabel: {
     flex: 1,
   },
   cancelBtn: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',
   },
   destructiveDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginHorizontal: Space.md,
   },
 });

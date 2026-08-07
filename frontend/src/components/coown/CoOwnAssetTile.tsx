@@ -120,7 +120,7 @@ export function CoOwnAssetTile({
                 <Text
                   style={[
                     styles.marketChange,
-                    { color: marketData.change24hPct >= 0 ? colors.success : colors.danger },
+                    { color: marketData.change24hPct >= 0 ? colors.coownUp : colors.coownDown },
                   ]}
                   numberOfLines={1}
                 >
@@ -223,14 +223,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
   },
   statusDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   statusText: {
     fontSize: Type.meta.size,
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 1.5,
     overflow: 'hidden',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   allocationBarFill: {
     height: 3,

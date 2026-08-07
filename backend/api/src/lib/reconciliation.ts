@@ -284,3 +284,204 @@ export async function getLatestReconciliationRun(
 
   return result.rows[0] ? toRunPayload(result.rows[0]) : null;
 }
+
+// ── Per-intent reconciliation ───────────────────────────────────────────
+// Catches compensating errors that net to zero in the daily aggregate.
+// Each succeeded payment_intent is matched against its ledger_entries
+// (buyer_charge credit). Mismatches are stored for drill-down.
+
+export type PerIntentReconciliationStatus = 'matched' | 'mismatch' | 'missing_ledger' | 'missing_intent';
+
+export interface PerIntentReconciliationItem {
+  id: string;
+  runDate: string;
+  intentId: string;
+  gatewayId: string;
+  intentAmountGbp: number;
+  ledgerAmountGbp: number;
+  mismatchGbp: number;
+  status: PerIntentReconciliationStatus;
+  createdAt: string;
+}
+
+interface PerIntentReconciliationItemRow {
+  id: string;
+  run_date: string;
+  intent_id: string;
+  gateway_id: string;
+  intent_amount_gbp: string | number;
+  ledger_amount_gbp: string | number;
+  mismatch_gbp: string | number;
+  status: PerIntentReconciliationStatus;
+  created_at: string;
+}
+
+export async function perIntentReconciliationTableAvailable(
+  client: DbQueryable
+): Promise<boolean> {
+  const result = await client.query<{ exists: boolean }>(
+    `SELECT to_regclass('public.payment_reconciliation_items') IS NOT NULL AS exists`
+  );
+  return Boolean(result.rows[0]?.exists);
+}
+
+export async function runPerIntentReconciliation(
+  client: DbQueryable,
+  input: { runDate: string; mismatchThresholdGbp: number }
+): Promise<{ items: PerIntentReconciliationItem[]; mismatchCount: number }> {
+  if (!(await perIntentReconciliationTableAvailable(client))) {
+    throw new Error('payment_reconciliation_items table unavailable');
+  }
+
+  // Match each succeeded payment_intent settled on runDate against the
+  // sum of its ledger_entries (buyer_charge credit). Flag per-intent
+  // mismatches rather than relying on daily totals alone.
+  const result = await client.query<{
+    intent_id: string;
+    gateway_id: string;
+    intent_amount_gbp: string | number;
+    ledger_amount_gbp: string | number;
+    mismatch_gbp: string | number;
+    status: PerIntentReconciliationStatus;
+  }>(
+    `
+      WITH succeeded_intents AS (
+        SELECT
+          i.id AS intent_id,
+          i.gateway_id,
+          COALESCE(i.amount_gbp, 0) AS intent_amount_gbp
+        FROM payment_intents i
+        WHERE i.status = 'succeeded'
+          AND COALESCE(i.settled_at, i.updated_at)::date = $1::date
+      ),
+      ledger_totals AS (
+        SELECT
+          source_id AS intent_id,
+          SUM(amount_gbp) AS ledger_amount_gbp
+        FROM ledger_entries
+        WHERE source_type = 'order_payment'
+          AND line_type = 'buyer_charge'
+          AND direction = 'credit'
+          AND created_at::date = $1::date
+        GROUP BY source_id
+      )
+      SELECT
+        si.intent_id,
+        si.gateway_id,
+        si.intent_amount_gbp::text,
+        COALESCE(lt.ledger_amount_gbp, 0)::text AS ledger_amount_gbp,
+        (si.intent_amount_gbp - COALESCE(lt.ledger_amount_gbp, 0))::text AS mismatch_gbp,
+        CASE
+          WHEN lt.ledger_amount_gbp IS NULL THEN 'missing_ledger'
+          WHEN ABS(si.intent_amount_gbp - lt.ledger_amount_gbp) > $2 THEN 'mismatch'
+          ELSE 'matched'
+        END AS status
+      FROM succeeded_intents si
+      LEFT JOIN ledger_totals lt ON lt.intent_id = si.intent_id
+    `,
+    [input.runDate, input.mismatchThresholdGbp]
+  );
+
+  const items: PerIntentReconciliationItem[] = [];
+  for (const row of result.rows) {
+    const intentAmount = toNumber(row.intent_amount_gbp);
+    const ledgerAmount = toNumber(row.ledger_amount_gbp);
+    const mismatch = roundTo(intentAmount - ledgerAmount, 6);
+    const status = row.status;
+
+    items.push({
+      id: `pri_${input.runDate.replace(/-/g, '')}_${row.intent_id}`,
+      runDate: input.runDate,
+      intentId: row.intent_id,
+      gatewayId: row.gateway_id,
+      intentAmountGbp: intentAmount,
+      ledgerAmountGbp: ledgerAmount,
+      mismatchGbp: mismatch,
+      status,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  // Persist items for drill-down.
+  for (const item of items) {
+    await client.query(
+      `
+        INSERT INTO payment_reconciliation_items (
+          id, run_date, intent_id, gateway_id,
+          intent_amount_gbp, ledger_amount_gbp, mismatch_gbp, status, created_at
+        )
+        VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, NOW())
+        ON CONFLICT (id) DO UPDATE
+          SET status = EXCLUDED.status,
+              mismatch_gbp = EXCLUDED.mismatch_gbp,
+              ledger_amount_gbp = EXCLUDED.ledger_amount_gbp,
+              updated_at = NOW()
+      `,
+      [
+        item.id,
+        item.runDate,
+        item.intentId,
+        item.gatewayId,
+        item.intentAmountGbp,
+        item.ledgerAmountGbp,
+        item.mismatchGbp,
+        item.status,
+      ]
+    );
+  }
+
+  const mismatchCount = items.filter(
+    (i) => i.status === 'mismatch' || i.status === 'missing_ledger'
+  ).length;
+
+  return { items, mismatchCount };
+}
+
+export async function getPerIntentReconciliationItems(
+  client: DbQueryable,
+  input: { runDate: string; status?: PerIntentReconciliationStatus; limit?: number }
+): Promise<PerIntentReconciliationItem[]> {
+  if (!(await perIntentReconciliationTableAvailable(client))) {
+    return [];
+  }
+
+  const result = await client.query<PerIntentReconciliationItemRow>(
+    `
+      SELECT
+        id,
+        run_date::text,
+        intent_id,
+        gateway_id,
+        intent_amount_gbp::text,
+        ledger_amount_gbp::text,
+        mismatch_gbp::text,
+        status,
+        created_at::text
+      FROM payment_reconciliation_items
+      WHERE run_date = $1::date
+        AND ($2::text IS NULL OR status = $2)
+      ORDER BY
+        CASE status
+          WHEN 'mismatch' THEN 0
+          WHEN 'missing_ledger' THEN 1
+          WHEN 'missing_intent' THEN 2
+          ELSE 3
+        END,
+        ABS(mismatch_gbp) DESC
+      LIMIT $3
+    `,
+    [input.runDate, input.status ?? null, input.limit ?? 200]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    runDate: row.run_date,
+    intentId: row.intent_id,
+    gatewayId: row.gateway_id,
+    intentAmountGbp: toNumber(row.intent_amount_gbp),
+    ledgerAmountGbp: toNumber(row.ledger_amount_gbp),
+    mismatchGbp: toNumber(row.mismatch_gbp),
+    status: row.status,
+    createdAt: row.created_at,
+  }));
+}

@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +49,8 @@ export function OrderStatusStepper({
   failureLabel = 'Cancelled',
   stageTimestamps,
 }: OrderStatusStepperProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentIndex = STAGE_ORDER.indexOf(currentStage);
 
   function formatStageDate(value?: string): string | undefined {
@@ -67,9 +69,9 @@ export function OrderStatusStepper({
     return (
       <View style={[styles.container, styles.failureContainer]}>
         <View style={[styles.stageIconWrap, styles.failureIconWrap]}>
-          <Ionicons name="close-circle" size={20} color={Colors.danger} />
+          <Ionicons name="close-circle" size={20} color={colors.danger} />
         </View>
-        <Text style={[styles.failureLabel, { color: Colors.danger }]}>{failureLabel}</Text>
+        <Text style={[styles.failureLabel, { color: colors.danger }]}>{failureLabel}</Text>
       </View>
     );
   }
@@ -83,9 +85,9 @@ export function OrderStatusStepper({
         const isPending = index > currentIndex;
         const isLast = index === STAGE_ORDER.length - 1;
 
-        const iconColor = isCompleted || isCurrent ? Colors.brand : Colors.textMuted;
-        const labelColor = isCompleted || isCurrent ? Colors.textPrimary : Colors.textMuted;
-        const lineColor = isCompleted ? Colors.brand : Colors.border;
+        const iconColor = isCompleted || isCurrent ? colors.brand : colors.textMuted;
+        const labelColor = isCompleted || isCurrent ? colors.textPrimary : colors.textMuted;
+        const lineColor = isCompleted ? colors.brand : colors.border;
 
         return (
           <React.Fragment key={stage}>
@@ -93,11 +95,11 @@ export function OrderStatusStepper({
               <View
                 style={[
                   styles.stageIconWrap,
-                  { backgroundColor: isCompleted || isCurrent ? `${Colors.brand}15` : Colors.surfaceAlt },
+                  { backgroundColor: isCompleted || isCurrent ? `${colors.brand}15` : colors.surfaceAlt },
                   isCurrent && styles.stageIconWrapActive,
                 ]}
               >
-                <Ionicons name={config.icon as any} size={16} color={iconColor} />
+                <Ionicons name={config.icon} size={16} color={iconColor} />
               </View>
               <Text
                 style={[
@@ -129,7 +131,7 @@ export function OrderStatusStepper({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -137,22 +139,22 @@ const styles = StyleSheet.create({
   },
   stageColumn: {
     alignItems: 'center',
-    gap: 4,
-    width: 52,
+    gap: Space.xs,
+    width: Space.xxl + Space.xl,
   },
   stageIconWrap: {
-    width: 32,
-    height: 32,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stageIconWrapActive: {
-    borderWidth: 2,
-    borderColor: Colors.brand,
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.brand,
   },
   stageLabel: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
     textAlign: 'center',
@@ -161,24 +163,24 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   stageTimestamp: {
-    fontSize: 8,
+    fontSize: Type.meta.size - 4,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
   connectorWrap: {
     flex: 1,
-    height: 32,
+    height: Space.xl + Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: Space.xs / 2,
   },
   connectorLine: {
     width: '100%',
-    height: 2,
-    borderRadius: 1,
-    marginTop: -14,
+    height: Stroke.emphasis,
+    borderRadius: Radius.sm,
+    marginTop: -Space.sm - 2,
   },
   failureContainer: {
     flexDirection: 'row',
@@ -187,10 +189,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
   },
   failureIconWrap: {
-    backgroundColor: `${Colors.danger}15`,
+    backgroundColor: `${colors.danger}15`,
   },
   failureLabel: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
 });

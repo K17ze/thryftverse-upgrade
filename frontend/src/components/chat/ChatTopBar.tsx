@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -47,6 +47,9 @@ export function ChatTopBar({
   onNextResult,
   onCloseSearch,
 }: ChatTopBarProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
       {isSearchActive ? (
@@ -60,14 +63,14 @@ export function ChatTopBar({
             accessibilityLabel="Close search"
             accessibilityRole="button"
           >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
           <TextInput
             style={styles.searchInput}
             value={searchValue}
             onChangeText={onSearchValueChange}
             placeholder="Search in chat"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             autoFocus
             autoCapitalize="none"
             autoCorrect={false}
@@ -86,7 +89,7 @@ export function ChatTopBar({
                   accessibilityLabel="Previous result"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="chevron-up" size={20} color={Colors.textPrimary} />
+                  <Ionicons name="chevron-up" size={20} color={colors.textPrimary} />
                 </AnimatedPressable>
               ) : null}
               {onNextResult ? (
@@ -99,7 +102,7 @@ export function ChatTopBar({
                   accessibilityLabel="Next result"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="chevron-down" size={20} color={Colors.textPrimary} />
+                  <Ionicons name="chevron-down" size={20} color={colors.textPrimary} />
                 </AnimatedPressable>
               ) : null}
             </View>
@@ -116,7 +119,7 @@ export function ChatTopBar({
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -129,11 +132,11 @@ export function ChatTopBar({
             accessibilityRole={onTitlePress ? 'button' : undefined}
             accessibilityLabel={onTitlePress ? (variant === 'group' ? 'Open group info' : 'Open profile') : undefined}
           >
-            <View style={[styles.avatar, { backgroundColor: Colors.surfaceAlt }]}>
+            <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
               {avatarUrl ? (
                 <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
               ) : variant === 'group' ? (
-                <Ionicons name="people" size={18} color={Colors.textSecondary} />
+                <Ionicons name="people" size={18} color={colors.textSecondary} />
               ) : (
                 <Text style={styles.avatarText}>{initials ?? '?'}</Text>
               )}
@@ -145,7 +148,7 @@ export function ChatTopBar({
                   <Ionicons
                     name="checkmark-circle"
                     size={13}
-                    color={Colors.brand}
+                    color={colors.brand}
                     style={styles.verifiedBadge}
                     accessibilityLabel="Verified user"
                   />
@@ -169,7 +172,7 @@ export function ChatTopBar({
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSearchActive }}
               >
-                <Ionicons name={isSearchActive ? 'search' : 'search-outline'} size={22} color={isSearchActive ? Colors.brand : Colors.textPrimary} />
+                <Ionicons name={isSearchActive ? 'search' : 'search-outline'} size={22} color={isSearchActive ? colors.brand : colors.textPrimary} />
               </AnimatedPressable>
             ) : null}
             {onInfo ? (
@@ -182,7 +185,7 @@ export function ChatTopBar({
                 accessibilityLabel={variant === 'group' ? 'Group info' : 'Chat info'}
                 accessibilityRole="button"
               >
-                <Ionicons name="information-circle-outline" size={22} color={Colors.textPrimary} />
+                <Ionicons name="information-circle-outline" size={22} color={colors.textPrimary} />
               </AnimatedPressable>
             ) : null}
           </View>
@@ -192,11 +195,11 @@ export function ChatTopBar({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   safe: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   searchRoot: {
     flexDirection: 'row',
@@ -209,10 +212,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     paddingHorizontal: Space.sm,
-    paddingVertical: 8,
-    backgroundColor: Colors.surfaceAlt,
+    paddingVertical: Space.sm,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
   },
   searchNav: {
@@ -223,7 +226,7 @@ const styles = StyleSheet.create({
   searchCount: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     minWidth: 36,
     textAlign: 'center',
   },
@@ -261,9 +264,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   avatarText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   titleWrap: {
     flex: 1,
@@ -277,7 +280,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
     flexShrink: 1,
   },
@@ -287,7 +290,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 1,
     letterSpacing: Type.caption.letterSpacing,
   },

@@ -12,11 +12,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { searchListingsFromApi, type ListingSearchResult } from '../services/listingsApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
@@ -24,9 +24,13 @@ import { useStore } from '../store/useStore';
 import { fetchLooksFromApi } from '../services/looksApi';
 import { createStableId } from '../utils/createStableId';
 import { SheetContainer, PressScale } from './CreatorAnimations';
+import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorLayer } from './composition';
+import { Canvas, Path, Skia, DashPathEffect } from '@shopify/react-native-skia';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, { useSharedValue, runOnJS } from 'react-native-reanimated';
 
-export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote';
+export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw' | 'gif' | 'music' | 'quiz' | 'question' | 'emojiSlider' | 'countdown' | 'stickers' | 'link' | 'location' | 'hashtag' | 'time' | 'weather';
 
 export interface CreatorAssetPickerProps {
   visible: boolean;
@@ -37,6 +41,7 @@ export interface CreatorAssetPickerProps {
 }
 
 export function CreatorAssetPicker({ visible, mode, onClose, onAddLayer, editingLayer }: CreatorAssetPickerProps) {
+  const haptic = useHaptic();
   if (!visible) return null;
 
   return (
@@ -60,6 +65,32 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
       return <ShapePicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'vote':
       return <VotePicker onClose={onClose} onAddLayer={onAddLayer} />;
+    case 'draw':
+      return <DrawPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'gif':
+      return <GifPicker onClose={onClose} onAddLayer={onAddLayer} />;
+    case 'music':
+      return <MusicPicker onClose={onClose} onAddLayer={onAddLayer} />;
+    case 'quiz':
+      return <QuizPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'question':
+      return <QuestionPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'emojiSlider':
+      return <EmojiSliderPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'countdown':
+      return <CountdownPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'stickers':
+      return <StickerTray onClose={onClose} onAddLayer={onAddLayer} />;
+    case 'link':
+      return <LinkPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'location':
+      return <LocationPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'hashtag':
+      return <HashtagPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'time':
+      return <TimePicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+    case 'weather':
+      return <WeatherPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     default:
       return null;
   }
@@ -67,12 +98,13 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
 
 function PickerShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <SheetContainer visible={true} onClose={onClose} maxHeight={0.85}>
       <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker">
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" hitSlop={12}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
@@ -104,6 +136,24 @@ const GRID_COLUMNS = 3;
 const { width: SCREEN_W } = Dimensions.get('window');
 const THUMB_SIZE = Math.floor((SCREEN_W - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
 
+// HSL → HEX converter for the spectrum color picker
+function hslToHex(h: number, s: number, l: number): string {
+  const sNorm = s / 100;
+  const lNorm = l / 100;
+  const c = (1 - Math.abs(2 * lNorm - 1)) * sNorm;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = lNorm - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
 interface MediaAsset {
   id: string;
   uri: string;
@@ -115,6 +165,8 @@ interface MediaAsset {
 
 function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [status, requestPermission] = MediaLibrary.usePermissions();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -182,6 +234,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   }, [status, loadRecentMedia]);
 
   const toggleSelect = useCallback((asset: MediaAsset) => {
+    haptic.selection();
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(asset.id)) {
@@ -196,6 +249,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   const handleAddSelected = useCallback(() => {
     if (selectedIds.size === 0) return;
+    haptic.light();
     const selected = assets.filter((a) => selectedIds.has(a.id));
     selected.forEach((asset, i) => {
       onAddLayer({
@@ -216,6 +270,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   }, [selectedIds, assets, onAddLayer, onClose]);
 
   const handleTakePhoto = useCallback(async () => {
+    haptic.light();
     const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
     if (camStatus !== 'granted') return;
     const result = await ImagePicker.launchCameraAsync({
@@ -240,6 +295,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   }, [onAddLayer, onClose]);
 
   const handlePickVideo = useCallback(async () => {
+    haptic.light();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       quality: 0.9,
@@ -275,9 +331,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       return (
         <Pressable
           onPress={handleTakePhoto}
-          style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]}
+          style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Take photo with camera"
           accessibilityRole="button"
+          hitSlop={12}
         >
           <Ionicons name="camera-outline" size={28} color={colors.textPrimary} />
         </Pressable>
@@ -287,9 +344,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       return (
         <Pressable
           onPress={handlePickVideo}
-          style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]}
+          style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Pick video from gallery"
           accessibilityRole="button"
+          hitSlop={12}
         >
           <Ionicons name="videocam-outline" size={28} color={colors.textPrimary} />
         </Pressable>
@@ -304,6 +362,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         style={styles.mediaGridCell}
         accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
         accessibilityRole="button"
+        hitSlop={12}
       >
         <Image
           source={{ uri: asset.uri }}
@@ -362,6 +421,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Open settings"
             accessibilityRole="button"
+            hitSlop={12}
           >
             <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Open settings</Text>
           </Pressable>
@@ -386,6 +446,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Grant access"
             accessibilityRole="button"
+            hitSlop={12}
           >
             <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Allow access</Text>
           </Pressable>
@@ -408,11 +469,12 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               onPress={handleAddSelected}
               style={[styles.addBtn, { backgroundColor: colors.brand }]}
               accessibilityLabel="Add selected media"
+              hitSlop={12}
             >
               <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add</Text>
             </PressScale>
           )}
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker">
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" hitSlop={12}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
@@ -433,6 +495,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Take photo"
             accessibilityRole="button"
+            hitSlop={12}
           >
             <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Take photo</Text>
           </Pressable>
@@ -461,6 +524,9 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 // ── Product Picker ─────────────────────────────────────────────────
 
 function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ListingSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -509,6 +575,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   const handleRetry = useCallback(() => doSearch(query), [doSearch, query]);
 
   const handleSelect = useCallback((item: ListingSearchResult) => {
+    haptic.selection();
     onAddLayer({
       ...baseLayer(createStableId('product'), 10),
       type: 'product',
@@ -528,11 +595,11 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   return (
     <PickerShell title="Add Product" onClose={onClose}>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search listings..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
@@ -540,12 +607,12 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           autoFocus
           accessibilityLabel="Search listings"
         />
-        {isLoading && <ActivityIndicator size="small" color={Colors.brand} />}
+        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
       </View>
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't search listings</Text>
-          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button">
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={12}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -554,9 +621,9 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           data={results}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button">
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={12}>
               <View style={styles.resultThumb}>
-                {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={16} color={Colors.textSecondary} />}
+                {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={16} color={colors.textSecondary} />}
               </View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
@@ -576,6 +643,9 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 // ── Mention Picker ─────────────────────────────────────────────────
 
 function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentUserId = useStore((state) => state.currentUser?.id);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserSearchResult[]>([]);
@@ -626,6 +696,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   const handleRetry = useCallback(() => doSearch(query), [doSearch, query]);
 
   const handleSelect = useCallback((user: UserSearchResult) => {
+    haptic.selection();
     onAddLayer({
       ...baseLayer(createStableId('mention'), 10),
       type: 'mention',
@@ -639,11 +710,11 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
   return (
     <PickerShell title="Add Mention" onClose={onClose}>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search by username..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
@@ -651,12 +722,12 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           autoFocus
           accessibilityLabel="Search users"
         />
-        {isSearching && <ActivityIndicator size="small" color={Colors.brand} />}
+        {isSearching && <ActivityIndicator size="small" color={colors.brand} />}
       </View>
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't search users</Text>
-          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button">
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={12}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -665,7 +736,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           data={results}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button">
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={12}>
               <View style={styles.resultAvatar}>
                 {item.avatar ? <Image source={{ uri: item.avatar }} style={styles.resultThumbImg} /> : <Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text>}
               </View>
@@ -687,6 +758,9 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
 // ── Look Picker ────────────────────────────────────────────────────
 
 function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [allLooks, setAllLooks] = useState<Array<{ id: string; caption: string; mediaUrl: string; creatorId: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -731,6 +805,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   }, [allLooks, query]);
 
   const handleSelect = useCallback((item: { id: string; caption: string; mediaUrl: string }) => {
+    haptic.selection();
     onAddLayer({
       ...baseLayer(createStableId('look'), 10),
       type: 'look',
@@ -744,11 +819,11 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   return (
     <PickerShell title="Add Look" onClose={onClose}>
       <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search looks..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
@@ -756,12 +831,12 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           autoFocus
           accessibilityLabel="Search looks"
         />
-        {isLoading && <ActivityIndicator size="small" color={Colors.brand} />}
+        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
       </View>
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load looks</Text>
-          <Pressable onPress={loadLooks} style={styles.retryBtn} accessibilityLabel="Retry loading looks" accessibilityRole="button">
+          <Pressable onPress={loadLooks} style={styles.retryBtn} accessibilityLabel="Retry loading looks" accessibilityRole="button" hitSlop={12}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -770,8 +845,8 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button">
-              <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={16} color={Colors.textSecondary} /></View>
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={12}>
+              <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={16} color={colors.textSecondary} /></View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
               </View>
@@ -787,42 +862,103 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
 }
 
 // ── Text Picker ────────────────────────────────────────────────────
+// Instagram 2025-2026 parity: 10 fonts, text effects, background color,
+// text animations (typewriter, bounce, fade). Each style label renders
+// in its own font (Snapchat pattern).
 
 const TEXT_STYLES: Array<{ key: string; label: string }> = [
   { key: 'clean', label: 'Clean' },
   { key: 'headline', label: 'Headline' },
   { key: 'editorial', label: 'Editorial' },
   { key: 'compact', label: 'Compact' },
+  { key: 'handwritten', label: 'Handwritten' },
+  { key: 'bubble', label: 'Bubble' },
+  { key: 'deco', label: 'Deco' },
+  { key: 'poster', label: 'Poster' },
+  { key: 'squeeze', label: 'Squeeze' },
+  { key: 'signature', label: 'Signature' },
+  { key: 'neon', label: 'Neon' },
 ];
 
-const TEXT_COLORS = ['#ffffff', '#000000', '#ff6b6b', '#4cd964', '#5ac8fa', '#ffcc00', '#ff9500', '#5856d6'];
+// Text effect types (Instagram 2025-2026)
+const TEXT_EFFECTS: Array<{ key: string; label: string; icon: string }> = [
+  { key: 'none', label: 'None', icon: 'close-circle-outline' },
+  { key: 'shadow', label: 'Shadow', icon: 'moon-outline' },
+  { key: 'neon', label: 'Neon', icon: 'flash-outline' },
+  { key: 'outline', label: 'Outline', icon: 'square-outline' },
+  { key: 'glow', label: 'Glow', icon: 'sunny-outline' },
+];
 
-const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: string }> = [
+// Text animation types (Instagram 2025-2026)
+const TEXT_ANIMATIONS: Array<{ key: string; label: string }> = [
+  { key: 'none', label: 'None' },
+  { key: 'typewriter', label: 'Typewriter' },
+  { key: 'bounce', label: 'Bounce' },
+  { key: 'fade', label: 'Fade In' },
+  { key: 'slide', label: 'Slide Up' },
+];
+
+const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#8A6A3F', '#6B3245', '#E06666', '#B85566'];
+
+const TEXT_BG_COLORS = ['transparent', '#000000', '#ffffff', '#9b0202', '#215634', '#06489A', '#C9A46A', '#6B3245'];
+
+const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'left', icon: 'text-outline' },
   { key: 'center', icon: 'text' },
-  { key: 'right', icon: 'text-right' },
+  { key: 'right', icon: 'list-outline' },
 ];
 
+// Text style preview mapping — mirrors CreatorCanvas styleMap
+// Instagram 2025-2026: 10 fonts covering clean, bold, editorial,
+// compact, handwritten, bubble, deco, poster, squeeze, signature
+const TEXT_STYLE_PREVIEW: Record<string, { fontFamily: string; fontSize: number; lineHeight: number }> = {
+  clean: { fontFamily: Typography.family.medium, fontSize: Type.body.size, lineHeight: Type.body.size * 1.3 },
+  headline: { fontFamily: Typography.family.bold, fontSize: Type.title.size, lineHeight: Type.title.size * 1.15 },
+  editorial: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 2, lineHeight: (Type.bodyEmphasis.size + 2) * 1.2 },
+  compact: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, lineHeight: Type.caption.size * 1.3 },
+  handwritten: { fontFamily: Typography.family.regular, fontSize: Type.body.size, lineHeight: Type.body.size * 1.35 },
+  bubble: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 4, lineHeight: (Type.bodyEmphasis.size + 4) * 1.2 },
+  deco: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size, lineHeight: Type.bodyEmphasis.size * 1.3 },
+  poster: { fontFamily: Typography.family.bold, fontSize: Type.title.size - 4, lineHeight: (Type.title.size - 4) * 1.1 },
+  squeeze: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.size * 1.1 },
+  signature: { fontFamily: Typography.family.regular, fontSize: Type.bodyEmphasis.size, lineHeight: Type.bodyEmphasis.size * 1.4 },
+  neon: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 4, lineHeight: (Type.bodyEmphasis.size + 4) * 1.2 },
+};
+
 function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'text';
-  const existingPayload = isEditing ? (editingLayer as any).payload : null;
+  const existingPayload = editingLayer?.type === 'text' ? editingLayer.payload : null;
 
   const [text, setText] = useState(existingPayload?.text ?? '');
-  const [textStyle, setTextStyle] = useState(existingPayload?.textStyle ?? 'clean');
+  const [textStyle, setTextStyle] = useState<string>(existingPayload?.textStyle ?? 'clean');
   const [textColor, setTextColor] = useState(existingPayload?.textColor ?? '#ffffff');
   const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>(existingPayload?.alignment ?? 'center');
+  const [textEffect, setTextEffect] = useState<string>(existingPayload?.textEffect ?? 'none');
+  const [textAnimation, setTextAnimation] = useState<string>(existingPayload?.textAnimation ?? 'none');
+  const [textBgColor, setTextBgColor] = useState(existingPayload?.backgroundColor ?? 'transparent');
+  const [showSpectrum, setShowSpectrum] = useState(false);
 
   const handleAdd = useCallback(() => {
     if (!text.trim()) return;
+    const payload: any = {
+      text: text.trim(),
+      textStyle,
+      textColor,
+      alignment,
+      opacity: 1,
+      textEffect,
+      textAnimation,
+      backgroundColor: textBgColor !== 'transparent' ? textBgColor : undefined,
+    };
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
         payload: {
           ...editingLayer.payload,
-          text: text.trim(),
-          textStyle,
-          textColor,
-          alignment,
+          ...payload,
         },
       } as CreatorLayer);
     } else {
@@ -831,25 +967,38 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         type: 'text',
         width: 0.6,
         height: 0.1,
-        payload: {
-          text: text.trim(),
-          textStyle,
-          textColor,
-          alignment,
-          opacity: 1,
-        },
+        payload,
       });
     }
     onClose();
-  }, [text, textStyle, textColor, alignment, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [text, textStyle, textColor, alignment, textEffect, textAnimation, textBgColor, isEditing, editingLayer, onAddLayer, onClose]);
 
   return (
     <PickerShell title={isEditing ? 'Edit Text' : 'Add Text'} onClose={onClose}>
       <View style={styles.textPickerBody}>
+        {/* Live preview — shows text with selected style + color (Snapchat pattern) */}
+        <View style={styles.textPreview}>
+          <Text
+            style={[
+              styles.textPreviewText,
+              { color: textColor, textAlign: alignment },
+              TEXT_STYLE_PREVIEW[textStyle] ?? TEXT_STYLE_PREVIEW.clean,
+              textStyle === 'neon' && {
+                textShadowColor: textColor,
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 12,
+              },
+            ]}
+            numberOfLines={3}
+          >
+            {text.trim() || 'Your text preview'}
+          </Text>
+        </View>
+
         <TextInput
           style={styles.textInput}
           placeholder="Type your text..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={text}
           onChangeText={setText}
           multiline
@@ -858,18 +1007,33 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           accessibilityLabel="Text content"
         />
 
-        {/* Style selector */}
+        {/* Style selector — each label rendered in its own style (Snapchat pattern) */}
         <Text style={styles.pickerSectionLabel}>Style</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
           {TEXT_STYLES.map((s) => (
             <Pressable
               key={s.key}
-              onPress={() => setTextStyle(s.key)}
+              onPress={() => { haptic.selection(); setTextStyle(s.key); }}
               style={[styles.styleOption, textStyle === s.key && styles.styleOptionActive]}
               accessibilityLabel={`Text style ${s.label}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: textStyle === s.key }}
+              hitSlop={12}
             >
-              <Text style={[styles.styleOptionText, textStyle === s.key && styles.styleOptionTextActive]}>{s.label}</Text>
+              <Text
+                style={[
+                  styles.styleOptionText,
+                  textStyle === s.key && styles.styleOptionTextActive,
+                  TEXT_STYLE_PREVIEW[s.key] ?? TEXT_STYLE_PREVIEW.clean,
+                  s.key === 'neon' && {
+                    textShadowColor: textStyle === 'neon' ? colors.brand : textColor,
+                    textShadowOffset: { width: 0, height: 0 },
+                    textShadowRadius: 8,
+                  },
+                ]}
+              >
+                {s.label}
+              </Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -880,13 +1044,46 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           {TEXT_COLORS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => setTextColor(c)}
-              style={[styles.colorOption, { backgroundColor: c }, textColor === c && styles.colorOptionActive]}
+              onPress={() => { haptic.selection(); setTextColor(c); setShowSpectrum(false); }}
+              onLongPress={() => { haptic.medium(); setTextColor(c); setShowSpectrum(true); }}
+              style={[styles.colorOption, { backgroundColor: c }, textColor === c && !showSpectrum && styles.colorOptionActive]}
               accessibilityLabel={`Text color ${c}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: textColor === c && !showSpectrum }}
+              hitSlop={12}
             />
           ))}
         </View>
+        {/* Spectrum picker — long-press any swatch to open (Instagram pattern) */}
+        {showSpectrum && (
+          <View style={styles.spectrumWrap}>
+            <LinearGradient
+              colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.spectrumBar}
+            >
+              <Pressable
+                style={styles.spectrumOverlay}
+                onPress={(e) => {
+                  const { locationX } = e.nativeEvent;
+                  // Approximate hue from x position (0..width → 0..360°)
+                  // width is approximate; the layout fills the row
+                  const ratio = Math.max(0, Math.min(1, locationX / (SCREEN_W - Space.md * 2 - 4)));
+                  const hue = ratio * 360;
+                  const hex = hslToHex(hue, 80, 55);
+                  setTextColor(hex);
+                }}
+                accessibilityLabel="Spectrum color picker"
+                accessibilityRole="adjustable"
+              />
+            </LinearGradient>
+            <View style={[styles.spectrumIndicator, { backgroundColor: textColor }]} />
+            <PressScale onPress={() => { haptic.selection(); setShowSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={13}>
+              <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
+            </PressScale>
+          </View>
+        )}
 
         {/* Alignment */}
         <Text style={styles.pickerSectionLabel}>Alignment</Text>
@@ -894,18 +1091,1387 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           {TEXT_ALIGNMENTS.map((a) => (
             <Pressable
               key={a.key}
-              onPress={() => setAlignment(a.key)}
+              onPress={() => { haptic.selection(); setAlignment(a.key); }}
               style={[styles.alignmentOption, alignment === a.key && styles.alignmentOptionActive]}
               accessibilityLabel={`Align ${a.key}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: alignment === a.key }}
+              hitSlop={12}
             >
-              <Ionicons name={a.icon as any} size={18} color={alignment === a.key ? Colors.brand : Colors.textSecondary} />
+              <Ionicons name={a.icon} size={18} color={alignment === a.key ? colors.brand : colors.textSecondary} />
             </Pressable>
           ))}
         </View>
 
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button">
+        {/* Text effect — Instagram 2025-2026: shadow, neon, outline, glow */}
+        <Text style={styles.pickerSectionLabel}>Effect</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {TEXT_EFFECTS.map((e) => {
+            const isActive = textEffect === e.key;
+            const sampleColor = isActive ? colors.brand : colors.textPrimary;
+            return (
+              <Pressable
+                key={e.key}
+                onPress={() => { haptic.selection(); setTextEffect(e.key); }}
+                style={({ pressed }) => [
+                  styles.effectChip,
+                  isActive && styles.effectChipActive,
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                ]}
+                accessibilityLabel={`Text effect ${e.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                hitSlop={12}
+              >
+                <Text
+                  style={[
+                    styles.effectChipSample,
+                    { color: sampleColor },
+                    e.key === 'shadow' && { textShadowColor: '#000', textShadowOffset: { width: 1, height: 2 }, textShadowRadius: 3 },
+                    e.key === 'neon' && { textShadowColor: isActive ? colors.brand : '#7B68EE', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
+                    e.key === 'outline' && { borderWidth: 1, borderColor: sampleColor, paddingHorizontal: Space.xs, borderRadius: Radius.sm },
+                    e.key === 'glow' && { textShadowColor: isActive ? colors.brand : '#F5D547', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 },
+                  ]}
+                >
+                  Aa
+                </Text>
+                <Text style={[styles.effectChipLabel, isActive && styles.effectChipLabelActive]}>{e.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Text animation — Instagram 2025-2026: typewriter, bounce, fade, slide */}
+        <Text style={styles.pickerSectionLabel}>Animation</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {TEXT_ANIMATIONS.map((a) => {
+            const isActive = textAnimation === a.key;
+            const animIcon: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
+              none: 'close-outline',
+              typewriter: 'keypad-outline',
+              bounce: 'arrow-up-circle-outline',
+              fade: 'eye-outline',
+              slide: 'arrow-up-outline',
+            };
+            return (
+              <Pressable
+                key={a.key}
+                onPress={() => { haptic.selection(); setTextAnimation(a.key); }}
+                style={({ pressed }) => [
+                  styles.animChip,
+                  isActive && styles.animChipActive,
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                ]}
+                accessibilityLabel={`Text animation ${a.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                hitSlop={12}
+              >
+                <Ionicons name={animIcon[a.key]} size={20} color={isActive ? colors.brand : colors.textSecondary} />
+                <Text style={[styles.animChipLabel, isActive && styles.animChipLabelActive]}>{a.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Background color — Instagram 2025-2026: colored text background */}
+        <Text style={styles.pickerSectionLabel}>Background</Text>
+        <View style={styles.colorRow}>
+          {TEXT_BG_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => { haptic.selection(); setTextBgColor(c); }}
+              style={[
+                styles.colorOption,
+                { backgroundColor: c === 'transparent' ? 'transparent' : c },
+                c === 'transparent' && styles.colorOptionTransparent,
+                textBgColor === c && styles.colorOptionActive,
+              ]}
+              accessibilityLabel={`Background ${c === 'transparent' ? 'none' : c}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: textBgColor === c }}
+              hitSlop={12}
+            >
+              {c === 'transparent' && (
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
+              )}
+            </Pressable>
+          ))}
+        </View>
+
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button" accessibilityState={{ disabled: !text.trim() }} hitSlop={12}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Text'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Draw Picker ───────────────────────────────────────────────────
+// Instagram/Snapchat parity: freehand drawing with pen, marker,
+// highlighter, neon, and eraser. Uses Skia for performant stroke
+// rendering and react-native-gesture-handler for pan capture.
+
+const DRAW_TOOLS: Array<{ key: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk'; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
+  { key: 'pen', label: 'Pen', icon: 'create-outline' },
+  { key: 'marker', label: 'Marker', icon: 'brush-outline' },
+  { key: 'highlighter', label: 'Highlight', icon: 'color-fill-outline' },
+  { key: 'neon', label: 'Neon', icon: 'flash-outline' },
+  { key: 'eraser', label: 'Eraser', icon: 'backspace-outline' },
+  { key: 'chalk', label: 'Chalk', icon: 'brush-outline' },
+];
+
+const DRAW_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#E06666', '#B85566', '#F5D547', '#7B68EE'];
+const BRUSH_SIZES = [2, 4, 8, 14, 22];
+
+interface DrawPoint { x: number; y: number; }
+interface DrawStroke {
+  points: DrawPoint[];
+  color: string;
+  width: number;
+  tool: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk';
+}
+
+function buildSkiaPath(points: DrawPoint[], canvasW: number, canvasH: number): any {
+  if (points.length === 0) return null;
+  const path = Skia.Path.Make();
+  const first = points[0];
+  path.moveTo(first.x * canvasW, first.y * canvasH);
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const midX = ((prev.x + curr.x) / 2) * canvasW;
+    const midY = ((prev.y + curr.y) / 2) * canvasH;
+    path.quadTo(prev.x * canvasW, prev.y * canvasH, midX, midY);
+  }
+  const last = points[points.length - 1];
+  path.lineTo(last.x * canvasW, last.y * canvasH);
+  return path;
+}
+
+function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'draw';
+  const existingStrokes: DrawStroke[] = editingLayer?.type === 'draw' ? editingLayer.payload.strokes ?? [] : [];
+
+  const [strokes, setStrokes] = useState<DrawStroke[]>(existingStrokes);
+  const [redoStack, setRedoStack] = useState<DrawStroke[]>([]);
+  const [activeTool, setActiveTool] = useState<'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk'>('pen');
+  const [activeColor, setActiveColor] = useState('#ffffff');
+  const [brushSize, setBrushSize] = useState(4);
+  const [canvasLayout, setCanvasLayout] = useState({ width: 320, height: 400 });
+  const [showDrawSpectrum, setShowDrawSpectrum] = useState(false);
+
+  // Current stroke being drawn
+  const currentStroke = useSharedValue<DrawStroke | null>(null);
+  const renderTick = useSharedValue(0);
+
+  const panGesture = React.useMemo(() => {
+    let currentPoints: DrawPoint[] = [];
+    return Gesture.Pan()
+      .onBegin((e) => {
+        currentPoints = [{ x: e.x / canvasLayout.width, y: e.y / canvasLayout.height }];
+        currentStroke.value = {
+          points: [...currentPoints],
+          color: activeTool === 'eraser' ? '#000000' : activeColor,
+          width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
+          tool: activeTool,
+        };
+      })
+      .onUpdate((e) => {
+        currentPoints.push({ x: e.x / canvasLayout.width, y: e.y / canvasLayout.height });
+        currentStroke.value = {
+          points: [...currentPoints],
+          color: activeTool === 'eraser' ? '#000000' : activeColor,
+          width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
+          tool: activeTool,
+        };
+        renderTick.value = renderTick.value + 1;
+      })
+      .onEnd(() => {
+        if (currentPoints.length > 1) {
+          runOnJS(commitStroke)({
+            points: [...currentPoints],
+            color: activeTool === 'eraser' ? '#000000' : activeColor,
+            width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
+            tool: activeTool,
+          });
+        }
+        currentStroke.value = null;
+        currentPoints = [];
+      })
+      .minDistance(1)
+      .maxPointers(1);
+  }, [activeTool, activeColor, brushSize, canvasLayout.width, canvasLayout.height]);
+
+  const commitStroke = useCallback((stroke: DrawStroke) => {
+    setStrokes((prev) => [...prev, stroke]);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    haptic.selection();
+    setStrokes((prev) => {
+      if (prev.length === 0) return prev;
+      const lastStroke = prev[prev.length - 1];
+      setRedoStack((redoPrev) => [...redoPrev, lastStroke]);
+      return prev.slice(0, -1);
+    });
+  }, [haptic]);
+
+  const handleRedo = useCallback(() => {
+    haptic.selection();
+    setRedoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const strokeToRestore = prev[prev.length - 1];
+      setStrokes((strokesPrev) => [...strokesPrev, strokeToRestore]);
+      return prev.slice(0, -1);
+    });
+  }, [haptic]);
+
+  const handleClear = useCallback(() => {
+    haptic.medium();
+    setStrokes([]);
+    setRedoStack([]);
+  }, [haptic]);
+
+  const handleDone = useCallback(() => {
+    haptic.medium();
+    const payload: any = {
+      strokes,
+      opacity: 1,
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({
+        ...editingLayer,
+        payload: { ...editingLayer.payload, ...payload },
+      } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('draw'), 10),
+        type: 'draw',
+        width: 0.9,
+        height: 0.9,
+        payload,
+      });
+    }
+    onClose();
+  }, [strokes, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  // Build Skia paths for rendering
+  const renderStrokes = useMemo(() => {
+    const allStrokes = [...strokes];
+    // Include current stroke for live preview
+    const live = currentStroke.value;
+    if (live && live.points.length > 1) allStrokes.push(live);
+    return allStrokes;
+  }, [strokes, renderTick]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Drawing' : 'Draw'} onClose={onClose}>
+      <View style={styles.drawBody}>
+        {/* Drawing canvas */}
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View
+            style={styles.drawCanvasWrap}
+            onLayout={(e) => setCanvasLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+          >
+            <GestureDetector gesture={panGesture}>
+              <View style={StyleSheet.absoluteFill} collapsable={false}>
+                <Canvas style={StyleSheet.absoluteFill}>
+                  {renderStrokes.map((stroke, i) => {
+                    const skPath = buildSkiaPath(stroke.points, canvasLayout.width, canvasLayout.height);
+                    if (!skPath) return null;
+                    const isEraser = stroke.tool === 'eraser';
+                    const isMarker = stroke.tool === 'marker';
+                    const isHighlighter = stroke.tool === 'highlighter';
+                    const isNeon = stroke.tool === 'neon';
+                    const isChalk = stroke.tool === 'chalk';
+                    return (
+                      <Path
+                        key={i}
+                        path={skPath}
+                        style="stroke"
+                        strokeWidth={stroke.width}
+                        color={stroke.color}
+                        strokeCap={isChalk ? 'butt' : 'round'}
+                        strokeJoin={isChalk ? 'miter' : 'round'}
+                        opacity={isHighlighter ? 0.35 : isMarker ? 0.6 : isChalk ? 0.85 : 1}
+                        blendMode={isEraser ? "clear" : isNeon ? "screen" : "srcOver"}
+                      >
+                        {isChalk && (
+                          <DashPathEffect intervals={[stroke.width * 1.8, stroke.width * 0.9]} />
+                        )}
+                      </Path>
+                    );
+                  })}
+                </Canvas>
+              </View>
+            </GestureDetector>
+            {strokes.length === 0 && (
+              <View style={styles.drawCanvasHint} pointerEvents="none">
+                <Text style={styles.drawCanvasHintText}>Draw with your finger</Text>
+              </View>
+            )}
+            {/* Vertical brush size slider — Instagram pattern (left side, drag up=thicker) */}
+            {activeTool !== 'eraser' && (
+              <View style={styles.brushSliderWrap} pointerEvents="box-none">
+                <Pressable
+                  style={styles.brushSliderTrack}
+                  onPress={(e) => {
+                    const { locationY } = e.nativeEvent;
+                    const trackHeight = 120;
+                    const ratio = 1 - Math.max(0, Math.min(1, locationY / trackHeight));
+                    const newSize = Math.max(2, Math.min(20, Math.round(2 + ratio * 18)));
+                    haptic.selection();
+                    setBrushSize(newSize);
+                  }}
+                  accessibilityLabel="Brush size slider"
+                  accessibilityRole="adjustable"
+                >
+                  <View style={[styles.brushSliderFill, { height: `${(brushSize - 2) / 18 * 100}%` }]} />
+                  <View style={[styles.brushSliderHandle, { bottom: `${(brushSize - 2) / 18 * 100}%` }]}>
+                    <View style={[styles.brushSliderDot, { width: Math.max(6, Math.min(22, brushSize + 4)), height: Math.max(6, Math.min(22, brushSize + 4)), borderRadius: Radius.full, backgroundColor: activeColor }]} />
+                  </View>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </GestureHandlerRootView>
+
+        {/* Tool selector */}
+        <Text style={styles.pickerSectionLabel}>Brush</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll} contentContainerStyle={styles.brushChipScroll}>
+          {DRAW_TOOLS.map((t) => {
+            const isActive = activeTool === t.key;
+            return (
+              <Pressable
+                key={t.key}
+                onPress={() => { haptic.selection(); setActiveTool(t.key); }}
+                style={({ pressed }) => [
+                  styles.brushChip,
+                  isActive && styles.brushChipActive,
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                ]}
+                accessibilityLabel={`Brush ${t.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                hitSlop={12}
+              >
+                <Ionicons name={t.icon} size={22} color={isActive ? '#fff' : colors.textSecondary} />
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Color selector (hidden for eraser) */}
+        {activeTool !== 'eraser' && (
+          <>
+            <Text style={styles.pickerSectionLabel}>Color</Text>
+            <View style={styles.colorRow}>
+              {DRAW_COLORS.map((c) => (
+                <Pressable
+                  key={c}
+                  onPress={() => { haptic.selection(); setActiveColor(c); setShowDrawSpectrum(false); }}
+                  onLongPress={() => { haptic.medium(); setActiveColor(c); setShowDrawSpectrum(true); }}
+                  style={[styles.colorOption, { backgroundColor: c }, activeColor === c && !showDrawSpectrum && styles.colorOptionActive]}
+                  accessibilityLabel={`Draw color ${c}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: activeColor === c && !showDrawSpectrum }}
+                  hitSlop={12}
+                />
+              ))}
+            </View>
+            {/* Spectrum picker — long-press any swatch to open */}
+            {showDrawSpectrum && (
+              <View style={styles.spectrumWrap}>
+                <LinearGradient
+                  colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.spectrumBar}
+                >
+                  <Pressable
+                    style={styles.spectrumOverlay}
+                    onPress={(e) => {
+                      const { locationX } = e.nativeEvent;
+                      const ratio = Math.max(0, Math.min(1, locationX / (SCREEN_W - Space.md * 2 - 4)));
+                      const hue = ratio * 360;
+                      setActiveColor(hslToHex(hue, 80, 55));
+                    }}
+                    accessibilityLabel="Spectrum color picker"
+                    accessibilityRole="adjustable"
+                  />
+                </LinearGradient>
+                <View style={[styles.spectrumIndicator, { backgroundColor: activeColor }]} />
+                <PressScale onPress={() => { haptic.selection(); setShowDrawSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={13}>
+                  <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
+                </PressScale>
+              </View>
+            )}
+          </>
+        )}
+
+        {/* Brush size */}
+        <Text style={styles.pickerSectionLabel}>Size</Text>
+        <View style={styles.brushSizeRow}>
+          {BRUSH_SIZES.map((s) => {
+            const isActive = brushSize === s;
+            const previewColor = activeTool === 'eraser' ? colors.textSecondary : isActive ? colors.brand : activeColor;
+            const dotSize = Math.max(6, Math.min(28, s + 4));
+            return (
+              <Pressable
+                key={s}
+                onPress={() => { haptic.selection(); setBrushSize(s); }}
+                style={({ pressed }) => [styles.brushSizeOption, isActive && styles.brushSizeOptionActive, pressed && { opacity: 0.7 }]}
+                accessibilityLabel={`Brush size ${s}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                hitSlop={12}
+              >
+                <View style={[styles.brushSizeDot, { width: dotSize, height: dotSize, backgroundColor: previewColor }]} />
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Live stroke preview — Instagram pattern: shows actual brush diameter in active color */}
+        <View style={styles.brushPreviewWrap}>
+          <View
+            style={[
+              styles.brushPreviewDot,
+              {
+                width: Math.max(4, Math.min(28, brushSize)),
+                height: Math.max(4, Math.min(28, brushSize)),
+                borderRadius: Math.max(2, Math.min(14, brushSize / 2)),
+                backgroundColor: activeTool === 'eraser' ? colors.surfaceAlt : activeColor,
+              },
+            ]}
+          />
+          <Text style={styles.brushPreviewLabel}>{brushSize}px</Text>
+        </View>
+
+        {/* Actions */}
+        <View style={styles.drawActions}>
+          <PressScale onPress={handleUndo} disabled={strokes.length === 0} style={[styles.drawActionBtn, ...(strokes.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Undo stroke" accessibilityState={{ disabled: strokes.length === 0 }} hitSlop={12}>
+            <Ionicons name="arrow-undo-outline" size={20} color={colors.textSecondary} />
+            <Text style={styles.drawActionLabel}>Undo</Text>
+          </PressScale>
+          <PressScale onPress={handleRedo} disabled={redoStack.length === 0} style={[styles.drawActionBtn, ...(redoStack.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Redo stroke" accessibilityState={{ disabled: redoStack.length === 0 }} hitSlop={12}>
+            <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
+            <Text style={styles.drawActionLabel}>Redo</Text>
+          </PressScale>
+          <PressScale onPress={handleClear} style={styles.drawActionBtn} accessibilityLabel="Clear drawing" hitSlop={12}>
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            <Text style={[styles.drawActionLabel, { color: colors.danger }]}>Clear</Text>
+          </PressScale>
+          <PressScale onPress={handleDone} style={[styles.drawDoneBtn, { backgroundColor: colors.brand }]} accessibilityLabel="Done drawing" hitSlop={12}>
+            <Text style={styles.drawDoneBtnText}>Done</Text>
+          </PressScale>
+        </View>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── GIF Picker ────────────────────────────────────────────────────
+// GIPHY-style search: trending GIFs on load, search by query.
+// Uses GIPHY public API with configurable key (EXPO_PUBLIC_GIPHY_API_KEY).
+
+const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY?.trim() || 'dc6zaTOxFJmzC';
+const GIPHY_BASE = 'https://api.giphy.com/v1/gifs';
+
+const GIF_CATEGORIES: Array<{ key: string; label: string; tag: string }> = [
+  { key: 'trending', label: 'Trending', tag: '' },
+  { key: 'reactions', label: 'Reactions', tag: 'reactions' },
+  { key: 'emotions', label: 'Emotions', tag: 'emotions' },
+  { key: 'animals', label: 'Animals', tag: 'animals' },
+  { key: 'celebrate', label: 'Celebrate', tag: 'celebrate' },
+  { key: 'memes', label: 'Mem', tag: 'memes' },
+];
+
+interface GifResult {
+  id: string;
+  gifUrl: string;
+  stillUrl: string;
+  altText: string;
+  width: number;
+  height: number;
+}
+
+function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [query, setQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('trending');
+  const [results, setResults] = useState<GifResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const fetchGifs = useCallback(async (searchQuery: string, category: string) => {
+    if (!mountedRef.current) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const catDef = GIF_CATEGORIES.find((c) => c.key === category);
+      const catTag = catDef?.tag ?? '';
+      const useTrending = !searchQuery.trim() && (!catTag || category === 'trending');
+      const endpoint = searchQuery.trim()
+        ? `${GIPHY_BASE}/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(searchQuery.trim())}&limit=24&rating=g`
+        : useTrending
+          ? `${GIPHY_BASE}/trending?api_key=${GIPHY_API_KEY}&limit=24&rating=g`
+          : `${GIPHY_BASE}/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(catTag)}&limit=24&rating=g`;
+      const res = await fetch(endpoint);
+      if (!res.ok) throw new Error(`GIPHY ${res.status}`);
+      const json = await res.json();
+      if (!mountedRef.current) return;
+      const gifs: GifResult[] = (json.data ?? []).map((g: any) => ({
+        id: g.id,
+        gifUrl: g.images?.fixed_height?.url ?? g.images?.original?.url ?? '',
+        stillUrl: g.images?.fixed_height_still?.url ?? g.images?.original_still?.url,
+        altText: g.title?.slice(0, 80) ?? 'GIF',
+        width: parseInt(g.images?.fixed_height?.width ?? '200', 10),
+        height: parseInt(g.images?.fixed_height?.height ?? '200', 10),
+      })).filter((g: GifResult) => g.gifUrl);
+      setResults(gifs);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setError((err as Error).message || 'Failed to load GIFs');
+    } finally {
+      if (mountedRef.current) setIsLoading(false);
+    }
+  }, []);
+
+  // Load trending on mount
+  useEffect(() => {
+    fetchGifs('', 'trending');
+  }, [fetchGifs]);
+
+  // Debounced search — refetch when query or category changes
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchGifs(query, activeCategory);
+    }, 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, activeCategory, fetchGifs]);
+
+  const handleCategorySelect = useCallback((catKey: string) => {
+    haptic.selection();
+    setActiveCategory(catKey);
+    setQuery('');
+  }, [haptic]);
+
+  const handleSelect = useCallback((gif: GifResult) => {
+    haptic.selection();
+    onAddLayer({
+      ...baseLayer(createStableId('gif'), 10),
+      type: 'gif',
+      width: 0.25,
+      height: 0.25 * (gif.height / gif.width),
+      payload: {
+        gifUrl: gif.gifUrl,
+        stillUrl: gif.stillUrl,
+        altText: gif.altText,
+        source: 'giphy',
+        opacity: 1,
+      },
+    });
+    onClose();
+  }, [onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title="GIF" onClose={onClose}>
+      {/* Category chips — premium style matching sticker tray */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.gifCategoryScroll} contentContainerStyle={styles.gifCategoryContent}>
+        {GIF_CATEGORIES.map((cat) => {
+          const isActive = activeCategory === cat.key;
+          return (
+            <Pressable
+              key={cat.key}
+              onPress={() => handleCategorySelect(cat.key)}
+              style={({ pressed }) => [
+                styles.gifCategoryChip,
+                isActive && { backgroundColor: colors.brand },
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityLabel={`GIF category ${cat.label}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+              hitSlop={12}
+            >
+              <Text style={[styles.gifCategoryChipText, isActive && { color: colors.textInverse }]}>
+                {cat.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      <View style={styles.searchRow}>
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search GIFs..."
+          placeholderTextColor={colors.textMuted}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus
+          accessibilityLabel="Search GIFs"
+        />
+        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
+      </View>
+      {error ? (
+        <View style={styles.errorBody}>
+          <Text style={styles.errorText}>Couldn't load GIFs</Text>
+          <Pressable onPress={() => fetchGifs(query, activeCategory)} style={styles.retryBtn} accessibilityLabel="Retry GIF search" accessibilityRole="button" hitSlop={12}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => handleSelect(item)}
+              style={styles.gifCell}
+              accessibilityLabel={`Select GIF ${item.altText}`}
+              accessibilityRole="button"
+            >
+              <Image
+                source={{ uri: item.stillUrl || item.gifUrl }}
+                style={styles.gifThumb}
+                resizeMode="cover"
+              />
+            </Pressable>
+          )}
+          style={styles.gifList}
+          columnWrapperStyle={styles.gifRow}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={!isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No GIFs found</Text></View> : null}
+        />
+      )}
+    </PickerShell>
+  );
+}
+
+// ── Music Picker ──────────────────────────────────────────────────
+// Instagram-style music sticker: search trending tracks via iTunes API
+// (free, no auth required). Shows album art + track name + artist.
+
+interface MusicTrack {
+  trackId: string;
+  trackName: string;
+  artistName: string;
+  artworkUrl: string;
+  previewUrl: string;
+}
+
+function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<MusicTrack[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [previewTrack, setPreviewTrack] = useState<MusicTrack | null>(null);
+  const mountedRef = useRef(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const fetchTracks = useCallback(async (searchQuery: string) => {
+    if (!mountedRef.current) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const endpoint = searchQuery.trim()
+        ? `https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery.trim())}&media=music&limit=25`
+        : `https://itunes.apple.com/search?term=top+hits&media=music&limit=25`;
+      const res = await fetch(endpoint);
+      if (!res.ok) throw new Error(`iTunes ${res.status}`);
+      const json = await res.json();
+      if (!mountedRef.current) return;
+      const tracks: MusicTrack[] = (json.results ?? []).map((t: any) => ({
+        trackId: String(t.trackId ?? t.collectionId ?? ''),
+        trackName: t.trackName ?? t.collectionName ?? 'Unknown Track',
+        artistName: t.artistName ?? '',
+        artworkUrl: (t.artworkUrl100 ?? t.artworkUrl60 ?? '').replace('100x100', '200x200'),
+        previewUrl: t.previewUrl ?? '',
+      })).filter((t: MusicTrack) => t.trackId && t.artworkUrl);
+      setResults(tracks);
+      // Default the live preview to the first track so the sticker is never empty
+      if (tracks.length > 0) setPreviewTrack((prev) => prev ?? tracks[0]);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setError((err as Error).message || 'Failed to load tracks');
+    } finally {
+      if (mountedRef.current) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTracks('');
+  }, [fetchTracks]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchTracks(query);
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, fetchTracks]);
+
+  const handleSelect = useCallback((track: MusicTrack) => {
+    haptic.selection();
+    onAddLayer({
+      ...baseLayer(createStableId('music'), 10),
+      type: 'music',
+      width: 0.5,
+      height: 0.12,
+      payload: {
+        trackName: track.trackName,
+        artistName: track.artistName,
+        artworkUrl: track.artworkUrl,
+        previewUrl: track.previewUrl,
+        trackId: track.trackId,
+        opacity: 1,
+      },
+    });
+    onClose();
+  }, [onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title="Music" onClose={onClose}>
+      {/* Live sticker preview — shows how the music sticker will look on canvas */}
+      <View style={styles.musicPreviewCard}>
+        {previewTrack ? (
+          <>
+            <Image source={{ uri: previewTrack.artworkUrl }} style={styles.musicPreviewArt} resizeMode="cover" />
+            <View style={styles.musicPreviewInfo}>
+              <Text style={styles.musicPreviewTrackName} numberOfLines={1}>{previewTrack.trackName}</Text>
+              <Text style={styles.musicPreviewArtistName} numberOfLines={1}>{previewTrack.artistName}</Text>
+            </View>
+            <View style={styles.musicPreviewPlayBtn}>
+              <Ionicons name="play" size={16} color="#fff" />
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={[styles.musicPreviewArt, { backgroundColor: colors.surfaceAlt }]} />
+            <View style={styles.musicPreviewInfo}>
+              <Text style={styles.musicPreviewTrackName}>Select a track</Text>
+              <Text style={styles.musicPreviewArtistName}>Search to preview</Text>
+            </View>
+            <View style={[styles.musicPreviewPlayBtn, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="play" size={16} color={colors.textMuted} />
+            </View>
+          </>
+        )}
+      </View>
+      <View style={styles.searchRow}>
+        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search songs, artists..."
+          placeholderTextColor={colors.textMuted}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus
+          accessibilityLabel="Search music"
+        />
+      </View>
+      {isLoading && (
+        <View style={styles.musicLoadingRow}>
+          <ActivityIndicator size="small" color={colors.brand} />
+          <Text style={styles.musicLoadingText}>Searching...</Text>
+        </View>
+      )}
+      {error ? (
+        <View style={styles.errorBody}>
+          <Text style={styles.errorText}>Couldn't load music</Text>
+          <Pressable onPress={() => fetchTracks(query)} style={styles.retryBtn} accessibilityLabel="Retry music search" accessibilityRole="button" hitSlop={12}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={(item) => item.trackId}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => handleSelect(item)}
+              onPressIn={() => setPreviewTrack(item)}
+              style={({ pressed }) => [styles.musicRow, pressed && { opacity: 0.6 }]}
+              accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
+              accessibilityRole="button"
+            >
+              <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} resizeMode="cover" />
+              <View style={styles.musicInfo}>
+                <Text style={styles.musicTrackName} numberOfLines={1}>{item.trackName}</Text>
+                <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
+              </View>
+              <View style={styles.musicAddBtn}>
+                <Ionicons name="checkmark" size={18} color="#fff" />
+              </View>
+            </Pressable>
+          )}
+          style={styles.resultList}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={!isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No tracks found</Text></View> : null}
+        />
+      )}
+    </PickerShell>
+  );
+}
+
+// ── Quiz Picker ───────────────────────────────────────────────────
+// Instagram 2026 parity: multiple-choice quiz with correct answer.
+
+const QUIZ_EMOJIS = ['🎯', '🔥', '💡', '❓', '✅', '⭐', '🎨', '👍'];
+
+function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'quiz';
+  const existing = editingLayer?.type === 'quiz' ? editingLayer.payload : null;
+
+  const [question, setQuestion] = useState(existing?.question ?? '');
+  const [options, setOptions] = useState<string[]>(existing?.options?.map((o: any) => o.label) ?? ['', '']);
+  const [correctIdx, setCorrectIdx] = useState<number>(() => {
+    if (existing?.correctOptionId && existing?.options) {
+      return existing.options.findIndex((o: any) => o.id === existing.correctOptionId);
+    }
+    return 0;
+  });
+  const [emoji, setEmoji] = useState(existing?.emoji ?? '🎯');
+  const [timerMs, setTimerMs] = useState<number | null>(existing?.timerMs ?? null);
+
+  const QUIZ_TIMER_OPTIONS = [
+    { label: 'No timer', value: null as number | null },
+    { label: '15s', value: 15000 },
+    { label: '30s', value: 30000 },
+    { label: '1m', value: 60000 },
+    { label: '5m', value: 300000 },
+  ];
+
+  const handleAdd = useCallback(() => {
+    if (!question.trim() || options.filter(o => o.trim()).length < 2) return;
+    const cleanOptions = options.filter(o => o.trim()).slice(0, 4);
+    const optionObjs = cleanOptions.map((label, i) => ({ id: `opt_${i}_${Date.now()}`, label: label.trim() }));
+    const payload: any = {
+      question: question.trim(),
+      options: optionObjs,
+      correctOptionId: optionObjs[correctIdx]?.id ?? optionObjs[0].id,
+      emoji,
+      ...(timerMs ? { timerMs } : {}),
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('quiz'), 10),
+        type: 'quiz',
+        width: 0.7,
+        height: 0.25,
+        payload,
+      });
+    }
+    onClose();
+  }, [question, options, correctIdx, emoji, isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Quiz' : 'Add Quiz'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        {/* Live preview — mini quiz sticker */}
+        <View style={styles.quizPreviewWrap}>
+          <View style={styles.quizPreviewHeader}>
+            <Text style={styles.quizPreviewEmoji}>{emoji}</Text>
+            <Text style={styles.quizPreviewQuestion} numberOfLines={2}>
+              {question.trim() || 'Ask a question...'}
+            </Text>
+          </View>
+          {options.filter(o => o.trim()).slice(0, 4).map((opt, i) => (
+            <View key={i} style={[styles.quizPreviewOption, correctIdx === i && styles.quizPreviewOptionCorrect]}>
+              <Text style={styles.quizPreviewOptionText} numberOfLines={1}>{opt.trim()}</Text>
+              {correctIdx === i && (
+                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              )}
+            </View>
+          ))}
+          {options.filter(o => o.trim()).length === 0 && (
+            <View style={styles.quizPreviewOption}>
+              <Text style={[styles.quizPreviewOptionText, { opacity: 0.5 }]}>Add options...</Text>
+            </View>
+          )}
+        </View>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Ask a question..."
+          placeholderTextColor={colors.textMuted}
+          value={question}
+          onChangeText={setQuestion}
+          maxLength={100}
+          autoFocus
+          accessibilityLabel="Quiz question"
+        />
+        <Text style={styles.pickerSectionLabel}>Options (tap to mark correct)</Text>
+        {options.map((opt, i) => (
+          <View key={i} style={styles.quizOptionRow}>
+            <Pressable
+              onPress={() => { haptic.selection(); setCorrectIdx(i); }}
+              style={[styles.quizCorrectDot, correctIdx === i && { backgroundColor: colors.success }]}
+              accessibilityLabel={`Mark option ${i + 1} as correct`}
+              accessibilityRole="button"
+            >
+              {correctIdx === i && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </Pressable>
+            <TextInput
+              style={[styles.textInput, { flex: 1, minHeight: 44 }]}
+              placeholder={`Option ${i + 1}`}
+              placeholderTextColor={colors.textMuted}
+              value={opt}
+              onChangeText={(v) => setOptions(prev => prev.map((o, idx) => idx === i ? v : o))}
+              maxLength={50}
+              accessibilityLabel={`Quiz option ${i + 1}`}
+            />
+            {options.length > 2 && (
+              <Pressable
+                onPress={() => {
+                  setOptions(prev => prev.filter((_, idx) => idx !== i));
+                  if (correctIdx >= i && correctIdx > 0) setCorrectIdx(correctIdx - 1);
+                }}
+                style={styles.quizRemoveBtn}
+                accessibilityLabel={`Remove option ${i + 1}`}
+                accessibilityRole="button"
+                hitSlop={12}
+              >
+                <Ionicons name="close-circle" size={20} color={colors.danger} />
+              </Pressable>
+            )}
+          </View>
+        ))}
+        {options.length < 4 && (
+          <Pressable
+            onPress={() => { haptic.selection(); setOptions(prev => [...prev, '']); }}
+            style={styles.quizAddOptionBtn}
+            accessibilityLabel="Add option"
+            accessibilityRole="button"
+            hitSlop={12}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
+            <Text style={styles.quizAddOptionText}>Add Option</Text>
+          </Pressable>
+        )}
+        <Text style={styles.pickerSectionLabel}>Emoji</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {QUIZ_EMOJIS.map((e) => (
+            <Pressable
+              key={e}
+              onPress={() => { haptic.selection(); setEmoji(e); }}
+              style={[styles.styleOption, emoji === e && styles.styleOptionActive]}
+              accessibilityLabel={`Emoji ${e}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: emoji === e }}
+              hitSlop={12}
+            >
+              <Text style={{ fontSize: Type.title.size }}>{e}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {/* Timer selection */}
+        <Text style={styles.pickerSectionLabel}>Timer</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {QUIZ_TIMER_OPTIONS.map((t) => {
+            const isActive = timerMs === t.value;
+            return (
+              <Pressable
+                key={t.label}
+                onPress={() => { haptic.selection(); setTimerMs(t.value); }}
+                style={({ pressed }) => [
+                  styles.timerChip,
+                  isActive && { backgroundColor: colors.brand, borderColor: colors.brand },
+                  pressed && { opacity: 0.7 },
+                ]}
+                accessibilityLabel={`Timer: ${t.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Pressable
+          onPress={handleAdd}
+          disabled={!question.trim() || options.filter(o => o.trim()).length < 2}
+          style={[styles.saveBtn, (!question.trim() || options.filter(o => o.trim()).length < 2) && styles.saveBtnDisabled]}
+          accessibilityLabel={isEditing ? 'Update quiz' : 'Add quiz'}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !question.trim() || options.filter(o => o.trim()).length < 2 }}
+        >
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Quiz'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Question Picker ───────────────────────────────────────────────
+// Instagram 2026 parity: open-ended question box sticker.
+
+function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'question';
+  const existing = editingLayer?.type === 'question' ? editingLayer.payload : null;
+
+  const [prompt, setPrompt] = useState(existing?.prompt ?? '');
+  const [placeholder, setPlaceholder] = useState(existing?.placeholder ?? 'Type something...');
+  const [bgColor, setBgColor] = useState(existing?.backgroundColor ?? '#9b0202');
+
+  const QUESTION_BG_COLORS = ['#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a', '#C9A46A'];
+
+  const handleAdd = useCallback(() => {
+    if (!prompt.trim()) return;
+    const payload: any = {
+      prompt: prompt.trim(),
+      placeholder: placeholder.trim() || 'Type something...',
+      backgroundColor: bgColor,
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('question'), 10),
+        type: 'question',
+        width: 0.6,
+        height: 0.12,
+        payload,
+      });
+    }
+    onClose();
+  }, [prompt, placeholder, bgColor, isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Question' : 'Ask Me'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={[styles.questionPreviewWrap, { backgroundColor: bgColor }]}>
+          <View style={styles.questionPreviewIconRow}>
+            <Ionicons name="chatbubble-ellipses" size={18} color="rgba(255,255,255,0.7)" />
+          </View>
+          <Text style={styles.questionPreviewPrompt}>
+            {prompt.trim() || 'Ask me a question'}
+          </Text>
+          <View style={styles.questionPreviewInputRow}>
+            <Text style={styles.questionPreviewPlaceholder}>
+              {placeholder.trim() || 'Type something...'}
+            </Text>
+            <View style={styles.questionPreviewSendDot} />
+          </View>
+        </View>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Question prompt..."
+          placeholderTextColor={colors.textMuted}
+          value={prompt}
+          onChangeText={setPrompt}
+          maxLength={100}
+          autoFocus
+          accessibilityLabel="Question prompt"
+        />
+        <TextInput
+          style={styles.textInput}
+          placeholder="Placeholder text..."
+          placeholderTextColor={colors.textMuted}
+          value={placeholder}
+          onChangeText={setPlaceholder}
+          maxLength={80}
+          accessibilityLabel="Question placeholder"
+        />
+        <Text style={styles.pickerSectionLabel}>Background</Text>
+        <View style={styles.colorRow}>
+          {QUESTION_BG_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => setBgColor(c)}
+              style={[styles.colorOption, { backgroundColor: c }, bgColor === c && styles.colorOptionActive]}
+              accessibilityLabel={`Background ${c}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: bgColor === c }}
+              hitSlop={12}
+            />
+          ))}
+        </View>
+        <Pressable
+          onPress={handleAdd}
+          disabled={!prompt.trim()}
+          style={[styles.saveBtn, !prompt.trim() && styles.saveBtnDisabled]}
+          accessibilityLabel={isEditing ? 'Update question' : 'Add question'}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !prompt.trim() }}
+        >
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Question'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Emoji Slider Picker ───────────────────────────────────────────
+// Instagram 2026 parity: emoji slider for intensity measurement.
+
+const SLIDER_EMOJIS = ['😍', '🔥', '💯', '😂', '🤔', '👍', '❤️', '✨', '🎨', '🛍️'];
+
+function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'emojiSlider';
+  const existing = editingLayer?.type === 'emojiSlider' ? editingLayer.payload : null;
+
+  const [question, setQuestion] = useState(existing?.question ?? '');
+  const [emoji, setEmoji] = useState(existing?.emoji ?? '😍');
+  const [endLabel, setEndLabel] = useState(existing?.endLabel ?? '');
+  const [sliderColor, setSliderColor] = useState(existing?.sliderColor ?? '#C9A46A');
+
+  const SLIDER_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#E06666'];
+
+  const handleAdd = useCallback(() => {
+    if (!question.trim()) return;
+    const payload: any = {
+      question: question.trim(),
+      emoji,
+      endLabel: endLabel.trim(),
+      sliderColor,
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('emojiSlider'), 10),
+        type: 'emojiSlider',
+        width: 0.6,
+        height: 0.1,
+        payload,
+      });
+    }
+    onClose();
+  }, [question, emoji, endLabel, sliderColor, isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Slider' : 'Emoji Slider'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.sliderPreviewWrap}>
+          <Text style={styles.sliderPreviewQuestion}>
+            {question.trim() || 'How much do you love it?'}
+          </Text>
+          <View style={styles.sliderPreviewRow}>
+            <Text style={styles.sliderPreviewEmoji}>{emoji}</Text>
+            <View style={styles.sliderPreviewTrack}>
+              <View style={[styles.sliderPreviewFill, { width: '60%', backgroundColor: sliderColor }]} />
+              <View style={[styles.sliderPreviewHandle, { left: '60%', backgroundColor: sliderColor }]} />
+            </View>
+          </View>
+          {endLabel.trim() ? (
+            <Text style={styles.sliderPreviewEndLabel}>{endLabel.trim()}</Text>
+          ) : null}
+        </View>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Ask something..."
+          placeholderTextColor={colors.textMuted}
+          value={question}
+          onChangeText={setQuestion}
+          maxLength={80}
+          autoFocus
+          accessibilityLabel="Slider question"
+        />
+        <TextInput
+          style={styles.textInput}
+          placeholder="End label (optional)..."
+          placeholderTextColor={colors.textMuted}
+          value={endLabel}
+          onChangeText={setEndLabel}
+          maxLength={20}
+          accessibilityLabel="Slider end label"
+        />
+        <Text style={styles.pickerSectionLabel}>Emoji</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {SLIDER_EMOJIS.map((e) => (
+            <Pressable
+              key={e}
+              onPress={() => { haptic.selection(); setEmoji(e); }}
+              style={[styles.styleOption, emoji === e && styles.styleOptionActive]}
+              accessibilityLabel={`Emoji ${e}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: emoji === e }}
+              hitSlop={12}
+            >
+              <Text style={{ fontSize: Type.title.size }}>{e}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Text style={styles.pickerSectionLabel}>Slider Color</Text>
+        <View style={styles.colorRow}>
+          {SLIDER_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => setSliderColor(c)}
+              style={[styles.colorOption, { backgroundColor: c }, sliderColor === c && styles.colorOptionActive]}
+              accessibilityLabel={`Slider color ${c}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sliderColor === c }}
+              hitSlop={12}
+            />
+          ))}
+        </View>
+        <Pressable
+          onPress={handleAdd}
+          disabled={!question.trim()}
+          style={[styles.saveBtn, !question.trim() && styles.saveBtnDisabled]}
+          accessibilityLabel={isEditing ? 'Update slider' : 'Add slider'}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !question.trim() }}
+        >
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Slider'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Countdown Picker ──────────────────────────────────────────────
+// Instagram 2026 parity: countdown to a date/time sticker.
+
+function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'countdown';
+  const existing = editingLayer?.type === 'countdown' ? editingLayer.payload : null;
+
+  const [label, setLabel] = useState(existing?.label ?? '');
+  const [endDate, setEndDate] = useState(() => {
+    if (existing?.endDateTime) return new Date(existing.endDateTime);
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(18, 0, 0, 0);
+    return d;
+  });
+  const [color, setColor] = useState(existing?.color ?? '#C9A46A');
+
+  const COUNTDOWN_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a'];
+
+  const handleAdd = useCallback(() => {
+    if (!label.trim()) return;
+    const payload: any = {
+      label: label.trim(),
+      endDateTime: endDate.toISOString(),
+      color,
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('countdown'), 10),
+        type: 'countdown',
+        width: 0.5,
+        height: 0.12,
+        payload,
+      });
+    }
+    onClose();
+  }, [label, endDate, color, isEditing, editingLayer, onAddLayer, onClose]);
+
+  const formatDate = (d: Date) => {
+    const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+    return d.toLocaleDateString('en-US', opts);
+  };
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Countdown' : 'Countdown'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={[styles.textPreview, { backgroundColor: color }]}>
+          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size }}>
+            {label.trim() || 'Event countdown'}
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: Typography.family.medium, fontSize: Type.title.size, marginTop: Space.xs }}>
+            {formatDate(endDate)}
+          </Text>
+        </View>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Countdown label..."
+          placeholderTextColor={colors.textMuted}
+          value={label}
+          onChangeText={setLabel}
+          maxLength={40}
+          autoFocus
+          accessibilityLabel="Countdown label"
+        />
+        <Text style={styles.pickerSectionLabel}>End Date & Time</Text>
+        <Pressable
+          onPress={() => {
+            // Simple date adjustment: cycle through next 7 days at 6pm
+            const d = new Date(endDate);
+            d.setDate(d.getDate() + 1);
+            if (d.getDate() === 1) d.setDate(endDate.getDate() - 6);
+            setEndDate(d);
+          }}
+          style={styles.countdownDateBtn}
+          accessibilityLabel="Adjust end date"
+          accessibilityRole="button"
+        >
+          <Ionicons name="calendar-outline" size={20} color={colors.brand} />
+          <Text style={styles.countdownDateText}>{formatDate(endDate)}</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Pressable>
+        <Text style={styles.pickerSectionLabel}>Color</Text>
+        <View style={styles.colorRow}>
+          {COUNTDOWN_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => setColor(c)}
+              style={[styles.colorOption, { backgroundColor: c }, color === c && styles.colorOptionActive]}
+              accessibilityLabel={`Countdown color ${c}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: color === c }}
+              hitSlop={12}
+            />
+          ))}
+        </View>
+        <Pressable
+          onPress={handleAdd}
+          disabled={!label.trim()}
+          style={[styles.saveBtn, !label.trim() && styles.saveBtnDisabled]}
+          accessibilityLabel={isEditing ? 'Update countdown' : 'Add countdown'}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !label.trim() }}
+        >
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Countdown'}</Text>
         </Pressable>
       </View>
     </PickerShell>
@@ -918,31 +2484,84 @@ const SHAPES: Array<{ shape: 'circle' | 'square' | 'line' | 'arrow' | 'star' | '
   { shape: 'circle', icon: 'ellipse-outline', label: 'Circle' },
   { shape: 'square', icon: 'square-outline', label: 'Square' },
   { shape: 'line', icon: 'remove', label: 'Line' },
-  { shape: 'arrow', icon: 'arrow-forward', label: 'Arrow' },
-  { shape: 'star', icon: 'star-outline', label: 'Star' },
-  { shape: 'heart', icon: 'heart-outline', label: 'Heart' },
+  { shape: 'arrow', icon: 'arrow-up', label: 'Arrow' },
+  { shape: 'star', icon: 'star', label: 'Star' },
+  { shape: 'heart', icon: 'heart', label: 'Heart' },
 ];
 
+const SHAPE_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#E06666', '#7B68EE'];
+
 function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [activeColor, setActiveColor] = useState('#ffffff');
   const handleSelect = useCallback((shape: typeof SHAPES[0]) => {
+    haptic.selection();
     onAddLayer({
       ...baseLayer(createStableId('shape'), 5),
       type: 'decorative',
       width: 0.15,
       height: 0.15,
-      payload: { shape: shape.shape, color: '#ffffff', opacity: 1 },
+      payload: { shape: shape.shape, color: activeColor, opacity: 1 },
     });
     onClose();
-  }, [onAddLayer, onClose]);
+  }, [onAddLayer, onClose, activeColor, haptic]);
+
+  const renderShapePreview = (shape: string) => {
+    switch (shape) {
+      case 'circle':
+        return <View style={{ width: 32, height: 32, borderRadius: Radius.full, backgroundColor: activeColor }} />;
+      case 'square':
+        return <View style={{ width: 32, height: 32, borderRadius: Radius.sm, backgroundColor: activeColor }} />;
+      case 'line':
+        return <View style={{ width: 32, height: 4, backgroundColor: activeColor }} />;
+      case 'arrow':
+        return (
+          <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 0, height: 0, borderLeftWidth: 10, borderRightWidth: 10, borderBottomWidth: 16, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: activeColor }} />
+          </View>
+        );
+      case 'star':
+        return <Ionicons name="star" size={32} color={activeColor} />;
+      case 'heart':
+        return <Ionicons name="heart" size={32} color={activeColor} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <PickerShell title="Add Shape" onClose={onClose}>
       <View style={styles.shapeGrid}>
         {SHAPES.map((s) => (
-          <Pressable key={s.shape} onPress={() => handleSelect(s)} style={styles.shapeOption} accessibilityLabel={`Add ${s.label}`} accessibilityRole="button">
-            <Ionicons name={s.icon as any} size={28} color={Colors.textPrimary} />
+          <Pressable
+            key={s.shape}
+            onPress={() => handleSelect(s)}
+            style={({ pressed }) => [styles.shapeOption, pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }]}
+            accessibilityLabel={`Add ${s.label}`}
+            accessibilityRole="button"
+            hitSlop={12}
+          >
+            <View style={styles.shapePreviewBox}>
+              {renderShapePreview(s.shape)}
+            </View>
             <Text style={styles.shapeLabel}>{s.label}</Text>
           </Pressable>
+        ))}
+      </View>
+      <Text style={styles.pickerSectionLabel}>Color</Text>
+      <View style={styles.colorRow}>
+        {SHAPE_COLORS.map((c) => (
+          <Pressable
+            key={c}
+            onPress={() => { haptic.selection(); setActiveColor(c); }}
+            style={[styles.colorOption, { backgroundColor: c }, activeColor === c && styles.colorOptionActive]}
+            accessibilityLabel={`Shape color ${c}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeColor === c }}
+            hitSlop={12}
+          />
         ))}
       </View>
     </PickerShell>
@@ -952,14 +2571,48 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 // ── Vote Picker ────────────────────────────────────────────────────
 
 function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [question, setQuestion] = useState('');
-  const [option1, setOption1] = useState('');
-  const [option2, setOption2] = useState('');
+  const [options, setOptions] = useState<string[]>(['', '']);
+  const [timerMs, setTimerMs] = useState<number | null>(null);
 
-  const canSave = question.trim().length > 0 && option1.trim().length > 0 && option2.trim().length > 0 && option1.trim() !== option2.trim();
+  const TIMER_OPTIONS = [
+    { label: 'No timer', value: null as number | null },
+    { label: '1h', value: 3600000 },
+    { label: '6h', value: 21600000 },
+    { label: '24h', value: 86400000 },
+    { label: '3d', value: 259200000 },
+  ];
+
+  const canSave = question.trim().length > 0 && options.filter(o => o.trim().length > 0).length >= 2;
+
+  const updateOption = (index: number, value: string) => {
+    setOptions(prev => prev.map((o, i) => i === index ? value : o));
+  };
+
+  const addOption = () => {
+    if (options.length < 4) {
+      setOptions(prev => [...prev, '']);
+      haptic.selection();
+    }
+  };
+
+  const removeOption = (index: number) => {
+    if (options.length > 2) {
+      setOptions(prev => prev.filter((_, i) => i !== index));
+      haptic.light();
+    }
+  };
 
   const handleAdd = useCallback(() => {
     if (!canSave) return;
+    haptic.selection();
+    const validOptions = options
+      .map(o => o.trim())
+      .filter(o => o.length > 0)
+      .map(label => ({ id: createStableId('opt'), label }));
     onAddLayer({
       ...baseLayer(createStableId('vote'), 10),
       type: 'vote',
@@ -967,51 +2620,720 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       height: 0.2,
       payload: {
         question: question.trim(),
-        options: [
-          { id: createStableId('opt'), label: option1.trim() },
-          { id: createStableId('opt'), label: option2.trim() },
-        ],
+        options: validOptions,
+        ...(timerMs ? { timerMs } : {}),
       },
     });
     onClose();
-  }, [question, option1, option2, canSave, onAddLayer, onClose]);
+  }, [question, options, timerMs, canSave, onAddLayer, onClose]);
 
   return (
     <PickerShell title="Add Style Vote" onClose={onClose}>
       <View style={styles.textPickerBody}>
+        {/* Live preview — mini vote sticker */}
+        <View style={styles.votePreviewWrap}>
+          <Text style={styles.votePreviewQuestion} numberOfLines={2}>
+            {question.trim() || 'Which outfit is better?'}
+          </Text>
+          <View style={[styles.votePreviewOptions, { flexWrap: 'wrap' }]}>
+            {options.filter(o => o.trim().length > 0).length > 0 ? (
+              options.map((opt, i) => (
+                opt.trim() ? (
+                  <View key={i} style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+                    <Text style={styles.votePreviewOptionText} numberOfLines={1}>{opt.trim()}</Text>
+                  </View>
+                ) : null
+              ))
+            ) : (
+              <>
+                <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+                  <Text style={styles.votePreviewOptionText} numberOfLines={1}>Option 1</Text>
+                </View>
+                <View style={[styles.votePreviewOption, { backgroundColor: `${colors.brand}22`, borderColor: `${colors.brand}55` }]}>
+                  <Text style={styles.votePreviewOptionText} numberOfLines={1}>Option 2</Text>
+                </View>
+              </>
+            )}
+          </View>
+          {timerMs && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'center' }}>
+              <Ionicons name="timer-outline" size={12} color={colors.textSecondary} />
+              <Text style={{ fontFamily: Typography.family.medium, fontSize: 10, color: colors.textSecondary }}>
+                {timerMs >= 86400000 ? `${Math.floor(timerMs / 86400000)}d` : timerMs >= 3600000 ? `${Math.floor(timerMs / 3600000)}h` : `${Math.floor(timerMs / 60000)}m`}
+              </Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.sectionLabel}>Question</Text>
         <TextInput
           style={styles.textInput}
           placeholder="e.g. Which outfit is better?"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={question}
           onChangeText={setQuestion}
           maxLength={100}
           autoFocus
           accessibilityLabel="Vote question"
         />
-        <Text style={styles.sectionLabel}>Option 1</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="First option"
-          placeholderTextColor={Colors.textMuted}
-          value={option1}
-          onChangeText={setOption1}
-          maxLength={50}
-          accessibilityLabel="Vote option 1"
-        />
-        <Text style={styles.sectionLabel}>Option 2</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Second option"
-          placeholderTextColor={Colors.textMuted}
-          value={option2}
-          onChangeText={setOption2}
-          maxLength={50}
-          accessibilityLabel="Vote option 2"
-        />
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button">
+        {options.map((opt, i) => (
+          <View key={i}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={styles.sectionLabel}>Option {i + 1}</Text>
+              {options.length > 2 && (
+                <Pressable onPress={() => removeOption(i)} hitSlop={14} accessibilityLabel={`Remove option ${i + 1}`} accessibilityRole="button">
+                  <Ionicons name="close-circle" size={18} color={colors.danger} />
+                </Pressable>
+              )}
+            </View>
+            <TextInput
+              style={styles.textInput}
+              placeholder={`Option ${i + 1}`}
+              placeholderTextColor={colors.textMuted}
+              value={opt}
+              onChangeText={(v) => updateOption(i, v)}
+              maxLength={50}
+              accessibilityLabel={`Vote option ${i + 1}`}
+            />
+          </View>
+        ))}
+        {options.length < 4 && (
+          <Pressable
+            onPress={addOption}
+            style={({ pressed }) => [styles.addOptionBtn, pressed && { opacity: 0.7 }]}
+            accessibilityLabel="Add option"
+            accessibilityRole="button"
+          >
+            <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
+            <Text style={styles.addOptionBtnText}>Add Option ({options.length}/4)</Text>
+          </Pressable>
+        )}
+        {/* Timer selection */}
+        <Text style={styles.sectionLabel}>Timer</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
+          {TIMER_OPTIONS.map((t) => {
+            const isActive = timerMs === t.value;
+            return (
+              <Pressable
+                key={t.label}
+                onPress={() => { haptic.selection(); setTimerMs(t.value); }}
+                style={({ pressed }) => [
+                  styles.timerChip,
+                  isActive && { backgroundColor: colors.brand, borderColor: colors.brand },
+                  pressed && { opacity: 0.7 },
+                ]}
+                accessibilityLabel={`Timer: ${t.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
           <Text style={styles.saveBtnText}>Add Vote</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Unified Sticker Tray ──────────────────────────────────────────
+// Instagram-pattern: ONE sticker entry point that opens a tray with
+// search + categories. Replaces the cluttered dock of individual
+// sticker tools (Poll, Quiz, Ask, Slider, Countdown, Mention, GIF, Elements).
+//
+// Categories:
+//   Interactive: Poll, Quiz, Question, Emoji Slider, Countdown
+//   Mentions:    @Mention, Location, Hashtag
+//   Media:       GIF, Music, Link
+//   Utility:     Time, Weather, Shapes
+
+interface StickerCategoryDef {
+  key: string;
+  label: string;
+  stickers: StickerDef[];
+}
+
+interface StickerDef {
+  key: string;
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  emoji?: string;
+  mode: AssetPickerMode;
+  description?: string;
+}
+
+const STICKER_CATEGORIES: StickerCategoryDef[] = [
+  {
+    key: 'interactive',
+    label: 'Interactive',
+    stickers: [
+      { key: 'poll', label: 'Poll', icon: 'stats-chart-outline', mode: 'vote', description: '2-option vote' },
+      { key: 'quiz', label: 'Quiz', icon: 'help-circle-outline', mode: 'quiz', description: 'Trivia with answer' },
+      { key: 'question', label: 'Ask', icon: 'chatbubble-outline', mode: 'question', description: 'Open Q&A' },
+      { key: 'emojiSlider', label: 'Slider', icon: 'happy-outline', mode: 'emojiSlider', description: 'Emoji rating' },
+      { key: 'countdown', label: 'Countdown', icon: 'time-outline', mode: 'countdown', description: 'Count to a date' },
+    ],
+  },
+  {
+    key: 'mentions',
+    label: 'Tags',
+    stickers: [
+      { key: 'mention', label: '@Mention', icon: 'at-outline', mode: 'mention', description: 'Tag a user' },
+      { key: 'location', label: 'Location', icon: 'location-outline', mode: 'location', description: 'Tag a place' },
+      { key: 'hashtag', label: 'Hashtag', icon: 'pricetag-outline', mode: 'hashtag', description: 'Topic tag' },
+    ],
+  },
+  {
+    key: 'media',
+    label: 'Media',
+    stickers: [
+      { key: 'gif', label: 'GIF', icon: 'image-outline', mode: 'gif', description: 'Animated sticker' },
+      { key: 'music', label: 'Music', icon: 'musical-notes-outline', mode: 'music', description: 'Song sticker' },
+      { key: 'link', label: 'Link', icon: 'link-outline', mode: 'link', description: 'Clickable URL' },
+    ],
+  },
+  {
+    key: 'utility',
+    label: 'Utility',
+    stickers: [
+      { key: 'time', label: 'Time', icon: 'time-outline', mode: 'time', description: 'Current timestamp' },
+      { key: 'weather', label: 'Weather', icon: 'partly-sunny-outline', mode: 'weather', description: 'Conditions' },
+      { key: 'shape', label: 'Shapes', icon: 'shapes-outline', mode: 'shape', description: 'Decorative shapes' },
+    ],
+  },
+];
+
+function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string>('interactive');
+
+  // Filter stickers by search
+  const filteredCategories = useMemo(() => {
+    if (!search.trim()) return STICKER_CATEGORIES;
+    const q = search.toLowerCase();
+    return STICKER_CATEGORIES
+      .map((cat) => ({
+        ...cat,
+        stickers: cat.stickers.filter((s) =>
+          s.label.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q)
+        ),
+      }))
+      .filter((cat) => cat.stickers.length > 0);
+  }, [search]);
+
+  const activeCategoryDef = filteredCategories.find((c) => c.key === activeCategory) ?? filteredCategories[0];
+
+  // StickerTray navigates to a specific picker via local state.
+  // onClose of the sub-picker returns to the tray (not the whole picker).
+  const [subMode, setSubMode] = useState<AssetPickerMode | null>(null);
+
+  if (subMode) {
+    // Render the specific picker, passing through onAddLayer.
+    // onClose goes back to the sticker tray (not the whole picker).
+    return (
+      <AssetPickerContent
+        mode={subMode}
+        onClose={() => setSubMode(null)}
+        onAddLayer={onAddLayer}
+        editingLayer={null}
+      />
+    );
+  }
+
+  return (
+    <SheetContainer visible={true} onClose={onClose} maxHeight={0.85}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Stickers</Text>
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close stickers" hitSlop={12}>
+          <Ionicons name="close" size={22} color={colors.textSecondary} />
+        </PressScale>
+      </View>
+
+      {/* Search bar */}
+      <View style={styles.stickerSearchWrap}>
+        <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+        <TextInput
+          style={styles.stickerSearchInput}
+          placeholder="Search stickers..."
+          placeholderTextColor={colors.textMuted}
+          value={search}
+          onChangeText={setSearch}
+          accessibilityLabel="Search stickers"
+        />
+        {search.length > 0 && (
+          <PressScale onPress={() => setSearch('')} style={styles.stickerSearchClear} accessibilityLabel="Clear search" hitSlop={6}>
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </PressScale>
+        )}
+      </View>
+
+      {/* Category chips */}
+      {!search.trim() && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stickerCategoryScroll} contentContainerStyle={styles.stickerCategoryContent}>
+          {STICKER_CATEGORIES.map((cat) => {
+            const isActive = activeCategory === cat.key;
+            return (
+              <Pressable
+                key={cat.key}
+                onPress={() => { haptic.selection(); setActiveCategory(cat.key); }}
+                style={[styles.stickerCategoryChip, isActive && { backgroundColor: colors.brand }]}
+                accessibilityLabel={`Category ${cat.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text style={[styles.stickerCategoryChipText, isActive && { color: colors.textInverse }]}>
+                  {cat.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Sticker grid */}
+      <ScrollView style={styles.stickerGridScroll} contentContainerStyle={styles.stickerGridContent}>
+        {filteredCategories.length === 0 ? (
+          <View style={styles.stickerEmptyState}>
+            <Ionicons name="search-outline" size={40} color={colors.textMuted} />
+            <Text style={styles.stickerEmptyText}>No stickers found</Text>
+          </View>
+        ) : (
+          (search.trim() ? filteredCategories : [activeCategoryDef]).map((cat) => (
+            <View key={cat.key} style={styles.stickerCategorySection}>
+              {search.trim() && (
+                <Text style={styles.stickerCategoryTitle}>{cat.label}</Text>
+              )}
+              <View style={styles.stickerGrid}>
+                {cat.stickers.map((sticker) => (
+                  <Pressable
+                    key={sticker.key}
+                    onPress={() => { haptic.selection(); setSubMode(sticker.mode); }}
+                    style={({ pressed }) => [styles.stickerCell, pressed && { opacity: 0.7 }]}
+                    accessibilityLabel={`Add ${sticker.label} sticker`}
+                    accessibilityRole="button"
+                  >
+                    <View style={styles.stickerCellIcon}>
+                      <Ionicons name={sticker.icon} size={28} color={colors.brand} />
+                    </View>
+                    <Text style={styles.stickerCellLabel} numberOfLines={1}>{sticker.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </SheetContainer>
+  );
+}
+
+// ── Link Picker ───────────────────────────────────────────────────
+
+function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'link';
+  const existingPayload = editingLayer?.type === 'link' ? editingLayer.payload : null;
+
+  const [url, setUrl] = useState(existingPayload?.url ?? '');
+  const [ctaText, setCtaText] = useState(existingPayload?.ctaText ?? 'Link');
+  const [bgColor, setBgColor] = useState(existingPayload?.backgroundColor ?? '#C9A46A');
+
+  const canSave = url.trim().length > 0 && (url.startsWith('http://') || url.startsWith('https://'));
+
+  const handleAdd = useCallback(() => {
+    if (!canSave) return;
+    const payload: any = {
+      url: url.trim(),
+      ctaText: ctaText.trim() || 'Link',
+      backgroundColor: bgColor,
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('link'), 10),
+        type: 'link',
+        width: 0.5,
+        height: 0.08,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [url, ctaText, bgColor, canSave, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Link' : 'Add Link'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.stickerPreviewPill}>
+          <Ionicons name="link-outline" size={18} color="#fff" />
+          <Text style={styles.stickerPreviewPillText}>{ctaText || 'Link'}</Text>
+        </View>
+        <Text style={styles.pickerSectionLabel}>URL</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="https://..."
+          placeholderTextColor={colors.textMuted}
+          value={url}
+          onChangeText={setUrl}
+          keyboardType="url"
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityLabel="Link URL"
+        />
+        <Text style={styles.pickerSectionLabel}>Button Text</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Link"
+          placeholderTextColor={colors.textMuted}
+          value={ctaText}
+          onChangeText={setCtaText}
+          maxLength={40}
+          accessibilityLabel="Link button text"
+        />
+        <Text style={styles.pickerSectionLabel}>Color</Text>
+        <View style={styles.colorRow}>
+          {['#C9A46A', '#9b0202', '#215634', '#06489A', '#000000', '#ffffff'].map((c) => (
+            <Pressable
+              key={c}
+              onPress={() => { haptic.selection(); setBgColor(c); }}
+              style={[styles.colorOption, { backgroundColor: c }, bgColor === c && styles.colorOptionActive]}
+              accessibilityLabel={`Link color ${c}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: bgColor === c }}
+              hitSlop={12}
+            />
+          ))}
+        </View>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update link' : 'Add link'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Link'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Location Picker ───────────────────────────────────────────────
+
+function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'location';
+  const existingPayload = editingLayer?.type === 'location' ? editingLayer.payload : null;
+
+  const [placeName, setPlaceName] = useState(existingPayload?.placeName ?? '');
+
+  const canSave = placeName.trim().length > 0;
+
+  const handleAdd = useCallback(() => {
+    if (!canSave) return;
+    const payload: any = {
+      placeName: placeName.trim(),
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('location'), 10),
+        type: 'location',
+        width: 0.4,
+        height: 0.06,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [placeName, canSave, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Location' : 'Add Location'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.stickerPreviewPill}>
+          <Ionicons name="location-outline" size={18} color="#fff" />
+          <Text style={styles.stickerPreviewPillText}>{placeName || 'Location'}</Text>
+        </View>
+        <Text style={styles.pickerSectionLabel}>Place Name</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="e.g. London, UK"
+          placeholderTextColor={colors.textMuted}
+          value={placeName}
+          onChangeText={setPlaceName}
+          maxLength={80}
+          accessibilityLabel="Location name"
+        />
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update location' : 'Add location'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Location'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Hashtag Picker ────────────────────────────────────────────────
+
+function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'hashtag';
+  const existingPayload = editingLayer?.type === 'hashtag' ? editingLayer.payload : null;
+
+  const [tag, setTag] = useState(existingPayload?.tag ?? '');
+
+  const canSave = tag.trim().length > 0;
+
+  const handleAdd = useCallback(() => {
+    if (!canSave) return;
+    const cleanTag = tag.trim().replace(/^#/, '');
+    const payload: any = {
+      tag: cleanTag,
+      backgroundColor: '#C9A46A',
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('hashtag'), 10),
+        type: 'hashtag',
+        width: 0.4,
+        height: 0.06,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [tag, canSave, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Hashtag' : 'Add Hashtag'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.stickerPreviewPill}>
+          <Ionicons name="pricetag-outline" size={18} color="#fff" />
+          <Text style={styles.stickerPreviewPillText}>#{tag.replace(/^#/, '') || 'hashtag'}</Text>
+        </View>
+        <Text style={styles.pickerSectionLabel}>Hashtag</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="thryftverse"
+          placeholderTextColor={colors.textMuted}
+          value={tag}
+          onChangeText={setTag}
+          maxLength={100}
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityLabel="Hashtag"
+        />
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update hashtag' : 'Add hashtag'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Hashtag'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Time Picker ───────────────────────────────────────────────────
+
+function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'time';
+  const existingPayload = editingLayer?.type === 'time' ? editingLayer.payload : null;
+
+  const [format, setFormat] = useState<'time' | 'date' | 'datetime'>(existingPayload?.format ?? 'time');
+  const now = new Date();
+  const previewStr = format === 'time'
+    ? now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : format === 'date'
+    ? now.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : now.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  const handleAdd = useCallback(() => {
+    const payload: any = {
+      displayTime: new Date().toISOString(),
+      format,
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('time'), 10),
+        type: 'time',
+        width: 0.3,
+        height: 0.06,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [format, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Time' : 'Add Time'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        <View style={styles.stickerPreviewPill}>
+          <Ionicons name="time-outline" size={18} color="#fff" />
+          <Text style={styles.stickerPreviewPillText}>{previewStr}</Text>
+        </View>
+        <Text style={styles.pickerSectionLabel}>Format</Text>
+        <View style={styles.alignmentRow}>
+          {([
+            { key: 'time' as const, label: 'Time', icon: 'time-outline' as const },
+            { key: 'date' as const, label: 'Date', icon: 'calendar-outline' as const },
+            { key: 'datetime' as const, label: 'Both', icon: 'calendar-number-outline' as const },
+          ] as const).map((f) => (
+            <Pressable
+              key={f.key}
+              onPress={() => { haptic.selection(); setFormat(f.key); }}
+              style={[styles.alignmentOption, format === f.key && styles.alignmentOptionActive]}
+              accessibilityLabel={`Time format ${f.label}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: format === f.key }}
+              hitSlop={12}
+            >
+              <Ionicons name={f.icon} size={18} color={format === f.key ? colors.brand : colors.textSecondary} />
+            </Pressable>
+          ))}
+        </View>
+        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update time' : 'Add time'} accessibilityRole="button" hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Time'}</Text>
+        </Pressable>
+      </View>
+    </PickerShell>
+  );
+}
+
+// ── Weather Picker ────────────────────────────────────────────────
+
+function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isEditing = editingLayer?.type === 'weather';
+  const existingPayload = editingLayer?.type === 'weather' ? editingLayer.payload : null;
+
+  const [temperature, setTemperature] = useState(existingPayload?.temperature ?? 22);
+  const [condition, setCondition] = useState(existingPayload?.condition ?? 'Sunny');
+  const [emoji, setEmoji] = useState(existingPayload?.emoji ?? '☀️');
+  const [locationName, setLocationName] = useState(existingPayload?.locationName ?? '');
+
+  const WEATHER_OPTIONS = [
+    { condition: 'Sunny', emoji: '☀️' },
+    { condition: 'Partly Cloudy', emoji: '⛅' },
+    { condition: 'Cloudy', emoji: '☁️' },
+    { condition: 'Rainy', emoji: '🌧️' },
+    { condition: 'Stormy', emoji: '⛈️' },
+    { condition: 'Snowy', emoji: '❄️' },
+    { condition: 'Foggy', emoji: '🌫️' },
+    { condition: 'Windy', emoji: '💨' },
+  ];
+
+  const handleAdd = useCallback(() => {
+    const payload: any = {
+      temperature,
+      condition,
+      emoji,
+      locationName: locationName.trim(),
+      textColor: '#ffffff',
+    };
+    if (isEditing && editingLayer) {
+      onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('weather'), 10),
+        type: 'weather',
+        width: 0.35,
+        height: 0.08,
+        payload,
+      });
+    }
+    haptic.medium();
+    onClose();
+  }, [temperature, condition, emoji, locationName, isEditing, editingLayer, onAddLayer, onClose, haptic]);
+
+  return (
+    <PickerShell title={isEditing ? 'Edit Weather' : 'Add Weather'} onClose={onClose}>
+      <View style={styles.textPickerBody}>
+        {/* Premium weather preview pill */}
+        <View style={styles.weatherPreviewPill}>
+          <Text style={styles.weatherPreviewEmoji}>{emoji}</Text>
+          <View style={styles.weatherPreviewInfo}>
+            <Text style={styles.weatherPreviewTemp}>{temperature}°</Text>
+            <Text style={styles.weatherPreviewCondition}>{condition}</Text>
+          </View>
+          {locationName.trim().length > 0 && (
+            <View style={styles.weatherPreviewLocation}>
+              <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.weatherPreviewLocationText} numberOfLines={1}>{locationName.trim()}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.pickerSectionLabel}>Condition</Text>
+        <View style={styles.weatherGrid}>
+          {WEATHER_OPTIONS.map((w) => {
+            const isActive = condition === w.condition;
+            return (
+              <Pressable
+                key={w.condition}
+                onPress={() => { haptic.selection(); setCondition(w.condition); setEmoji(w.emoji); }}
+                style={({ pressed }) => [
+                  styles.weatherCell,
+                  isActive && styles.weatherCellActive,
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                ]}
+                accessibilityLabel={`Weather ${w.condition}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                hitSlop={8}
+              >
+                <Text style={[styles.weatherCellEmoji, isActive && { color: '#fff' }]}>{w.emoji}</Text>
+                <Text style={[styles.weatherCellLabel, isActive && { color: '#fff' }]} numberOfLines={1}>{w.condition}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.inputCardLabel}>Temperature</Text>
+        <View style={styles.inputCard}>
+          <TextInput
+            style={styles.inputCardText}
+            placeholder="22"
+            placeholderTextColor={colors.textMuted}
+            value={String(temperature)}
+            onChangeText={(v) => { const n = parseInt(v, 10); if (!isNaN(n)) setTemperature(n); }}
+            keyboardType="numeric"
+            accessibilityLabel="Temperature"
+          />
+          <Text style={styles.inputCardSuffix}>°C</Text>
+        </View>
+        <Text style={styles.inputCardLabel}>Location</Text>
+        <View style={styles.inputCard}>
+          <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+          <TextInput
+            style={styles.inputCardText}
+            placeholder="London, UK"
+            placeholderTextColor={colors.textMuted}
+            value={locationName}
+            onChangeText={setLocationName}
+            maxLength={80}
+            accessibilityLabel="Weather location"
+          />
+        </View>
+        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update weather' : 'Add weather'} accessibilityRole="button" hitSlop={12}>
+          <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Weather'}</Text>
         </Pressable>
       </View>
     </PickerShell>
@@ -1020,13 +3342,14 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
 
 // ── Styles ─────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, paddingVertical: Space.sm },
-  title: { fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: Colors.textPrimary },
+  title: { fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: colors.textPrimary },
   closeBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.sm },
   mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
   mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
-  mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textPrimary },
+  mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
   // ── Media grid ──
   mediaGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   mediaGridRow: { gap: Space.xs, marginBottom: Space.xs },
@@ -1050,9 +3373,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   mediaGridDuration: {
     color: '#fff',
@@ -1069,15 +3392,15 @@ const styles = StyleSheet.create({
     right: 6,
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
   },
   mediaGridSelectionText: {
     color: '#000',
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.bold,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1085,8 +3408,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   addBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
     borderRadius: Radius.full,
   },
   addBtnText: {
@@ -1142,48 +3465,246 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: 8 },
   searchIcon: {},
   searchInput: {
-    flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
-    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: Colors.textPrimary,
+    flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md,
+    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: colors.textPrimary,
   },
   resultList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-  resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
-  resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   resultThumbImg: { width: '100%', height: '100%' },
-  resultAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
-  resultAvatarText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: Colors.textSecondary },
+  resultAvatar: { width: 40, height: 40, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
+  resultAvatarText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
   resultInfo: { flex: 1, gap: 2 },
-  resultName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textPrimary },
-  resultPrice: { fontFamily: Typography.family.bold, fontSize: Type.caption.size, color: Colors.brand },
-  resultSubtext: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: Colors.textMuted },
+  resultName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  resultPrice: { fontFamily: Typography.family.bold, fontSize: Type.caption.size, color: colors.brand },
+  resultSubtext: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textMuted },
   loadingBody: { paddingVertical: Space.xl, alignItems: 'center' },
   emptyState: { paddingVertical: Space.xl, alignItems: 'center' },
-  emptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textMuted },
+  emptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
   errorBody: { paddingVertical: Space.xl, alignItems: 'center', gap: Space.sm },
-  errorText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textMuted },
-  retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt, borderWidth: 1, borderColor: Colors.border },
-  retryBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: Colors.brand },
+  errorText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  retryBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.brand },
   textPickerBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.sm },
-  sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
-  textInput: {
-    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
-    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: Colors.textPrimary, minHeight: 80,
+  // Live preview area — dark canvas mimicking the poster/look background
+  textPreview: {
+    minHeight: 90,
+    borderRadius: Radius.lg,
+    backgroundColor: '#0d0d0d',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Space.md + 2,
+    paddingHorizontal: Space.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  saveBtn: { height: 44, borderRadius: Radius.md, backgroundColor: Colors.brand, justifyContent: 'center', alignItems: 'center' },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveBtnText: { color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.body.size },
-  pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
-  styleScroll: { marginHorizontal: -Space.md },
-  styleOption: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt, marginRight: Space.sm },
-  styleOptionActive: { borderColor: Colors.brand, backgroundColor: `${Colors.brand}15` },
-  styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: Colors.textPrimary },
-  styleOptionTextActive: { color: Colors.brand },
-  colorRow: { flexDirection: 'row', gap: Space.sm, flexWrap: 'wrap' },
-  colorOption: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: 'transparent' },
-  colorOptionActive: { borderColor: Colors.brand },
+  textPreviewText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+  },
+  sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  textInput: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: Radius.lg,
+    paddingHorizontal: Space.md, paddingVertical: Space.md, fontSize: Type.body.size, color: colors.textPrimary, minHeight: 52,
+  },
+  saveBtn: { height: 48, borderRadius: Radius.lg, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  saveBtnDisabled: { opacity: 0.35 },
+  saveBtnText: { color: colors.textInverse, fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, letterSpacing: 0.3 },
+  pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
+  styleScroll: { marginHorizontal: -Space.md, paddingHorizontal: Space.md },
+  styleOption: { paddingHorizontal: Space.md + 2, paddingVertical: Space.sm + 2, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt },
+  styleOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
+  styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  styleOptionTextActive: { color: colors.brand },
+  colorRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  colorOption: { width: 44, height: 44, borderRadius: Radius.full, borderWidth: 2, borderColor: 'transparent', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  colorOptionActive: { borderColor: colors.brand, shadowColor: colors.brand, shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 0 }, elevation: 2 },
+  colorOptionTransparent: { borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
-  alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
-  alignmentOptionActive: { borderColor: Colors.brand, backgroundColor: `${Colors.brand}15` },
+  alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  alignmentOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
   shapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Space.md, paddingVertical: Space.lg, paddingHorizontal: Space.md },
   shapeOption: { alignItems: 'center', gap: 6, width: 80, paddingVertical: Space.sm },
-  shapeLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: Colors.textSecondary },
-});
+  shapeLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  // ── Draw picker ──
+  drawBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.xs },
+  drawCanvasWrap: {
+    flex: 1,
+    minHeight: 280,
+    borderRadius: Radius.lg,
+    backgroundColor: '#161616',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
+    marginBottom: Space.sm,
+  },
+  drawCanvasHint: {
+    position: 'absolute',
+    bottom: Space.sm,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  drawCanvasHintText: {
+    fontFamily: Typography.family.regular,
+    fontSize: Type.meta.size,
+    color: 'rgba(255,255,255,0.28)',
+    letterSpacing: 0.3,
+  },
+  brushSizeRow: { flexDirection: 'row', gap: Space.md, alignItems: 'center', paddingVertical: Space.xs },
+  brushSizeOption: { width: 44, height: 44, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  brushSizeOptionActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}15` },
+  brushSizeDot: { borderRadius: Radius.full },
+  brushPreviewWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
+  brushPreviewDot: { elevation: 1, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
+  brushPreviewLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  drawActions: { flexDirection: 'row', alignItems: 'center', gap: Space.md, marginTop: Space.md },
+  drawActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  drawActionLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  drawDoneBtn: { paddingHorizontal: Space.xl, paddingVertical: Space.sm, borderRadius: Radius.full, marginLeft: 'auto' },
+  drawDoneBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: '#fff' },
+  // ── GIF picker ──
+  gifList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
+  gifRow: { gap: Space.xs, marginBottom: Space.xs },
+  gifCell: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceAlt,
+  },
+  gifThumb: { width: '100%', height: '100%' },
+  // ── Music picker ──
+  musicPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginHorizontal: Space.md, marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  musicPreviewArt: { width: 48, height: 48, borderRadius: Radius.md },
+  musicPreviewInfo: { flex: 1, gap: 2 },
+  musicPreviewTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary },
+  musicPreviewArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicPreviewPlayBtn: { width: 32, height: 32, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  musicLoadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.sm },
+  musicLoadingText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  musicArtwork: { width: 56, height: 56, borderRadius: Radius.md, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  musicInfo: { flex: 1, gap: 2 },
+  musicTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary },
+  musicArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicAddBtn: { width: 36, height: 36, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  // ── Quiz picker ──
+  quizOptionRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
+  quizCorrectDot: { width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  quizRemoveBtn: { padding: Space.xs },
+  quizAddOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm },
+  quizAddOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.brand },
+  // ── Countdown picker ──
+  countdownDateBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border },
+  countdownDateText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  // ── Sticker tray ──
+  stickerSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt, borderRadius: Radius.lg, marginHorizontal: Space.md, marginBottom: Space.sm },
+  stickerSearchInput: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: Space.xs },
+  stickerSearchClear: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+  stickerCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.xs },
+  stickerCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
+  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
+  stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, color: colors.textSecondary },
+  stickerGridScroll: { flex: 1 },
+  stickerGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
+  stickerCategorySection: { marginBottom: Space.lg },
+  stickerCategoryTitle: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
+  stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
+  stickerCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: 1, borderColor: colors.borderSubtle },
+  stickerCellIcon: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: `${colors.brand}15`, justifyContent: 'center', alignItems: 'center' },
+  stickerCellLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  stickerEmptyState: { paddingVertical: Space.xxl, alignItems: 'center', gap: Space.md },
+  stickerEmptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  // ── Sticker preview pill (shared by Link/Location/Hashtag/Time/Weather) ──
+  stickerPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.lg, backgroundColor: 'rgba(201,164,106,0.9)', alignSelf: 'center', marginBottom: Space.sm },
+  stickerPreviewPillText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: '#fff' },
+  stickerPreviewPillEmoji: { fontSize: Type.priceList.size },
+  // ── Weather picker ──
+  weatherPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.xl, backgroundColor: 'rgba(201,164,106,0.95)', alignSelf: 'center', marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3, minWidth: 180 },
+  weatherPreviewEmoji: { fontSize: Type.display.size },
+  weatherPreviewInfo: { gap: 0 },
+  weatherPreviewTemp: { fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, color: '#fff' },
+  weatherPreviewCondition: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.85)' },
+  weatherPreviewLocation: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
+  weatherPreviewLocationText: { fontFamily: Typography.family.medium, fontSize: Type.meta.size, color: 'rgba(255,255,255,0.7)' },
+  weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  weatherCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
+  weatherCellActive: { backgroundColor: colors.brand },
+  weatherCellEmoji: { fontSize: Type.priceLarge.size },
+  weatherCellLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
+  inputCardLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, marginBottom: 6, marginTop: Space.sm },
+  inputCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.xs },
+  inputCardText: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: 2 },
+  inputCardSuffix: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
+  // ── Spectrum color picker ──
+  spectrumWrap: { marginTop: Space.sm, gap: Space.xs },
+  spectrumBar: { height: 36, borderRadius: Radius.full, overflow: 'hidden', position: 'relative', elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  spectrumOverlay: { ...StyleSheet.absoluteFill },
+  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: '#fff', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4, left: '50%', marginLeft: -14 },
+  spectrumClose: { alignSelf: 'center', paddingVertical: Space.xs },
+  // ── Vertical brush size slider (Instagram pattern) ──
+  brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10, elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  brushSliderTrack: { width: 28, height: 120, borderRadius: Radius.full, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
+  brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.full },
+  brushSliderHandle: { position: 'absolute', left: '50%', marginLeft: -11, width: 22, height: 22, justifyContent: 'center', alignItems: 'center' },
+  brushSliderDot: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  // ── Text effect chips (visual preview) ──
+  effectChip: { width: 56, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
+  effectChipActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
+  effectChipSample: { fontFamily: Typography.family.bold, fontSize: Type.priceList.size, lineHeight: 24 },
+  effectChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary },
+  effectChipLabelActive: { color: colors.brand },
+  // ── Text animation chips (visual preview) ──
+  animChip: { width: 48, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
+  animChipActive: { borderColor: colors.brand, backgroundColor: `${colors.brand}18`, borderWidth: 1.5 },
+  animChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
+  animChipLabelActive: { color: colors.brand },
+  // ── Draw brush chips (premium tool selection) ──
+  brushChipScroll: { gap: Space.sm, paddingVertical: Space.xs },
+  brushChip: { width: 48, height: 48, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', marginRight: Space.sm },
+  brushChipActive: { backgroundColor: colors.brand },
+  // ── Shape preview box ──
+  shapePreviewBox: { width: 56, height: 56, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+  // ── GIF category chips ──
+  gifCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.sm },
+  gifCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
+  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
+  gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, color: colors.textSecondary },
+  // ── Vote preview ──
+  votePreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  votePreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
+  votePreviewOptions: { flexDirection: 'row', gap: Space.sm },
+  votePreviewOption: { flex: 1, paddingVertical: Space.sm, paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: 1.5, alignItems: 'center' },
+  votePreviewOptionText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  addOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm, marginBottom: Space.xs },
+  addOptionBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.brand },
+  timerChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: Space.sm },
+  timerChipText: { fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, color: colors.textSecondary },
+  // ── Quiz preview ──
+  quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
+  quizPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
+  quizPreviewEmoji: { fontSize: 22 },
+  quizPreviewQuestion: { flex: 1, fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary },
+  quizPreviewOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Space.sm, paddingHorizontal: Space.md, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  quizPreviewOptionCorrect: { borderColor: colors.success, backgroundColor: `${colors.success}15` },
+  quizPreviewOptionText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  // ── Question preview (improved) ──
+  questionPreviewWrap: { borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  questionPreviewIconRow: { marginBottom: Space.xs },
+  questionPreviewPrompt: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: '#fff', lineHeight: Type.bodyEmphasis.size * 1.3 },
+  questionPreviewInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.md, paddingVertical: Space.sm, paddingHorizontal: Space.md },
+  questionPreviewPlaceholder: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.6)' },
+  questionPreviewSendDot: { width: 24, height: 24, borderRadius: Radius.full, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  // ── Emoji slider preview (improved) ──
+  sliderPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  sliderPreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, textAlign: 'center' },
+  sliderPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  sliderPreviewEmoji: { fontSize: Type.display.size },
+  sliderPreviewTrack: { flex: 1, height: 8, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, position: 'relative' },
+  sliderPreviewFill: { height: '100%', borderRadius: Radius.sm },
+  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  sliderPreviewEndLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
+  });
+}

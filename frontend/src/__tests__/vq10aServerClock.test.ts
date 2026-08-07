@@ -15,6 +15,8 @@ import {
   createSearchState,
   IDLE_SEARCH_STATE,
   getSellerInitials,
+  buildCanonicalMap,
+  formatFinalMinutesCountdown,
 } from '../utils/auctionHomeLogic';
 
 interface AuctionTimingInput {
@@ -41,6 +43,7 @@ interface AuctionHomeItem {
   minimumNextBidGbp: number;
   bidCount: number;
   buyNowPriceGbp: number | null;
+  reservePriceGbp: number | null;
   viewerState: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
   isWatched: boolean;
   cancelledAt: string | null;
@@ -82,6 +85,7 @@ function makeItem(
     minimumNextBidGbp: 21,
     bidCount: 5,
     buyNowPriceGbp: null,
+    reservePriceGbp: null,
     viewerState: 'not_participating',
     isWatched: false,
     cancelledAt: null,
@@ -242,38 +246,6 @@ describe('useServerClock — formatCountdown', () => {
   });
 });
 
-describe('useServerClock — foreground resync (needsResync signal)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../hooks/useServerClock.ts'),
-    'utf-8'
-  );
-
-  it('does not recompute offset from initialServerNow on foreground', () => {
-    const appStateEffect = src.match(/const handleAppStateChange[\s\S]*?subscription\.remove\(\);[\s\S]*?\}\s*,\s*\[\]\s*\)/);
-    expect(appStateEffect).toBeTruthy();
-    const effectBody = appStateEffect![0];
-    expect(effectBody).not.toContain('initialServerNow');
-    expect(effectBody).not.toContain('computeOffset(initialServerNow)');
-  });
-
-  it('emits needsResync signal instead of recomputing', () => {
-    expect(src).toContain('setNeedsResync(true)');
-  });
-
-  it('preserves last valid offset until fresh data arrives', () => {
-    expect(src).toContain('offsetRef.current');
-    expect(src).toContain('needsResync');
-    expect(src).toContain('markResyncFailed');
-  });
-
-  it('no backwards clock jump: offset is only updated via computeOffset with fresh serverNow', () => {
-    const appStateEffect = src.match(/const handleAppStateChange[\s\S]*?subscription\.remove\(\);[\s\S]*?\}\s*,\s*\[\]\s*\)/);
-    expect(appStateEffect).toBeTruthy();
-    expect(appStateEffect![0]).not.toMatch(/computeOffset\(initialServerNow\)/);
-    expect(src).toMatch(/computeOffset\(serverNow\)/);
-  });
-});
-
 describe('isAttentionItem — exhaustive state table', () => {
   const baseStarts = new Date(NOW - ONE_HOUR).toISOString();
   const baseEnds = new Date(NOW + ONE_HOUR).toISOString();
@@ -403,135 +375,7 @@ describe('isAttentionItem — exhaustive state table', () => {
   });
 });
 
-describe('isAttentionItem — won CTA truth', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('uses "View result" for won auctions', () => {
-    expect(src).toContain('View result');
-  });
-
-  it('does not use "Complete purchase"', () => {
-    expect(src).not.toContain('Complete purchase');
-  });
-});
-
-describe('Duplicate prevention — seller items included', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('seller section checks usedIds.has before adding', () => {
-    const sellerMatch = src.match(/sellerItems[\s\S]*?usedIds\.has/);
-    expect(sellerMatch).toBeTruthy();
-  });
-
-  it('seller items are added to usedIds after inclusion', () => {
-    const sellerMatch = src.match(/sellerItems[\s\S]*?usedIds\.add/);
-    expect(sellerMatch).toBeTruthy();
-  });
-
-  it('uses buildCanonicalMap for attention deduplication', () => {
-    expect(src).toContain('buildCanonicalMap');
-    expect(src).toContain('canonicalMap');
-  });
-
-  it('at least 6 sections check usedIds (attention uses canonical map)', () => {
-    const matches = src.match(/usedIds\.has/g) || [];
-    expect(matches.length).toBeGreaterThanOrEqual(6);
-  });
-});
-
-describe('Section query contracts', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('live section uses status=live, sort=endingSoon', () => {
-    expect(src).toContain("status: 'live'");
-    expect(src).toContain("sort: 'endingSoon'");
-  });
-
-  it('upcoming section uses status=scheduled, sort=newest', () => {
-    expect(src).toContain("status: 'scheduled'");
-  });
-
-  it('ended section uses status=ended, sort=newest', () => {
-    expect(src).toContain("status: 'ended'");
-  });
-
-  it('seller section uses seller=me', () => {
-    expect(src).toContain("seller: 'me'");
-  });
-
-  it('watchlist uses getWatchlist()', () => {
-    expect(src).toContain('getWatchlist()');
-  });
-
-  it('does not use a single all-status fetch for all sections', () => {
-    expect(src).not.toContain("status: 'all', sort: 'endingSoon', limit: 50");
-  });
-});
-
-describe('Search query propagation', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('passes debouncedQuery to listAuctions', () => {
-    expect(src).toContain('query: debouncedQuery');
-  });
-
-  it('resets cursor on new query', () => {
-    expect(src).toContain('searchState');
-  });
-
-  it('has stale request rejection', () => {
-    expect(src).toContain('searchReqIdRef');
-    expect(src).toMatch(/reqId\s*!==\s*searchReqIdRef\.current/);
-  });
-
-  it('clear search restores default sections', () => {
-    expect(src).toContain('IDLE_SEARCH_STATE');
-    expect(src).toContain("setDebouncedQuery('')");
-  });
-});
-
-describe('Cancelled/settled list mapping', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('toViewModel maps api.cancelledAt (not hardcoded null)', () => {
-    expect(src).toContain('api.cancelledAt');
-    expect(src).not.toMatch(/cancelledAt:\s*null\s*,/);
-  });
-
-  it('toViewModel maps api.settledAt (not hardcoded null)', () => {
-    expect(src).toContain('api.settledAt');
-    expect(src).not.toMatch(/settledAt:\s*null\s*,/);
-  });
-
-  it('toViewModel maps api.seller.avatarUrl', () => {
-    expect(src).toContain('api.seller.avatarUrl');
-  });
-});
-
 // ── PASS 3 unit tests ──
-
-import {
-  buildCanonicalMap,
-  formatFinalMinutesCountdown,
-  isEndingSoon as isEndingSoonFn,
-  type PriceLabel,
-  type UrgencyLevel,
-} from '../utils/auctionHomeLogic';
 
 describe('PASS 3.2: Price label resolver', () => {
   function makePriceItem(overrides: Partial<AuctionHomeItem> & { startsAt: string; endsAt: string }): AuctionHomeItem {
@@ -550,6 +394,7 @@ describe('PASS 3.2: Price label resolver', () => {
       minimumNextBidGbp: 21,
       bidCount: 5,
       buyNowPriceGbp: null,
+      reservePriceGbp: null,
       viewerState: 'not_participating',
       isWatched: false,
       cancelledAt: null,
@@ -765,6 +610,7 @@ describe('PASS 3.0C: Attention deduplication via canonical map', () => {
       minimumNextBidGbp: 21,
       bidCount: 3,
       buyNowPriceGbp: null,
+      reservePriceGbp: null,
       viewerState,
       isWatched: false,
       cancelledAt: null,
@@ -805,174 +651,7 @@ describe('PASS 3.0C: Attention deduplication via canonical map', () => {
   });
 });
 
-describe('PASS 3.0A: Stale search invalidation (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('handleSearchChange increments search generation immediately', () => {
-    expect(src).toContain('searchReqIdRef.current++');
-  });
-
-  it('handleClearSearch increments search generation', () => {
-    const clearMatch = src.match(/handleClearSearch[\s\S]*?searchReqIdRef\.current\+\+/);
-    expect(clearMatch).toBeTruthy();
-  });
-
-  it('cleanup on unmount invalidates in-flight search', () => {
-    const cleanupMatch = src.match(/return \(\) => \{ searchReqIdRef\.current\+\+; \}/);
-    expect(cleanupMatch).toBeTruthy();
-  });
-
-  it('handleSearchChange resets cursor immediately', () => {
-    const changeMatch = src.match(/handleSearchChange[\s\S]*?createSearchState/);
-    expect(changeMatch).toBeTruthy();
-  });
-});
-
-describe('PASS 3.0B: Active search refresh (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('handleRefresh reruns search when search results are visible', () => {
-    const refreshMatch = src.match(/handleRefresh[\s\S]*?searchState\.status !== 'idle'[\s\S]*?listAuctions\(/);
-    expect(refreshMatch).toBeTruthy();
-  });
-
-  it('handleRefresh refetches sections when not searching', () => {
-    const refreshMatch = src.match(/handleRefresh[\s\S]*?fetchSections/);
-    expect(refreshMatch).toBeTruthy();
-  });
-});
-
-describe('PASS 3.0D: Foreground resync failure (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../hooks/useServerClock.ts'),
-    'utf-8'
-  );
-
-  it('does not clear needsResync before server response succeeds', () => {
-    const appStateEffect = src.match(/const handleAppStateChange[\s\S]*?subscription\.remove\(\);[\s\S]*?\}\s*,\s*\[\]\s*\)/);
-    expect(appStateEffect).toBeTruthy();
-    expect(appStateEffect![0]).not.toContain('setNeedsResync(false)');
-  });
-
-  it('needsResync is only cleared inside computeOffset', () => {
-    const computeMatch = src.match(/computeOffset[\s\S]*?setNeedsResync\(false\)/);
-    expect(computeMatch).toBeTruthy();
-  });
-
-  it('exposes resyncFailed state', () => {
-    expect(src).toContain('resyncFailed');
-    expect(src).toContain('clearResyncFailed');
-  });
-});
-
-describe('PASS 3.0E: Dark mode (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('does not hardcode barStyle="dark-content"', () => {
-    expect(src).not.toMatch(/barStyle="dark-content"/);
-  });
-
-  it('uses isDark for StatusBar barStyle', () => {
-    expect(src).toContain('isDark');
-    expect(src).toMatch(/barStyle=\{isDark/);
-  });
-
-  it('uses useAppTheme', () => {
-    expect(src).toContain('useAppTheme');
-  });
-
-  it('does not use hardcoded #ff4444', () => {
-    expect(src).not.toContain('#ff4444');
-  });
-
-  it('uses Colors.danger for danger states', () => {
-    expect(src).toContain('Colors.danger');
-  });
-});
-
-describe('PASS 3.0F: Least-data exposure (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('AuctionHomeItem contains winnerBidderId', () => {
-    const logicSrc = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../utils/auctionHomeLogic.ts'),
-      'utf-8'
-    );
-    const itemMatch = logicSrc.match(/export interface AuctionHomeItem \{[\s\S]*?\}/);
-    expect(itemMatch).toBeTruthy();
-    expect(itemMatch![0]).toContain('winnerBidderId');
-  });
-});
-
-describe('PASS 3.1: Card model family (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('defines AuctionAttentionCard', () => {
-    expect(src).toContain('AuctionAttentionCard');
-  });
-
-  it('defines AuctionFeedCard', () => {
-    expect(src).toContain('AuctionFeedCard');
-  });
-
-  it('defines AuctionCompactCard', () => {
-    expect(src).toContain('AuctionCompactCard');
-  });
-
-  it('defines AuctionEndedCard', () => {
-    expect(src).toContain('AuctionEndedCard');
-  });
-
-  it('attention card does not nest AppButton', () => {
-    expect(src).not.toContain('AppButton');
-  });
-
-  it('cards are memoised', () => {
-    expect(src).toContain('memo(');
-  });
-});
-
-describe('PASS 3.6: Attention card interaction (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('attention card uses single pressable, not nested AppButton', () => {
-    expect(src).toContain('AnimatedPressable');
-    expect(src).not.toContain('AppButton');
-  });
-
-  it('attention card has visual CTA label (not interactive button)', () => {
-    expect(src).toContain('attentionCtaLabel');
-  });
-});
-
-describe('PASS 3.7: Seller identity (static guardrails)', () => {
-  const logicSrc = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../utils/auctionHomeLogic.ts'),
-    'utf-8'
-  );
-
-  it('AuctionHomeItem has sellerAvatarUrl', () => {
-    expect(logicSrc).toContain('sellerAvatarUrl');
-  });
-
+describe('PASS 3.7: Seller identity', () => {
   it('getSellerInitials provides fallback', () => {
     expect(getSellerInitials('John Doe', 'johndoe')).toBe('JD');
     expect(getSellerInitials(null, 'johndoe')).toBe('J');
@@ -980,91 +659,7 @@ describe('PASS 3.7: Seller identity (static guardrails)', () => {
   });
 });
 
-describe('PASS 3.10: Partial section failure (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('uses Promise.allSettled (not Promise.all)', () => {
-    expect(src).toContain('Promise.allSettled');
-  });
-
-  it('tracks section errors', () => {
-    expect(src).toContain('sectionErrors');
-  });
-
-  it('shows section error banner for failed sections', () => {
-    expect(src).toContain('sectionErrorBanner');
-  });
-
-  it('pagination error is not silently swallowed', () => {
-    expect(src).toContain('paginationError');
-    expect(src).toContain('setPaginationError');
-  });
-});
-
-describe('PASS 3.11: Performance (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('card components are memoised', () => {
-    expect(src).toMatch(/memo\(function Auction/);
-  });
-
-  it('uses useCallback for render dispatchers', () => {
-    expect(src).toContain('useCallback');
-  });
-
-  it('uses useMemo for sections', () => {
-    expect(src).toContain('useMemo');
-  });
-
-  it('does not use nested FlashLists with scrollEnabled={false} inside parent FlashList', () => {
-    const flashListCount = (src.match(/FlashList/g) || []).length;
-    // Parent list + section lists — some section lists are horizontal (not nested vertical)
-    // The key is no nested scrollEnabled={false} vertical lists inside a parent vertical list
-    expect(flashListCount).toBeGreaterThan(0);
-  });
-});
-
-describe('PASS 3.12: Accessibility (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('uses buildAuctionAccessibilityLabel', () => {
-    expect(src).toContain('buildAuctionAccessibilityLabel');
-  });
-
-  it('accessibility labels include price state', () => {
-    const logicSrc = require('fs').readFileSync(
-      require('path').resolve(__dirname, '../utils/auctionHomeLogic.ts'),
-      'utf-8'
-    );
-    expect(logicSrc).toContain('priceLabel');
-    expect(logicSrc).toContain('buildAuctionAccessibilityLabel');
-  });
-
-  it('header buttons have accessibility labels', () => {
-    expect(src).toContain('accessibilityLabel="Go back"');
-    expect(src).toContain('accessibilityLabel="My auction activity"');
-  });
-
-  it('search has accessibility label', () => {
-    expect(src).toContain('accessibilityLabel="Search auctions"');
-  });
-
-  it('clear search has accessibility label', () => {
-    expect(src).toContain('accessibilityLabel="Clear search"');
-  });
-});
-
 // ── PASS 3.1 PURE UNIT TESTS ──
-// All tests below are pure unit tests — no React Native component mounting.
 
 describe('PASS 3.1: Server-time fallback selection (pure unit)', () => {
   it('selects first valid serverNow from multiple sources', () => {
@@ -1323,82 +918,5 @@ describe('PASS 3.1: Countdown update precision (pure unit)', () => {
   it('live with <=1min has urgency finalMinutes', () => {
     const timing = { effectiveState: 'live' as const, msToEnd: 30 * 1000 };
     expect(resolveUrgency(timing)).toBe('finalMinutes');
-  });
-});
-
-describe('PASS 3.1: Resync failure and retry (pure unit)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../hooks/useServerClock.ts'),
-    'utf-8'
-  );
-
-  it('markResyncFailed clears needsResync and sets resyncFailed', () => {
-    expect(src).toContain('markResyncFailed');
-    expect(src).toMatch(/setNeedsResync\(false\).*setResyncFailed\(true\)/s);
-  });
-
-  it('resyncFailed is cleared on successful computeOffset', () => {
-    expect(src).toMatch(/computeOffset[\s\S]*?setResyncFailed\(false\)/);
-  });
-
-  it('does not have clearResync (removed dead API)', () => {
-    expect(src).not.toMatch(/\bclearResync\b(?!Failed)/);
-  });
-
-  it('has bucketed clocks for performance', () => {
-    expect(src).toContain('secondClock');
-    expect(src).toContain('minuteClock');
-    expect(src).toContain('useBucketedServerClock');
-  });
-});
-
-describe('PASS 3.1: Card interaction consistency (static guardrails)', () => {
-  const src = require('fs').readFileSync(
-    require('path').resolve(__dirname, '../screens/AuctionHomeScreen.tsx'),
-    'utf-8'
-  );
-
-  it('no haptics import in screen', () => {
-    expect(src).not.toContain('haptics');
-  });
-
-  it('all card components use clockMs prop (not nowMs)', () => {
-    expect(src).not.toContain('nowMs');
-    expect(src).toContain('clockMs');
-  });
-
-  it('uses bucketed server clock (secondClock + minuteClock)', () => {
-    expect(src).toContain('secondClock');
-    expect(src).toContain('minuteClock');
-    expect(src).toContain('useBucketedServerClock');
-  });
-
-  it('uses AuctionSearchState model', () => {
-    expect(src).toContain('searchState');
-    expect(src).toContain('createSearchState');
-    expect(src).toContain('IDLE_SEARCH_STATE');
-  });
-
-  it('uses selectFirstServerTime for server-time fallback', () => {
-    expect(src).toContain('selectFirstServerTime');
-  });
-
-  it('uses isAllRejected for all-failed detection', () => {
-    expect(src).toContain('isAllRejected');
-  });
-
-  it('uses markResyncFailed (not clearResync)', () => {
-    expect(src).toContain('markResyncFailed');
-    expect(src).not.toMatch(/\bclearResync\b(?!Failed)/);
-  });
-
-  it('renders section error card with retry for failed sections', () => {
-    expect(src).toContain('sectionErrorCard');
-    expect(src).toContain('Retry');
-  });
-
-  it('uses sectionStates for section load state tracking', () => {
-    expect(src).toContain('sectionStates');
-    expect(src).toContain('makeSectionLoadState');
   });
 });

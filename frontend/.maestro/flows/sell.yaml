@@ -1,0 +1,26 @@
+appId: ${APP_ID}
+---
+tags:
+  - flagship
+  - sell
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+
+# The Home header has a "+" button that opens the Sell flow.
+- tapOn:
+    id: "home-sell-button"
+    optional: true
+
+- extendedWaitUntil:
+    visible:
+      id: "sell-screen"
+      optional: true
+    timeout: 15000
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: sell_first_viewport

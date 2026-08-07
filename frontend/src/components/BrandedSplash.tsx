@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Reanimated, {
   FadeInDown,
@@ -10,8 +10,9 @@ import Reanimated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
-import { Typography } from '../theme/designTokens';
+import { Typography, Type, Space } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface BrandedSplashProps {
@@ -21,6 +22,8 @@ interface BrandedSplashProps {
 const WORDMARK = 'THRYFTVERSE';
 
 export function BrandedSplash({ onFinish }: BrandedSplashProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const reducedMotionEnabled = useReducedMotion();
   const pulse = useSharedValue(1);
 
@@ -77,17 +80,18 @@ export function BrandedSplash({ onFinish }: BrandedSplashProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   centerWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
   },
   brandRow: {
     flexDirection: 'row',
@@ -96,16 +100,17 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   brandLetter: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     fontSize: 27,
     letterSpacing: 0.42,
   },
   tagline: {
     marginTop: 14,
-    color: '#d7b98f',
+    color: colors.brand,
     fontFamily: Typography.family.medium,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     letterSpacing: 0.22,
   },
-});
+  });
+}

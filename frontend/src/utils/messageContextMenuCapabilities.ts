@@ -1,9 +1,11 @@
 export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'retry' | 'report' | 'translate';
 
+import type { Ionicons } from '@expo/vector-icons';
+
 export interface ActionDef {
   id: MessageAction;
   label: string;
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   color?: string;
   destructive?: boolean;
 }

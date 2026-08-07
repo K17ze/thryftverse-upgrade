@@ -16,10 +16,12 @@ describe("neutral flagship production detail pass", () => {
     expect(design).toContain("do not introduce decorative champagne or gold");
   });
 
-  it("uses real media metadata with an honest 4:5 fallback", () => {
+  it("uses real media metadata with an honest portrait 3:4 fallback (2026 Poshmark standard)", () => {
     const geometry = readSource("utils/listingMediaGeometry.ts");
     const mapper = readSource("services/listingMapper.ts");
-    expect(geometry).toContain("DEFAULT_LISTING_MEDIA_ASPECT_RATIO = 4 / 5");
+    // 2026 standard: portrait 3:4 imagery (Poshmark March 2026 redesign).
+    // The fallback uses AspectRatio.portrait; real media geometry is still honoured.
+    expect(geometry).toContain("AspectRatio.portrait");
     expect(geometry).toContain("listing.mediaAspectRatio");
     expect(geometry).not.toContain("charCodeAt");
     expect(mapper).toContain("mediaAspectRatio:");
@@ -41,7 +43,11 @@ describe("neutral flagship production detail pass", () => {
   it("keeps product cards legible, truthful and accessible", () => {
     const card = readSource("components/ProductCardV2.tsx");
     const heart = readSource("components/AnimatedHeart.tsx");
-    expect(card).toContain("!item.isSold && !hasPriceDrop");
+    // Sustainability chip must never appear when sold or when a price drop
+    // is shown. The consolidated badge cascade enforces this through priority
+    // ordering: price drop > sold > condition > sustainability.
+    expect(card).toContain("price drop > sold > condition > sustainability");
+    expect(card).toContain("showSustainabilityChip");
     expect(card).not.toContain("Thryftverse seller");
     expect(card).not.toContain("item.likes > 0 ? item.likes : '—'");
     expect(card).toContain('accessibilityHint="Opens item details"');

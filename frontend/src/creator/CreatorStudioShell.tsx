@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Keyboard,
   useWindowDimensions,
   Platform,
+  PanResponder,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +31,13 @@ import { CreatorAssetPicker, type AssetPickerMode } from './CreatorAssetPicker';
 import { CreatorTemplateBrowser } from './CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from './CreatorPreviewOverlay';
 import { CreatorEntryScreen } from './CreatorEntryScreen';
-import { PressScale } from './CreatorAnimations';
+import { CreatorCropSheet } from './CreatorCropSheet';
+import { CreatorCutoutSheet } from './CreatorCutoutSheet';
+import { PressScale, SheetContainer } from './CreatorAnimations';
+import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
+import { useHaptic } from '../hooks/useHaptic';
+import { fetchLookByIdFromApi } from '../services/looksApi';
+import { lookToDocument } from './viewerAdapters';
 import type { CreatorTemplate } from './templates';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -42,7 +50,19 @@ function layerTypeLabel(type: CreatorLayer['type']): string {
     case 'mention': return 'Mention';
     case 'look': return 'Look';
     case 'vote': return 'Vote';
+    case 'quiz': return 'Quiz';
+    case 'question': return 'Question';
+    case 'emojiSlider': return 'Slider';
+    case 'countdown': return 'Countdown';
     case 'decorative': return 'Shape';
+    case 'draw': return 'Drawing';
+    case 'gif': return 'GIF';
+    case 'music': return 'Music';
+    case 'link': return 'Link';
+    case 'location': return 'Location';
+    case 'hashtag': return 'Hashtag';
+    case 'time': return 'Time';
+    case 'weather': return 'Weather';
     default: return 'Layer';
   }
 }
@@ -52,7 +72,7 @@ function CreatorStudioInner() {
   const route = useRoute<any>();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, commitLayerTransform, autosaveStatus, isLoadingDraft, setDocument, saveDraft } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, updatePageDuration, reorderPages, commitLayerTransform, isLoadingDraft, setDocument, saveDraft } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
@@ -63,10 +83,56 @@ function CreatorStudioInner() {
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
+  const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
+  const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
+  const [pageMenuIndex, setPageMenuIndex] = useState<number | null>(null);
+  const [editingLookId, setEditingLookId] = useState<string | null>(null);
+  const [isLoadingSourceLook, setIsLoadingSourceLook] = useState(false);
 
-  // Show entry screen when document is empty and not loading a draft/template
+  const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
+
+  // ── Edit mode: load an existing published look for editing ────────
+  // When sourceDocumentId refers to a published look (not a local draft),
+  // fetch it from the API and load it into the canvas as the working
+  // document. The remix path in CreatorContext handles local-draft
+  // sourceDocumentIds via CreatorDraftService; a published look ID will
+  // not be found there, so this effect picks it up from the API instead.
+  useEffect(() => {
+    if (!sourceDocumentId || route.params?.draftId || route.params?.templateId) return;
+    let cancelled = false;
+    setIsLoadingSourceLook(true);
+    fetchLookByIdFromApi(sourceDocumentId)
+      .then((res) => {
+        if (cancelled || !res.ok || !res.look) return;
+        const doc = lookToDocument({
+          id: res.look.id,
+          title: res.look.title,
+          caption: res.look.caption,
+          mediaUrl: res.look.mediaUrl,
+          tags: res.look.tags.map((t) => ({
+            id: t.id,
+            label: t.label,
+            listingId: t.listingId,
+            x: t.x,
+            y: t.y,
+          })),
+        });
+        setDocument(doc);
+        setEditingLookId(sourceDocumentId);
+      })
+      .catch(() => {
+        // Not a published look — the remix path in CreatorContext handles
+        // local-draft sourceDocumentIds. Nothing to do here.
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingSourceLook(false);
+      });
+    return () => { cancelled = true; };
+  }, [sourceDocumentId, route.params?.draftId, route.params?.templateId, setDocument]);
+
+  // Show entry screen when document is empty and not loading a draft/template/source look
   const hasContent = document.pages.some((p) => p.layers.length > 0);
-  const showEntryScreen = !entryComplete && !hasContent && !isLoadingDraft;
+  const showEntryScreen = !entryComplete && !hasContent && !isLoadingDraft && !isLoadingSourceLook;
 
   const page = document.pages[activePageIndex];
   const isLook = document.type === 'look';
@@ -138,7 +204,9 @@ function CreatorStudioInner() {
         e.preventDefault();
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
-        if (showPreview) setShowPreview(false);
+        if (cropTarget) setCropTarget(null);
+        else if (cutoutTarget) setCutoutTarget(null);
+        else if (showPreview) setShowPreview(false);
         else if (showOverflow) setShowOverflow(false);
         else if (showPublish) setShowPublish(false);
         else if (showTemplates) setShowTemplates(false);
@@ -154,12 +222,14 @@ function CreatorStudioInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, cropTarget, cutoutTarget, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // Hardware back button — intercept to close sheets first
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
+        if (cropTarget) { setCropTarget(null); return true; }
+        if (cutoutTarget) { setCutoutTarget(null); return true; }
         if (showPreview) { setShowPreview(false); return true; }
         if (showOverflow) { setShowOverflow(false); return true; }
         if (showPublish) { setShowPublish(false); return true; }
@@ -171,7 +241,7 @@ function CreatorStudioInner() {
         return false;
       };
       return onBackPress;
-    }, [showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+    }, [cropTarget, cutoutTarget, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
@@ -185,13 +255,10 @@ function CreatorStudioInner() {
 
   const selectedLayer = page?.layers.find((l) => l.id === selectedLayerId) ?? null;
 
-  // Compact draft status label for the top bar centre
-  const draftStatusLabel = useMemo(() => {
-    if (isLoadingDraft) return 'Loading…';
-    if (autosaveStatus === 'saving') return 'Saving…';
-    if (autosaveStatus === 'failed') return 'Save failed';
-    return null;
-  }, [isLoadingDraft, autosaveStatus]);
+  // Autosave status for the top bar (saving / saved / failed with retry)
+  const handleAutosaveRetry = useCallback(() => {
+    saveDraft();
+  }, [saveDraft]);
 
   // Handle media selection from entry screen — add all layers to the
   // first page, then enter the editor.
@@ -252,62 +319,27 @@ function CreatorStudioInner() {
         </View>
       </View>
 
-      {/* ── Floating top bar with gradient fade ──────────────────────── */}
-      {/* Semi-transparent gradient from black to transparent, like
-          Instagram Stories. Chrome floats over the canvas. */}
+      {/* ── Top bar — transparent floating, gradient scrim (Instagram pattern) ── */}
       <View style={[styles.topBarContainer, { paddingTop: insets.top }]}>
         <LinearGradient
-          colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
-          style={styles.topBarGradient}
-        >
-          {/* Page progress dots (poster) — Instagram-style segments at top */}
-          {isPoster && document.pages.length > 1 && (
-            <View style={styles.pageDotsRow}>
-              {document.pages.map((p, i) => (
-                <PressScale
-                  key={p.id}
-                  onPress={() => { selectLayer(null); setActivePageIndex(i); }}
-                  onLongPress={() => {
-                    if (document.pages.length > 1) {
-                      Alert.alert(
-                        `Page ${i + 1}`,
-                        undefined,
-                        [
-                          { text: 'Duplicate', onPress: () => duplicatePage(i) },
-                          { text: 'Delete', style: 'destructive', onPress: () => removePage(i) },
-                          { text: 'Cancel', style: 'cancel' },
-                        ],
-                      );
-                    }
-                  }}
-                  style={styles.pageDotSegment}
-                  accessibilityLabel={`Page ${i + 1}`}
-                >
-                  <View style={[
-                    styles.pageDotFill,
-                    i === activePageIndex
-                      ? { backgroundColor: '#fff' }
-                      : { backgroundColor: 'rgba(255,255,255,0.3)' },
-                  ]} />
-                </PressScale>
-              ))}
-            </View>
-          )}
-
+          colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0)']}
+          style={styles.topBarScrim}
+        />
+        <View style={[styles.topBar, { backgroundColor: 'transparent', borderBottomColor: 'transparent' }]}>
           <View style={styles.topBarRow}>
             {selectedLayer ? (
-              /* During selection: Done · object name · More (audit 9.3) */
+              /* During selection: Done · object name · More */
               <>
                 <PressScale
                   onPress={() => selectLayer(null)}
                   style={styles.topBtn}
                   accessibilityLabel="Done"
                 >
-                  <Text style={styles.doneText}>Done</Text>
+                  <Text style={[styles.doneText, { color: '#fff' }]}>Done</Text>
                 </PressScale>
 
                 <View style={styles.topCenter}>
-                  <Text style={styles.titleText} numberOfLines={1}>
+                  <Text style={[styles.titleText, { color: '#fff' }]} numberOfLines={1}>
                     {layerTypeLabel(selectedLayer.type)}
                   </Text>
                 </View>
@@ -323,32 +355,19 @@ function CreatorStudioInner() {
                 </View>
               </>
             ) : (
-              /* Default: Back · center draft status · Preview/Next (audit 9.3) */
+              /* Default: Back · spacer · Preview · Publish (Instagram minimalism) */
               <>
-                <PressScale
-                  onPress={handleBack}
-                  style={styles.topBtn}
-                  accessibilityLabel="Back"
-                >
-                  <Ionicons name="close" size={28} color="#fff" />
-                </PressScale>
-
-                {/* Centre: mode-specific title + status */}
-                <View style={styles.topCenter}>
-                  {draftStatusLabel ? (
-                    <Text style={styles.statusText} numberOfLines={1}>
-                      {draftStatusLabel}
-                    </Text>
-                  ) : (
-                    <Text style={styles.titleText} numberOfLines={1}>
-                      {isLook ? 'Collage' : 'Story'}
-                      {isDirty ? ' ·' : ''}
-                    </Text>
-                  )}
+                <View style={styles.topLeftGroup}>
+                  <PressScale
+                    onPress={handleBack}
+                    style={styles.topBtn}
+                    accessibilityLabel="Back"
+                  >
+                    <Ionicons name="chevron-back" size={26} color="#fff" />
+                  </PressScale>
                 </View>
 
-                {/* Right: Preview + Next */}
-                <View style={styles.topRight}>
+                <View style={styles.topRightGroup}>
                   <PressScale
                     onPress={() => setShowPreview(true)}
                     style={styles.topBtn}
@@ -358,43 +377,94 @@ function CreatorStudioInner() {
                   </PressScale>
                   <PressScale
                     onPress={() => setShowPublish(true)}
-                    style={styles.nextBtn}
-                    accessibilityLabel="Next"
+                    style={[styles.publishBtn, { backgroundColor: colors.brand }]}
+                    accessibilityLabel="Publish"
                     scale={0.97}
                   >
-                    <Text style={styles.nextBtnText}>Next</Text>
+                    <Text style={[styles.publishBtnText, { color: '#fff' }]}>Publish</Text>
                   </PressScale>
                 </View>
               </>
             )}
           </View>
-        </LinearGradient>
+        </View>
       </View>
 
-      {/* ── Add page button (poster) — floating, right side ──────────── */}
-      {isPoster && document.pages.length < 10 && (
-        <PressScale
-          onPress={() => { selectLayer(null); addPage(); }}
-          style={[styles.addPageFloat, { top: insets.top + 60 }]}
-          accessibilityLabel="Add page"
+      {/* ── Page dots row (poster) — floating glass pill below top bar ──── */}
+      {isPoster && document.pages.length > 1 && (
+        <View
+          style={[
+            styles.pageDotsFloat,
+            { top: insets.top + 56 + Space.sm },
+          ]}
         >
-          <LinearGradient
-            colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.3)']}
-            style={styles.addPageFloatGradient}
+          <LiquidGlassBackdrop
+            intensity={40}
+            tint="dark"
+            absoluteFill={false}
+            style={styles.pageDotsPill}
           >
-            <Ionicons name="add" size={20} color="#fff" />
-          </LinearGradient>
-        </PressScale>
+            {document.pages.map((p, i) => (
+              <PressScale
+                key={p.id}
+                onPress={() => { selectLayer(null); setActivePageIndex(i); }}
+                onLongPress={() => setPageMenuIndex(i)}
+                style={styles.pageDotTarget}
+                accessibilityLabel={`Page ${i + 1}`}
+                accessibilityState={{ selected: i === activePageIndex }}
+                hitSlop={8}
+              >
+                {i === activePageIndex ? (
+                  <LinearGradient
+                    colors={[colors.brand, colors.brand]}
+                    style={styles.pageDotActive}
+                  />
+                ) : (
+                  <View style={[styles.pageDot, { backgroundColor: 'rgba(255,255,255,0.5)' }]} />
+                )}
+              </PressScale>
+            ))}
+          </LiquidGlassBackdrop>
+
+          {/* Page count */}
+          <Text style={[styles.pageCountText, { color: 'rgba(255,255,255,0.85)' }]}>
+            {activePageIndex + 1}/{document.pages.length}
+          </Text>
+
+          {/* Add page button */}
+          {document.pages.length < 10 && (
+            <LiquidGlassBackdrop
+              intensity={40}
+              tint="dark"
+              absoluteFill={false}
+              style={styles.addPageBtn}
+            >
+              <PressScale
+                onPress={() => { selectLayer(null); addPage(); }}
+                style={styles.addPageBtnInner}
+                accessibilityLabel="Add page"
+                hitSlop={8}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+              </PressScale>
+            </LiquidGlassBackdrop>
+          )}
+        </View>
       )}
 
-      {/* ── Floating bottom rail with gradient fade ──────────────────── */}
-      {/* Semi-transparent gradient from transparent to black, with
-          blur. The tool dock sits on top of this gradient. */}
+      {/* ── Floating bottom rail with Liquid Glass backdrop ──────────── */}
+      {/* Premium glassmorphism: Liquid Glass on iOS 26+, BlurView fallback
+          elsewhere. The tool dock sits on top of this glass surface. */}
       <View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }]}>
-        <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)']}
-          style={styles.bottomRailGradient}
-        >
+        <LiquidGlassBackdrop intensity={50} tint="dark" absoluteFill={false} style={styles.bottomRailGlass}>
+          {/* Opacity slider — appears when a layer is selected (Instagram pattern) */}
+          {selectedLayer && (
+            <OpacityBar
+              value={selectedLayer.opacity ?? 1}
+              onChange={(v) => updateLayer(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
+              onCommit={(v) => commitLayerTransform(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
+            />
+          )}
           <CreatorToolDock
             selectedLayer={selectedLayer}
             onPublish={() => setShowPublish(true)}
@@ -407,16 +477,31 @@ function CreatorStudioInner() {
               else if (layer.type === 'product') setPickerMode('product');
               else if (layer.type === 'mention') setPickerMode('mention');
               else if (layer.type === 'vote') setPickerMode('vote');
+              else if (layer.type === 'quiz') setPickerMode('quiz');
+              else if (layer.type === 'question') setPickerMode('question');
+              else if (layer.type === 'emojiSlider') setPickerMode('emojiSlider');
+              else if (layer.type === 'countdown') setPickerMode('countdown');
+              else if (layer.type === 'draw') setPickerMode('draw');
+              else if (layer.type === 'gif') setPickerMode('gif');
+              else if (layer.type === 'music') setPickerMode('music');
+              else if (layer.type === 'link') setPickerMode('link');
+              else if (layer.type === 'location') setPickerMode('location');
+              else if (layer.type === 'hashtag') setPickerMode('hashtag');
+              else if (layer.type === 'time') setPickerMode('time');
+              else if (layer.type === 'weather') setPickerMode('weather');
             }}
+            onCropLayer={(layer) => setCropTarget(layer)}
+            onCutoutLayer={(layer) => setCutoutTarget(layer)}
             onDeleteLayer={(id) => removeLayer(id)}
             onDuplicateLayer={(id) => duplicateLayer(id)}
             onReorderLayer={(id, dir) => reorderLayer(id, dir)}
             onMore={() => setShowOverflow(true)}
             floating={true}
+            documentType={document.type}
             onAddPage={isPoster ? () => addPage() : undefined}
             onLayoutPresets={isLook ? () => setShowTemplates(true) : undefined}
           />
-        </LinearGradient>
+        </LiquidGlassBackdrop>
       </View>
 
       {/* ── Overflow menu ────────────────────────────────────────────── */}
@@ -431,7 +516,8 @@ function CreatorStudioInner() {
               {
                 backgroundColor: colors.surfaceElevated,
                 borderColor: colors.border,
-                bottom: insets.bottom + 72,
+                top: insets.top + 52,
+                right: 12,
               },
             ]}
           >
@@ -465,10 +551,10 @@ function CreatorStudioInner() {
               />
             ) : (
               <OverflowItem
-                icon="stats-chart-outline"
-                label="Vote"
+                icon="happy-outline"
+                label="Stickers"
                 colors={colors}
-                onPress={() => { setPickerMode('vote'); setShowOverflow(false); }}
+                onPress={() => { setPickerMode('stickers'); setShowOverflow(false); }}
               />
             )}
             <View style={[styles.overflowDivider, { backgroundColor: colors.border }]} />
@@ -511,7 +597,7 @@ function CreatorStudioInner() {
         }}
       />
       <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
-      <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} />
+      <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} editingLookId={editingLookId ?? undefined} />
       <CreatorSettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
       <CreatorTemplateBrowser
         visible={showTemplates}
@@ -523,6 +609,45 @@ function CreatorStudioInner() {
           setDocument(doc);
         }}
       />
+      {/* ── Crop sheet (Look mode — Instagram-style aspect ratio crop) ── */}
+      {cropTarget && cropTarget.type === 'media' && (
+        <CreatorCropSheet
+          visible={!!cropTarget}
+          imageUri={cropTarget.payload.mediaUri}
+          onClose={() => setCropTarget(null)}
+          onCropComplete={(newUri) => {
+            if (cropTarget && cropTarget.type === 'media') {
+              updateLayer(cropTarget.id, {
+                type: 'media',
+                payload: { ...cropTarget.payload, mediaUri: newUri },
+              });
+            }
+            setCropTarget(null);
+          }}
+        />
+      )}
+      {/* ── Cutout sheet (Look mode — Snapchat-style scissors cutout) ── */}
+      {cutoutTarget && cutoutTarget.type === 'media' && (
+        <CreatorCutoutSheet
+          visible={!!cutoutTarget}
+          imageUri={cutoutTarget.payload.mediaUri}
+          onClose={() => setCutoutTarget(null)}
+          onCutoutComplete={(newUri) => {
+            if (cutoutTarget && cutoutTarget.type === 'media') {
+              // Replace the media layer's URI with the cutout result
+              updateLayer(cutoutTarget.id, {
+                type: 'media',
+                payload: {
+                  ...cutoutTarget.payload,
+                  mediaUri: newUri,
+                  contentFit: 'contain',
+                },
+              });
+            }
+            setCutoutTarget(null);
+          }}
+        />
+      )}
       <CreatorAssetPicker
         visible={pickerMode !== null}
         mode={pickerMode ?? 'media'}
@@ -536,6 +661,20 @@ function CreatorStudioInner() {
           }
         }}
       />
+      {/* ── Page options sheet (duration + duplicate + reorder + delete) ── */}
+      {pageMenuIndex !== null && (
+        <PageOptionsSheet
+          pageIndex={pageMenuIndex}
+          pageCount={document.pages.length}
+          currentDuration={document.pages[pageMenuIndex]?.durationMs ?? 5000}
+          onClose={() => setPageMenuIndex(null)}
+          onSetDuration={(ms) => { updatePageDuration(pageMenuIndex, ms); }}
+          onDuplicate={() => { duplicatePage(pageMenuIndex); setPageMenuIndex(null); }}
+          onDelete={() => { removePage(pageMenuIndex); setPageMenuIndex(null); }}
+          onMoveLeft={() => { if (pageMenuIndex > 0) { reorderPages(pageMenuIndex, pageMenuIndex - 1); setActivePageIndex(pageMenuIndex - 1); } setPageMenuIndex(null); }}
+          onMoveRight={() => { if (pageMenuIndex < document.pages.length - 1) { reorderPages(pageMenuIndex, pageMenuIndex + 1); setActivePageIndex(pageMenuIndex + 1); } setPageMenuIndex(null); }}
+        />
+      )}
     </View>
   );
 }
@@ -543,23 +682,30 @@ function CreatorStudioInner() {
 // ── Overflow menu item ─────────────────────────────────────────────
 
 interface OverflowItemProps {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   colors: ReturnType<typeof useAppTheme>['colors'];
   onPress: () => void;
   disabled?: boolean;
 }
 
-function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemProps) {
+const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemProps) {
+  const haptic = useHaptic();
   return (
     <PressScale
-      onPress={onPress}
+      onPress={() => {
+        if (disabled) return;
+        haptic.selection();
+        onPress();
+      }}
       disabled={disabled}
       style={[styles.overflowItem, disabled ? { opacity: 0.4 } : {}]}
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      hitSlop={12}
     >
       <Ionicons
-        name={icon as any}
+        name={icon}
         size={22}
         color={disabled ? colors.textMuted : colors.textPrimary}
       />
@@ -572,6 +718,188 @@ function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemPr
         {label}
       </Text>
     </PressScale>
+  );
+});
+
+// ── Opacity bar — drag-based slider for layer opacity (Instagram pattern) ──
+const OpacityBar = React.memo(function OpacityBar({ value, onChange, onCommit }: { value: number; onChange: (v: number) => void; onCommit: (v: number) => void }) {
+  const trackRef = useRef<View | null>(null);
+  const draggingRef = useRef(false);
+  const haptic = useHaptic();
+
+  const updateFromTouch = useCallback((locationX: number, width: number) => {
+    if (width <= 0) return;
+    const ratio = Math.max(0, Math.min(1, locationX / width));
+    const snapped = Math.round(ratio * 20) / 20; // snap to 5% increments
+    if (snapped !== value) {
+      haptic.selection();
+      onChange(snapped);
+    }
+  }, [value, onChange, haptic]);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (e) => {
+      draggingRef.current = true;
+      trackRef.current?.measure((x, y, w, h, pageX) => {
+        updateFromTouch(e.nativeEvent.pageX - pageX, w);
+      });
+    },
+    onPanResponderMove: (e) => {
+      trackRef.current?.measure((x, y, w, h, pageX) => {
+        updateFromTouch(e.nativeEvent.pageX - pageX, w);
+      });
+    },
+    onPanResponderRelease: () => {
+      draggingRef.current = false;
+      onCommit(value);
+    },
+    onPanResponderTerminate: () => {
+      draggingRef.current = false;
+      onCommit(value);
+    },
+  }), [updateFromTouch, onCommit, value]);
+
+  const pct = Math.round(value * 100);
+
+  return (
+    <View style={styles.opacityBar}>
+      <Ionicons name="contrast-outline" size={16} color="rgba(255,255,255,0.7)" />
+      <View
+        ref={trackRef}
+        style={styles.opacitySliderTrack}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.opacitySliderTrackBg} />
+        <View style={[styles.opacitySliderFill, { width: `${pct}%` }]} />
+        <View style={[styles.opacitySliderThumb, { left: `${pct}%` }]} />
+      </View>
+      <Text style={styles.opacityLabel}>{pct}%</Text>
+    </View>
+  );
+});
+
+// ── Page options sheet ─────────────────────────────────────────────
+// Replaces the old Alert.alert-based page menu with a proper designed
+// sheet: segmented duration control, duplicate, move left/right, delete.
+function PageOptionsSheet({
+  pageIndex,
+  pageCount,
+  currentDuration,
+  onClose,
+  onSetDuration,
+  onDuplicate,
+  onDelete,
+  onMoveLeft,
+  onMoveRight,
+}: {
+  pageIndex: number;
+  pageCount: number;
+  currentDuration: number;
+  onClose: () => void;
+  onSetDuration: (ms: number) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onMoveLeft: () => void;
+  onMoveRight: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const DURATIONS = [
+    { label: '3s', ms: 3000 },
+    { label: '5s', ms: 5000 },
+    { label: '7s', ms: 7000 },
+    { label: '10s', ms: 10000 },
+    { label: '15s', ms: 15000 },
+  ];
+  const canMoveLeft = pageIndex > 0;
+  const canMoveRight = pageIndex < pageCount - 1;
+  const canDelete = pageCount > 1;
+
+  return (
+    <SheetContainer visible={true} onClose={onClose} maxHeight={0.6}>
+      <View style={styles.pageSheetHeader}>
+        <Text style={[styles.pageSheetTitle, { color: colors.textPrimary }]}>Page {pageIndex + 1}</Text>
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close page options">
+          <Ionicons name="close" size={22} color={colors.textSecondary} />
+        </PressScale>
+      </View>
+      <View style={styles.pageSheetBody}>
+        {/* Duration — segmented control */}
+        <Text style={[styles.pageSheetLabel, { color: colors.textSecondary }]}>Duration</Text>
+        <View style={styles.pageSheetDurationRow}>
+          {DURATIONS.map((d) => {
+            const isActive = currentDuration === d.ms;
+            return (
+              <Pressable
+                key={d.ms}
+                onPress={() => { haptic.selection(); onSetDuration(d.ms); }}
+                style={[styles.pageSheetDurationBtn, isActive && { backgroundColor: colors.brand }]}
+                accessibilityLabel={`Set duration to ${d.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text style={[styles.pageSheetDurationText, isActive && { color: colors.textInverse }]}>
+                  {d.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Reorder */}
+        <Text style={[styles.pageSheetLabel, { color: colors.textSecondary, marginTop: Space.md }]}>Order</Text>
+        <View style={styles.pageSheetActions}>
+          <Pressable
+            onPress={() => { if (canMoveLeft) { haptic.selection(); onMoveLeft(); } }}
+            disabled={!canMoveLeft}
+            style={[styles.pageSheetActionBtn, !canMoveLeft && { opacity: 0.35 }]}
+            accessibilityLabel="Move page left"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canMoveLeft }}
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
+            <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Left</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { if (canMoveRight) { haptic.selection(); onMoveRight(); } }}
+            disabled={!canMoveRight}
+            style={[styles.pageSheetActionBtn, !canMoveRight && { opacity: 0.35 }]}
+            accessibilityLabel="Move page right"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canMoveRight }}
+          >
+            <Ionicons name="arrow-forward" size={20} color={colors.textPrimary} />
+            <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Right</Text>
+          </Pressable>
+        </View>
+
+        {/* Duplicate + Delete */}
+        <View style={styles.pageSheetActions}>
+          <Pressable
+            onPress={() => { haptic.medium(); onDuplicate(); }}
+            style={styles.pageSheetActionBtn}
+            accessibilityLabel="Duplicate page"
+            accessibilityRole="button"
+          >
+            <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
+            <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Duplicate</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { if (canDelete) { haptic.medium(); onDelete(); } }}
+            disabled={!canDelete}
+            style={[styles.pageSheetActionBtn, !canDelete && { opacity: 0.35 }]}
+            accessibilityLabel="Delete page"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canDelete }}
+          >
+            <Ionicons name="trash-outline" size={20} color={canDelete ? colors.danger : colors.textMuted} />
+            <Text style={[styles.pageSheetActionLabel, { color: canDelete ? colors.danger : colors.textMuted }]}>Delete</Text>
+          </Pressable>
+        </View>
+      </View>
+    </SheetContainer>
   );
 }
 
@@ -599,13 +927,21 @@ const styles = StyleSheet.create({
   canvasStage: {
     ...StyleSheet.absoluteFill,
   },
-  // ── Floating top bar ──
+  // ── Floating top bar (transparent, gradient scrim) ──
   topBarContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 100,
+  },
+  topBarScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 140,
+    zIndex: -1,
   },
   topBarGradient: {
     paddingHorizontal: Space.sm,
@@ -614,19 +950,19 @@ const styles = StyleSheet.create({
   // ── Page progress dots (Instagram-style segments) ──
   pageDotsRow: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 3,
     paddingHorizontal: Space.xs,
-    paddingBottom: Space.sm,
+    paddingBottom: Space.sm + 2,
   },
   pageDotSegment: {
     flex: 1,
-    height: 3,
-    borderRadius: 2,
+    height: 22,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
   },
   pageDotFill: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
+    height: 3.5,
+    borderRadius: Radius.sm,
   },
   // ── Top bar row ──
   topBarRow: {
@@ -659,7 +995,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   statusText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.8)',
   },
@@ -675,6 +1011,99 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
+  },
+  // ── Top bar groups (default mode) ──
+  topLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  topRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  // ── Transparent floating top bar ──
+  topBar: {
+    height: 56,
+    paddingHorizontal: Space.sm,
+    borderBottomWidth: 0,
+    backgroundColor: 'transparent',
+  },
+  // ── Publish button (premium pill) ──
+  publishBtn: {
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  publishBtnText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+  },
+  // ── Page dots floating pill ──
+  pageDotsFloat: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    zIndex: 90,
+  },
+  pageDotsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.md,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  pageDotTarget: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageDot: {
+    width: 7,
+    height: 7,
+    borderRadius: Radius.full,
+  },
+  pageDotActive: {
+    width: 10,
+    height: 10,
+    borderRadius: Radius.full,
+  },
+  pageCountText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+  },
+  addPageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  addPageBtnInner: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   nextBtnText: {
     fontFamily: Typography.family.semibold,
@@ -694,7 +1123,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // ── Floating bottom rail ──
+  // ── Floating bottom rail (Liquid Glass) ──
   bottomRailContainer: {
     position: 'absolute',
     bottom: 0,
@@ -702,8 +1131,58 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
   },
-  bottomRailGradient: {
+  bottomRailGlass: {
+    flex: 1,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    overflow: 'hidden',
     paddingTop: Space.md,
+  },
+  // ── Opacity bar ──
+  opacityBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.xs,
+  },
+  opacitySliderTrack: {
+    flex: 1,
+    height: 28,
+    justifyContent: 'center',
+  },
+  opacitySliderTrackBg: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 4,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  opacitySliderFill: {
+    height: 4,
+    borderRadius: Radius.sm,
+    backgroundColor: '#C9A46A',
+  },
+  opacitySliderThumb: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderRadius: Radius.full,
+    backgroundColor: '#fff',
+    marginLeft: -9,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    shadowOpacity: 0.25,
+    elevation: 3,
+  },
+  opacityLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    color: 'rgba(255,255,255,0.8)',
+    minWidth: 36,
+    textAlign: 'right',
   },
   // ── Overflow menu ──
   overflowBackdrop: {
@@ -712,16 +1191,15 @@ const styles = StyleSheet.create({
   },
   overflowMenu: {
     position: 'absolute',
-    right: Space.sm,
     minWidth: 220,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   overflowItem: {
     flexDirection: 'row',
@@ -738,5 +1216,72 @@ const styles = StyleSheet.create({
   overflowDivider: {
     height: StyleSheet.hairlineWidth,
     marginVertical: Space.xs,
+  },
+  // ── Page options sheet ──
+  pageSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  pageSheetTitle: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.subtitle.size,
+  },
+  closeBtn: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
+  },
+  pageSheetBody: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xl,
+    gap: Space.xs,
+  },
+  pageSheetLabel: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.caption.size,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pageSheetDurationRow: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    marginTop: Space.xs,
+  },
+  pageSheetDurationBtn: {
+    flex: 1,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+  },
+  pageSheetDurationText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    color: '#fff',
+  },
+  pageSheetActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.xs,
+  },
+  pageSheetActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs + 2,
+    paddingVertical: Space.md,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  pageSheetActionLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    color: '#fff',
   },
 });

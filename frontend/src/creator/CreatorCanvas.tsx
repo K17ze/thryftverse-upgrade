@@ -1,10 +1,12 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
-import { View, Text, Image, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { CachedImage } from '../components/CachedImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
   runOnJS,
   withTiming,
   withSpring,
@@ -14,9 +16,11 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Canvas as SkiaCanvas, Path as SkiaPath, Skia } from '@shopify/react-native-skia';
+import { Image as ExpoImage } from 'expo-image';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
 import { getVisibleLayersSorted } from './composition';
@@ -78,17 +82,17 @@ export function CreatorCanvas({
     }
     if (canvas.background.type === 'image' && canvas.background.value) {
       return (
-        <Image
-          source={{ uri: canvas.background.value }}
+        <CachedImage
+          uri={canvas.background.value}
           style={StyleSheet.absoluteFill}
-          resizeMode="cover"
+          contentFit="cover"
         />
       );
     }
     return <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]} />;
   };
 
-  // Canvas borderRadius: 0 in edit mode (the canvas IS the stage),
+  // Canvas borderRadius: Radius.none in edit mode (the canvas IS the stage),
   // rounded in view/preview mode (thumbnails, publish preview).
   const canvasRadius = mode === 'edit' ? 0 : Radius.lg;
 
@@ -113,6 +117,7 @@ export function CreatorCanvas({
         <LayerRenderer
           key={layer.id}
           layer={layer}
+          siblingLayers={visibleLayers.filter((l) => l.id !== layer.id)}
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
           mode={mode}
@@ -136,16 +141,23 @@ export function CreatorCanvas({
 // Premium empty state with layered icon, title, and guidance.
 // Not just a pulsing icon — a proper designed empty surface.
 function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
+  const reducedMotion = useReducedMotion();
   const scaleSV = useSharedValue(1);
 
   useEffect(() => {
+    if (reducedMotion) {
+      // WCAG 2.2 §2.3.3 — no repeating pulse animation when Reduce Motion is on
+      cancelAnimation(scaleSV);
+      scaleSV.value = 1;
+      return;
+    }
     scaleSV.value = withRepeat(
-      withTiming(1.08, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1.06, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
     return () => cancelAnimation(scaleSV);
-  }, [scaleSV]);
+  }, [scaleSV, reducedMotion]);
 
   const animatedIconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleSV.value }],
@@ -155,14 +167,14 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
     <View style={styles.emptyState} pointerEvents="none">
       <View style={styles.emptyStateIconWrap}>
         <Reanimated.View style={animatedIconStyle}>
-          <Ionicons name="add-circle-outline" size={56} color="rgba(255,255,255,0.25)" />
+          <Ionicons name="add-circle-outline" size={64} color="rgba(255,255,255,0.4)" />
         </Reanimated.View>
       </View>
       <Text style={styles.emptyStateTitle}>
-        Start creating
+        Tap a tool to start
       </Text>
       <Text style={styles.emptyStateSubtitle}>
-        Use the tools below to add media, text, and more
+        Media · Text · Product · Elements · Layout
       </Text>
     </View>
   );
@@ -170,6 +182,7 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
 
 interface LayerRendererProps {
   layer: CreatorLayer;
+  siblingLayers: CreatorLayer[];
   canvasWidth: number;
   canvasHeight: number;
   mode: 'edit' | 'preview' | 'view';
@@ -188,8 +201,9 @@ function triggerHaptic() {
   try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
 }
 
-function LayerRenderer({
+const LayerRenderer = React.memo(function LayerRenderer({
   layer,
+  siblingLayers,
   canvasWidth,
   canvasHeight,
   mode,
@@ -200,6 +214,7 @@ function LayerRenderer({
   onLongPress,
 }: LayerRendererProps) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const translateX = useSharedValue(layer.x * canvasWidth);
   const translateY = useSharedValue(layer.y * canvasHeight);
   const scaleSV = useSharedValue(layer.scale);
@@ -209,6 +224,9 @@ function LayerRenderer({
   const startScale = useSharedValue(1);
   const startRotation = useSharedValue(0);
   const [showGuides, setShowGuides] = useState(false);
+  // Smart alignment guides — vertical/horizontal pixel positions where the
+  // dragged layer's edges/centre align with a sibling's edges/centre.
+  const [smartGuides, setSmartGuides] = useState<{ vertical: number[]; horizontal: number[] }>({ vertical: [], horizontal: [] });
 
   // Selection animation: border + handles fade/scale in with spring
   const selectionOpacity = useSharedValue(0);
@@ -216,24 +234,32 @@ function LayerRenderer({
 
   useEffect(() => {
     if (isSelected) {
-      selectionOpacity.value = withSpring(1, { damping: 25, stiffness: 400 });
-      handleScale.value = withSpring(1, { damping: 25, stiffness: 400 });
+      selectionOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, { damping: 15, stiffness: 180 });
+      handleScale.value = reducedMotion ? withTiming(1, { duration: 0 }) : withSpring(1, { damping: 14, stiffness: 200 });
     } else {
-      selectionOpacity.value = withTiming(0, { duration: 120 });
-      handleScale.value = withTiming(0.5, { duration: 120 });
+      selectionOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withSpring(0, { damping: 16, stiffness: 200 });
+      handleScale.value = reducedMotion ? withTiming(0.5, { duration: 0 }) : withSpring(0.5, { damping: 16, stiffness: 200 });
     }
-  }, [isSelected, selectionOpacity, handleScale]);
+  }, [isSelected, selectionOpacity, handleScale, reducedMotion]);
 
   // Gesture feedback badges (scale % and rotation angle)
   const [gestureBadge, setGestureBadge] = useState<string | null>(null);
 
   // Sync shared values when document state changes (undo/redo/draft load/page change)
   useEffect(() => {
-    translateX.value = withTiming(layer.x * canvasWidth, { duration: 150 });
-    translateY.value = withTiming(layer.y * canvasHeight, { duration: 150 });
-    scaleSV.value = withTiming(layer.scale, { duration: 150 });
-    rotationSV.value = withTiming(normaliseDegrees(layer.rotation), { duration: 150 });
-  }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight]);
+    if (reducedMotion) {
+      // WCAG 2.2 §2.3.3 — instant snap, no spring bounce
+      translateX.value = withTiming(layer.x * canvasWidth, { duration: 0 });
+      translateY.value = withTiming(layer.y * canvasHeight, { duration: 0 });
+      scaleSV.value = withTiming(layer.scale, { duration: 0 });
+      rotationSV.value = withTiming(normaliseDegrees(layer.rotation), { duration: 0 });
+    } else {
+      translateX.value = withSpring(layer.x * canvasWidth, { damping: 18, stiffness: 220 });
+      translateY.value = withSpring(layer.y * canvasHeight, { damping: 18, stiffness: 220 });
+      scaleSV.value = withSpring(layer.scale, { damping: 18, stiffness: 220 });
+      rotationSV.value = withSpring(normaliseDegrees(layer.rotation), { damping: 18, stiffness: 220 });
+    }
+  }, [layer.x, layer.y, layer.scale, layer.rotation, canvasWidth, canvasHeight, reducedMotion]);
 
   const handlePress = useCallback(() => {
     if (mode === 'edit' && onPress) {
@@ -273,14 +299,16 @@ function LayerRenderer({
     normX = Math.max(minX, Math.min(maxX, normX));
     normY = Math.max(minY, Math.min(maxY, normY));
 
-    translateX.value = withTiming(normX * canvasWidth, { duration: 100 });
-    translateY.value = withTiming(normY * canvasHeight, { duration: 100 });
+    translateX.value = withTiming(normX * canvasWidth, { duration: reducedMotion ? 0 : 100 });
+    translateY.value = withTiming(normY * canvasHeight, { duration: reducedMotion ? 0 : 100 });
 
     if (snappedX || snappedY) triggerHaptic();
     setShowGuides(false);
+    setSmartGuides({ vertical: [], horizontal: [] });
+    setSmartGuides({ vertical: [], horizontal: [] });
 
     onTransformChange?.(layer.id, { x: normX, y: normY });
-  }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY]);
+  }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY, reducedMotion]);
 
   const handleTransformCommit = useCallback((finalScale: number, finalRotation: number) => {
     const clampedScale = Math.max(0.2, Math.min(5, finalScale));
@@ -294,10 +322,10 @@ function LayerRenderer({
       triggerHaptic();
     }
 
-    scaleSV.value = withTiming(clampedScale, { duration: 100 });
-    rotationSV.value = withTiming(snappedRotation, { duration: 100 });
+    scaleSV.value = withTiming(clampedScale, { duration: reducedMotion ? 0 : 100 });
+    rotationSV.value = withTiming(snappedRotation, { duration: reducedMotion ? 0 : 100 });
     onTransformChange?.(layer.id, { scale: clampedScale, rotation: snappedRotation });
-  }, [layer.id, onTransformChange, scaleSV, rotationSV]);
+  }, [layer.id, onTransformChange, scaleSV, rotationSV, reducedMotion]);
 
   const panGesture = useMemo(
     () =>
@@ -424,6 +452,65 @@ function LayerRenderer({
 
   const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight);
 
+  // Smart alignment guides: while dragging, detect when this layer's
+  // left/right/centre aligns with a sibling's left/right/centre (vertical
+  // guide) or top/bottom/centre (horizontal guide). Computed on the UI
+  // thread from the live translate shared values and committed sibling
+  // geometry, then mirrored to JS state for rendering.
+  const SMART_GUIDE_THRESHOLD_PX = 4;
+  const computeSmartGuides = useCallback(
+    (cx: number, cy: number) => {
+      const halfW = (layer.width * layer.scale * canvasWidth) / 2;
+      const halfH = (layer.height * layer.scale * canvasHeight) / 2;
+      const myLeft = cx - halfW;
+      const myRight = cx + halfW;
+      const myCenterX = cx;
+      const myTop = cy - halfH;
+      const myBottom = cy + halfH;
+      const myCenterY = cy;
+      const vertical = new Set<number>();
+      const horizontal = new Set<number>();
+      for (const sib of siblingLayers) {
+        const sHalfW = (sib.width * sib.scale * canvasWidth) / 2;
+        const sHalfH = (sib.height * sib.scale * canvasHeight) / 2;
+        const sCx = sib.x * canvasWidth;
+        const sCy = sib.y * canvasHeight;
+        const sLeft = sCx - sHalfW;
+        const sRight = sCx + sHalfW;
+        const sCenterX = sCx;
+        const sTop = sCy - sHalfH;
+        const sBottom = sCy + sHalfH;
+        const sCenterY = sCy;
+        const xCandidates = [myLeft, myRight, myCenterX];
+        const xTargets = [sLeft, sRight, sCenterX];
+        for (const mc of xCandidates) {
+          for (const st of xTargets) {
+            if (Math.abs(mc - st) < SMART_GUIDE_THRESHOLD_PX) vertical.add(st);
+          }
+        }
+        const yCandidates = [myTop, myBottom, myCenterY];
+        const yTargets = [sTop, sBottom, sCenterY];
+        for (const mc of yCandidates) {
+          for (const st of yTargets) {
+            if (Math.abs(mc - st) < SMART_GUIDE_THRESHOLD_PX) horizontal.add(st);
+          }
+        }
+      }
+      setSmartGuides({ vertical: Array.from(vertical), horizontal: Array.from(horizontal) });
+    },
+    [layer.width, layer.height, layer.scale, canvasWidth, canvasHeight, siblingLayers],
+  );
+
+  useAnimatedReaction(
+    () => ({ x: translateX.value, y: translateY.value }),
+    (pos) => {
+      if (showGuides) {
+        runOnJS(computeSmartGuides)(pos.x, pos.y);
+      }
+    },
+    [showGuides, computeSmartGuides],
+  );
+
   // Per-type corner radius: media = 0 (full-bleed), text = conditional,
   // product/mention/look/vote = 8px (pill content), decorative = 0
   const layerRadius = getLayerRadius(layer);
@@ -478,7 +565,7 @@ function LayerRenderer({
               <Text style={[styles.gestureBadgeText, { color: colors.textPrimary }]}>{gestureBadge}</Text>
             </View>
           )}
-          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} />}
+          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} smartGuides={smartGuides} />}
         </Reanimated.View>
       </GestureDetector>
     );
@@ -508,7 +595,7 @@ function LayerRenderer({
       </View>
     </View>
   );
-}
+});
 
 // ── Per-type layer corner radius ───────────────────────────────────
 // Media: 0 (full-bleed), text: conditional on background, pill content: 8px, decorative: 0
@@ -523,8 +610,28 @@ function getLayerRadius(layer: CreatorLayer): number {
     case 'look':
     case 'vote':
       return Radius.md;
+    case 'quiz':
+      return Radius.md;
+    case 'question':
+      return Radius.md;
+    case 'emojiSlider':
+      return Radius.lg;
+    case 'countdown':
+      return Radius.md;
     case 'decorative':
       return 0;
+    case 'draw':
+      return 0;
+    case 'gif':
+      return Radius.sm;
+    case 'music':
+      return Radius.md;
+    case 'link':
+    case 'location':
+    case 'hashtag':
+    case 'time':
+    case 'weather':
+      return Radius.md;
     default:
       return 0;
   }
@@ -544,8 +651,32 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
       return <LookLayerContent layer={layer} />;
     case 'vote':
       return <VoteLayerContent layer={layer} />;
+    case 'quiz':
+      return <QuizLayerContent layer={layer} />;
+    case 'question':
+      return <QuestionLayerContent layer={layer} />;
+    case 'emojiSlider':
+      return <EmojiSliderLayerContent layer={layer} />;
+    case 'countdown':
+      return <CountdownLayerContent layer={layer} />;
     case 'decorative':
-      return <DecorativeLayerContent layer={layer} />;
+      return <DecorativeLayerContent layer={layer} width={width} height={height} />;
+    case 'draw':
+      return <DrawLayerContent layer={layer} width={width} height={height} />;
+    case 'gif':
+      return <GifLayerContent layer={layer} />;
+    case 'music':
+      return <MusicLayerContent layer={layer} />;
+    case 'link':
+      return <LinkLayerContent layer={layer} />;
+    case 'location':
+      return <LocationLayerContent layer={layer} />;
+    case 'hashtag':
+      return <HashtagLayerContent layer={layer} />;
+    case 'time':
+      return <TimeLayerContent layer={layer} />;
+    case 'weather':
+      return <WeatherLayerContent layer={layer} />;
     default:
       return null;
   }
@@ -562,7 +693,7 @@ function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLay
     return (
       <>
         {payload.thumbnailUri && (
-          <Image source={{ uri: payload.thumbnailUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <ExpoImage source={{ uri: payload.thumbnailUri }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" recyclingKey={payload.thumbnailUri} enforceEarlyResizing />
         )}
         <Video
           key={`${layer.id}-${payload.mediaUri}`}
@@ -608,8 +739,65 @@ function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLay
 
 function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'text' }> }) {
   const { payload } = layer;
+  const reducedMotion = useReducedMotion();
+
+  // Text entrance animation (Instagram 2025-2026: typewriter, bounce, fade, slide)
+  const animProgress = useSharedValue(0);
+  const animOpacity = useSharedValue(0);
+  const animTranslateY = useSharedValue(0);
+  const [typewriterText, setTypewriterText] = useState(payload.text);
+
+  useEffect(() => {
+    const animation = payload.textAnimation ?? 'none';
+    animProgress.value = 0;
+    animOpacity.value = 0;
+    animTranslateY.value = 0;
+    if (animation === 'none' || reducedMotion) {
+      // WCAG 2.2 §2.3.3 — show text immediately with no animation when Reduce Motion is on
+      animOpacity.value = 1;
+      animProgress.value = 1;
+      animTranslateY.value = 0;
+      setTypewriterText(payload.text);
+      return;
+    }
+    if (animation === 'fade') {
+      animOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) });
+      setTypewriterText(payload.text);
+    } else if (animation === 'slide') {
+      animTranslateY.value = 24;
+      animOpacity.value = 0;
+      animOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
+      animTranslateY.value = withTiming(0, { duration: 500, easing: Easing.out(Easing.exp) });
+      setTypewriterText(payload.text);
+    } else if (animation === 'bounce') {
+      animOpacity.value = 1;
+      animTranslateY.value = -16;
+      animTranslateY.value = withSpring(0, { damping: 8, stiffness: 120, mass: 0.8 });
+      setTypewriterText(payload.text);
+    } else if (animation === 'typewriter') {
+      animOpacity.value = 1;
+      setTypewriterText('');
+      animProgress.value = withTiming(1, { duration: Math.max(800, (payload.text?.length ?? 0) * 60), easing: Easing.linear });
+    }
+  }, [payload.textAnimation, payload.text, animProgress, animOpacity, animTranslateY, reducedMotion]);
+
+  // Typewriter: react to progress shared value and update visible substring on JS thread
+  useAnimatedReaction(
+    () => animProgress.value,
+    (progress) => {
+      const full = payload.text ?? '';
+      runOnJS(setTypewriterText)(full.substring(0, Math.ceil(progress * full.length)));
+    },
+    [payload.text],
+  );
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: animOpacity.value,
+    transform: [{ translateY: animTranslateY.value }],
+  }));
 
   // Per-style typography — real visual distinction, not just font size
+  // Instagram 2025-2026: 10 fonts with distinct visual character
   const styleMap: Record<string, any> = {
     headline: {
       fontFamily: Typography.family.bold,
@@ -648,7 +836,57 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       lineHeight: (Type.body.size + 2) * 1.3,
       fontStyle: 'italic',
     },
+    bubble: {
+      fontFamily: Typography.family.bold,
+      fontSize: Type.bodyEmphasis.size + 6,
+      lineHeight: (Type.bodyEmphasis.size + 6) * 1.2,
+      letterSpacing: 0.5,
+    },
+    deco: {
+      fontFamily: Typography.family.bold,
+      fontSize: Type.bodyEmphasis.size + 2,
+      lineHeight: (Type.bodyEmphasis.size + 2) * 1.3,
+      letterSpacing: 1.5,
+    },
+    poster: {
+      fontFamily: Typography.family.bold,
+      fontSize: Type.title.size - 2,
+      lineHeight: (Type.title.size - 2) * 1.1,
+      letterSpacing: -0.5,
+    },
+    squeeze: {
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+      lineHeight: Type.body.size * 1.1,
+      letterSpacing: -0.3,
+    },
+    signature: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.bodyEmphasis.size + 2,
+      lineHeight: (Type.bodyEmphasis.size + 2) * 1.4,
+      fontStyle: 'italic',
+    },
   };
+
+  // Text effect styles (Instagram 2025-2026)
+  const effectStyle: any = {};
+  if (payload.textEffect === 'shadow') {
+    effectStyle.textShadowColor = 'rgba(0,0,0,0.6)';
+    effectStyle.textShadowOffset = { width: 2, height: 2 };
+    effectStyle.textShadowRadius = 4;
+  } else if (payload.textEffect === 'neon') {
+    effectStyle.textShadowColor = payload.textColor;
+    effectStyle.textShadowOffset = { width: 0, height: 0 };
+    effectStyle.textShadowRadius = 8;
+  } else if (payload.textEffect === 'glow') {
+    effectStyle.textShadowColor = payload.textColor;
+    effectStyle.textShadowOffset = { width: 0, height: 0 };
+    effectStyle.textShadowRadius = 12;
+  } else if (payload.textEffect === 'outline') {
+    effectStyle.textShadowColor = '#000';
+    effectStyle.textShadowOffset = { width: 0, height: 0 };
+    effectStyle.textShadowRadius = 1;
+  }
 
   return (
     <View
@@ -659,22 +897,27 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
         payload.alignment === 'right' && { alignItems: 'flex-end' },
       ]}
     >
-      <Text
-        style={[
-          textStyles.text,
-          { color: payload.textColor },
-          styleMap[payload.textStyle] ?? styleMap.clean,
-        ]}
-        numberOfLines={undefined}
-      >
-        {payload.text}
-      </Text>
+      <Reanimated.View style={animStyle}>
+        <Text
+          style={[
+            textStyles.text,
+            { color: payload.textColor },
+            styleMap[payload.textStyle] ?? styleMap.clean,
+            effectStyle,
+          ]}
+          numberOfLines={undefined}
+        >
+          {typewriterText}
+        </Text>
+      </Reanimated.View>
     </View>
   );
 }
 
 function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'product' }> }) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
+  const productStyles = React.useMemo(() => createProductStyles(colors), [colors]);
   const isSold = payload.availability === 'sold';
   const isDeleted = payload.availability === 'deleted';
   const hasImage = !!payload.snapshotImageUrl;
@@ -683,10 +926,13 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
   if (hasImage) {
     return (
       <View style={productStyles.imageContainer}>
-        <Image
+        <ExpoImage
           source={{ uri: payload.snapshotImageUrl! }}
           style={productStyles.thumbnail}
-          resizeMode="cover"
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={payload.snapshotImageUrl!}
+          enforceEarlyResizing
         />
         <View style={productStyles.imageOverlay}>
           <Text style={productStyles.imageTitle} numberOfLines={1}>
@@ -761,42 +1007,511 @@ function LookLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'loo
 
 function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vote' }> }) {
   const { payload } = layer;
+  const hasTimer = payload.timerMs !== undefined && payload.timerMs > 0;
+  const timerSeconds = hasTimer ? Math.round(payload.timerMs! / 1000) : 0;
+  const timerLabel = timerSeconds >= 3600
+    ? `${Math.floor(timerSeconds / 3600)}h`
+    : timerSeconds >= 60
+      ? `${Math.floor(timerSeconds / 60)}m`
+      : `${timerSeconds}s`;
+
   return (
-    <View style={voteStyles.container}>
-      <Text style={voteStyles.question}>{payload.question}</Text>
-      {payload.options.map((opt) => (
-        <View key={opt.id} style={voteStyles.option}>
-          <Text style={voteStyles.optionText}>{opt.label}</Text>
-        </View>
-      ))}
+    <View style={[voteStyles.container, payload.backgroundColor && { backgroundColor: payload.backgroundColor }]}>
+      <View style={voteStyles.headerRow}>
+        <Text style={voteStyles.question}>{payload.question}</Text>
+        {hasTimer && (
+          <View style={voteStyles.timerBadge}>
+            <Ionicons name="timer-outline" size={10} color="#fff" />
+            <Text style={voteStyles.timerText}>{timerLabel}</Text>
+          </View>
+        )}
+      </View>
+      <View style={voteStyles.optionsRow}>
+        {payload.options.map((opt) => (
+          <View key={opt.id} style={voteStyles.option}>
+            <Text style={voteStyles.optionText} numberOfLines={1}>{opt.label}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
-function DecorativeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'decorative' }> }) {
+// ── Quiz layer content ─────────────────────────────────────────────
+// Instagram 2026: multiple-choice quiz with emoji and correct answer indicator.
+// Premium rendering: gradient surface, proper button styling, filled correct badge.
+function QuizLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'quiz' }> }) {
   const { payload } = layer;
-  const baseStyle: any = {
-    width: '100%',
-    height: '100%',
-    backgroundColor: payload.color,
-    opacity: payload.opacity,
+  return (
+    <View style={quizStyles.container}>
+      <View style={quizStyles.header}>
+        <Text style={quizStyles.emoji}>{payload.emoji}</Text>
+        <Text style={quizStyles.question}>{payload.question}</Text>
+      </View>
+      <View style={quizStyles.optionsCol}>
+        {payload.options.map((opt, i) => {
+          const isCorrect = opt.id === payload.correctOptionId;
+          return (
+            <View key={opt.id} style={[
+              quizStyles.option,
+              isCorrect && quizStyles.optionCorrect,
+            ]}>
+              <Text style={[quizStyles.optionText, isCorrect && quizStyles.optionTextCorrect]}>
+                {opt.label}
+              </Text>
+              {isCorrect && (
+                <View style={quizStyles.correctBadge}>
+                  <Ionicons name="checkmark" size={12} color="#1a1a1a" />
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ── Question box layer content ─────────────────────────────────────
+// Instagram 2026: open-ended question box sticker.
+// Premium rendering: gradient background, input affordance with cursor hint.
+function QuestionLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'question' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={[questionStyles.container, { backgroundColor: payload.backgroundColor }]}>
+      <Text style={questionStyles.prompt}>{payload.prompt}</Text>
+      <View style={questionStyles.inputAffordance}>
+        <Ionicons name="chatbubbles-outline" size={14} color="rgba(255,255,255,0.5)" />
+        <Text style={questionStyles.placeholder}>{payload.placeholder}</Text>
+        <View style={questionStyles.sendHint}>
+          <Ionicons name="arrow-up" size={10} color="rgba(255,255,255,0.4)" />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ── Emoji slider layer content ─────────────────────────────────────
+// Instagram 2026: emoji slider for intensity measurement.
+// Premium rendering: dark glass surface, proper slider track with thumb.
+function EmojiSliderLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'emojiSlider' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={sliderStyles.container}>
+      <Text style={sliderStyles.question}>{payload.question}</Text>
+      <View style={sliderStyles.sliderRow}>
+        <Text style={sliderStyles.emoji}>{payload.emoji}</Text>
+        <View style={sliderStyles.track}>
+          <View style={[sliderStyles.trackFill, { backgroundColor: payload.sliderColor }]} />
+          <View style={[sliderStyles.thumb, { borderColor: payload.sliderColor }]} />
+        </View>
+        {payload.endLabel ? (
+          <Text style={sliderStyles.endLabel}>{payload.endLabel}</Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+// ── Countdown layer content ────────────────────────────────────────
+// Instagram 2026: countdown to a date/time with live timer.
+// Premium rendering: card with depth, gradient surface, tabular time display.
+function CountdownLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'countdown' }> }) {
+  const { payload } = layer;
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const endMs = new Date(payload.endDateTime).getTime();
+  const remaining = Math.max(0, endMs - now);
+  const hours = Math.floor(remaining / 3600000);
+  const mins = Math.floor((remaining % 3600000) / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+  const days = Math.floor(hours / 24);
+  const displayHours = hours % 24;
+
+  const timeStr = days > 0
+    ? `${days}d ${displayHours}h ${mins}m`
+    : `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  return (
+    <View style={[countdownStyles.container, { backgroundColor: payload.color }]}>
+      <View style={countdownStyles.iconRow}>
+        <Ionicons name="time-outline" size={12} color={payload.textColor} />
+        <Text style={countdownStyles.label}>{payload.label}</Text>
+      </View>
+      <Text style={countdownStyles.time}>{timeStr}</Text>
+    </View>
+  );
+}
+
+function DecorativeLayerContent({ layer, width, height }: { layer: Extract<CreatorLayer, { type: 'decorative' }>; width: number; height: number }) {
+  const { colors } = useAppTheme();
+  const { payload } = layer;
+  const fillColor = payload.fillColor ?? colors.brand;
+  const subtleShadow = {
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   };
+  const iconSize = Math.min(width, height);
+
   switch (payload.shape) {
     case 'circle':
-      return <View style={[baseStyle, { borderRadius: 999 }]} />;
+      return (
+        <View
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: width / 2,
+            backgroundColor: fillColor,
+            opacity: payload.opacity,
+            ...subtleShadow,
+          }}
+        />
+      );
     case 'square':
-      return <View style={[baseStyle, { borderRadius: Radius.sm }]} />;
+      return (
+        <View
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: Radius.md,
+            backgroundColor: fillColor,
+            opacity: payload.opacity,
+            ...subtleShadow,
+          }}
+        />
+      );
     case 'line':
-      return <View style={[baseStyle, { height: 2, marginTop: '50%' }]} />;
+      return (
+        <View
+          style={{
+            width: '100%',
+            height: 4,
+            borderRadius: Radius.sm,
+            backgroundColor: fillColor,
+            opacity: payload.opacity,
+            marginTop: height / 2 - 2,
+          }}
+        />
+      );
     case 'arrow':
-      return <Ionicons name="arrow-forward" size={24} color={payload.color} style={{ opacity: payload.opacity }} />;
+      return (
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity }}>
+          <Ionicons
+            name="arrow-up"
+            size={iconSize}
+            color={fillColor}
+            style={{ transform: [{ rotate: `${layer.rotation}deg` }] }}
+          />
+        </View>
+      );
     case 'star':
-      return <Ionicons name="star" size={24} color={payload.color} style={{ opacity: payload.opacity }} />;
+      return (
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }}>
+          <Ionicons name="star" size={iconSize} color={fillColor} />
+        </View>
+      );
     case 'heart':
-      return <Ionicons name="heart" size={24} color={payload.color} style={{ opacity: payload.opacity }} />;
+      return (
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }}>
+          <Ionicons name="heart" size={iconSize} color={fillColor} />
+        </View>
+      );
+    case 'triangle':
+      return (
+        <View
+          style={{
+            width: 0,
+            height: 0,
+            borderLeftWidth: width / 2,
+            borderRightWidth: width / 2,
+            borderBottomWidth: height,
+            borderLeftColor: 'transparent',
+            borderRightColor: 'transparent',
+            borderBottomColor: fillColor,
+            opacity: payload.opacity,
+            alignSelf: 'center',
+          }}
+        />
+      );
+    case 'hexagon':
+      return (
+        <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: payload.opacity, ...subtleShadow }}>
+          <Ionicons name="stop" size={iconSize} color={fillColor} style={{ transform: [{ rotate: '45deg' }] }} />
+        </View>
+      );
     default:
       return null;
   }
+}
+
+// ── Draw layer content ─────────────────────────────────────────────
+// Renders freehand strokes using Skia. Points are normalized 0-1
+// relative to the layer bounds; scaled to the rendered pixel size.
+function DrawLayerContent({ layer, width, height }: { layer: Extract<CreatorLayer, { type: 'draw' }>; width: number; height: number }) {
+  const { payload } = layer;
+
+  const strokePaths = useMemo(() => {
+    return payload.strokes.map((stroke, i) => {
+      if (stroke.points.length === 0) return null;
+      const path = Skia.Path.Make();
+      const first = stroke.points[0];
+      path.moveTo(first.x * width, first.y * height);
+      for (let j = 1; j < stroke.points.length; j++) {
+        const prev = stroke.points[j - 1];
+        const curr = stroke.points[j];
+        const midX = ((prev.x + curr.x) / 2) * width;
+        const midY = ((prev.y + curr.y) / 2) * height;
+        path.quadTo(prev.x * width, prev.y * height, midX, midY);
+      }
+      const last = stroke.points[stroke.points.length - 1];
+      path.lineTo(last.x * width, last.y * height);
+      return { key: i, path, stroke };
+    }).filter(Boolean);
+  }, [payload.strokes, width, height]);
+
+  return (
+    <SkiaCanvas style={{ width, height }}>
+      {strokePaths.map((sp: any) => {
+        const isEraser = sp.stroke.tool === 'eraser';
+        const isMarker = sp.stroke.tool === 'marker';
+        const isHighlighter = sp.stroke.tool === 'highlighter';
+        const isNeon = sp.stroke.tool === 'neon';
+        return (
+          <SkiaPath
+            key={sp.key}
+            path={sp.path}
+            style="stroke"
+            strokeWidth={sp.stroke.width}
+            color={sp.stroke.color}
+            strokeCap="round"
+            strokeJoin="round"
+            opacity={isHighlighter ? 0.35 : isMarker ? 0.6 : 1}
+            blendMode={isEraser ? "clear" : isNeon ? "screen" : "srcOver"}
+          />
+        );
+      })}
+    </SkiaCanvas>
+  );
+}
+
+// ── GIF layer content ──────────────────────────────────────────────
+// Renders animated GIF using expo-image (supports animated GIF playback).
+function GifLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'gif' }> }) {
+  const { payload } = layer;
+  return (
+    <ExpoImage
+      source={{ uri: payload.gifUrl }}
+      style={{ width: '100%', height: '100%' }}
+      contentFit="contain"
+      cachePolicy="memory-disk"
+      recyclingKey={payload.gifUrl}
+      transition={300}
+      enforceEarlyResizing
+      accessible
+      accessibilityLabel={payload.altText || 'GIF sticker'}
+    />
+  );
+}
+
+// ── Music layer content ────────────────────────────────────────────
+// Instagram-style music sticker: album art + track name + artist.
+// Premium rendering: darker glass surface, proper album art with shadow.
+function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'music' }> }) {
+  const { payload } = layer;
+  const { colors } = useAppTheme();
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: Radius.lg,
+      backgroundColor: 'rgba(0,0,0,0.75)',
+      minWidth: 160,
+      maxWidth: '100%',
+    }}>
+      {payload.artworkUrl ? (
+        <ExpoImage
+          source={{ uri: payload.artworkUrl }}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: Radius.sm,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.3,
+            shadowRadius: 3,
+          }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={payload.artworkUrl}
+          enforceEarlyResizing
+        />
+      ) : (
+        <View style={{
+          width: 40,
+          height: 40,
+          borderRadius: Radius.sm,
+          backgroundColor: 'rgba(201,164,106,0.2)',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <Ionicons name="musical-notes" size={18} color="rgba(201,164,106,0.8)" />
+        </View>
+      )}
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: '#fff' }} numberOfLines={1}>
+          {payload.trackName}
+        </Text>
+        {payload.artistName ? (
+          <Text style={{ fontFamily: Typography.family.regular, fontSize: Type.meta.size, color: 'rgba(255,255,255,0.6)' }} numberOfLines={1}>
+            {payload.artistName}
+          </Text>
+        ) : null}
+      </View>
+      <View style={{
+        width: 22,
+        height: 22,
+        borderRadius: Radius.full,
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+        <Ionicons name="play" size={10} color="#fff" />
+      </View>
+    </View>
+  );
+}
+
+// ── Link layer content ─────────────────────────────────────────────
+function LinkLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'link' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: Radius.md,
+      backgroundColor: payload.backgroundColor,
+      minWidth: 120,
+    }}>
+      <Ionicons name="link-outline" size={16} color={payload.textColor} />
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+        {payload.ctaText}
+      </Text>
+    </View>
+  );
+}
+
+// ── Location layer content ─────────────────────────────────────────
+function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'location' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.md,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      minWidth: 100,
+    }}>
+      <Ionicons name="location-outline" size={16} color="#fff" />
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: '#fff' }} numberOfLines={1}>
+        {payload.placeName}
+      </Text>
+    </View>
+  );
+}
+
+// ── Hashtag layer content ──────────────────────────────────────────
+function HashtagLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'hashtag' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.md,
+      backgroundColor: payload.backgroundColor,
+      minWidth: 80,
+    }}>
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+        #{payload.tag}
+      </Text>
+    </View>
+  );
+}
+
+// ── Time layer content ─────────────────────────────────────────────
+function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'time' }> }) {
+  const { payload } = layer;
+  const date = new Date(payload.displayTime);
+  const timeStr = payload.format === 'time'
+    ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : payload.format === 'date'
+    ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.md,
+      backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
+      minWidth: 80,
+    }}>
+      <Ionicons name="time-outline" size={16} color={payload.textColor} />
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+        {timeStr}
+      </Text>
+    </View>
+  );
+}
+
+// ── Weather layer content ──────────────────────────────────────────
+function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'weather' }> }) {
+  const { payload } = layer;
+  return (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: Radius.md,
+      backgroundColor: payload.backgroundColor ?? 'rgba(0,0,0,0.6)',
+      minWidth: 120,
+    }}>
+      <Text style={{ fontSize: Type.priceList.size }}>{payload.emoji}</Text>
+      <View style={{ gap: 1 }}>
+        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size + 1, color: payload.textColor }} numberOfLines={1}>
+          {payload.temperature}° {payload.condition}
+        </Text>
+        {payload.locationName ? (
+          <Text style={{ fontFamily: Typography.family.regular, fontSize: 10, color: payload.textColor, opacity: 0.7 }} numberOfLines={1}>
+            {payload.locationName}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
 }
 
 // ── Selection handles ──────────────────────────────────────────────
@@ -883,7 +1598,7 @@ function SelectionHandles({
     position: 'absolute',
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: handleColor,
@@ -899,7 +1614,7 @@ function SelectionHandles({
     position: 'absolute',
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
   };
 
   return (
@@ -958,14 +1673,16 @@ function AlignmentGuides({
   canvasWidth,
   canvasHeight,
   colors,
+  smartGuides,
 }: {
   canvasWidth: number;
   canvasHeight: number;
   colors: ReturnType<typeof useAppTheme>['colors'];
+  smartGuides?: { vertical: number[]; horizontal: number[] };
 }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Horizontal centre line — 1.5px, brand color at 40% opacity */}
+      {/* Horizontal centre line — 1.5px, brand color at 50% opacity */}
       <View style={{
         position: 'absolute',
         left: 0,
@@ -973,7 +1690,7 @@ function AlignmentGuides({
         top: canvasHeight / 2 - 0.75,
         height: 1.5,
         backgroundColor: colors.brand,
-        opacity: 0.4,
+        opacity: 0.5,
       }} />
       {/* Vertical centre line */}
       <View style={{
@@ -983,13 +1700,32 @@ function AlignmentGuides({
         left: canvasWidth / 2 - 0.75,
         width: 1.5,
         backgroundColor: colors.brand,
-        opacity: 0.4,
+        opacity: 0.5,
       }} />
-      {/* Safe-zone edges — 1px dashed, muted at 30% opacity */}
-      <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
-      <View style={{ position: 'absolute', top: 0, bottom: 0, left: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
-      <View style={{ position: 'absolute', top: 0, bottom: 0, right: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+      {/* Center dot at intersection */}
+      <View style={{
+        position: 'absolute',
+        left: canvasWidth / 2 - 3,
+        top: canvasHeight / 2 - 3,
+        width: 6,
+        height: 6,
+        borderRadius: Radius.full,
+        backgroundColor: colors.brand,
+        opacity: 0.6,
+      }} />
+      {/* Safe-zone edges — 1px dashed, muted at 25% opacity */}
+      <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
+      <View style={{ position: 'absolute', top: 0, bottom: 0, left: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
+      <View style={{ position: 'absolute', top: 0, bottom: 0, right: canvasWidth * SAFE_MARGIN, width: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
+      {/* Smart guides — vertical */}
+      {(smartGuides?.vertical ?? []).map((x, i) => (
+        <View key={`v${i}`} style={{ position: 'absolute', top: 0, bottom: 0, left: x, width: 1, backgroundColor: colors.brand, opacity: 0.7 }} />
+      ))}
+      {/* Smart guides — horizontal */}
+      {(smartGuides?.horizontal ?? []).map((y, i) => (
+        <View key={`h${i}`} style={{ position: 'absolute', left: 0, right: 0, top: y, height: 1, backgroundColor: colors.brand, opacity: 0.7 }} />
+      ))}
     </View>
   );
 }
@@ -1048,7 +1784,7 @@ const styles = StyleSheet.create({
   },
   gestureBadgeText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   // Locked badge
   lockedBadge: {
@@ -1057,7 +1793,7 @@ const styles = StyleSheet.create({
     left: -10,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1070,7 +1806,7 @@ const mediaStyles = StyleSheet.create({
     left: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.sm,
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     paddingVertical: 2,
   },
 });
@@ -1092,7 +1828,8 @@ const textStyles = StyleSheet.create({
   },
 });
 
-const productStyles = StyleSheet.create({
+function createProductStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: Radius.md,
@@ -1113,12 +1850,12 @@ const productStyles = StyleSheet.create({
     fontSize: Type.caption.size,
   },
   price: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
     fontSize: Type.body.size,
   },
   soldPrice: {
-    color: Colors.danger,
+    color: colors.danger,
   },
   deletedPrice: {
     color: '#888',
@@ -1150,7 +1887,7 @@ const productStyles = StyleSheet.create({
     fontSize: 10,
   },
   imagePrice: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
     fontSize: Type.caption.size,
   },
@@ -1158,7 +1895,7 @@ const productStyles = StyleSheet.create({
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     borderRadius: Radius.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1185,30 +1922,31 @@ const productStyles = StyleSheet.create({
   hotspotDot: {
     width: 7,
     height: 7,
-    borderRadius: 3.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     borderWidth: 1.5,
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   hotspotLabel: {
     color: '#fff',
     fontFamily: Typography.family.semibold,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     flex: 1,
   },
   hotspotPrice: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.bold,
-    fontSize: 11,
+    fontSize: Type.meta.size,
   },
-});
+  });
+}
 
 const mentionStyles = StyleSheet.create({
   container: {
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 4,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1227,7 +1965,7 @@ const lookStyles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     justifyContent: 'center',
   },
   text: {
@@ -1239,31 +1977,250 @@ const lookStyles = StyleSheet.create({
 
 const voteStyles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: 6,
-    minWidth: 140,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    gap: 8,
+    minWidth: 160,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   question: {
     color: '#fff',
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
     textAlign: 'center',
+    flexShrink: 1,
+  },
+  timerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: Radius.md,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  timerText: {
+    color: '#fff',
+    fontFamily: Typography.family.medium,
+    fontSize: 10,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   option: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: Radius.sm,
-    paddingVertical: 6,
-    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
     alignItems: 'center',
+    minWidth: 60,
+    flex: 1,
+    maxWidth: '48%',
+  },
+  optionFirst: {
+    // Both options equal weight — no visual hierarchy difference
   },
   optionText: {
     color: '#fff',
     fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size + 1,
+  },
+});
+
+const quizStyles = StyleSheet.create({
+  container: {
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    gap: 10,
+    minWidth: 180,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  emoji: {
+    fontSize: 18,
+  },
+  question: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    flex: 1,
+  },
+  optionsCol: {
+    gap: 6,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: Radius.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  optionCorrect: {
+    backgroundColor: 'rgba(201,164,106,0.25)',
+    borderColor: 'rgba(201,164,106,0.6)',
+  },
+  optionText: {
+    color: '#fff',
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size + 1,
+    flex: 1,
+  },
+  optionTextCorrect: {
+    color: '#C9A46A',
+    fontFamily: Typography.family.semibold,
+  },
+  correctBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: Radius.full,
+    backgroundColor: '#C9A46A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+
+const questionStyles = StyleSheet.create({
+  container: {
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    minWidth: 180,
+    maxWidth: '100%',
+  },
+  prompt: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    marginBottom: Space.sm,
+  },
+  inputAffordance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
+  },
+  placeholder: {
+    flex: 1,
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
+  },
+  sendHint: {
+    width: 18,
+    height: 18,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+
+const sliderStyles = StyleSheet.create({
+  container: {
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    minWidth: 200,
+    maxWidth: '100%',
+  },
+  question: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  emoji: {
+    fontSize: 26,
+  },
+  track: {
+    flex: 1,
+    height: 6,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+  },
+  trackFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '50%',
+    borderRadius: Radius.full,
+  },
+  thumb: {
+    width: 14,
+    height: 14,
+    borderRadius: Radius.full,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -7,
+  },
+  endLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+  },
+});
+
+const countdownStyles = StyleSheet.create({
+  container: {
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.md + 2,
+    paddingVertical: Space.sm + 2,
+    minWidth: 150,
+    maxWidth: '100%',
+    alignItems: 'center',
+  },
+  iconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  label: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.caption.size - 1,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  time: {
+    fontFamily: Typography.family.bold,
+    fontSize: Type.title.size,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
   },
 });

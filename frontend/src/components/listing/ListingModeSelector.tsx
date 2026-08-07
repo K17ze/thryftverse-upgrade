@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 export type ListingMode = 'sell_now' | 'co_own' | 'auction';
 
@@ -11,13 +12,15 @@ interface ListingModeSelectorProps {
   onChange: (mode: ListingMode) => void;
 }
 
-const MODES: { key: ListingMode; label: string; icon: string; description: string }[] = [
+const MODES: { key: ListingMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name']; description: string }[] = [
   { key: 'sell_now', label: 'Sell now', icon: 'pricetag-outline', description: 'List at a fixed price for immediate purchase.' },
   { key: 'auction', label: 'Auction', icon: 'hammer-outline', description: 'Let buyers bid over a set duration.' },
   { key: 'co_own', label: 'Co-Own', icon: 'people-outline', description: 'Offer fractional shares to investors.' },
 ];
 
 export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const activeMode = MODES.find((m) => m.key === mode);
 
   return (
@@ -35,9 +38,9 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
               accessibilityState={{ selected: active }}
             >
               <Ionicons
-                name={m.icon as any}
+                name={m.icon}
                 size={15}
-                color={active ? Colors.textInverse : Colors.textMuted}
+                color={active ? colors.textInverse : colors.textMuted}
                 style={{ marginRight: 6 }}
               />
               <Text
@@ -59,16 +62,17 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
   },
   segmentRow: {
     flexDirection: 'row',
     gap: 6,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: 10,
-    padding: 4,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.lg,
+    padding: Space.xs,
   },
   segment: {
     flex: 1,
@@ -76,26 +80,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.md,
   },
   segmentActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   segmentText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   segmentTextActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   modeDescription: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 8,
-    paddingHorizontal: 4,
+    color: colors.textMuted,
+    marginTop: Space.sm,
+    paddingHorizontal: Space.xs,
   },
-});
+  });
+}

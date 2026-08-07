@@ -6,9 +6,8 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Control } from '../theme/designTokens';
-import { T, Price } from './ui/Text';
+import { useAppTheme } from '../theme/ThemeContext';
+import { T } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
 import { AnimatedHeart } from './AnimatedHeart';
@@ -18,13 +17,15 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Listing } from '../data/mockData';
-import { isVideoUri } from '../utils/media';
-import { Typography } from '../theme/designTokens';
+import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT } from '../utils/media';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { PressPresets } from '../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../utils/listingMediaGeometry';
+import { computeSustainabilityScore } from '../utils/sustainabilityScore';
+import { SustainabilityBadge } from './product/SustainabilityBadge';
 
+import { Space, Radius, Control, Type, Typography } from '../theme/designTokens';
 // A URI is only usable when it is a non-blank string. Backend rows can surface
 // `''`, `null`, or whitespace-only strings; treat all of these as "no media"
 // so the premium placeholder renders instead of a broken image.
@@ -46,7 +47,7 @@ interface ProductCardV2Props {
   onMessageSeller?: () => void;
 }
 
-export function ProductCardV2({
+function ProductCardV2Base({
   item,
   onPress,
   index = 0,
@@ -65,6 +66,8 @@ export function ProductCardV2({
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const [imageFailed, setImageFailed] = useState(false);
   const aspectRatio = mediaAspectRatio ?? resolveListingMediaAspectRatio(item);
@@ -78,10 +81,29 @@ export function ProductCardV2({
   const showPlaceholder = !hasUsableImage || imageFailed;
   const sellerUsername = item.seller?.username ?? item.sellerId ?? null;
   const sellerAvatar = item.seller?.avatar ?? null;
+  const sellerVerified = item.seller?.verified === true;
+
+  // Sustainability — only surface A/B grades on the card to avoid visual
+  // noise on lower-impact items. Computed client-side from listing data.
+  const sustainabilityScore = React.useMemo(
+    () =>
+      computeSustainabilityScore({
+        condition: item.condition,
+        category: item.category,
+        subcategory: item.subcategory,
+        brand: item.brand,
+        sellerLocation: item.seller?.location ?? null,
+      }),
+    [item.condition, item.category, item.subcategory, item.brand, item.seller?.location],
+  );
+  const showSustainabilityChip =
+    !item.isSold && (sustainabilityScore.grade === 'A' || sustainabilityScore.grade === 'B');
 
   const handleToggleFav = () => {
+    haptic.light();
     toggleFav(item.id);
     if (!isFav) {
+      haptic.success();
       show('Added to wishlist', 'success');
     }
   };
@@ -105,7 +127,7 @@ export function ProductCardV2({
         style={styles.imageWrap}
         {...PressPresets.card}
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
       >
         {showPlaceholder ? (
@@ -122,43 +144,53 @@ export function ProductCardV2({
             style={[styles.image, { aspectRatio }]}
             contentFit="cover"
             transition={300}
+            focalPoint={getCategoryFocalPoint(item.category)}
             onError={() => setImageFailed(true)}
           />
         )}
 
-        {/* Sold overlay */}
-        {item.isSold && (
-          <View style={styles.soldOverlay}>
-            <Text style={styles.soldText}>SOLD</Text>
-          </View>
-        )}
-
-        {/* Condition badge - top left, more subtle */}
-        {!item.isSold && !hasPriceDrop && (
-          <View style={styles.conditionBadge}>
-            <Text style={styles.conditionText}>{item.condition}</Text>
-          </View>
-        )}
-
-        {/* A single top-left status keeps the image legible. */}
-        {hasPriceDrop && !item.isSold && (
+        {/* Consolidated badge — only ONE badge at a time, by priority:
+            price drop > sold > condition > sustainability.
+            Media count stays as a separate small icon in the corner. */}
+        {item.isSold ? (
+          <>
+            <View style={styles.soldScrim} />
+            <View style={styles.soldPill}>
+              <Text style={styles.soldPillText}>Sold</Text>
+            </View>
+          </>
+        ) : hasPriceDrop ? (
           <View style={[styles.conditionBadge, styles.priceDropBadge]}>
             <Text style={styles.conditionText}>-{priceDropPercent}%</Text>
           </View>
-        )}
+        ) : item.condition ? (
+          <View style={styles.conditionBadge}>
+            <Text style={styles.conditionText}>{item.condition}</Text>
+          </View>
+        ) : showSustainabilityChip ? (
+          <View style={styles.sustainabilityChipWrap}>
+            <SustainabilityBadge
+              score={sustainabilityScore}
+              variant="compact"
+              onMedia
+            />
+          </View>
+        ) : null}
 
-        {/* Media indicator - refined */}
+        {/* Media indicator — separate small icon in corner */}
         {(hasMultiple || hasVideo) && (
           <View style={styles.mediaBadge}>
             <Ionicons
               name={hasVideo ? 'videocam' : 'images'}
               size={13}
-              color={Colors.textInverse}
+              color={colors.textInverse}
             />
           </View>
         )}
 
-        {/* Favorite button */}
+        {/* Favorite button — transparent hit targets with text-shadow scrim
+            per AGENTS.md: separate hit area from visible shape. No decorative
+            circular chrome; the glyph legibility comes from the shadow. */}
         <View style={styles.actionButtonsRow}>
           {showSaveButton ? (
             <AnimatedPressable
@@ -167,24 +199,26 @@ export function ProductCardV2({
               {...PressPresets.iconButton}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel={isSaved ? 'Remove from saved' : 'Save product'}
+              accessibilityLabel={isSaved ? 'Remove from saved' : 'Save item'}
               accessibilityHint="Toggles this product in your saved page"
+              accessibilityState={{ checked: isSaved }}
             >
-              <View style={styles.actionChrome}>
-                <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={18} color={isSaved ? Colors.brand : Colors.textInverse} />
-              </View>
+              <Ionicons
+                name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                size={20}
+                color={isSaved ? colors.brand : colors.textInverse}
+                style={styles.actionGlyph}
+              />
             </AnimatedPressable>
           ) : null}
           <View style={styles.actionHitTarget}>
-            <View style={styles.actionChrome}>
-              <AnimatedHeart
-                isActive={isFav}
-                onToggle={handleToggleFav}
-                size={19}
-                activeColor={Colors.danger}
-                inactiveColor={Colors.textInverse}
-              />
-            </View>
+            <AnimatedHeart
+              isActive={isFav}
+              onToggle={handleToggleFav}
+              size={21}
+              activeColor={colors.danger}
+              inactiveColor={colors.textInverse}
+            />
           </View>
         </View>
       </AnimatedPressable>
@@ -195,14 +229,14 @@ export function ProductCardV2({
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
             <View style={styles.priceWrap}>
-              <Price amount={item.price} />
+              <Text style={styles.priceHero}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
               {hasPriceDrop && (
                 <Text style={styles.originalPrice}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
               )}
             </View>
             {item.likes > 0 ? (
               <View style={styles.likes}>
-                <Ionicons name="heart" size={9} color={Colors.textMuted} />
+                <Ionicons name="heart" size={9} color={colors.textMuted} />
                 <T.Caption style={styles.likesText}>{item.likes}</T.Caption>
               </View>
             ) : null}
@@ -226,15 +260,25 @@ export function ProductCardV2({
                   uri={sellerAvatar}
                   style={styles.sellerAvatar}
                   contentFit="cover"
+                  focalPoint={FACE_FOCAL_POINT}
                 />
               ) : (
                 // Premium compact seller placeholder — keeps alignment and
                 // avoids awkward whitespace when avatar is missing.
                 <View style={styles.sellerAvatarPlaceholder}>
-                  <Ionicons name="person" size={10} color={Colors.textMuted} />
+                  <Ionicons name="person" size={10} color={colors.textMuted} />
                 </View>
               )}
               <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
+              {sellerVerified ? (
+                <Ionicons
+                  name="shield-checkmark"
+                  size={11}
+                  color={colors.success}
+                  style={styles.sellerVerifiedIcon}
+                  accessibilityLabel="Verified seller"
+                />
+              ) : null}
               </AnimatedPressable>
               {onMessageSeller ? (
                 <AnimatedPressable
@@ -246,7 +290,7 @@ export function ProductCardV2({
                   accessibilityRole="button"
                   accessibilityLabel={`Message @${sellerUsername}`}
                 >
-                  <Ionicons name="chatbubble-outline" size={17} color={Colors.textPrimary} />
+                  <Ionicons name="chatbubble-outline" size={17} color={colors.textPrimary} />
                 </AnimatedPressable>
               ) : null}
             </View>
@@ -267,6 +311,8 @@ export function ProductCardV2({
   );
 }
 
+export const ProductCardV2 = React.memo(ProductCardV2Base);
+
 // ============================================================================
 // MASONRY GRID
 // ============================================================================
@@ -280,6 +326,8 @@ interface MasonryGridProps {
 }
 
 export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton = false, visualOnly = false }: MasonryGridProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   // True masonry: assign each item to the shortest column for visual balance
   const columns: { item: Listing; originalIndex: number }[][] = Array.from({ length: numColumns }, () => []);
   const heights = Array.from({ length: numColumns }, () => 0);
@@ -287,8 +335,8 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
   items.forEach((item, index) => {
     const aspect = resolveListingMediaAspectRatio(item);
     const imgHeight = 160 / aspect; // approximate; actual width varies
-    const infoHeight = visualOnly ? 0 : 112;
-    const itemHeight = imgHeight + infoHeight + Space.sm;
+    const infoHeight = visualOnly ? 0 : 108;
+    const itemHeight = imgHeight + infoHeight + 12;
 
     let shortestCol = 0;
     let shortestHeight = heights[0];
@@ -329,7 +377,7 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
 // STYLES
 // ============================================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -339,31 +387,39 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   image: {
     width: '100%',
   },
 
-  // Overlays
-  soldOverlay: {
+  // Sold — editorial scrim + pill (image stays visible)
+  soldScrim: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255,255,255,0.82)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.22)',
   },
-  soldText: {
-    fontSize: 13,
+  soldPill: {
+    position: 'absolute',
+    top: Space.sm,
+    left: Space.sm,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.md,
+  },
+  soldPillText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: 1.5,
+    color: colors.textInverse,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   mediaBadge: {
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.40)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     width: 28,
     height: 28,
     borderRadius: Radius.full,
@@ -376,35 +432,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionChrome: {
-    width: Control.chromeCompact,
-    height: Control.chromeCompact,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.56)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Text-shadow scrim for glyph legibility on media — per AGENTS.md,
+  // visible containment must have meaning. These controls don't need
+  // containment; they need legibility. Shadow replaces circular chrome.
+  actionGlyph: {
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   actionButtonsRow: {
     position: 'absolute',
-    bottom: Space.sm,
-    right: Space.sm,
+    bottom: Space.xs,
+    right: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 0,
   },
+  sustainabilityChipWrap: {
+    position: 'absolute',
+    bottom: Space.xs,
+    left: Space.xs,
+  },
 
-  // Info - Clean hierarchy
+  // Info - Clean hierarchy with breathing room
   info: {
     paddingTop: Space.sm,
-    paddingHorizontal: 2,
-    gap: 2,
+    paddingHorizontal: Space.xs,
+    gap: Space.xs,
   },
   title: {
-    fontSize: 14,
-    lineHeight: 19,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.15,
+    color: colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
   },
   priceRow: {
     flexDirection: 'row',
@@ -416,10 +477,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
+  // This is the Vestiaire/StockX move: price is the visual anchor.
+  priceHero: {
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+    letterSpacing: Type.bodyLarge.letterSpacing,
+  },
   originalPrice: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textDecorationLine: 'line-through',
   },
   likes: {
@@ -428,43 +499,47 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   likesText: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
   },
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 40,
-    marginTop: 1,
+    minHeight: 32,
+    marginTop: 2,
   },
   sellerIdentity: {
     flex: 1,
     minWidth: 0,
-    minHeight: 40,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
   sellerAvatar: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: Radius.md,
   },
   sellerAvatarPlaceholder: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: Colors.surfaceAlt,
+    width: 16,
+    height: 16,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sellerName: {
-    fontSize: 11,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     flex: 1,
+  },
+  sellerVerifiedIcon: {
+    flexShrink: 0,
   },
   messageButton: {
     width: Control.hit,
@@ -479,30 +554,31 @@ const styles = StyleSheet.create({
     top: Space.sm,
     left: Space.sm,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   priceDropBadge: {
     backgroundColor: 'rgba(200,50,50,0.65)',
   },
   conditionText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
 
-  // Grid — Pinterest density with breathable gaps
+  // Grid — breathable gaps for flagship feel (12pt vs 8pt)
   grid: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    gap: 12,
   },
   column: {
     flex: 1,
-    gap: Space.sm,
+    gap: 12,
   },
 });
 

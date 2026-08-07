@@ -1,19 +1,20 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Type, Radius, Control, Stroke } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   FlagshipHeader,
   FlagshipScreen,
 } from '../components/flagship';
 import { reportUser, type ReportReason } from '../services/profileApi';
+import { reportListing, type ListingReportReason } from '../services/listingsApi';
 import { useToast } from '../context/ToastContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
-type Props = StackScreenProps<RootStackParamList, 'Report'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Report'>;
 
 const REPORT_REASONS: Array<{
   key: ReportReason;
@@ -54,6 +55,8 @@ const REPORT_REASONS: Array<{
 
 export default function ReportScreen({ navigation, route }: Props) {
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { type, targetId } = route.params;
   const [selectedReason, setSelectedReason] =
     React.useState<ReportReason | null>(null);
@@ -62,7 +65,6 @@ export default function ReportScreen({ navigation, route }: Props) {
   const [isSubmitted, setIsSubmitted] = React.useState(false);
 
   const canSubmit =
-    type === 'user' &&
     Boolean(targetId) &&
     Boolean(selectedReason) &&
     !isSubmitting;
@@ -71,7 +73,15 @@ export default function ReportScreen({ navigation, route }: Props) {
     if (!canSubmit || !selectedReason || !targetId) return;
     setIsSubmitting(true);
     try {
-      await reportUser(targetId, selectedReason, details.trim() || undefined);
+      if (type === 'user') {
+        await reportUser(targetId, selectedReason, details.trim() || undefined);
+      } else {
+        await reportListing(
+          targetId,
+          selectedReason as ListingReportReason,
+          details.trim() || undefined
+        );
+      }
       setIsSubmitted(true);
     } catch {
       show('The report could not be sent. Check your connection and try again.', 'error');
@@ -94,7 +104,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           <Ionicons
             name="shield-checkmark-outline"
             size={28}
-            color={Colors.textPrimary}
+            color={colors.textPrimary}
           />
           <Text style={styles.completeTitle}>Thank you for reporting this</Text>
           <Text style={styles.completeBody}>
@@ -116,7 +126,7 @@ export default function ReportScreen({ navigation, route }: Props) {
     );
   }
 
-  if (type !== 'user' || !targetId) {
+  if (!targetId) {
     return (
       <FlagshipScreen
         header={
@@ -130,11 +140,11 @@ export default function ReportScreen({ navigation, route }: Props) {
           <Ionicons
             name="alert-circle-outline"
             size={28}
-            color={Colors.textMuted}
+            color={colors.textMuted}
           />
           <Text style={styles.completeTitle}>Report target unavailable</Text>
           <Text style={styles.completeBody}>
-            This report was opened without a valid account reference. Nothing
+            This report was opened without a valid reference. Nothing
             has been submitted.
           </Text>
           <AnimatedPressable
@@ -152,11 +162,13 @@ export default function ReportScreen({ navigation, route }: Props) {
     );
   }
 
+  const reportTitle = type === 'user' ? 'Report account' : 'Report listing';
+
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Report account"
+          title={reportTitle}
           subtitle="Reports are confidential"
           onBack={() => navigation.goBack()}
         />
@@ -173,7 +185,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           accessibilityState={{ disabled: !canSubmit, busy: isSubmitting }}
         >
           {isSubmitting ? (
-            <ActivityIndicator size="small" color={Colors.textInverse} />
+            <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
             <Text style={styles.submitText}>Send report</Text>
           )}
@@ -230,7 +242,7 @@ export default function ReportScreen({ navigation, route }: Props) {
             value={details}
             onChangeText={setDetails}
             placeholder="Describe what happened"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
             textAlignVertical="top"
@@ -243,165 +255,178 @@ export default function ReportScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   intro: {
     paddingVertical: Space.md,
   },
   introTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   introBody: {
     maxWidth: 340,
-    marginTop: 5,
-    color: Colors.textMuted,
+    marginTop: Space.xs,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
   },
   reasons: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   reason: {
-    minHeight: 68,
+    minHeight: Control.hit + Space.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.md,
   },
   reasonDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   reasonCopy: {
     minWidth: 0,
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   reasonLabel: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   reasonDescription: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
   },
   radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    width: Space.lg - Space.xs,
+    height: Space.lg - Space.xs,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioSelected: {
-    borderColor: Colors.textPrimary,
+    borderColor: colors.textPrimary,
   },
   radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.textPrimary,
+    width: Space.sm + 2,
+    height: Space.sm + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.textPrimary,
   },
   details: {
     marginTop: Space.lg,
   },
   detailsLabel: {
-    marginBottom: 7,
-    color: Colors.textPrimary,
+    marginBottom: Space.xs + 2,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   detailsInput: {
-    minHeight: 116,
-    padding: 13,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.background,
+    minHeight: Space.xl * 3 + Space.md + Space.xs,
+    padding: Space.md,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    borderRadius: Radius.md,
+    color: colors.textPrimary,
+    backgroundColor: colors.background,
     fontFamily: Typography.family.regular,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   characterCount: {
-    marginTop: 5,
-    color: Colors.textMuted,
+    marginTop: Space.xs,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: Type.meta.letterSpacing,
     textAlign: 'right',
   },
   submitAction: {
-    minHeight: 48,
-    borderRadius: 12,
+    minHeight: Space.xxl,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   submitDisabled: {
     opacity: 0.36,
   },
   submitText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   complete: {
     alignItems: 'center',
     paddingHorizontal: Space.xl,
-    paddingTop: 88,
+    paddingTop: Control.hit * 2,
   },
   completeTitle: {
     marginTop: Space.md,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.subtitle.letterSpacing,
     textAlign: 'center',
   },
   completeBody: {
     maxWidth: 330,
     marginTop: Space.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
     textAlign: 'center',
   },
   doneAction: {
     minWidth: 150,
-    minHeight: 44,
+    minHeight: Control.hit,
     marginTop: Space.lg,
     paddingHorizontal: Space.lg,
-    borderRadius: 11,
-    backgroundColor: Colors.textPrimary,
+    borderRadius: Radius.full,
+    backgroundColor: colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   doneActionText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   secondaryDoneAction: {
     minWidth: 140,
-    minHeight: 44,
+    minHeight: Control.hit,
     marginTop: Space.lg,
     paddingHorizontal: Space.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 11,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryDoneText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
-});
+  });
+}

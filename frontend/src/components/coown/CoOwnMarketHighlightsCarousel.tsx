@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   statusDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   statusText: {
     color: '#FFFFFF',
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     lineHeight: 24,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.45,
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingLeft: 8,
+    paddingLeft: Space.sm,
   },
   marketActionText: {
     color: '#FFFFFF',
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   dot: {
     width: 4,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   activeDot: {
     width: 12,

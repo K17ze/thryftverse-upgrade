@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-native';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Stroke, Type, AspectRatio } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionCountdown } from './AuctionCountdown';
@@ -45,6 +45,8 @@ export function AuctionGridCard({
   cardWidth,
   priceLabel,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const w = cardWidth ?? (width - Space.md * 2 - Space.sm) / 2;
 
@@ -103,19 +105,19 @@ export function AuctionGridCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {
-    marginBottom: Space.md - 2,
+    marginBottom: Space.sm,
   },
   imageWrap: {
     position: 'relative',
-    aspectRatio: 4 / 5,
-    borderRadius: Radius.md,
+    aspectRatio: AspectRatio.portrait,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   imageContainer: {
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   image: {
@@ -129,8 +131,8 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: Radius.full,
-    backgroundColor: Colors.danger,
-    borderWidth: 1.5,
+    backgroundColor: colors.danger,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(0,0,0,0.35)',
   },
   personalMarker: {
@@ -151,8 +153,8 @@ const styles = StyleSheet.create({
   },
   personalMarkerText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10,
-    color: '#FFFFFF',
+    fontSize: Type.meta.size,
+    color: colors.textInverse,
     letterSpacing: 0.4,
   },
   body: {
@@ -161,14 +163,14 @@ const styles = StyleSheet.create({
   },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: 10,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
     letterSpacing: 0.2,
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
-    color: Colors.textPrimary,
+    fontSize: Type.body.size,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
     lineHeight: 18,
   },
@@ -180,8 +182,8 @@ const styles = StyleSheet.create({
   },
   bidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: 10,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
   },
 });
 

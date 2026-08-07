@@ -1,22 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, StatusBar, Keyboard } from 'react-native';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
-import { Type, Space } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { signupWithPassword } from '../services/authApi';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Typography } from '../theme/designTokens';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
+import { Type, Space, Radius, Typography } from '../theme/designTokens';
 export default function SignUpScreen() {
   const navigation = useNavigation<any>();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const login = useStore((state) => state.login);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const [username, setUsername] = useState('');
@@ -24,23 +26,28 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const reducedMotionEnabled = useReducedMotion();
   const canSubmit = username.trim().length > 0 && email.trim().length > 0 && password.length > 0 && !isSubmitting;
 
-  const shakeOffset = useSharedValue(0);
+  const errorPulse = useSharedValue(1);
 
-  const shake = () => {
-    shakeOffset.value = withSequence(
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withSpring(0, { damping: 20, stiffness: 400 })
+  const triggerErrorFeedback = () => {
+    if (reducedMotionEnabled) {
+      // WCAG 2.2 §2.3.3 — no motion animation when Reduce Motion is on
+      errorPulse.value = 1;
+      return;
+    }
+    errorPulse.value = withSequence(
+      withTiming(0.95, { duration: 120 }),
+      withTiming(1, { duration: 180 })
     );
   };
 
-  const shakeStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shakeOffset.value }]
+  const errorPulseStyle = useAnimatedStyle(() => ({
+    opacity: errorPulse.value
   }));
 
   const statusEnterAnimation = reducedMotionEnabled
@@ -59,29 +66,38 @@ export default function SignUpScreen() {
 
     if (!normalizedUsername || !normalizedEmail || !password) {
       setErrorMsg('Please fill in all details.');
-      shake();
+      setUsernameError(!normalizedUsername ? 'Username is required.' : '');
+      setEmailError(!normalizedEmail ? 'Email is required.' : '');
+      setPasswordError(!password ? 'Password is required.' : '');
+      triggerErrorFeedback();
       return;
     }
 
     if (normalizedUsername.length < 3) {
       setErrorMsg('Username must be at least 3 characters.');
-      shake();
+      setUsernameError('Username must be at least 3 characters.');
+      triggerErrorFeedback();
       return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address.');
-      shake();
+      setEmailError('Enter a valid email address.');
+      triggerErrorFeedback();
       return;
     }
 
     if (password.length < 8) {
       setErrorMsg('Password must be at least 8 characters.');
-      shake();
+      setPasswordError('Password must be at least 8 characters.');
+      triggerErrorFeedback();
       return;
     }
 
     setErrorMsg('');
+    setUsernameError('');
+    setEmailError('');
+    setPasswordError('');
     setIsSubmitting(true);
 
     try {
@@ -96,7 +112,7 @@ export default function SignUpScreen() {
       navigation.replace('MainTabs');
     } catch (error) {
       setErrorMsg((error as Error).message || 'Unable to create account right now.');
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsSubmitting(false);
     }
@@ -104,11 +120,11 @@ export default function SignUpScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
       </View>
 
@@ -130,7 +146,12 @@ export default function SignUpScreen() {
                 autoCorrect={false}
                 returnKeyType="next"
                 value={username}
-                onChangeText={setUsername}
+                errorText={usernameError || undefined}
+                onChangeText={(value) => {
+                  setUsername(value);
+                  if (errorMsg) setErrorMsg('');
+                  if (usernameError) setUsernameError('');
+                }}
                 containerStyle={styles.inputGroup}
               />
               <AppInput
@@ -141,7 +162,12 @@ export default function SignUpScreen() {
                 autoCorrect={false}
                 returnKeyType="next"
                 value={email}
-                onChangeText={setEmail}
+                errorText={emailError || undefined}
+                onChangeText={(value) => {
+                  setEmail(value);
+                  if (errorMsg) setErrorMsg('');
+                  if (emailError) setEmailError('');
+                }}
                 containerStyle={styles.inputGroup}
               />
               <AppInput
@@ -150,7 +176,12 @@ export default function SignUpScreen() {
                 secureTextEntry
                 returnKeyType="done"
                 value={password}
-                onChangeText={setPassword}
+                errorText={passwordError || undefined}
+                onChangeText={(value) => {
+                  setPassword(value);
+                  if (errorMsg) setErrorMsg('');
+                  if (passwordError) setPasswordError('');
+                }}
                 onSubmitEditing={() => {
                   Keyboard.dismiss();
                   if (canSubmit) {
@@ -178,7 +209,7 @@ export default function SignUpScreen() {
               </Reanimated.Text>
             )}
 
-            <Reanimated.View style={shakeStyle} layout={layoutAnimation}>
+            <Reanimated.View style={errorPulseStyle} layout={layoutAnimation}>
               <AppButton
                 title={isSubmitting ? 'Creating account...' : 'Create Account'}
                 variant="primary"
@@ -196,10 +227,11 @@ export default function SignUpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.lg },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, borderRadius: Radius.xxl, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
 
   keyboardWrap: { flex: 1 },
   content: { flex: 1 },
@@ -210,15 +242,16 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  title: { fontSize: Type.title.size + 8, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: Type.title.lineHeight + 8, letterSpacing: Type.title.letterSpacing - 0.4, marginBottom: Space.xl + 8 },
+  title: { fontSize: Type.title.size + 8, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.title.lineHeight + 8, letterSpacing: Type.title.letterSpacing - 0.4, marginBottom: Space.xl + 8 },
 
   form: { marginBottom: Space.lg + 6 },
   inputGroup: { marginBottom: Space.lg - 2 },
 
   footer: { paddingBottom: Space.sm, position: 'relative' },
-  termsText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: Colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
-  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  primaryBtn: { backgroundColor: Colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  termsText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
+  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  primaryBtn: { backgroundColor: colors.textPrimary, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },
+  primaryText: { color: colors.background, fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },
 });
+}

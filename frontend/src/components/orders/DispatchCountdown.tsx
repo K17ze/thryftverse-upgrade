@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 interface Props {
   /** ISO timestamp of order creation (dispatch window start) */
@@ -36,6 +36,8 @@ function formatDispatchCountdown(ms: number): string {
 }
 
 export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   // Tick every second
@@ -53,18 +55,18 @@ export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Prop
   const urgency = resolveUrgency(msRemaining, windowHours * 60 * 60 * 1000);
 
   const color =
-    urgency === 'overdue' ? Colors.danger :
-    urgency === 'urgent' ? Colors.danger :
-    urgency === 'warning' ? Colors.warning :
-    Colors.textPrimary;
+    urgency === 'overdue' ? colors.danger :
+    urgency === 'urgent' ? colors.danger :
+    urgency === 'warning' ? colors.warning :
+    colors.textPrimary;
 
   const bgColor =
-    urgency === 'overdue' ? `${Colors.danger}15` :
-    urgency === 'urgent' ? `${Colors.danger}10` :
-    urgency === 'warning' ? `${Colors.warning}10` :
-    Colors.surface;
+    urgency === 'overdue' ? `${colors.danger}15` :
+    urgency === 'urgent' ? `${colors.danger}10` :
+    urgency === 'warning' ? `${colors.warning}10` :
+    colors.surface;
 
-  const icon =
+  const icon: React.ComponentProps<typeof Ionicons>['name'] =
     urgency === 'overdue' ? 'alert-circle' :
     urgency === 'urgent' ? 'time' :
     urgency === 'warning' ? 'time' :
@@ -81,7 +83,7 @@ export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Prop
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
       <View style={styles.row}>
-        <Ionicons name={icon as any} size={14} color={color} />
+        <Ionicons name={icon} size={14} color={color} />
         <Text style={[styles.label, { color }]} numberOfLines={1}>
           {label}
         </Text>
@@ -110,46 +112,46 @@ export function DispatchCountdown({ createdAt, windowHours = 24, shipped }: Prop
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   progressTrack: {
     height: 3,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(128,128,128,0.15)',
-    marginTop: 8,
+    marginTop: Space.sm,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   label: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   countdown: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
   },
   overdueHint: {
-    marginTop: 4,
-    fontSize: 11,
+    marginTop: Space.xs,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });

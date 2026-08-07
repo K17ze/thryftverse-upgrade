@@ -11,6 +11,8 @@ export { CoOwnCompactPositionCard, COOWN_POSITION_CARD_WIDTH } from './CoOwnComp
 export type { CoOwnCompactPositionCardProps } from './CoOwnCompactPositionCard';
 export { CoOwnInstrumentCard } from './CoOwnInstrumentCard';
 export type { CoOwnInstrumentCardProps } from './CoOwnInstrumentCard';
+export { CoOwnMarketOverview } from './CoOwnMarketOverview';
+export type { CoOwnMarketOverviewProps } from './CoOwnMarketOverview';
 export { CoOwnAssetTile } from './CoOwnAssetTile';
 export type { CoOwnAssetTileProps, CoOwnAssetTileVariant, CoOwnMarketTileData } from './CoOwnAssetTile';
 export { CoOwnDiscoveryCard } from './CoOwnDiscoveryCard';
@@ -25,6 +27,8 @@ export { CoOwnIssuerCard, CoOwnVehicleCard } from './CoOwnIssuerCard';
 export type { CoOwnIssuerCardProps, CoOwnVehicleFields, CoOwnVehicleDocument } from './CoOwnIssuerCard';
 export { CoOwnTrustPanel } from './CoOwnTrustPanel';
 export type { CoOwnTrustPanelProps } from './CoOwnTrustPanel';
+export { CoOwnRecoursePanel } from './CoOwnRecoursePanel';
+export type { CoOwnRecoursePanelProps } from './CoOwnRecoursePanel';
 export { CoOwnRiskDisclosure } from './CoOwnRiskDisclosure';
 export type { CoOwnRiskDisclosureProps } from './CoOwnRiskDisclosure';
 export { CoOwnStickyActionDock } from './CoOwnStickyActionDock';
@@ -92,6 +96,10 @@ export { CoOwnRightsSheet, CANONICAL_RIGHTS_LABELS } from './CoOwnRightsSheet';
 export type { CoOwnRightsSheetProps, CoOwnRightsRow } from './CoOwnRightsSheet';
 export { CoOwnWalletBreakdown } from './CoOwnWalletBreakdown';
 export type { CoOwnWalletBreakdownProps, CoOwn1ZeBalance } from './CoOwnWalletBreakdown';
+export { CoOwnSupplySheet } from './CoOwnSupplySheet';
+export type { CoOwnSupplySheetProps } from './CoOwnSupplySheet';
+export { CoOwnOverflowSheet } from './CoOwnOverflowSheet';
+export type { CoOwnOverflowSheetProps } from './CoOwnOverflowSheet';
 
 // Canonical model types — single source of truth in coOwnModels.ts
 export type {

@@ -57,7 +57,7 @@ describe('settings preference persistence', () => {
 
   it('reads stored settings preferences when payload is valid', async () => {
     asyncStorageMock.getItem.mockResolvedValueOnce(
-      JSON.stringify({ language: 'French (FR)', emailNotificationsEnabled: false })
+      JSON.stringify({ language: 'French (FR)', emailNotificationsEnabled: false, analyticsOptOut: true })
     );
 
     const preferences = await getStoredSettingsPreferences();
@@ -69,6 +69,7 @@ describe('settings preference persistence', () => {
       quietHours: DEFAULT_QUIET_HOURS,
       mySizes: [],
       filterPresets: [],
+      analyticsOptOut: true,
     });
   });
 
@@ -80,6 +81,16 @@ describe('settings preference persistence', () => {
     expect(preferences).toEqual(DEFAULT_SETTINGS_PREFERENCES);
   });
 
+  it('defaults analyticsOptOut to false when not present in storage', async () => {
+    asyncStorageMock.getItem.mockResolvedValueOnce(
+      JSON.stringify({ language: 'English (EN)' })
+    );
+
+    const preferences = await getStoredSettingsPreferences();
+
+    expect(preferences.analyticsOptOut).toBe(false);
+  });
+
   it('writes settings preferences to storage', async () => {
     asyncStorageMock.setItem.mockResolvedValueOnce(undefined);
 
@@ -89,6 +100,7 @@ describe('settings preference persistence', () => {
       quietHours: DEFAULT_QUIET_HOURS,
       mySizes: [],
       filterPresets: [],
+      analyticsOptOut: true,
     });
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
@@ -99,6 +111,7 @@ describe('settings preference persistence', () => {
         quietHours: DEFAULT_QUIET_HOURS,
         mySizes: [],
         filterPresets: [],
+        analyticsOptOut: true,
       })
     );
   });

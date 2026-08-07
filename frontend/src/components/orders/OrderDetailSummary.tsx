@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 interface Props {
   title: string;
@@ -22,6 +22,9 @@ export function OrderDetailSummary({
   listingAvailable,
   onPress,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Pressable
       onPress={onPress}
@@ -44,19 +47,19 @@ export function OrderDetailSummary({
         <Text style={styles.price}>{priceLabel}</Text>
         {!listingAvailable ? (
           <View style={styles.unavailableRow}>
-            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+            <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
             <Text style={styles.unavailableText}>Listing no longer available</Text>
           </View>
         ) : null}
       </View>
       {onPress && listingAvailable ? (
-        <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+        <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
       ) : null}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -66,39 +69,39 @@ const styles = StyleSheet.create({
   image: {
     width: 96,
     height: 120,
-    borderRadius: 8,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
   },
   info: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    lineHeight: 21,
+    color: colors.textPrimary,
+    lineHeight: Type.bodyLarge.lineHeight,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   price: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginTop: 2,
+    color: colors.textPrimary,
+    marginTop: Space.xs / 2,
   },
   unavailableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: Space.xs,
+    marginTop: Space.xs,
   },
   unavailableText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });

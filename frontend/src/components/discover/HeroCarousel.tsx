@@ -13,7 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors, ActiveTheme } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -39,6 +40,7 @@ export function HeroCarousel({ items, autoPlayInterval = 5000 }: Props) {
   const flatListRef = useRef<FlatList<HeroItem>>(null);
   const autoPlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isInteractingRef = useRef(false);
+  const reducedMotion = useReducedMotion();
 
   const startAutoPlay = useCallback(() => {
     if (autoPlayTimerRef.current) clearInterval(autoPlayTimerRef.current);
@@ -133,7 +135,7 @@ export function HeroCarousel({ items, autoPlayInterval = 5000 }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <Reanimated.View entering={FadeIn.duration(400)}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(400)}>
       <FlatList
         ref={flatListRef}
         data={items}
@@ -188,7 +190,7 @@ const styles = StyleSheet.create({
     right: 16,
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -201,13 +203,13 @@ const styles = StyleSheet.create({
   },
   sponsorLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: 'rgba(255,255,255,0.85)',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   heroTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 28,
+    fontSize: Type.priceLarge.size,
     color: '#fff',
     letterSpacing: -0.6,
     lineHeight: 34,
@@ -222,13 +224,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.75)',
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
   visitBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: '#fff',
   },
   dotsRow: {
@@ -237,17 +239,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginTop: 12,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: ActiveTheme === 'light' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.25)',
   },
   dotActive: {
     width: 18,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: ActiveTheme === 'light' ? Colors.textPrimary : '#fff',
   },
 });

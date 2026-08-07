@@ -84,7 +84,7 @@ export function CoOwnWalletBreakdown({
         <CoOwnNumericText
           value={balance.available}
           unit="1ZE"
-          size="priceLarge"
+          size="display"
           align="left"
         />
         {localFiatLabel && (

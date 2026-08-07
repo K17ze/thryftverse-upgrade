@@ -7,12 +7,11 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
-import { Typography } from '../theme/designTokens';
 import { Caption, Meta } from './ui/Text';
 
+import { Space, Radius, Type, Typography } from '../theme/designTokens';
 interface VoiceMessagePlayerProps {
   duration: number; // in seconds
   waveform: number[]; // 40 bars, normalized 0-1
@@ -42,6 +41,8 @@ export function VoiceMessagePlayer({
   const [localSpeed, setLocalSpeed] = useState<1 | 1.5 | 2>(playbackSpeed);
   const [waveformWidth, setWaveformWidth] = useState(200);
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
     setLocalPlaying(isPlaying);
@@ -100,7 +101,7 @@ export function VoiceMessagePlayer({
         <Ionicons
           name={localPlaying ? 'pause' : 'play'}
           size={24}
-          color={isMe ? Colors.textInverse : Colors.brand}
+          color={isMe ? colors.textInverse : colors.brand}
           style={!localPlaying && { marginLeft: 2 }}
         />
       </AnimatedPressable>
@@ -122,8 +123,8 @@ export function VoiceMessagePlayer({
                   {
                     height: `${Math.max(amplitude * 100, 10)}%`,
                     backgroundColor: isPlayed
-                      ? (isMe ? Colors.textInverse : Colors.brand)
-                      : (isMe ? `${Colors.textInverse}30` : `${Colors.textMuted}30`),
+                      ? (isMe ? colors.textInverse : colors.brand)
+                      : (isMe ? `${colors.textInverse}30` : `${colors.textMuted}30`),
                   },
                 ]}
               />
@@ -132,7 +133,7 @@ export function VoiceMessagePlayer({
         </View>
       </AnimatedPressable>
 
-      <Caption color={isMe ? Colors.textInverse : Colors.textMuted} style={styles.duration}>
+      <Caption color={isMe ? colors.textInverse : colors.textMuted} style={styles.duration}>
         {formatTime(duration - currentTime)}
       </Caption>
 
@@ -145,7 +146,7 @@ export function VoiceMessagePlayer({
         scaleValue={0.9}
         hapticFeedback="light"
       >
-        <Meta color={isMe ? Colors.textInverse : Colors.brand} style={styles.speedText}>
+        <Meta color={isMe ? colors.textInverse : colors.brand} style={styles.speedText}>
           {localSpeed}x
         </Meta>
       </AnimatedPressable>
@@ -153,7 +154,7 @@ export function VoiceMessagePlayer({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -163,12 +164,12 @@ const styles = StyleSheet.create({
     maxWidth: 300,
   },
   containerMe: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   containerThem: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   playButton: {
     width: 36,
@@ -176,7 +177,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: `${Colors.textInverse}20`,
+    backgroundColor: `${colors.textInverse}20`,
   },
   waveformContainer: {
     flex: 1,
@@ -202,7 +203,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: `${Colors.textInverse}20`,
+    backgroundColor: `${colors.textInverse}20`,
     marginLeft: Space.xs,
   },
   speedText: {

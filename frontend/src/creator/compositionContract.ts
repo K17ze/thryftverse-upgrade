@@ -125,8 +125,8 @@ export function validateForPublish(doc: CreatorDocument): ContractValidationResu
   for (const page of validated.pages) {
     for (const layer of page.layers) {
       if (layer.type === 'vote') {
-        if (layer.payload.options.length !== 2) {
-          errors.push(`Layer ${layer.id}: vote must have exactly 2 options`);
+        if (layer.payload.options.length < 2 || layer.payload.options.length > 4) {
+          errors.push(`Layer ${layer.id}: vote must have 2-4 options`);
         }
       }
     }
@@ -157,8 +157,8 @@ export function serialiseToLookPayload(doc: CreatorDocument): {
 
   // For collage looks with multiple media layers, use the largest as primary
   const mediaLayer = mediaLayers.reduce((largest, current) => {
-    const currentArea = (current as any).width * (current as any).height;
-    const largestArea = (largest as any).width * (largest as any).height;
+    const currentArea = current.width * current.height;
+    const largestArea = largest.width * largest.height;
     return currentArea > largestArea ? current : largest;
   });
 

@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, StatusBar, Keyboard } from 'react-native';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, FadeInUp, FadeOutUp, Layout } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
-import { Type, Space } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Typography } from '../theme/designTokens';
+import { markInteractive } from '../platform/monitoring';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import {
   loginWithPassword,
   requestEmailOtp,
@@ -23,6 +23,7 @@ import {
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
+  const { colors, isDark } = useAppTheme();
   const canGoBack = navigation.canGoBack();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,7 +38,10 @@ export default function LoginScreen() {
   const [recoveryCode, setRecoveryCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const reducedMotionEnabled = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const login = useStore(state => state.login);
   const setTwoFactorEnabled = useStore(state => state.setTwoFactorEnabled);
   const canSubmit = email.trim().length > 0 && password.length > 0 && !isSubmitting;
@@ -45,20 +49,22 @@ export default function LoginScreen() {
   const canRequestOtp = email.trim().length > 0 && !isSubmitting && !isOtpSending;
   const canVerifyOtp = !!otpChallengeId && otpCode.trim().length >= 4 && !isOtpVerifying && !isSubmitting;
 
-  const shakeOffset = useSharedValue(0);
+  const errorPulse = useSharedValue(1);
 
-  const shake = () => {
-    shakeOffset.value = withSequence(
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withSpring(0, { damping: 20, stiffness: 400 })
+  const triggerErrorFeedback = () => {
+    if (reducedMotionEnabled) {
+      // WCAG 2.2 §2.3.3 — no motion animation when Reduce Motion is on
+      errorPulse.value = 1;
+      return;
+    }
+    errorPulse.value = withSequence(
+      withTiming(0.95, { duration: 120 }),
+      withTiming(1, { duration: 180 })
     );
   };
 
-  const shakeStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shakeOffset.value }]
+  const errorPulseStyle = useAnimatedStyle(() => ({
+    opacity: errorPulse.value
   }));
 
   const statusEnterAnimation = reducedMotionEnabled
@@ -76,26 +82,32 @@ export default function LoginScreen() {
 
     if (!normalizedEmail || !password) {
       setErrorMsg('Please fill in both email and password.');
+      setEmailError(!normalizedEmail ? 'Email is required.' : '');
+      setPasswordError(!password ? 'Password is required.' : '');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address.');
+      setEmailError('Enter a valid email address.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     if (password.length < 6) {
       setErrorMsg('Password must be at least 6 characters.');
+      setPasswordError('Password must be at least 6 characters.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     setErrorMsg('');
+    setEmailError('');
+    setPasswordError('');
     setInfoMsg('');
     setIsSubmitting(true);
 
@@ -110,6 +122,10 @@ export default function LoginScreen() {
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
+      // EAS Observe: login has completed and the user is being routed into the
+      // main app. Only the first markInteractive() app-wide records the TTI
+      // metric, so this is safe alongside the home-feed and splash signals.
+      markInteractive({ surface: 'login_complete' });
     } catch (error) {
       const authError = error as LoginWithPasswordError;
       if (
@@ -122,7 +138,7 @@ export default function LoginScreen() {
         setInfoMsg('Enter your authenticator code (or a recovery code) to continue.');
       }
       setErrorMsg(authError.message || 'Unable to log in right now.');
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsSubmitting(false);
     }
@@ -137,14 +153,14 @@ export default function LoginScreen() {
     if (!normalizedEmail) {
       setErrorMsg('Enter your email first to receive an OTP code.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address before requesting OTP.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -165,7 +181,7 @@ export default function LoginScreen() {
     } catch (error) {
       setErrorMsg((error as Error).message || 'Unable to send OTP right now.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsOtpSending(false);
     }
@@ -180,14 +196,14 @@ export default function LoginScreen() {
     if (!normalizedEmail) {
       setErrorMsg('Enter your email first to request a magic link.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address before requesting a magic link.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -205,7 +221,7 @@ export default function LoginScreen() {
     } catch (error) {
       setErrorMsg((error as Error).message || 'Unable to send magic link right now.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsMagicSending(false);
     }
@@ -220,7 +236,7 @@ export default function LoginScreen() {
     if (normalizedCode.length < 4) {
       setErrorMsg('Enter the OTP code from your email.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -237,6 +253,10 @@ export default function LoginScreen() {
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
+      // EAS Observe: OTP login has completed and the user is being routed
+      // into the main app. Only the first markInteractive() app-wide records
+      // the TTI metric.
+      markInteractive({ surface: 'login_complete_otp' });
     } catch (error) {
       const maybeAttempts = (error as { attemptsRemaining?: number }).attemptsRemaining;
       const baseMessage = (error as Error).message || 'Unable to verify OTP right now.';
@@ -245,7 +265,7 @@ export default function LoginScreen() {
       } else {
         setErrorMsg(baseMessage);
       }
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsOtpVerifying(false);
     }
@@ -253,12 +273,18 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
         {canGoBack ? (
-          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <AnimatedPressable
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            accessibilityHint="Returns to the previous screen"
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         ) : (
           <View style={styles.backBtnSpacer} />
@@ -285,6 +311,7 @@ export default function LoginScreen() {
                 autoCorrect={false}
                 returnKeyType="next"
                 value={email}
+                errorText={emailError || undefined}
                 onChangeText={(value) => {
                   setEmail(value);
                   setRequiresTwoFactor(false);
@@ -296,6 +323,9 @@ export default function LoginScreen() {
                   }
                   if (errorMsg) {
                     setErrorMsg('');
+                  }
+                  if (emailError) {
+                    setEmailError('');
                   }
                   if (infoMsg) {
                     setInfoMsg('');
@@ -346,7 +376,16 @@ export default function LoginScreen() {
                 secureTextEntry
                 returnKeyType="done"
                 value={password}
-                onChangeText={setPassword}
+                errorText={passwordError || undefined}
+                onChangeText={(value) => {
+                  setPassword(value);
+                  if (errorMsg) {
+                    setErrorMsg('');
+                  }
+                  if (passwordError) {
+                    setPasswordError('');
+                  }
+                }}
                 onSubmitEditing={() => {
                   Keyboard.dismiss();
                   if (canSubmit) {
@@ -359,6 +398,9 @@ export default function LoginScreen() {
               <AnimatedPressable
                 style={styles.forgotBtn}
                 onPress={() => navigation.navigate('ForgotPassword')}
+                accessibilityRole="button"
+                accessibilityLabel="Forgot password"
+                accessibilityHint="Opens password recovery flow"
               >
                 <Text style={styles.forgotText}>Forgot password?</Text>
               </AnimatedPressable>
@@ -433,6 +475,7 @@ export default function LoginScreen() {
                 exiting={statusExitAnimation}
                 layout={layoutAnimation}
                 style={styles.infoText}
+                accessibilityLiveRegion="polite"
               >
                 {infoMsg}
               </Reanimated.Text>
@@ -444,20 +487,22 @@ export default function LoginScreen() {
                 exiting={statusExitAnimation}
                 layout={layoutAnimation}
                 style={styles.errorText}
+                accessibilityLiveRegion="assertive"
               >
                 {errorMsg}
               </Reanimated.Text>
             )}
 
-            <Reanimated.View style={shakeStyle} layout={layoutAnimation}>
+            <Reanimated.View style={errorPulseStyle} layout={layoutAnimation}>
               <AppButton
-                title={isSubmitting ? 'Logging in...' : 'Log In'}
+                title={isSubmitting ? 'Signing in...' : 'Log In'}
                 style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
                 titleStyle={styles.primaryText}
                 variant="primary"
                 size="md"
                 onPress={handleLogin}
                 disabled={!canSubmit}
+                loading={isSubmitting}
                 accessibilityLabel="Log in"
                 hapticFeedback="medium"
               />
@@ -465,7 +510,13 @@ export default function LoginScreen() {
 
             <View style={styles.switchRow}>
               <Text style={styles.switchText}>New to Thryftverse?</Text>
-              <AnimatedPressable onPress={() => navigation.navigate('SignUp')} activeOpacity={0.8}>
+              <AnimatedPressable
+                onPress={() => navigation.navigate('SignUp')}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Create account"
+                accessibilityHint="Opens the sign-up screen"
+              >
                 <Text style={styles.switchLink}>Create account</Text>
               </AnimatedPressable>
             </View>
@@ -475,11 +526,12 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xs },
-  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
-  backBtnSpacer: { width: 44, height: 44 },
+  backBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.xxl, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: Stroke.standard, borderColor: colors.border },
+  backBtnSpacer: { width: Control.hit, height: Control.hit },
 
   keyboardWrap: { flex: 1 },
   content: { flex: 1 },
@@ -490,14 +542,14 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.lg,
   },
-  title: { fontSize: Type.title.size, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: Type.title.lineHeight, letterSpacing: Type.title.letterSpacing },
-  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: Colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.lg },
+  title: { fontSize: Type.title.size, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.title.lineHeight, letterSpacing: Type.title.letterSpacing },
+  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.lg },
 
   form: { marginBottom: Space.lg },
   inputGroup: { marginBottom: Space.md },
 
   forgotBtn: { alignSelf: 'flex-start', marginTop: Space.sm },
-  forgotText: { color: Colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
+  forgotText: { color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
   dividerRow: {
     marginTop: Space.md + 2,
     marginBottom: Space.sm + 4,
@@ -507,25 +559,25 @@ const styles = StyleSheet.create({
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
+    height: Stroke.standard,
+    backgroundColor: colors.border,
   },
   dividerText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: LetterSpacing.caps,
   },
   otpRequestBtn: {
-    minHeight: 46,
-    borderRadius: 23,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    minHeight: Control.hit + 2,
+    borderRadius: Radius.xxl,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   otpRequestText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
@@ -538,58 +590,59 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   twoFactorHint: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   magicLinkBtn: {
-    minHeight: 42,
-    borderRadius: 21,
+    minHeight: Control.hit - 2,
+    borderRadius: Radius.xxl,
     borderWidth: 0,
     backgroundColor: 'transparent',
     marginTop: Space.sm + 2,
   },
   magicLinkText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
+    color: colors.textSecondary,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     textDecorationLine: 'underline',
   },
   otpVerifyBtn: {
-    minHeight: 48,
-    borderRadius: 24,
+    minHeight: Space.xxl,
+    borderRadius: Radius.xxl,
     borderWidth: 0,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   otpVerifyText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
 
   footer: { paddingTop: Space.sm, position: 'relative' },
-  infoText: { color: Colors.success, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  primaryBtn: { backgroundColor: Colors.textPrimary, minHeight: 56, borderRadius: 28, borderWidth: 0 },
+  infoText: { color: colors.success, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  primaryBtn: { backgroundColor: colors.textPrimary, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0 },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: Colors.background, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
+  primaryText: { color: colors.background, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
   switchRow: {
     marginTop: Space.sm + 6,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   switchText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
+    color: colors.textSecondary,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
   },
   switchLink: {
-    color: Colors.textPrimary,
-    fontSize: 13,
+    color: colors.textPrimary,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     textDecorationLine: 'underline',
   },
-});
+  });
+}

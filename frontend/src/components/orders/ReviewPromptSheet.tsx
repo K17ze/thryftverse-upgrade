@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
@@ -29,6 +29,8 @@ export function ReviewPromptSheet({
   onClose,
   onWriteReview,
 }: ReviewPromptSheetProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [selectedRating, setSelectedRating] = useState(0);
 
   const handleStarPress = useCallback((star: number) => {
@@ -57,14 +59,19 @@ export function ReviewPromptSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={onClose}
+        accessibilityLabel="Close review prompt"
+        accessibilityRole="button"
+      >
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.handle} />
 
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerIcon}>
-              <Ionicons name="star-outline" size={20} color={Colors.brand} />
+              <Ionicons name="star-outline" size={20} color={colors.brand} />
             </View>
             <Text style={styles.title}>How was your order?</Text>
             <Text style={styles.subtitle}>
@@ -84,7 +91,7 @@ export function ReviewPromptSheet({
                 />
               ) : (
                 <View style={[styles.itemImage, styles.itemImageFallback]}>
-                  <Ionicons name="shirt-outline" size={18} color={Colors.textMuted} />
+                  <Ionicons name="shirt-outline" size={18} color={colors.textMuted} />
                 </View>
               )}
               <Text style={styles.itemTitle} numberOfLines={2}>{itemTitle ?? 'Your item'}</Text>
@@ -106,7 +113,7 @@ export function ReviewPromptSheet({
                 <Ionicons
                   name={selectedRating >= star ? 'star' : 'star-outline'}
                   size={36}
-                  color={selectedRating >= star ? Colors.brand : Colors.textMuted}
+                  color={selectedRating >= star ? colors.brand : colors.textMuted}
                 />
               </AnimatedPressable>
             ))}
@@ -120,7 +127,7 @@ export function ReviewPromptSheet({
           <View style={styles.actions}>
             <AppButton
               title="Write a review"
-              icon={<Ionicons name="create-outline" size={16} color={Colors.textInverse} />}
+              icon={<Ionicons name="create-outline" size={16} color={colors.textInverse} />}
               variant="primary"
               size="md"
               onPress={handleWriteReview}
@@ -144,14 +151,14 @@ export function ReviewPromptSheet({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingBottom: Space.xl,
@@ -159,7 +166,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(0,0,0,0.15)',
     alignSelf: 'center',
     marginTop: Space.sm,
@@ -174,7 +181,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}15`,
+    backgroundColor: `${colors.brand}15`,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.xs,
@@ -182,14 +189,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: Space.md,
@@ -200,7 +207,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginHorizontal: Space.md,
     marginTop: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: Space.sm + 2,
   },
@@ -211,7 +218,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   itemImageFallback: {
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -219,19 +226,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 18,
   },
   starsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
     marginTop: Space.lg,
   },
   ratingLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
     textAlign: 'center',
     marginTop: Space.sm,
   },
@@ -247,7 +254,7 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingVertical: Space.xs,
   },
 });

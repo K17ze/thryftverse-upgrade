@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,10 @@ import Reanimated, { FadeInRight, FadeInLeft } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -25,14 +25,14 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type Step = 0 | 1 | 2 | 3;
 
 interface QuizOption {
   label: string;
   value: string;
-  icon?: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
 }
 
 const GENDER_OPTIONS: QuizOption[] = [
@@ -63,6 +63,8 @@ export default function StyleQuizScreen() {
   const { show } = useToast();
   const reducedMotion = useReducedMotion();
   const updatePersonalisation = useStore((state) => state.updatePersonalisationPreferences);
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [step, setStep] = useState<Step>(0);
   const [selectedGender, setSelectedGender] = useState<string>('');
@@ -128,7 +130,7 @@ export default function StyleQuizScreen() {
             onPress={() => { haptic.light(); setSelectedGender(opt.value); }}
             activeOpacity={0.88}
           >
-            <Ionicons name={opt.icon as any} size={28} color={selectedGender === opt.value ? Colors.background : Colors.textPrimary} />
+            <Ionicons name={opt.icon} size={28} color={selectedGender === opt.value ? colors.background : colors.textPrimary} />
             <Text style={[styles.optionLabel, selectedGender === opt.value && styles.optionLabelActive]}>{opt.label}</Text>
           </AnimatedPressable>
         ))}
@@ -150,7 +152,7 @@ export default function StyleQuizScreen() {
               onPress={() => toggleStyle(opt.value)}
               activeOpacity={0.88}
             >
-              <Ionicons name={opt.icon as any} size={16} color={isActive ? Colors.background : Colors.textPrimary} />
+              <Ionicons name={opt.icon} size={16} color={isActive ? colors.background : colors.textPrimary} />
               <Text style={[styles.pillLabel, isActive && styles.pillLabelActive]}>{opt.label}</Text>
             </AnimatedPressable>
           );
@@ -172,7 +174,7 @@ export default function StyleQuizScreen() {
             activeOpacity={0.88}
           >
             <Text style={[styles.rowOptionLabel, selectedPrice === opt.value && styles.rowOptionLabelActive]}>{opt.label}</Text>
-            {selectedPrice === opt.value && <Ionicons name="checkmark" size={18} color={Colors.background} />}
+            {selectedPrice === opt.value && <Ionicons name="checkmark" size={18} color={colors.background} />}
           </AnimatedPressable>
         ))}
       </View>
@@ -182,7 +184,7 @@ export default function StyleQuizScreen() {
   const renderStep3 = () => (
     <Reanimated.View entering={reducedMotion ? undefined : FadeInRight.duration(250)} style={styles.stepContent}>
       <View style={styles.completeIconWrap}>
-        <Ionicons name="checkmark-circle" size={64} color={Colors.success} />
+        <Ionicons name="checkmark-circle" size={64} color={colors.success} />
       </View>
       <Text style={styles.stepTitle}>You're all set</Text>
       <Text style={styles.stepSub}>Your Explore feed will be tailored to your preferences.</Text>
@@ -233,6 +235,8 @@ export default function StyleQuizScreen() {
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.summaryRow}>
       <Text style={styles.summaryLabel}>{label}</Text>
@@ -241,8 +245,9 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { paddingHorizontal: Space.md, paddingTop: Space.lg, paddingBottom: Space.xl },
   progressWrap: {
     paddingHorizontal: Space.md,
@@ -250,15 +255,15 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
   },
   progressTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.surfaceAlt,
+    height: Space.xs,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.textPrimary,
-    borderRadius: 2,
+    backgroundColor: colors.textPrimary,
+    borderRadius: Radius.sm,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -269,12 +274,12 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   skipText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   stepContent: {
     gap: Space.sm,
@@ -282,13 +287,13 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
   },
   stepSub: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: Type.body.letterSpacing,
     marginBottom: Space.md,
   },
@@ -301,24 +306,24 @@ const styles = StyleSheet.create({
     width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
     aspectRatio: 1.2,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
   },
   optionCardActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
+    borderColor: colors.textPrimary,
   },
   optionLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   optionLabelActive: {
-    color: Colors.background,
+    color: colors.background,
   },
   optionsWrap: {
     flexDirection: 'row',
@@ -328,25 +333,25 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md - 2,
+    paddingVertical: Space.sm + 2,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   pillActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
+    borderColor: colors.textPrimary,
   },
   pillLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   pillLabelActive: {
-    color: Colors.background,
+    color: colors.background,
   },
   optionsColumn: {
     gap: Space.sm,
@@ -358,21 +363,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   rowOptionActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
+    borderColor: colors.textPrimary,
   },
   rowOptionLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   rowOptionLabelActive: {
-    color: Colors.background,
+    color: colors.background,
   },
   completeIconWrap: {
     alignItems: 'center',
@@ -380,10 +385,10 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     marginTop: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: Space.md,
     gap: Space.sm,
   },
@@ -395,12 +400,12 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   summaryValue: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     flex: 1,
     textAlign: 'right',
   },
@@ -409,4 +414,5 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
-});
+  });
+}

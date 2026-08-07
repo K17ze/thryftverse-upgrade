@@ -4,9 +4,10 @@ import Reanimated, {
   FadeIn,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface SuggestedAction {
   label: string;
@@ -29,8 +30,12 @@ interface Props {
   /** Compact states preserve first-viewport context inside feeds and tabs. */
   density?: 'default' | 'compact';
 }
-export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor = Colors.brand, graphic, density = 'default' }: Props) {
-  const enter = FadeIn.duration(300);
+export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, secondaryCtaLabel, onSecondaryCtaPress, suggestedActions, iconColor, graphic, density = 'default' }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const resolvedIconColor = iconColor ?? colors.brand;
+  const reducedMotionEnabled = useReducedMotion();
+  const enter = reducedMotionEnabled ? undefined : FadeIn.duration(300);
   const compact = density === 'compact';
 
   return (
@@ -44,7 +49,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
           entering={enter}
           style={[styles.iconRing, compact && styles.iconRingCompact]}
         >
-          <Ionicons name={icon ?? 'cube-outline'} size={compact ? 24 : 38} color={iconColor} />
+          <Ionicons name={icon ?? 'cube-outline'} size={compact ? 24 : 38} color={resolvedIconColor} />
         </Reanimated.View>
       )}
 
@@ -66,7 +71,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
 
       {hint ? (
         <Reanimated.View entering={enter} style={styles.hintWrap}>
-          <Ionicons name="bulb-outline" size={12} color={Colors.textMuted} />
+          <Ionicons name="bulb-outline" size={12} color={colors.textMuted} />
           <Text style={styles.hintText}>{hint}</Text>
         </Reanimated.View>
       ) : null}
@@ -109,7 +114,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
@@ -121,7 +126,7 @@ const styles = StyleSheet.create({
   containerCompact: {
     flex: 0,
     minHeight: 228,
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
     paddingVertical: 28,
     gap: 6,
   },
@@ -130,40 +135,40 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 48,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: Space.md,
   },
   iconRingCompact: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   title: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   titleCompact: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     lineHeight: 22,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     letterSpacing: 0.08,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 21,
     maxWidth: 260,
   },
   subtitleCompact: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     lineHeight: 19,
     maxWidth: 310,
   },
@@ -171,47 +176,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 6,
-    marginTop: 4,
+    marginTop: Space.xs,
     maxWidth: 280,
   },
   hintText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 17,
   },
   cta: {
     marginTop: 20,
-    backgroundColor: Colors.textPrimary,
-    paddingHorizontal: 32,
+    backgroundColor: colors.textPrimary,
+    paddingHorizontal: Space.xl,
     paddingVertical: 14,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
   },
   ctaCompact: {
     minHeight: 44,
     marginTop: 12,
     paddingVertical: 11,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
   },
   ctaText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.3,
-    color: Colors.background,
+    color: colors.background,
   },
   ctaSecondary: {
     marginTop: 10,
     paddingHorizontal: 28,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   ctaSecondaryText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   suggestedWrap: {
     marginTop: 20,
@@ -219,9 +224,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   suggestedLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -234,15 +239,15 @@ const styles = StyleSheet.create({
   },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.xxl,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 });

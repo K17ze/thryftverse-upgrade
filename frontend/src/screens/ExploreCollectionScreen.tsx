@@ -8,16 +8,17 @@ import {
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useBackendData } from '../context/BackendDataContext';
 import { useStore } from '../store/useStore';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ProductCardV2 } from '../components/ProductCardV2';
 import { MasonryGrid } from '../components/ProductCardV2';
-import { Colors } from '../constants/colors';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -28,7 +29,7 @@ import { ProductAnalytics } from '../platform/product/productAnalytics';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'ExploreCollection'>;
 
 export default function ExploreCollectionScreen() {
@@ -36,7 +37,10 @@ export default function ExploreCollectionScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
   const savedProducts = useStore((state) => state.savedProducts);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
 
@@ -115,7 +119,7 @@ export default function ExploreCollectionScreen() {
   };
 
   const renderHeader = () => (
-    <Reanimated.View entering={FadeInDown.duration(300)} style={styles.headerInfo}>
+    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.headerInfo}>
       {subtitle ? (
         <Text style={styles.headerSubtitle}>{subtitle}</Text>
       ) : null}
@@ -128,13 +132,13 @@ export default function ExploreCollectionScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScreenHeader title={title} onBack={() => navigation.goBack()} />
         <View style={styles.loadingWrap}>
-          <SkeletonLoader width={120} height={18} borderRadius={8} style={{ marginBottom: 16 }} />
+          <SkeletonLoader width={120} height={18} borderRadius={8} style={{ marginBottom: Space.md }} />
           <View style={styles.loadingGrid}>
             {Array.from({ length: 4 }).map((_, i) => (
               <View key={i} style={styles.loadingCard}>
                 <SkeletonLoader width="100%" height={180} borderRadius={Radius.md} />
-                <SkeletonLoader width="60%" height={14} borderRadius={6} style={{ marginTop: 8 }} />
-                <SkeletonLoader width="40%" height={14} borderRadius={6} style={{ marginTop: 4 }} />
+                <SkeletonLoader width="60%" height={14} borderRadius={6} style={{ marginTop: Space.sm }} />
+                <SkeletonLoader width="40%" height={14} borderRadius={6} style={{ marginTop: Space.xs }} />
               </View>
             ))}
           </View>
@@ -175,36 +179,38 @@ export default function ExploreCollectionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  headerInfo: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    gap: 4,
-  },
-  headerSubtitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-  headerCount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-  },
-  loadingWrap: {
-    flex: 1,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
-  loadingGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  loadingCard: {
-    width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
-    marginBottom: Space.md,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    headerInfo: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.sm,
+      gap: Space.xs,
+    },
+    headerSubtitle: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+    },
+    headerCount: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
+    },
+    loadingWrap: {
+      flex: 1,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.md,
+    },
+    loadingGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      gap: Space.sm,
+    },
+    loadingCard: {
+      width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
+      marginBottom: Space.md,
+    },
+  });
+}

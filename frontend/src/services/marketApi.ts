@@ -1,5 +1,6 @@
 import { fetchJson } from '../lib/apiClient';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+import { warnIfMockSuppressed } from '../utils/mockGate';
 
 export type AuctionLifecycle = 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
 export type AuctionStatus = AuctionLifecycle;
@@ -56,6 +57,10 @@ export interface AuctionDetail {
   seller: AuctionSeller;
   title: string;
   imageUrl: string | null;
+  /** Canonical media array. Per spec 02_AUCTION §7: replaces single
+   * imageUrl dependence. imageUrl remains as a temporary compatibility
+   * field. */
+  mediaItems?: AuctionMediaItem[];
   brand: string | null;
   category: string | null;
   conditionLabel: string | null;
@@ -77,6 +82,52 @@ export interface AuctionDetail {
   settledAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
+  /** Terminal fulfilment summary. Per spec 02_AUCTION §8: backend-backed
+   * result/fulfilment contract. Null when the auction is not terminal
+   * or fulfilment data is not yet available. */
+  fulfilment?: AuctionFulfilmentSummary | null;
+  /** Whether buyer protection (escrow hold) is active for this auction.
+   *  Platform-wide feature — all auction transactions go through escrow. */
+  buyerProtection?: boolean;
+}
+
+/** Canonical auction media record. Per spec 02_AUCTION §7. */
+export interface AuctionMediaItem {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+  width: number | null;
+  height: number | null;
+  blurhash: string | null;
+  focalX: number | null;
+  focalY: number | null;
+  posterUrl: string | null;
+  order: number;
+}
+
+/** Auction result and fulfilment contract. Per spec 02_AUCTION §8.
+ * The frontend must not invent next steps — these come from the
+ * backend. */
+export interface AuctionFulfilmentSummary {
+  orderId: string | null;
+  paymentStatus:
+    | 'not_started'
+    | 'pending'
+    | 'authorised'
+    | 'paid'
+    | 'failed'
+    | 'refunded';
+  fulfilmentStatus:
+    | 'not_started'
+    | 'awaiting_seller'
+    | 'awaiting_buyer'
+    | 'ready_to_ship'
+    | 'shipped'
+    | 'delivered'
+    | 'completed'
+    | 'cancelled';
+  buyerNextAction: string | null;
+  sellerNextAction: string | null;
 }
 
 export interface AuctionDetailResponse {
@@ -135,6 +186,20 @@ export interface MarketCoOwnAsset {
   id: string;
   listingId: string;
   issuerId: string;
+  issuer?: {
+    username: string;
+    displayName: string | null;
+    avatar: string | null;
+    location: string | null;
+  } | null;
+  /** WS2: Tiered issuer verification. Null when no profile row exists
+   * (fail closed — the frontend shows no badge). */
+  issuerVerification?: {
+    tier: 'email' | 'id' | 'seller';
+    tierSetAt: string | null;
+    kycVerified: boolean;
+    sellerStandardsMet: boolean;
+  } | null;
   title: string;
   imageUrl: string | null;
   totalUnits: number;
@@ -143,12 +208,190 @@ export interface MarketCoOwnAsset {
   unitPriceStable: number;
   settlementMode: CoOwnSettlementMode;
   issuerJurisdiction: string | null;
-  marketMovePct24h: number;
+  marketMovePct24h: number | null;
   holders: number;
-  volume24hGbp: number;
+  volume24hGbp: number | null;
   isOpen: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Per spec 03_COOWN §2: backend-backed market snapshot. Null
+   * until the backend exposes lastExecutionPriceGbp. The frontend
+   * must not label reference price as "Last trade" without this. */
+  marketSnapshot?: CoOwnMarketSnapshot | null;
+  /** Per spec 03_COOWN §4: canonical OHLC candles. Empty array when
+   * no candle data exists. The frontend gates the candle toggle on
+   * this. */
+  candles?: CoOwnCandle[];
+  /** T06: Versioned rights/dossier. Null when no rights have been
+   * published for this asset. The frontend must not claim rights
+   * guarantees without this being populated. */
+  rights?: CoOwnRights | null;
+  /** GAP 4: Versioned risk disclosures. Null when none published. */
+  riskDisclosures?: CoOwnRiskDisclosures | null;
+  /** WS5: Explicit listing tier. 'preview' = visible but not tradeable
+   * (rights pending); 'listed' = tradeable; 'badged' = tradeable + verified;
+   * 'delisted' = hidden. */
+  listingTier?: 'preview' | 'listed' | 'badged' | 'delisted';
+  /** WS3: Escrow partner holding funds during settlement. */
+  escrowPartner?: string | null;
+  /** WS3: URL to the escrow terms document. */
+  escrowTermsUrl?: string | null;
+  /** WS3: Expected settlement time in hours. Null when variable. */
+  settlementEtaHours?: number | null;
+  /** WS4: Whether buyer funds/units are safeguarded. Backend-backed
+   * (no longer hardcoded false). */
+  safeguarded?: boolean;
+  /** WS4: The safeguarding partner (e.g. segregated wallet provider). */
+  safeguardingPartner?: string | null;
+  /** WS4: URL to the safeguarding evidence document. */
+  safeguardingEvidenceUrl?: string | null;
+  /** WS4: URL to the safeguarding terms. */
+  safeguardingTermsUrl?: string | null;
+  /** WS6: Days since the last public market audit event. Null when no
+   * events exist. >7 days = stale pricing notice. */
+  staleMarkDays?: number | null;
+  /** WS6: Last 10 public market audit events (price marks, supply
+   * changes, listing tier transitions). */
+  marketAuditEvents?: CoOwnMarketAuditEvent[];
+  // ── Trust profile (WS1) ──
+  // All fields nullable so existing assets don't break. The frontend
+  // fails closed: a null field means the corresponding UI element does
+  // not render (no fabricated trust signals).
+  legalVehicleType?: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none' | null;
+  legalVehicleName?: string | null;
+  legalVehicleJurisdiction?: string | null;
+  custodianName?: string | null;
+  custodianLocation?: string | null;
+  custodyInsured?: boolean;
+  custodyInsurer?: string | null;
+  custodyPolicyRef?: string | null;
+  custodyCoverageGbp?: number | null;
+  authenticityStatus?: 'unverified' | 'pending' | 'verified' | null;
+  authenticityMethod?: string | null;
+  authenticityVerifiedAt?: string | null;
+  provenance?: string | null;
+  conditionGrade?: string | null;
+  appraisalValueGbp?: number | null;
+  appraisalValuedAt?: string | null;
+  appraisalValuer?: string | null;
+  /** Days since the appraisal was last valued. Null when no appraisal. */
+  appraisalStaleDays?: number | null;
+  buyerProtection?: boolean;
+  buyerProtectionTermsUrl?: string | null;
+  /** Append-only audit trail of trust-profile changes (last 10). */
+  trustAuditEvents?: CoOwnTrustAuditEvent[];
+  // ── Recourse agreement (WS7) ──
+  /** Whether the seller has signed the personal liability recourse agreement. */
+  recourseAgreementSigned?: boolean;
+  /** Recourse status: 'pending' (not signed), 'active' (signed), 'triggered'
+   * (seller defaulted), 'settled' (debt recovered), 'disputed'. */
+  recourseStatus?: 'pending' | 'active' | 'triggered' | 'settled' | 'disputed';
+  /** Total cumulative traded value in GBP. Used to calculate seller's debt
+   * if recourse is triggered. */
+  totalTradedValueGbp?: number;
+  /** Number of active verification demands from unit holders. */
+  activeVerificationDemands?: number;
+}
+
+/** Trust-profile audit event (WS1, SEC Rule 17Ad-7 pattern). */
+export interface CoOwnTrustAuditEvent {
+  eventType:
+    | 'trust_profile_created'
+    | 'authenticity_updated'
+    | 'custody_changed'
+    | 'insurance_changed'
+    | 'appraisal_refreshed'
+    | 'vehicle_updated'
+    | 'buyer_protection_changed';
+  createdAt: string;
+  changedByLabel?: string | null;
+}
+
+/** WS6: Market-level audit event (price marks, supply changes, etc.) */
+export interface CoOwnMarketAuditEvent {
+  id: number;
+  eventType:
+    | 'price_mark'
+    | 'supply_change'
+    | 'listing_tier_transition'
+    | 'rights_published'
+    | 'trade_settled'
+    | 'trade_failed'
+    | 'appraisal_refreshed'
+    | 'verification_tier_changed';
+  payload?: unknown;
+  createdAt: string;
+}
+
+/** Co-Own rights/dossier. Per T06: versioned, attributable rights
+ * document attached to each Co-Own asset. */
+export interface CoOwnRights {
+  id: string;
+  version: number;
+  rightsType: 'fractional_ownership' | 'revenue_share' | 'usage_rights' | 'custody';
+  jurisdiction: string;
+  governingLaw: string | null;
+  summaryTerms: string;
+  transferable: boolean;
+  minHoldingUnits: number;
+  publishedAt: string;
+  /** WS5: When the rights answer is expected, if currently TBC. */
+  tbcEtaDate?: string | null;
+  /** WS5: Why the rights answer is pending, if currently TBC. */
+  tbcReason?: string | null;
+  /** GAP 3: Structured economic rights (revenue share, dividend, etc.). */
+  economicRights?: string | null;
+  /** GAP 3: Structured voting rights (governance, consent, etc.). */
+  votingRights?: string | null;
+  /** GAP 3: Structured exit rights (redemption, wind-up, drag/tag). */
+  exitRights?: string | null;
+  /** GAP 3: Structured fee rights (management fee, carry, etc.). */
+  feeRights?: string | null;
+}
+
+/** GAP 4: Versioned risk disclosures for a Co-Own asset. */
+export interface CoOwnRiskDisclosures {
+  marketRisk: string | null;
+  liquidityRisk: string | null;
+  custodyRisk: string | null;
+  regulatoryRisk: string | null;
+  counterpartyRisk: string | null;
+  otherRisks: string | null;
+  publishedAt: string;
+}
+
+/** Co-Own market snapshot. Per spec 03_COOWN §2. */
+export interface CoOwnMarketSnapshot {
+  /** Schema version for forward-compatible market snapshot parsing. */
+  version: number;
+  /** Server time at which the snapshot was assembled. */
+  asOf: string;
+  /** GAP 5: Connection status — 'live', 'stale', 'closed', or 'degraded'. */
+  connectionStatus?: 'live' | 'stale' | 'closed' | 'degraded';
+  /** Last settled execution price in GBP. Null when no settled trades
+   * exist. The frontend uses this to distinguish "Reference unit
+   * price" from "Last settled trade". */
+  lastExecutionPriceGbp: number | null;
+  /** Timestamp of the last settled execution. */
+  lastExecutionAt: string | null;
+  /** 24h volume in GBP. */
+  volume24hGbp: number | null;
+  /** 24h price change percentage. */
+  marketMovePct24h: number | null;
+  /** Best bid price in GBP. */
+  bestBidGbp: number | null;
+  /** Best ask price in GBP. */
+  bestAskGbp: number | null;
+}
+
+/** Co-Own OHLC candle. Per spec 03_COOWN §4. */
+export interface CoOwnCandle {
+  timestamp: string;
+  openGbp: number;
+  highGbp: number;
+  lowGbp: number;
+  closeGbp: number;
+  volume: number;
 }
 
 export type CoOwnOrderSide = 'buy' | 'sell';
@@ -430,6 +673,7 @@ export interface CreateAuctionInput {
   endsAt: string;
   startingBidGbp: number;
   buyNowPriceGbp?: number;
+  reservePriceGbp?: number;
   minIncrementGbp?: number;
   idempotencyKey?: string;
 }
@@ -723,6 +967,7 @@ export async function getAuctionHome(): Promise<AuctionHomeResponse> {
       console.warn('[marketApi] /auctions/home failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
       return getMockAuctionHome();
     }
+    warnIfMockSuppressed('getAuctionHome', err);
     throw err;
   }
 }
@@ -788,6 +1033,9 @@ export async function placeAuctionBid(
 export interface BuyNowResult {
   ok: true;
   isBuyNow: true;
+  /** T08: Order ID created by Buy Now. The order flows into the standard
+   * fulfilment workflow (orders table with auction_id). */
+  orderId?: string;
   idempotent?: boolean;
   bid: MarketAuctionBid;
   auction: {
@@ -854,8 +1102,9 @@ function mockCoOwnAsset(
     unitPriceStable?: number;
     settlementMode?: CoOwnSettlementMode;
     issuerJurisdiction?: string | null;
+    marketMovePct24h?: number | null;
     holders?: number;
-    volume24hGbp?: number;
+    volume24hGbp?: number | null;
     isOpen?: boolean;
     imageUrl?: string | null;
     createdAtMinAgo?: number;
@@ -875,12 +1124,103 @@ function mockCoOwnAsset(
     unitPriceStable: opts.unitPriceStable ?? 30,
     settlementMode: opts.settlementMode ?? 'HYBRID',
     issuerJurisdiction: opts.issuerJurisdiction ?? 'United Kingdom',
-    marketMovePct24h: 0,
+    marketMovePct24h: opts.marketMovePct24h ?? null,
     holders: opts.holders ?? total - available,
-    volume24hGbp: opts.volume24hGbp ?? 0,
+    volume24hGbp: opts.volume24hGbp ?? null,
     isOpen: opts.isOpen ?? true,
     createdAt: new Date(Date.now() - (opts.createdAtMinAgo ?? 180) * 60_000).toISOString(),
     updatedAt: new Date(Date.now() - (opts.createdAtMinAgo ?? 60) * 60_000).toISOString(),
+    // P2-6 fix: populate trust fields in mock data so the trust UI
+    // renders in dev/mock mode. Without these, the trust chips, panel,
+    // and dossier are invisible during development — masking the gaps.
+    issuerVerification: {
+      tier: 'id',
+      tierSetAt: new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString(),
+      kycVerified: true,
+      sellerStandardsMet: true,
+    },
+    legalVehicleType: 'spv',
+    legalVehicleName: `${title.slice(0, 12)} Holding Co`,
+    legalVehicleJurisdiction: 'United Kingdom',
+    custodianName: 'ThryftVault Custody',
+    custodianLocation: 'London, UK',
+    custodyInsured: true,
+    custodyInsurer: 'Lloyd\'s of London',
+    custodyPolicyRef: 'POL-2026-001',
+    custodyCoverageGbp: 50000,
+    authenticityStatus: 'verified',
+    authenticityMethod: 'Third-party appraisal',
+    authenticityVerifiedAt: new Date(Date.now() - 60 * 24 * 60 * 60_000).toISOString(),
+    provenance: 'Acquired from authorised dealer, 2024',
+    conditionGrade: 'A',
+    appraisalValueGbp: (opts.unitPriceGbp ?? 25) * (opts.totalUnits ?? 100),
+    appraisalValuedAt: new Date(Date.now() - 60 * 24 * 60 * 60_000).toISOString(),
+    appraisalValuer: 'Independent Valuer Ltd',
+    appraisalStaleDays: 60,
+    buyerProtection: true,
+    buyerProtectionTermsUrl: 'https://example.com/buyer-protection',
+    listingTier: 'listed',
+    escrowPartner: 'ThryftEscrow',
+    escrowTermsUrl: 'https://example.com/escrow-terms',
+    settlementEtaHours: 24,
+    safeguarded: true,
+    safeguardingPartner: 'ThryftVault',
+    safeguardingEvidenceUrl: 'https://example.com/safeguarding',
+    safeguardingTermsUrl: 'https://example.com/safeguarding-terms',
+    staleMarkDays: 3,
+    marketAuditEvents: [
+      {
+        id: 1,
+        eventType: 'trade_settled',
+        payload: { side: 'buy', units: 5, unitPriceGbp: opts.unitPriceGbp ?? 25 },
+        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(),
+      },
+    ],
+    trustAuditEvents: [
+      {
+        eventType: 'appraisal_refreshed',
+        createdAt: new Date(Date.now() - 60 * 24 * 60 * 60_000).toISOString(),
+        changedByLabel: 'Issuer',
+      },
+    ],
+    rights: {
+      id: `rights-${id}`,
+      version: 1,
+      rightsType: 'fractional_ownership',
+      jurisdiction: 'United Kingdom',
+      governingLaw: 'England and Wales',
+      summaryTerms: 'Fractional ownership with pro-rata economic rights',
+      transferable: true,
+      minHoldingUnits: 1,
+      publishedAt: new Date(Date.now() - 90 * 24 * 60 * 60_000).toISOString(),
+      tbcEtaDate: null,
+      tbcReason: null,
+      economicRights: 'Pro-rata share of net proceeds on sale',
+      votingRights: 'One vote per unit on major decisions',
+      exitRights: 'Sell on secondary market; no redemption right',
+      feeRights: '2% transaction fee on buys and sells',
+    },
+    riskDisclosures: {
+      marketRisk: 'Asset values fluctuate; you may receive less than paid',
+      liquidityRisk: 'Selling depends on buyer demand',
+      custodyRisk: 'Asset held by regulated custodian',
+      regulatoryRisk: 'Subject to UK consumer protection law',
+      counterpartyRisk: 'Issuer default risk is not insured',
+      otherRisks: null,
+      publishedAt: new Date(Date.now() - 90 * 24 * 60 * 60_000).toISOString(),
+    },
+    marketSnapshot: {
+      version: 1,
+      asOf: new Date().toISOString(),
+      connectionStatus: 'live',
+      lastExecutionPriceGbp: opts.unitPriceGbp ?? 25,
+      lastExecutionAt: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(),
+      volume24hGbp: opts.volume24hGbp ?? null,
+      marketMovePct24h: opts.marketMovePct24h ?? null,
+      bestBidGbp: (opts.unitPriceGbp ?? 25) * 0.98,
+      bestAskGbp: (opts.unitPriceGbp ?? 25) * 1.02,
+    },
+    candles: [],
   };
 }
 
@@ -1030,6 +1370,7 @@ export async function listCoOwnAssets(
       console.warn('[marketApi] /co-own/assets failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
       return getMockCoOwnAssets();
     }
+    warnIfMockSuppressed('listCoOwnAssets', err);
     throw err;
   }
 }
@@ -1052,6 +1393,7 @@ export async function fetchCoOwnAssetById(assetId: string): Promise<MarketCoOwnA
       const found = mockAssets.find((a) => a.id === assetId);
       if (found) return found;
     }
+    warnIfMockSuppressed('getCoOwnAsset', err);
     throw err;
   }
 }
@@ -1094,6 +1436,12 @@ export interface MarketCoOwnExecution {
   unitPriceGbp: number;
   notionalGbp: number;
   executedAt: string;
+  /** WS3: settlement status of the trade. */
+  settlementStatus?: 'settled' | 'pending' | 'failed' | 'reversed';
+  /** WS3: why the settlement failed, when status is 'failed'/'reversed'. */
+  failureReason?: string | null;
+  /** WS3: what happens next for a failed/reversed settlement. */
+  recoveryAction?: string | null;
 }
 
 interface ListCoOwnExecutionsResponse {
@@ -1148,6 +1496,7 @@ export async function fetchCoOwnOrderBook(
         source: 'development-fallback',
       };
     }
+    warnIfMockSuppressed('getCoOwnOrderBook', err);
     throw err;
   }
 }
@@ -1355,6 +1704,25 @@ export interface CreateCoOwnAssetInput {
   unitPriceStable?: number;
   settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
   issuerJurisdiction?: string;
+  // ── Trust profile (WS1) ──
+  legalVehicleType: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none';
+  legalVehicleName?: string;
+  legalVehicleJurisdiction?: string;
+  custodianName?: string;
+  custodianLocation?: string;
+  custodyInsured?: boolean;
+  custodyInsurer?: string;
+  custodyPolicyRef?: string;
+  custodyCoverageGbp?: number;
+  authenticityStatus?: 'unverified' | 'pending' | 'verified';
+  authenticityMethod?: string;
+  provenance?: string;
+  conditionGrade?: string;
+  appraisalValueGbp?: number;
+  appraisalValuedAt?: string;
+  appraisalValuer?: string;
+  buyerProtection?: boolean;
+  buyerProtectionTermsUrl?: string;
 }
 
 interface CreateCoOwnAssetResponse {
@@ -1371,6 +1739,34 @@ export async function createCoOwnAsset(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
+    }
+  );
+}
+
+/** WS1: Refresh the appraisal for a Co-Own asset (issuer-only). */
+export async function refreshCoOwnAppraisal(
+  assetId: string,
+  input: { appraisalValueGbp: number; appraisalValuer: string; appraisalNotes?: string }
+): Promise<{ ok: true; refreshedAt: string }> {
+  return fetchJson<{ ok: true; refreshedAt: string }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/trust/refresh-appraisal`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+}
+
+/** WS5: Promote a Co-Own asset from 'preview' to 'listed' (issuer-only). */
+export async function promoteCoOwnAsset(
+  assetId: string
+): Promise<{ ok: true; listingTier: 'preview' | 'listed' | 'badged' | 'delisted' }> {
+  return fetchJson<{ ok: true; listingTier: 'preview' | 'listed' | 'badged' | 'delisted' }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/promote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
     }
   );
 }
@@ -1414,6 +1810,7 @@ export async function listCoOwnAssetOrders(
         { id: 4, assetId, userId: 'mock-user-4', side: 'buy', units: 1, unitPriceGbp: basePrice + 2, feeGbp: (basePrice + 2) * 0.01, totalGbp: (basePrice + 2) * 1.01, status: 'open', createdAt: new Date(Date.now() - 15 * 60_000).toISOString() },
       ] as MarketCoOwnOrder[];
     }
+    warnIfMockSuppressed('fetchCoOwnOrders', err);
     throw err;
   }
 }
@@ -1432,6 +1829,26 @@ interface ListCoOwnHoldingsResponse {
   items: MarketCoOwnHolding[];
 }
 
+/** WS2: Fetch the current user's Co-Own issuer verification tier.
+ * Used by CreateSyndicateScreen to gate issuance on KYC. */
+export async function fetchIssuerVerification(userId: string): Promise<{
+  tier: 'email' | 'id' | 'seller';
+  tierSetAt: string | null;
+  kycVerified: boolean;
+  sellerStandardsMet: boolean;
+} | null> {
+  try {
+    const payload = await fetchJson<{ ok: true; verification: { tier: 'email' | 'id' | 'seller'; tierSetAt: string | null; kycVerified: boolean; sellerStandardsMet: boolean } } | { ok: true; verification: null }>(
+      `/co-own/issuer-verification/${encodeURIComponent(userId)}`
+    );
+    return payload.verification;
+  } catch {
+    // Fail closed — if the endpoint doesn't exist or errors, treat as
+    // unverified so the KYC gate blocks issuance.
+    return null;
+  }
+}
+
 export async function fetchCoOwnHoldings(userId: string): Promise<MarketCoOwnHolding[]> {
   try {
     const payload = await fetchJson<ListCoOwnHoldingsResponse>(
@@ -1443,6 +1860,7 @@ export async function fetchCoOwnHoldings(userId: string): Promise<MarketCoOwnHol
       console.warn('[marketApi] /co-own/holdings failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
       return getMockCoOwnHoldings(userId);
     }
+    warnIfMockSuppressed('fetchCoOwnHoldings', err);
     throw err;
   }
 }
@@ -1478,6 +1896,7 @@ export async function listUserMarketHistory(
       ];
       return { items: mockItems, pageInfo: { hasMore: false } };
     }
+    warnIfMockSuppressed('listUserMarketHistory', err);
     throw err;
   }
 }
@@ -1489,4 +1908,473 @@ export async function listCoOwnExecutions(
   return fetchJson<ListCoOwnExecutionsResponse>(
     `/co-own/assets/${encodeURIComponent(assetId)}/executions${toQuery({ limit: options?.limit ?? 200 })}`
   );
+}
+
+// ── Recourse agreement API (WS7) ────────────────────────────────────
+
+export interface CoOwnRecourseAgreement {
+  id: string;
+  sellerId: string;
+  version: number;
+  agreementUrl: string | null;
+  signedAt: string;
+  maxLiabilityGbp: number;
+  personalGuarantee: boolean;
+  status: 'active' | 'triggered' | 'settled' | 'disputed' | 'void';
+  triggeredAt: string | null;
+  triggeredReason: string | null;
+  settledAt: string | null;
+  settledAmountGbp: number | null;
+}
+
+export interface CoOwnSellerLiability {
+  totalActiveLiabilityGbp: number;
+  activeAgreementCount: number;
+  totalAgreementsSigned: number;
+  totalRecourseTriggered: number;
+  totalDebtRecoveredGbp: number;
+  riskTier: 'standard' | 'elevated' | 'high' | 'blocked';
+  backgroundCheckStatus: 'pending' | 'passed' | 'failed' | 'expired';
+}
+
+export interface CoOwnVerificationDemand {
+  id: number;
+  requestedBy: string;
+  demandType: 'authenticity' | 'possession' | 'condition' | 'inspection';
+  deadline: string;
+  status: 'pending' | 'responded' | 'compliant' | 'failed' | 'expired' | 'withdrawn';
+  respondedAt: string | null;
+  evidenceUrl: string | null;
+  evidenceNotes: string | null;
+  inspectorVerdict: 'compliant' | 'failed' | 'inconclusive' | null;
+  createdAt: string;
+}
+
+export interface CoOwnRecourseEvent {
+  id: number;
+  eventType: string;
+  payload: unknown;
+  amountGbp: number | null;
+  triggeredBy: string | null;
+  createdAt: string;
+}
+
+export interface CoOwnRecourseStatus {
+  ok: true;
+  agreement: CoOwnRecourseAgreement | null;
+  sellerLiability: CoOwnSellerLiability | null;
+  verificationDemands: CoOwnVerificationDemand[];
+  events: CoOwnRecourseEvent[];
+}
+
+export async function fetchCoOwnRecourseStatus(assetId: string): Promise<CoOwnRecourseStatus> {
+  return fetchJson<CoOwnRecourseStatus>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/recourse`
+  );
+}
+
+export async function signRecourseAgreement(
+  assetId: string,
+  options?: { agreementUrl?: string; personalGuarantee?: boolean }
+): Promise<{ ok: true; agreement: CoOwnRecourseAgreement }> {
+  return fetchJson<{ ok: true; agreement: CoOwnRecourseAgreement }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/recourse-agreement`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        agreementUrl: options?.agreementUrl,
+        personalGuarantee: options?.personalGuarantee ?? true,
+      }),
+    }
+  );
+}
+
+export async function createVerificationDemand(
+  assetId: string,
+  demandType: 'authenticity' | 'possession' | 'condition' | 'inspection',
+  options?: { deadlineDays?: number; notes?: string }
+): Promise<{ ok: true; demand: CoOwnVerificationDemand }> {
+  return fetchJson<{ ok: true; demand: CoOwnVerificationDemand }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/verification-demand`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        demandType,
+        deadlineDays: options?.deadlineDays ?? 14,
+        notes: options?.notes,
+      }),
+    }
+  );
+}
+
+export async function respondToVerificationDemand(
+  assetId: string,
+  demandId: number,
+  evidenceUrl: string,
+  evidenceNotes?: string
+): Promise<{ ok: true; demand: Partial<CoOwnVerificationDemand> }> {
+  return fetchJson<{ ok: true; demand: Partial<CoOwnVerificationDemand> }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/verification-demand/${demandId}/respond`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ evidenceUrl, evidenceNotes }),
+    }
+  );
+}
+
+export async function fetchSellerLiability(
+  userId: string
+): Promise<{ ok: true; liability: CoOwnSellerLiability | null }> {
+  return fetchJson<{ ok: true; liability: CoOwnSellerLiability | null }>(
+    `/co-own/seller/${encodeURIComponent(userId)}/liability`
+  );
+}
+
+export interface SellerVerificationDemand extends CoOwnVerificationDemand {
+  assetId: string;
+  assetTitle: string;
+  assetImageUrl: string | null;
+}
+
+export async function fetchSellerVerificationDemands(
+  userId: string
+): Promise<{ ok: true; demands: SellerVerificationDemand[] }> {
+  return fetchJson<{ ok: true; demands: SellerVerificationDemand[] }>(
+    `/co-own/seller/${encodeURIComponent(userId)}/verification-demands`
+  );
+}
+
+/* ─── Distributions ─── */
+
+export interface CoOwnDistribution {
+  id: string;
+  assetId: string;
+  amountGbpMinor: number;
+  unitsAtRecord: number;
+  perUnitGbpMinor: number;
+  distributionType: string;
+  status: string;
+  reference: string | null;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+interface ListDistributionsResponse {
+  ok: true;
+  items: CoOwnDistribution[];
+  nextCursor: string | null;
+}
+
+export async function fetchCoOwnDistributions(
+  options: { assetId?: string; limit?: number; cursor?: string } = {}
+): Promise<{ items: CoOwnDistribution[]; nextCursor: string | null }> {
+  const query = toQuery({
+    assetId: options.assetId,
+    limit: options.limit,
+    cursor: options.cursor,
+  });
+  const payload = await fetchJson<ListDistributionsResponse>(`/co-own/distributions${query}`);
+  return { items: payload.items, nextCursor: payload.nextCursor };
+}
+
+/* ─── Corporate Actions ─── */
+
+export interface CoOwnCorporateAction {
+  id: string;
+  assetId: string;
+  actionType: string;
+  title: string;
+  description: string | null;
+  perUnitValueGbpMinor: number | null;
+  totalValueGbpMinor: number | null;
+  recordDate: string | null;
+  exDate: string | null;
+  payableDate: string | null;
+  status: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+interface ListCorporateActionsResponse {
+  ok: true;
+  items: CoOwnCorporateAction[];
+}
+
+export async function fetchCoOwnCorporateActions(
+  options: { assetId?: string; type?: string; limit?: number } = {}
+): Promise<CoOwnCorporateAction[]> {
+  const query = toQuery({
+    assetId: options.assetId,
+    type: options.type,
+    limit: options.limit,
+  });
+  const payload = await fetchJson<ListCorporateActionsResponse>(`/co-own/corporate-actions${query}`);
+  return payload.items;
+}
+
+export async function fetchCoOwnAssetCorporateActions(
+  assetId: string,
+  options: { type?: string; limit?: number } = {}
+): Promise<CoOwnCorporateAction[]> {
+  const query = toQuery({
+    type: options.type,
+    limit: options.limit,
+  });
+  const payload = await fetchJson<ListCorporateActionsResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/corporate-actions${query}`
+  );
+  return payload.items;
+}
+
+/* ─── Watchlist ─── */
+
+export async function addToCoOwnWatchlist(assetId: string): Promise<void> {
+  await fetchJson<{ ok: true }>('/co-own/watchlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assetId }),
+  });
+}
+
+export async function removeFromCoOwnWatchlist(assetId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/co-own/watchlist/${encodeURIComponent(assetId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function fetchCoOwnWatchlist(limit: number = 50): Promise<MarketCoOwnAsset[]> {
+  const query = toQuery({ limit });
+  const payload = await fetchJson<{ ok: true; items: MarketCoOwnAsset[] }>(`/co-own/watchlist${query}`);
+  return payload.items;
+}
+
+/* ─── Feed: Trending ─── */
+
+export interface TrendingListing {
+  id: string;
+  sellerId: string;
+  title: string;
+  description: string;
+  priceGbp: number;
+  imageUrl: string | null;
+  images: string[];
+  status: string;
+  category: string | null;
+  brand: string | null;
+  size: string | null;
+  condition: string | null;
+  originalPriceGbp: number | null;
+  createdAt: string;
+  velocity: number;
+}
+
+export async function fetchTrendingListings(
+  options: { window?: '24h' | '7d' | '30d'; category?: string; limit?: number } = {}
+): Promise<TrendingListing[]> {
+  const query = toQuery({
+    window: options.window,
+    category: options.category,
+    limit: options.limit,
+  });
+  const payload = await fetchJson<{ ok: true; items: TrendingListing[] }>(`/feed/trending${query}`);
+  return payload.items;
+}
+
+/* ─── Feed: Following Activity ─── */
+
+export interface FollowingActivityItem {
+  activityType: 'listing' | 'look';
+  entityId: string;
+  entityTitle: string;
+  actorId: string;
+  createdAt: string;
+  images: string[] | null;
+  priceGbpMinor: number | null;
+}
+
+export async function fetchFollowingActivity(
+  options: { limit?: number; cursor?: string } = {}
+): Promise<{ items: FollowingActivityItem[]; nextCursor: string | null }> {
+  const query = toQuery({ limit: options.limit, cursor: options.cursor });
+  const payload = await fetchJson<{ ok: true; items: FollowingActivityItem[]; nextCursor: string | null }>(`/feed/following${query}`);
+  return { items: payload.items, nextCursor: payload.nextCursor };
+}
+
+/* ─── Co-Own Price Alerts ─── */
+
+export interface CoOwnPriceAlert {
+  id: string;
+  assetId: string;
+  condition: 'above' | 'below';
+  targetPriceGbpMinor: number;
+  active: boolean;
+  triggeredAt: string | null;
+  createdAt: string;
+}
+
+export async function fetchCoOwnPriceAlerts(): Promise<CoOwnPriceAlert[]> {
+  const payload = await fetchJson<{ ok: true; alerts: CoOwnPriceAlert[] }>('/co-own/price-alerts');
+  return payload.alerts;
+}
+
+export async function createCoOwnPriceAlert(
+  assetId: string,
+  condition: 'above' | 'below',
+  targetPriceGbpMinor: number
+): Promise<CoOwnPriceAlert> {
+  const payload = await fetchJson<{ ok: true; alert: CoOwnPriceAlert }>('/co-own/price-alerts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assetId, condition, targetPriceGbpMinor }),
+  });
+  return payload.alert;
+}
+
+export async function deleteCoOwnPriceAlert(id: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/co-own/price-alerts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/* ─── Co-Own Price History (OHLCV) ─── */
+
+export interface PriceCandle {
+  timestamp: string;
+  openGbpMinor: number;
+  highGbpMinor: number;
+  lowGbpMinor: number;
+  closeGbpMinor: number;
+  volumeUnits: number;
+  tradeCount: number;
+}
+
+export async function fetchCoOwnPriceHistory(
+  assetId: string,
+  options: { interval?: '1h' | '4h' | '1d' | '1w'; limit?: number } = {}
+): Promise<{ interval: string; candles: PriceCandle[] }> {
+  const query = toQuery({ interval: options.interval, limit: options.limit });
+  const payload = await fetchJson<{ ok: true; interval: string; candles: PriceCandle[] }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/price-history${query}`
+  );
+  return { interval: payload.interval, candles: payload.candles };
+}
+
+/* ─── Co-Own Governance Voting ─── */
+
+export interface GovernanceVoteSummary {
+  vote: 'for' | 'against' | 'abstain';
+  votingPowerUnits: number;
+  voteCount: number;
+}
+
+export interface GovernanceVoteResult {
+  summary: GovernanceVoteSummary[];
+  totalVotingPower: number;
+  myVote: 'for' | 'against' | 'abstain' | null;
+}
+
+export async function fetchGovernanceVotes(actionId: string): Promise<GovernanceVoteResult> {
+  const payload = await fetchJson<{ ok: true } & GovernanceVoteResult>(
+    `/co-own/corporate-actions/${encodeURIComponent(actionId)}/votes`
+  );
+  return { summary: payload.summary, totalVotingPower: payload.totalVotingPower, myVote: payload.myVote };
+}
+
+export async function castGovernanceVote(
+  actionId: string,
+  input: { assetId: string; vote: 'for' | 'against' | 'abstain'; rationale?: string }
+): Promise<{ actionId: string; vote: string; votingPowerUnits: number; createdAt: string }> {
+  const payload = await fetchJson<{ ok: true; vote: { actionId: string; vote: string; votingPowerUnits: number; createdAt: string } }>(
+    `/co-own/corporate-actions/${encodeURIComponent(actionId)}/vote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+  return payload.vote;
+}
+
+/* ─── Co-Own DRIP ─── */
+
+export interface DripEnrollment {
+  assetId: string;
+  enrolled: boolean;
+  enrolledAt: string | null;
+}
+
+export async function fetchDripEnrollments(): Promise<DripEnrollment[]> {
+  const payload = await fetchJson<{ ok: true; enrollments: DripEnrollment[] }>('/co-own/drip/enrollments');
+  return payload.enrollments;
+}
+
+export async function updateDripEnrollment(assetId: string, enrolled: boolean): Promise<void> {
+  await fetchJson<{ ok: true; assetId: string; enrolled: boolean }>('/co-own/drip/enroll', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assetId, enrolled }),
+  });
+}
+
+/* ─── Co-Own Recurring Orders ─── */
+
+export interface CoOwnRecurringOrder {
+  id: string;
+  assetId: string;
+  side: 'buy';
+  unitsPerExecution: number;
+  frequency: 'weekly' | 'biweekly' | 'monthly';
+  nextExecutionAt: string;
+  maxPriceGbpMinor: number | null;
+  active: boolean;
+  executionsCount: number;
+  createdAt: string;
+}
+
+export async function fetchCoOwnRecurringOrders(): Promise<CoOwnRecurringOrder[]> {
+  const payload = await fetchJson<{ ok: true; orders: CoOwnRecurringOrder[] }>('/co-own/recurring-orders');
+  return payload.orders;
+}
+
+export async function createCoOwnRecurringOrder(input: {
+  assetId: string;
+  unitsPerExecution: number;
+  frequency: 'weekly' | 'biweekly' | 'monthly';
+  maxPriceGbpMinor?: number;
+}): Promise<CoOwnRecurringOrder> {
+  const payload = await fetchJson<{ ok: true; order: CoOwnRecurringOrder }>('/co-own/recurring-orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return payload.order;
+}
+
+export async function cancelCoOwnRecurringOrder(id: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/co-own/recurring-orders/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/* ─── Co-Own Tax Documents ─── */
+
+export interface CoOwnTaxDocument {
+  taxYear: string;
+  startDate: string;
+  endDate: string;
+  currency: string;
+  summary: {
+    totalPurchasesGbpMinor: number;
+    totalSalesGbpMinor: number;
+    totalDistributionsGbpMinor: number;
+    realizedPnlGbpMinor: number;
+  };
+  purchases: Array<{ assetId: string; totalGbpMinor: number; units: number; executionCount: number }>;
+  sales: Array<{ assetId: string; totalGbpMinor: number; units: number; executionCount: number }>;
+  distributions: Array<{ assetId: string; totalGbpMinor: number; count: number }>;
+  generatedAt: string;
+}
+
+export async function fetchCoOwnTaxDocument(taxYear?: string): Promise<CoOwnTaxDocument> {
+  const query = toQuery({ taxYear });
+  const payload = await fetchJson<{ ok: true; taxDocument: CoOwnTaxDocument }>(
+    `/users/me/co-own/tax-documents${query}`
+  );
+  return payload.taxDocument;
 }

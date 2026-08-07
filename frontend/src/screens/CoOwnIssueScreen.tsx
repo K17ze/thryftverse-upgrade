@@ -4,19 +4,20 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { useToast } from '../context/ToastContext';
 import { fetchCoOwnAssetById } from '../services/marketApi';
 import { haptics } from '../utils/haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CoOwnMarketHeader, CoOwnStickyActionDock } from '../components/coown';
 
-type Props = StackScreenProps<RootStackParamList, 'CoOwnIssue'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnIssue'>;
 
 const CATEGORIES = [
   { value: 'dispute', label: 'Ownership dispute', icon: 'shield-half-outline' as const },
@@ -29,6 +30,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
+  const reducedMotionEnabled = useReducedMotion();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
@@ -77,7 +79,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Asset context — show title, not UUID */}
         {assetId && (
-          <Reanimated.View entering={FadeInDown.duration(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={[styles.assetContext, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
               <Text style={[styles.assetContextLabel, { color: colors.textMuted }]}>Item:</Text>
@@ -89,7 +91,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         )}
 
         {/* Issue category */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Issue category</Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.map((cat) => {
@@ -122,7 +124,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Description */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(100)} style={{ marginTop: Space.lg }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)} style={{ marginTop: Space.lg }}>
           <AppInput
             label="Description"
             placeholder="Describe what happened and what you need..."
@@ -136,7 +138,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Note */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(150)} style={styles.note}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(150)} style={styles.note}>
           <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
           <Text style={[styles.noteText, { color: colors.textMuted }]}>
             Your report will be submitted through the Help & Support flow. Use the description above when contacting support.
@@ -185,14 +187,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   sectionLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -202,7 +204,7 @@ const styles = StyleSheet.create({
   categoryCard: {
     width: '48%',
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     padding: Space.md,
     gap: Space.sm,
     alignItems: 'flex-start',
@@ -221,6 +223,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
 });

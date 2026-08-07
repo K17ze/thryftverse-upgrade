@@ -21,11 +21,11 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Typography, Space, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
@@ -47,13 +47,49 @@ import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const COVER_HEIGHT = 152;
 
 export default function MyProfileScreen() {
+  const { colors, isDark } = useAppTheme();
+
+  // Themed style overrides — color properties extracted from module-level styles
+  const t = {
+    container: { backgroundColor: colors.background },
+    coverWrap: { backgroundColor: colors.surfaceAlt },
+    coverFailureText: { color: colors.textInverse },
+    coverFailureActionText: { color: colors.textInverse },
+    floatingHeader: { backgroundColor: colors.background, borderBottomColor: colors.border },
+    floatingHeaderTitle: { color: colors.textPrimary },
+    gridHeaderCount: { color: colors.textMuted },
+    gridHeaderAction: { color: colors.brand },
+    soldText: { color: colors.textInverse },
+    gridPrice: { color: colors.textPrimary },
+    gridBrand: { color: colors.textSecondary },
+    gridMeta: { color: colors.textMuted },
+    listingsEmptyTitle: { color: colors.textPrimary },
+    listingsEmptyBody: { color: colors.textMuted },
+    listingsEmptyCta: { backgroundColor: colors.brand },
+    listingsEmptyCtaText: { color: colors.textInverse },
+    aboutSectionTitle: { color: colors.textPrimary },
+    aboutRow: { borderBottomColor: colors.border },
+    aboutLabel: { color: colors.textMuted },
+    aboutValue: { color: colors.textPrimary },
+    aboutEmpty: { color: colors.textMuted },
+    topUtilityVisible: { backgroundColor: `${colors.textPrimary}6B`, borderColor: `${colors.textInverse}2E` },
+    coverEditVisible: { backgroundColor: `${colors.textPrimary}8C`, borderColor: `${colors.textInverse}3D` },
+    coverFailure: { backgroundColor: `${colors.textPrimary}B8` },
+    soldOverlay: { backgroundColor: `${colors.textPrimary}80` },
+  };
+  const tMyProfile = {
+    awayBanner: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    awayBannerTitle: { color: colors.textPrimary },
+    awayBannerSub: { color: colors.textMuted },
+  };
+
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
   const reducedMotionEnabled = useReducedMotion();
@@ -128,7 +164,7 @@ export default function MyProfileScreen() {
   const userCover = useStore((state) => state.userCover);
   const updateUserAvatar = useStore((state) => state.updateUserAvatar);
   const updateUserCover = useStore((state) => state.updateUserCover);
-  const user = currentUser as any;
+  const user = currentUser;
   const [myLooks, setMyLooks] = React.useState<LookApiItem[]>([]);
   const [looksLoading, setLooksLoading] = React.useState(false);
 
@@ -198,8 +234,8 @@ export default function MyProfileScreen() {
 
   if (!user) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <View style={[styles.container, t.container]}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <EmptyState
           icon="person-outline"
           title="Not signed in"
@@ -229,20 +265,6 @@ export default function MyProfileScreen() {
     || null;
 
   const allOwnedListings = React.useMemo(() => listings.filter((item) => item.sellerId === profileUserId), [listings, profileUserId]);
-
-  const holdingsValue = React.useMemo(
-    () => coOwnHoldings.reduce((sum, asset) => sum + asset.yourUnits * asset.unitPriceGBP, 0),
-    [coOwnHoldings]
-  );
-
-  const holdingsUnrealized = React.useMemo(
-    () =>
-      coOwnHoldings.reduce((sum, asset) => {
-        const avgEntry = asset.avgEntryPriceGBP ?? asset.unitPriceGBP;
-        return sum + (asset.unitPriceGBP - avgEntry) * asset.yourUnits;
-      }, 0),
-    [coOwnHoldings]
-  );
 
   // Parallax scroll for cover
   const scrollY = useSharedValue(0);
@@ -313,6 +335,12 @@ export default function MyProfileScreen() {
         accessibilityLabel: 'View your orders',
       },
       {
+        icon: 'pulse-outline' as const,
+        label: 'Analytics',
+        onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
+        accessibilityLabel: 'View your creator analytics',
+      },
+      {
         icon: 'bookmark-outline' as const,
         label: 'Closet',
         value: `${savedCount + wishlistCount} items`,
@@ -338,6 +366,13 @@ export default function MyProfileScreen() {
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
         accessibilityLabel: 'Browse co-own market',
       },
+      {
+        icon: 'images-outline' as const,
+        label: 'Posters',
+        onPress: () => { haptic.light(); navigation.navigate('PosterArchive'); },
+        accessibilityLabel: 'Poster archive',
+        accessibilityHint: 'View your archived posters',
+      },
     ],
     [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation]
   );
@@ -350,11 +385,11 @@ export default function MyProfileScreen() {
   const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP) / 2;
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <View style={[styles.container, t.container]}>
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       {/* ── 1. FULL-WIDTH COVER ── */}
-      <Reanimated.View style={[styles.coverWrap, coverStyle]}>
+      <Reanimated.View style={[styles.coverWrap, t.coverWrap, coverStyle]}>
         <FlagshipProfileMedia
           coverUri={displayCover}
           coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
@@ -379,7 +414,7 @@ export default function MyProfileScreen() {
             accessibilityHint="Opens your style and experience preferences"
           >
             <View style={styles.topUtilityVisible}>
-              <Ionicons name="options-outline" size={19} color={Colors.textInverse} />
+              <Ionicons name="options-outline" size={19} color={colors.textInverse} />
             </View>
           </AnimatedPressable>
 
@@ -392,7 +427,7 @@ export default function MyProfileScreen() {
             accessibilityHint="Opens account and app settings"
           >
             <View style={styles.topUtilityVisible}>
-              <Ionicons name="settings-outline" size={19} color={Colors.textInverse} />
+              <Ionicons name="settings-outline" size={19} color={colors.textInverse} />
             </View>
           </AnimatedPressable>
         </Reanimated.View>
@@ -400,8 +435,8 @@ export default function MyProfileScreen() {
         {coverState.status === 'failed' ? (
           <View style={styles.coverFailure}>
             <View style={styles.coverFailureCopy}>
-              <Ionicons name="alert-circle-outline" size={17} color={Colors.textInverse} />
-              <Text style={styles.coverFailureText} numberOfLines={1}>
+              <Ionicons name="alert-circle-outline" size={17} color={colors.textInverse} />
+              <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1}>
                 {coverState.error || 'Cover upload failed'}
               </Text>
             </View>
@@ -412,8 +447,9 @@ export default function MyProfileScreen() {
               scaleValue={0.98}
               accessibilityRole="button"
               accessibilityLabel="Retry cover upload"
+              hitSlop={5}
             >
-              <Text style={styles.coverFailureActionText}>Retry</Text>
+              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>Retry</Text>
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.coverFailureAction}
@@ -422,8 +458,9 @@ export default function MyProfileScreen() {
               scaleValue={0.98}
               accessibilityRole="button"
               accessibilityLabel="Cancel cover change"
+              hitSlop={5}
             >
-              <Text style={styles.coverFailureActionText}>Cancel</Text>
+              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>Cancel</Text>
             </AnimatedPressable>
           </View>
         ) : (
@@ -444,9 +481,9 @@ export default function MyProfileScreen() {
           >
             <View style={styles.coverEditVisible}>
               {coverState.status === 'uploading' ? (
-                <ActivityIndicator size="small" color={Colors.textInverse} />
+                <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
-                <Ionicons name="image-outline" size={17} color={Colors.textInverse} />
+                <Ionicons name="image-outline" size={17} color={colors.textInverse} />
               )}
             </View>
           </AnimatedPressable>
@@ -454,9 +491,9 @@ export default function MyProfileScreen() {
       </Reanimated.View>
 
       {/* ── COLLAPSED SCROLL HEADER ── */}
-      <Reanimated.View style={[styles.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]} pointerEvents="none">
+      <Reanimated.View style={[styles.floatingHeader, t.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]} pointerEvents="none">
         <View style={{ flex: 1 }} />
-        <Text style={styles.floatingHeaderTitle} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
+        <Text style={[styles.floatingHeaderTitle, t.floatingHeaderTitle]} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
         <View style={{ flex: 1 }} />
       </Reanimated.View>
 
@@ -468,43 +505,42 @@ export default function MyProfileScreen() {
         scrollEventThrottle={16}
       >
         {/* ── 3-9: IDENTITY HERO + ACTIONS ── */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
           <MyProfileIdentityHero
             avatarUri={displayAvatar}
             displayName={user.displayName || user.username}
             username={user.username}
-            bio={user.bio}
-            location={user.location}
+            bio={user.bio ?? undefined}
+            location={user.location ?? undefined}
             memberSince={memberSince}
             listingCount={allOwnedListings.length}
             lookCount={myLooks.length}
             sellerTrust={sellerTrust}
             emailVerified={user.emailVerified}
             onEditAvatar={pickAvatar}
-            onEditProfile={() => (navigation as any).navigate('EditProfile')}
+            onEditProfile={() => navigation.navigate('EditProfile', {})}
             onShare={handleShare}
           />
 
           {/* Away-mode indicator — shown when holiday mode is enabled */}
           {holidayMode ? (
             <Pressable
-              style={myProfileStyles.awayBanner}
-              onPress={() => (navigation as any).navigate('PrivacySettings')}
+              style={[myProfileStyles.awayBanner, tMyProfile.awayBanner]}
+              onPress={() => navigation.navigate('PrivacySettings')}
               accessibilityRole="button"
               accessibilityLabel="Holiday mode is on — tap to manage"
             >
-              <Ionicons name="pause-circle" size={18} color={Colors.textMuted} />
+              <Ionicons name="pause-circle" size={18} color={colors.textMuted} />
               <View style={myProfileStyles.awayBannerTextWrap}>
-                <Text style={myProfileStyles.awayBannerTitle}>Holiday mode is on</Text>
-                <Text style={myProfileStyles.awayBannerSub}>
+                <Text style={[myProfileStyles.awayBannerTitle, tMyProfile.awayBannerTitle]}>Holiday mode is on</Text>
+                <Text style={[myProfileStyles.awayBannerSub, tMyProfile.awayBannerSub]}>
                   Your shop is paused. Tap to manage.
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
           ) : null}
 
-          {/* Profile completeness indicator — only shows when incomplete */}
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
           <ProfileUtilityRail items={utilityItems} />
 
@@ -524,34 +560,36 @@ export default function MyProfileScreen() {
 
         {/* LISTINGS TAB — two-column portfolio grid */}
         {activeTab === 'listings' && (
-          <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {allOwnedListings.length === 0 ? (
               <View style={styles.listingsEmpty}>
-                <Ionicons name="bag-add-outline" size={27} color={Colors.textSecondary} />
-                <Text style={styles.listingsEmptyTitle}>List your first item</Text>
-                <Text style={styles.listingsEmptyBody}>
+                <Ionicons name="bag-add-outline" size={27} color={colors.textSecondary} />
+                <Text style={[styles.listingsEmptyTitle, t.listingsEmptyTitle]}>List your first item</Text>
+                <Text style={[styles.listingsEmptyBody, t.listingsEmptyBody]}>
                   Photograph an item and publish it when you are ready.
                 </Text>
                 <AnimatedPressable
-                  style={styles.listingsEmptyCta}
+                  style={[styles.listingsEmptyCta, t.listingsEmptyCta]}
                   onPress={() => navigation.navigate('MainTabs')}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel="Start selling"
+                  hitSlop={1}
                 >
-                  <Text style={styles.listingsEmptyCtaText}>Start selling</Text>
+                  <Text style={[styles.listingsEmptyCtaText, t.listingsEmptyCtaText]}>Start selling</Text>
                 </AnimatedPressable>
               </View>
             ) : (
               <>
                 <View style={styles.gridHeader}>
-                  <Text style={styles.gridHeaderCount}>{allOwnedListings.length} listings</Text>
+                  <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>{allOwnedListings.length} listings</Text>
                   <Pressable
                     onPress={() => navigation.navigate('MyListings')}
                     accessibilityRole="button"
                     accessibilityLabel="View all listings"
+                    hitSlop={13}
                   >
-                    <Text style={styles.gridHeaderAction}>View All</Text>
+                    <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>View All</Text>
                   </Pressable>
                 </View>
                 <View style={styles.grid}>
@@ -571,23 +609,23 @@ export default function MyProfileScreen() {
                         <CachedImage
                           uri={item.images?.[0] ?? ''}
                           style={styles.gridImage}
-                          containerStyle={{ width: '100%', height: '100%', borderRadius: 6 }}
+                          containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.md }}
                           contentFit="cover"
                         />
                         {item.isSold ? (
                           <View style={styles.soldOverlay}>
-                            <Text style={styles.soldText}>SOLD</Text>
+                            <Text style={[styles.soldText, t.soldText]}>SOLD</Text>
                           </View>
                         ) : null}
                       </SharedTransitionView>
-                      <Text style={styles.gridPrice} numberOfLines={1}>
+                      <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
                         {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
                       </Text>
                       {item.brand ? (
-                        <Text style={styles.gridBrand} numberOfLines={1}>{item.brand}</Text>
+                        <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
                       ) : null}
                       {(item.size || item.condition) ? (
-                        <Text style={styles.gridMeta} numberOfLines={1}>
+                        <Text style={[styles.gridMeta, t.gridMeta]} numberOfLines={1}>
                           {[item.size, item.condition].filter(Boolean).join(' · ')}
                         </Text>
                       ) : null}
@@ -601,10 +639,10 @@ export default function MyProfileScreen() {
 
         {/* LOOKS TAB — fetched from backend */}
         {activeTab === 'looks' && (
-          <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {looksLoading ? (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                <Text style={{ color: Colors.textMuted, fontSize: 14 }}>Loading looks...</Text>
+                <Text style={{ color: colors.textMuted, fontSize: Type.body.size }}>Loading looks...</Text>
               </View>
             ) : myLooks.length === 0 ? (
               <EmptyState
@@ -639,77 +677,77 @@ export default function MyProfileScreen() {
 
         {/* ABOUT TAB — flat editorial layout */}
         {activeTab === 'about' && (
-          <View style={{ backgroundColor: Colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             <View style={styles.aboutContainer}>
               {user.bio ? (
-                <View style={styles.aboutRow}>
-                  <Text style={styles.aboutLabel}>Bio</Text>
-                  <Text style={styles.aboutValue}>{user.bio}</Text>
+                <View style={[styles.aboutRow, t.aboutRow]}>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Bio</Text>
+                  <Text style={[styles.aboutValue, t.aboutValue]}>{user.bio}</Text>
                 </View>
               ) : null}
               {user.location ? (
-                <View style={styles.aboutRow}>
-                  <Text style={styles.aboutLabel}>Location</Text>
-                  <Text style={styles.aboutValue}>{user.location}</Text>
+                <View style={[styles.aboutRow, t.aboutRow]}>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Location</Text>
+                  <Text style={[styles.aboutValue, t.aboutValue]}>{user.location}</Text>
                 </View>
               ) : null}
               {user.website ? (
-                <View style={styles.aboutRow}>
-                  <Text style={styles.aboutLabel}>Website</Text>
-                  <Text style={styles.aboutValue}>{user.website}</Text>
+                <View style={[styles.aboutRow, t.aboutRow]}>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Website</Text>
+                  <Text style={[styles.aboutValue, t.aboutValue]}>{user.website}</Text>
                 </View>
               ) : null}
               {memberSince ? (
-                <View style={[styles.aboutRow, styles.aboutRowLast]}>
-                  <Text style={styles.aboutLabel}>Member Since</Text>
-                  <Text style={styles.aboutValue}>{memberSince}</Text>
+                <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Member Since</Text>
+                  <Text style={[styles.aboutValue, t.aboutValue]}>{memberSince}</Text>
                 </View>
               ) : null}
               {!user.bio && !user.location && !user.website && !memberSince && (
-                <Text style={styles.aboutEmpty}>No profile details added yet.</Text>
+                <Text style={[styles.aboutEmpty, t.aboutEmpty]}>No profile details added yet.</Text>
               )}
             </View>
 
             {/* Shop stats — derived from seller trust data */}
             {sellerTrust ? (
               <View style={styles.aboutContainer}>
-                <Text style={styles.aboutSectionTitle}>Shop stats</Text>
+                <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>Shop stats</Text>
                 {sellerTrust.rating !== null && sellerTrust.rating !== undefined && sellerTrust.reviewCount ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Rating</Text>
-                    <Text style={styles.aboutValue}>
+                  <View style={[styles.aboutRow, t.aboutRow]}>
+                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Rating</Text>
+                    <Text style={[styles.aboutValue, t.aboutValue]}>
                       {sellerTrust.rating.toFixed(1)} ★ ({sellerTrust.reviewCount} review{sellerTrust.reviewCount === 1 ? '' : 's'})
                     </Text>
                   </View>
                 ) : null}
                 {sellerTrust.completedSales !== null && sellerTrust.completedSales !== undefined ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Completed sales</Text>
-                    <Text style={styles.aboutValue}>{sellerTrust.completedSales}</Text>
+                  <View style={[styles.aboutRow, t.aboutRow]}>
+                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Completed sales</Text>
+                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.completedSales}</Text>
                   </View>
                 ) : null}
                 {sellerTrust.responseTimeLabel ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Response time</Text>
-                    <Text style={styles.aboutValue}>Replies {sellerTrust.responseTimeLabel}</Text>
+                  <View style={[styles.aboutRow, t.aboutRow]}>
+                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Response time</Text>
+                    <Text style={[styles.aboutValue, t.aboutValue]}>Replies {sellerTrust.responseTimeLabel}</Text>
                   </View>
                 ) : null}
                 {sellerTrust.dispatchTimeLabel ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Dispatch time</Text>
-                    <Text style={styles.aboutValue}>{sellerTrust.dispatchTimeLabel}</Text>
+                  <View style={[styles.aboutRow, t.aboutRow]}>
+                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Dispatch time</Text>
+                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.dispatchTimeLabel}</Text>
                   </View>
                 ) : null}
                 {sellerTrust.responseRate !== null && sellerTrust.responseRate !== undefined ? (
-                  <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Response rate</Text>
-                    <Text style={styles.aboutValue}>{sellerTrust.responseRate}%</Text>
+                  <View style={[styles.aboutRow, t.aboutRow]}>
+                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Response rate</Text>
+                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.responseRate}%</Text>
                   </View>
                 ) : null}
                 {sellerTrust.activeListingCount !== null && sellerTrust.activeListingCount !== undefined ? (
-                  <View style={[styles.aboutRow, styles.aboutRowLast]}>
-                    <Text style={styles.aboutLabel}>Active listings</Text>
-                    <Text style={styles.aboutValue}>{sellerTrust.activeListingCount}</Text>
+                  <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
+                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Active listings</Text>
+                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.activeListingCount}</Text>
                   </View>
                 ) : null}
               </View>
@@ -717,26 +755,26 @@ export default function MyProfileScreen() {
 
             {/* Shop policies — derived from trust + account data */}
             <View style={styles.aboutContainer}>
-              <Text style={styles.aboutSectionTitle}>Shop policies</Text>
-              <View style={styles.aboutRow}>
-                <Text style={styles.aboutLabel}>Payments</Text>
-                <Text style={styles.aboutValue}>Secure checkout with buyer protection</Text>
+              <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>Shop policies</Text>
+              <View style={[styles.aboutRow, t.aboutRow]}>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>Payments</Text>
+                <Text style={[styles.aboutValue, t.aboutValue]}>Secure checkout with buyer protection</Text>
               </View>
-              <View style={styles.aboutRow}>
-                <Text style={styles.aboutLabel}>Shipping</Text>
-                <Text style={styles.aboutValue}>
+              <View style={[styles.aboutRow, t.aboutRow]}>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>Shipping</Text>
+                <Text style={[styles.aboutValue, t.aboutValue]}>
                   {sellerTrust?.dispatchTimeLabel
                     ? `Seller ${sellerTrust.dispatchTimeLabel.toLowerCase()}. Tracking provided on dispatch.`
                     : 'Tracking provided on dispatch.'}
                 </Text>
               </View>
-              <View style={styles.aboutRow}>
-                <Text style={styles.aboutLabel}>Returns</Text>
-                <Text style={styles.aboutValue}>Returns accepted for items not as described.</Text>
+              <View style={[styles.aboutRow, t.aboutRow]}>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>Returns</Text>
+                <Text style={[styles.aboutValue, t.aboutValue]}>Returns accepted for items not as described.</Text>
               </View>
-              <View style={[styles.aboutRow, styles.aboutRowLast]}>
-                <Text style={styles.aboutLabel}>Response</Text>
-                <Text style={styles.aboutValue}>
+              <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>Response</Text>
+                <Text style={[styles.aboutValue, t.aboutValue]}>
                   {sellerTrust?.responseTimeLabel
                     ? `Seller typically replies ${sellerTrust.responseTimeLabel.toLowerCase()}.`
                     : 'Seller aims to respond promptly.'}
@@ -754,35 +792,31 @@ const myProfileStyles = StyleSheet.create({
   awayBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm + 2,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   awayBannerTextWrap: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   awayBannerTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   awayBannerSub: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, overflow: 'hidden' },
-  scrollContent: { paddingBottom: 100, overflow: 'hidden' },
+  container: { flex: 1, overflow: 'hidden' },
+  scrollContent: { paddingBottom: Space.xxl + Space.xxl + Space.xs, overflow: 'hidden' },
 
   // Cover
   coverWrap: {
@@ -793,7 +827,6 @@ const styles = StyleSheet.create({
     height: COVER_HEIGHT,
     zIndex: 0,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
   },
   coverActionLayer: {
     position: 'absolute',
@@ -805,22 +838,22 @@ const styles = StyleSheet.create({
   },
   topUtilityRow: {
     position: 'absolute',
-    left: 14,
-    right: 14,
+    left: Space.md - 2,
+    right: Space.md - 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   topUtilityIconBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   topUtilityVisible: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: Space.xl - 2,
+    height: Space.xl - 2,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.42)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',
@@ -829,17 +862,17 @@ const styles = StyleSheet.create({
   },
   coverEditTarget: {
     position: 'absolute',
-    right: 14,
-    bottom: 8,
-    width: 44,
-    height: 44,
+    right: Space.md - 2,
+    bottom: Space.sm,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   coverEditVisible: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: Space.xl + 2,
+    height: Space.xl + 2,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.24)',
@@ -848,42 +881,40 @@ const styles = StyleSheet.create({
   },
   coverFailure: {
     position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 8,
-    minHeight: 44,
-    paddingLeft: 12,
-    paddingRight: 5,
-    borderRadius: 12,
+    left: Space.md - 2,
+    right: Space.md - 2,
+    bottom: Space.sm,
+    minHeight: Control.hit,
+    paddingLeft: Space.sm + 4,
+    paddingRight: Space.xs + 1,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.72)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
   },
   coverFailureCopy: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: Space.xs + 3,
   },
   coverFailureText: {
     flexShrink: 1,
-    color: Colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   coverFailureAction: {
-    minWidth: 52,
-    minHeight: 34,
-    paddingHorizontal: 8,
+    minWidth: Space.xxl + 4,
+    minHeight: Space.xl + 2,
+    paddingHorizontal: Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   coverFailureActionText: {
-    color: Colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
 
   // Collapsed header
@@ -896,16 +927,13 @@ const styles = StyleSheet.create({
     elevation: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 16,
-    backgroundColor: Colors.background,
+    paddingBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   floatingHeaderTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
   },
 
   // Listings grid
@@ -917,26 +945,24 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   gridHeaderCount: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   gridHeaderAction: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: 8,
+    gap: Space.sm,
   },
   gridCard: {
-    marginBottom: 12,
+    marginBottom: Space.sm + 4,
   },
   gridImageWrap: {
-    borderRadius: 6,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -951,28 +977,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   soldText: {
-    color: Colors.textInverse,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: 1,
+    letterSpacing: LetterSpacing.caps + 0.18,
   },
   gridPrice: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginTop: 6,
+    marginTop: Space.xs + 2,
   },
   gridBrand: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
   gridMeta: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
 
   // Listings empty state — compact in-grid prompt, not full blank page
@@ -984,30 +1006,26 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   listingsEmptyTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   listingsEmptyBody: {
     maxWidth: 280,
-    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     textAlign: 'center',
   },
   listingsEmptyCta: {
-    marginTop: 6,
-    minHeight: 42,
-    paddingHorizontal: 18,
+    marginTop: Space.xs + 2,
+    minHeight: Control.hit - 2,
+    paddingHorizontal: Space.md + 2,
     justifyContent: 'center',
-    backgroundColor: Colors.brand,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   listingsEmptyCtaText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
 
   // About — flat editorial rows
@@ -1015,38 +1033,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   aboutSectionTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
     paddingTop: Space.md + 2,
     paddingBottom: Space.xs,
   },
   aboutRow: {
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   aboutRowLast: {
     borderBottomWidth: 0,
   },
   aboutLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 4,
+    letterSpacing: LetterSpacing.caps - 0.12,
+    marginBottom: Space.xs,
   },
   aboutValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
   },
   aboutEmpty: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
     paddingVertical: Space.xl,
   },

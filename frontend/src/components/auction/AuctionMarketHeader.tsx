@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography, Elevation } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Elevation, Stroke, Type } from '../../theme/designTokens';
 
 export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
 
@@ -37,6 +37,8 @@ export function AuctionMarketHeader({
   onBack,
   actions,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isVerySmall = width < VERY_SMALL_THRESHOLD;
@@ -69,7 +71,7 @@ export function AuctionMarketHeader({
             accessibilityLabel="Go back"
             style={styles.iconBtn}
           >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </Pressable>
         ) : null}
 
@@ -90,7 +92,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={searchAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={searchAction.icon} size={22} color={Colors.textPrimary} />
+              <Ionicons name={searchAction.icon} size={22} color={colors.textPrimary} />
             </Pressable>
           )}
 
@@ -103,7 +105,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={activityAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={activityAction.icon} size={22} color={Colors.textPrimary} />
+              <Ionicons name={activityAction.icon} size={22} color={colors.textPrimary} />
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
                   {activityAction.badgeCount! > 9 ? '9+' : activityAction.badgeCount}
@@ -121,7 +123,7 @@ export function AuctionMarketHeader({
               accessibilityLabel="More auction options"
               style={styles.iconBtn}
             >
-              <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
+              <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
             </Pressable>
           )}
 
@@ -134,7 +136,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={createAction.label}
               style={styles.createBtn}
             >
-              <Ionicons name={createAction.icon} size={22} color={Colors.brand} />
+              <Ionicons name={createAction.icon} size={22} color={colors.brand} />
             </Pressable>
           )}
         </View>
@@ -158,7 +160,7 @@ export function AuctionMarketHeader({
                   accessibilityRole="button"
                   accessibilityLabel={action.label}
                 >
-                  <Ionicons name={action.icon} size={20} color={Colors.textPrimary} />
+                  <Ionicons name={action.icon} size={20} color={colors.textPrimary} />
                   <Text style={styles.overflowLabel}>{action.label}</Text>
                   {action.badgeCount != null && action.badgeCount > 0 && (
                     <View style={styles.overflowBadge}>
@@ -177,9 +179,9 @@ export function AuctionMarketHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   header: {
-    paddingBottom: Space.sm - 2,
+    paddingBottom: Space.sm,
     paddingHorizontal: Space.md,
   },
   row: {
@@ -188,72 +190,76 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     minHeight: 48,
   },
+  // Standardized 44x44 hit targets — per AGENTS.md: separate hit area
+  // from visible shape. No circular chrome on utility controls.
   iconBtn: {
-    width: 36,
+    width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
+  // Create button — transparent hit target, brand-colored icon.
+  // No surfaceAlt circle; the brand color is the visual signal.
   createBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(244,240,232,0.10)',
-    marginLeft: 4,
+    marginLeft: Space.xs,
   },
   titleWrap: {
     flex: 1,
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 30,
-    color: Colors.textPrimary,
-    letterSpacing: -0.8,
+    fontSize: Type.title.size,
+    color: colors.textPrimary,
+    letterSpacing: -0.6,
   },
+  // Context elevated — 14pt medium with tighter tracking for editorial feel
   context: {
-    fontFamily: Typography.family.regular,
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 0,
-    letterSpacing: -0.1,
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    color: colors.textSecondary,
+    marginTop: 2,
+    letterSpacing: -0.3,
   },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 0,
   },
+  // Refined badge — smaller, hairline border, subtle shadow
   badge: {
     position: 'absolute',
-    top: 5,
-    right: 3,
-    minWidth: 16,
-    height: 16,
+    top: 4,
+    right: 4,
+    minWidth: 14,
+    height: 14,
     borderRadius: Radius.full,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: Colors.background,
+    paddingHorizontal: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.background,
   },
   badgeText: {
     fontFamily: Typography.family.bold,
     fontSize: 9,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   overflowBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
   },
   overflowSheet: {
     marginTop: 120,
     marginRight: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.xs,
     minWidth: 220,
@@ -269,16 +275,18 @@ const styles = StyleSheet.create({
   overflowLabel: {
     flex: 1,
     fontFamily: Typography.family.medium,
-    fontSize: 15,
-    color: Colors.textPrimary,
+    fontSize: Type.bodyEmphasis.size,
+    color: colors.textPrimary,
   },
   overflowBadge: {
     minWidth: 18,
     height: 18,
     borderRadius: Radius.full,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
+    borderWidth: Stroke.standard,
+    borderColor: colors.surface,
   },
 });

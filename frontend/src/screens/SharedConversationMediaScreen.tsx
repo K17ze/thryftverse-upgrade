@@ -6,10 +6,10 @@ import {
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -18,7 +18,7 @@ import { isVideoUri } from '../utils/media';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
 
-type Props = StackScreenProps<RootStackParamList, 'SharedConversationMedia'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'SharedConversationMedia'>;
 
 const GAP = 2;
 const COLS = 3;
@@ -34,8 +34,11 @@ type MediaItem = {
 export default function SharedConversationMediaScreen({ navigation, route }: Props) {
   const { conversationId } = route.params as { conversationId: string };
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
   const { width } = useWindowDimensions();
   const thumbSize = (width - Space.md * 2 - GAP * (COLS - 1)) / COLS;
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const conversations = useStore((state) => state.conversations);
   const conversation = useMemo(
@@ -78,7 +81,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     >
       {item.isVideo ? (
         <View style={[styles.thumb, styles.videoTile, { width: thumbSize, height: thumbSize }]}>
-          <Ionicons name="videocam" size={24} color={Colors.textSecondary} />
+          <Ionicons name="videocam" size={24} color={colors.textSecondary} />
         </View>
       ) : (
         <CachedImage
@@ -89,7 +92,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       )}
       {item.isVideo && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play" size={12} color={Colors.textInverse} />
+          <Ionicons name="play" size={12} color={colors.textInverse} />
         </View>
       )}
     </AnimatedPressable>
@@ -129,39 +132,41 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
   );
 }
 
-const styles = StyleSheet.create({
-  listContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xxl,
-  },
-  thumbWrap: {
-    borderRadius: Radius.sm,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    marginRight: GAP,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  thumb: {
-    borderRadius: Radius.sm,
-  },
-  videoTile: {
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoBadge: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginTop: -14,
-    marginLeft: -14,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    listContent: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.xxl,
+    },
+    thumbWrap: {
+      borderRadius: Radius.sm,
+      overflow: 'hidden',
+      backgroundColor: colors.surfaceAlt,
+      marginRight: GAP,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    thumb: {
+      borderRadius: Radius.sm,
+    },
+    videoTile: {
+      backgroundColor: colors.surface,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    videoBadge: {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      marginTop: -(Space.lg + 4) / 2,
+      marginLeft: -(Space.lg + 4) / 2,
+      width: Space.lg + 4,
+      height: Space.lg + 4,
+      borderRadius: Radius.xl,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+  });
+}

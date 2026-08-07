@@ -703,11 +703,169 @@ BLOCKED — RUNTIME FAILURE
 
 ---
 
-## 24. CORE PRINCIPLES
+## 24. AGENT RUNTIME HYGIENE (WINDOWS / REACT NATIVE)
+
+This repository runs on Windows with PowerShell as the default shell, and ships a React Native / Expo frontend with a large dependency tree. Two environmental culprits cause agentic IDEs to spin, freeze, or burn attention tokens on irrelevant code. The protections below are enforced via `.devin/config.json` (committed) and the user config; agents must respect them.
+
+### 24.1 Shell — PowerShell, not bash
+
+The default shell on this machine is **PowerShell**. Do not assume bash, zsh, or Unix coreutils.
+
+- Use `Get-ChildItem` (alias `gci`, `dir`), not `ls -la`. `ls -la` fails in PowerShell.
+- Use `Get-Content`, not `cat` (alias works, but prefer native cmdlets for flags).
+- Use `Remove-Item`, not `rm`. Use `Copy-Item`/`Move-Item`, not `cp`/`mv`.
+- Use `Select-String`, not `grep`, for shell-side text search. (Prefer the dedicated `grep`/`code_search` tools over shell search anyway.)
+- Use `;` to chain commands, not `&&`. For conditional chaining use `if ($?) { ... }`.
+- Quote paths containing spaces with double quotes: `Get-ChildItem "reference images"`.
+- Forward slashes work in most cmdlets, but prefer backslashes for Windows-native paths when passing to native executables.
+- `git` works identically; only the surrounding shell syntax differs.
+
+If a Unix-style command fails with a parameter-binding error, stop and rewrite it in PowerShell syntax. Do not retry the same command in a loop.
+
+### 24.2 Indexing scope — do not read dependency/build trees
+
+`frontend/node_modules` contains ~70k files / 16 GB. Reading or searching it drowns the agent's context and triggers subagent research loops over standard-library code. The following paths are blocked by `.devin/config.json` deny rules and/or `.gitignore` + `respect_gitignore`:
+
+- `node_modules/**`, `**/node_modules/**`
+- `.expo/**`, `**/.expo/**`
+- `dist/**`, `**/dist/**`
+- `frontend/ios/**`, `frontend/android/**` (generated native output)
+- `__pycache__/**`, `.venv/**`
+- `thryftverse-payment-wallet-flagship-upgrade-prompts/**` (prompt archive, not source)
+- `thryftverse_product_detail_competitive_closure_audit_2026-07-30/**` (audit archive, not source)
+
+Do not attempt to work around these deny rules. If a dependency's behaviour is genuinely needed, read its public docs via `webfetch` or inspect the package's entry point listed in `frontend/package.json` — do not crawl `node_modules`.
+
+`reference images/` is intentionally NOT blocked: it holds the benchmark images required for UI/UX case studies (see §3, §5). Treat it as a reference, not an index target.
+
+### 24.3 When an agent spins
+
+If you notice yourself looping on research without implementation:
+
+1. Stop. Re-read §10 (implementation over auditing) and §22 (completion standard).
+2. Confirm you are not searching inside a blocked path.
+3. Confirm you are using PowerShell syntax, not retrying failed bash commands.
+4. Move to the implementation loop: study → implement → render → criticise → correct.
+
+---
+
+## 25. MANDATORY RESEARCH-TO-IMPLEMENTATION PROTOCOL (EVERY PROMPT)
+
+This section is non-negotiable. It applies to **every** prompt the agent executes, not only large UI/UX tasks. A prompt is not "done" because code was written. A prompt is done when the agent has researched the codebase, researched references and online best practices, pushed the work to maximum flagship production grade, and implemented it in the production files.
+
+### 25.1 The mandatory execution sequence
+
+For every prompt, run this sequence in order. Skipping a stage is a process failure, even if the output looks reasonable.
+
+```
+1. CODEBASE RESEARCH     → understand the current implementation end-to-end
+2. REFERENCE RESEARCH    → study supplied reference images / apps deeply
+3. ONLINE RESEARCH       → find the maximum best current practices and patterns
+4. FLAGSHIP SYNTHESIS    → combine codebase + references + best practices into a target
+5. IMPLEMENT             → write the change in the production TSX/files
+6. VERIFY + CRITIQUE     → render, criticise, correct, render again
+```
+
+### 25.2 Stage 1 — Codebase research (always)
+
+Before writing anything, inspect the real implementation. Do not work from assumptions or from the prompt text alone.
+
+- Read the canonical screen/component file(s) named in the prompt.
+- Trace the full flow per §2: route → page → container → hooks → services → API → DB (or bottom-up).
+- Identify the data contract, state owner, loading/error/empty states, and navigation wiring.
+- Note what is genuinely working and must be preserved (§8).
+- Note the existing design tokens, component patterns, and conventions in use.
+
+A change made without understanding the codebase is not flagship work — it is a guess.
+
+### 25.3 Stage 2 — Reference research (when references exist)
+
+When the user supplies reference images, apps, or links, study them seriously per §3 and §5. References are quality benchmarks to exceed, not surfaces to photocopy.
+
+Study and record:
+
+- hierarchy and visual weight
+- density and breathing room
+- spacing rhythm and grid system
+- typography relationships and scale
+- media treatment and art direction
+- alignment and edge behaviour
+- control placement and interaction patterns
+- first-viewport usefulness
+- state transitions and motion language
+
+Then design a ThryftVerse surface that embodies the same underlying thinking, not a copy of the reference's appearance.
+
+### 25.4 Stage 3 — Online research (always, to the maximum)
+
+This is the stage agents most often skip. Do not. For every meaningful prompt, use `web_search` / `webfetch` to research the current maximum best practices relevant to the surface or mechanic being changed.
+
+Research areas (pick what is relevant to the prompt):
+
+- **Platform conventions** — current iOS / Android Human Interface Guidelines and Material 3 patterns for the surface type (list, detail, checkout, settings, media viewer, etc.).
+- **Production-grade patterns** — how top-shipping apps solve the same problem (e.g. Stripe, Airbnb, Vinted, Depop, Grailed, Etsy, GOAT, StockX for marketplace surfaces).
+- **React Native / Expo best practices** — current recommended patterns for the libraries already in `frontend/package.json` (FlashList, Reanimated, expo-image, expo-router, etc.). Verify against the library's current docs, not memory.
+- **Accessibility best practices** — WCAG 2.2, Apple HIG accessibility, current RN Accessibility API patterns.
+- **Performance best practices** — current guidance on list virtualization, image loading, reanimation, and render budget for the libraries in use.
+- **Design system / token practice** — current thinking on spacing scales, type scales, radius grammar, and colour systems for production mobile apps.
+
+Do not rely on memory for library APIs or platform guidance — they drift. Verify against current online sources. Cite the source when it changes a decision.
+
+The goal of online research is to find the **maximum best** practice, not the first acceptable one. Compare at least two credible sources when the answer is non-obvious.
+
+### 25.5 Stage 4 — Flagship synthesis
+
+Combine the three research streams into a concrete target for this prompt:
+
+```
+codebase truth  +  reference quality  +  online best practice  =  flagship target
+```
+
+The flagship target is the highest-quality version of the change that the codebase and agent capability can produce, informed by real references and real current best practices — not a generic improvement, not a token swap, not a memory-based guess.
+
+If the three streams conflict, prioritise in this order: user's explicit written requirements → user-supplied references → online best practice → existing codebase pattern.
+
+### 25.6 Stage 5 — Implement (always)
+
+Research without implementation is not completion (§10). Implement the flagship target directly in the production files.
+
+- Modify the canonical screen/component (§7). No `ScreenV2`, `ScreenFinal`, `ScreenFlagship` parallel files.
+- Preserve working functionality (§8).
+- Push to the quality bar in §4: authored composition, clear hierarchy, useful first viewport, deliberate spacing, readable typography, strong media treatment, coherent action placement, complete state coverage.
+- Use truthful UI (§11), correct navigation (§12), control quality (§13), state completeness (§14).
+
+### 25.7 Stage 6 — Verify and critique
+
+After implementing:
+
+- Run TypeScript (§20, §22).
+- Run existing tests if present.
+- Critique the result against the flagship target and the references. Be honest about gaps.
+- Correct and re-render. The loop is: implement → render → criticise → correct → render again (§10).
+- If a native device is available, validate on device (§19). If not, mark `IMPLEMENTED — NATIVE DEVICE VALIDATION PENDING`.
+
+### 25.8 Anti-patterns (process failures)
+
+- Writing code without reading the current implementation.
+- Implementing from memory without verifying current library APIs or platform guidance online.
+- Treating references as surfaces to copy instead of quality benchmarks to exceed.
+- Stopping at "the first acceptable pattern" instead of researching the maximum best.
+- Producing research/audit documentation instead of visible product improvement.
+- Claiming completion after TypeScript passes without a real critique against the flagship target.
+- Skipping online research because "the answer is obvious" — verify anyway; best practices drift.
+
+### 25.9 Proportionality
+
+This protocol scales with the prompt. A one-line fix still requires codebase research (stage 1) and a quick online check if it touches a library API (stage 3), but does not require a full reference study. A UI/UX upgrade requires the full sequence. Use judgment on depth — but never skip a stage entirely; if a stage is genuinely not applicable, state why in one line and proceed.
+
+---
+
+## 26. CORE PRINCIPLES
 
 - The product is the native mobile application. Every decision serves the user's experience.
 - Fix at the source-of-truth, not at the symptom layer.
 - Ultra-deep system research before acting. Diagnose end-to-end.
+- Every prompt: research the codebase, study references, research online best practices, then implement to flagship grade (§25).
 - When changing a mechanic, align all directly coupled layers.
 - Push every UI/UX task to maximum quality. Exceed references, don't photocopy them.
 - Composition over decoration. Hierarchy over ornament.

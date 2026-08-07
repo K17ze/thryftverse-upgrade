@@ -1,13 +1,17 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius } from '../../theme/designTokens';
+import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
-import { AppStatusPill } from '../ui/AppStatusPill';
+import { AppStatusPill, type AppStatusTone } from '../ui/AppStatusPill';
 import { Meta, BodyEmphasis, Body, Headline } from '../ui/Text';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+
+type TimerUrgency = 'critical' | 'urgent' | 'normal';
 
 interface AuctionCardProps {
   id: string;
@@ -23,17 +27,51 @@ interface AuctionCardProps {
   isWatching?: boolean;
   buyNowPrice?: string;
   viewerState?: 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
+  timerUrgency?: TimerUrgency;
+  endingSoon?: boolean;
   onPress?: () => void;
   onBid?: () => void;
   onBuyNow?: () => void;
   onToggleWatch?: () => void;
   onPressSeller?: () => void;
   onMessageSeller?: () => void;
+  onViewBidHistory?: () => void;
   isBuyNowLoading?: boolean;
   isBidSubmitting?: boolean;
 }
 
-export function AuctionCard({
+function LiveDot({ color }: { color: string }) {
+  const reducedMotion = useReducedMotion();
+  const opacity = useSharedValue(1);
+  React.useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      return;
+    }
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      true,
+    );
+  }, [opacity, reducedMotion]);
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+  return (
+    <Reanimated.View style={[{ width: 6, height: 6, borderRadius: Radius.sm, backgroundColor: color }, dotStyle]} />
+  );
+}
+
+const URGENCY_TONE_MAP: Record<TimerUrgency, AppStatusTone> = {
+  critical: 'negative',
+  urgent: 'warning',
+  normal: 'accent',
+};
+
+function AuctionCardBase({
   title,
   image,
   sellerName,
@@ -46,15 +84,21 @@ export function AuctionCard({
   isWatching = false,
   buyNowPrice,
   viewerState,
+  timerUrgency = 'normal',
+  endingSoon = false,
   onPress,
   onBid,
   onBuyNow,
   onToggleWatch,
   onPressSeller,
   onMessageSeller,
+  onViewBidHistory,
   isBuyNowLoading = false,
   isBidSubmitting = false,
 }: AuctionCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <AnimatedPressable
       style={styles.container}
@@ -75,23 +119,29 @@ export function AuctionCard({
         />
         {isLive && (
           <View style={styles.livePill}>
-            <View style={styles.liveDot} />
+            <LiveDot color={colors.danger} />
             <Meta style={styles.liveText}>LIVE</Meta>
           </View>
         )}
-        {viewerState === 'outbid' && (
+        {endingSoon && isLive && (
+          <View style={styles.endingSoonBadge}>
+            <Ionicons name="time-outline" size={10} color="#fff" />
+            <Meta style={styles.viewerBadgeText}>ENDING SOON</Meta>
+          </View>
+        )}
+        {viewerState === 'outbid' && !endingSoon && (
           <View style={styles.outbidBadge}>
             <Ionicons name="trending-down-outline" size={10} color="#fff" />
             <Meta style={styles.viewerBadgeText}>OUTBID</Meta>
           </View>
         )}
-        {viewerState === 'leading' && (
+        {viewerState === 'leading' && !endingSoon && (
           <View style={styles.leadingBadge}>
             <Ionicons name="trophy-outline" size={10} color="#fff" />
             <Meta style={styles.viewerBadgeText}>LEADING</Meta>
           </View>
         )}
-        {viewerState === 'won' && (
+        {viewerState === 'won' && !endingSoon && (
           <View style={styles.wonBadge}>
             <Ionicons name="ribbon-outline" size={10} color="#fff" />
             <Meta style={styles.viewerBadgeText}>WON</Meta>
@@ -105,7 +155,7 @@ export function AuctionCard({
             {title}
           </Headline>
           <AppStatusPill
-            tone="accent"
+            tone={URGENCY_TONE_MAP[timerUrgency]}
             iconName="time-outline"
             label={timeRemaining}
             size="sm"
@@ -133,7 +183,7 @@ export function AuctionCard({
                 accessibilityLabel={`Message ${sellerName}`}
                 accessibilityHint="Opens chat with this seller"
               >
-                <Ionicons name="chatbubble-ellipses-outline" size={14} color={Colors.textPrimary} />
+                <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.textPrimary} />
               </AnimatedPressable>
             )}
           </View>
@@ -145,10 +195,23 @@ export function AuctionCard({
             <BodyEmphasis style={styles.bidValue}>{currentBid}</BodyEmphasis>
           </View>
           <View style={styles.bidCountWrap}>
-            <Ionicons name="people-outline" size={12} color={Colors.textMuted} />
+            <Ionicons name="people-outline" size={12} color={colors.textMuted} />
             <Meta style={styles.bidCount}>{bidCount} bids</Meta>
           </View>
         </View>
+
+        {onViewBidHistory && bidCount > 0 ? (
+          <Pressable
+            style={styles.bidHistoryBtn}
+            onPress={onViewBidHistory}
+            accessibilityRole="button"
+            accessibilityLabel={`View bid history for ${title}`}
+          >
+            <Ionicons name="list-outline" size={12} color={colors.brand} />
+            <Meta style={styles.bidHistoryBtnText}>View bid history</Meta>
+            <Ionicons name="chevron-forward" size={10} color={colors.brand} />
+          </Pressable>
+        ) : null}
 
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${Math.min(100, progress * 100)}%` }]} />
@@ -199,12 +262,14 @@ export function AuctionCard({
   );
 }
 
-const styles = StyleSheet.create({
+export const AuctionCard = React.memo(AuctionCardBase);
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
@@ -228,21 +293,33 @@ const styles = StyleSheet.create({
     left: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
   },
   liveDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.danger,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.danger,
+  },
+  endingSoonBadge: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2 + 1,
+    backgroundColor: 'rgba(220,38,38,0.9)',
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2 + 1,
   },
   liveText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
   },
   outbidBadge: {
     position: 'absolute',
@@ -250,11 +327,11 @@ const styles = StyleSheet.create({
     right: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: Space.xs / 2 + 1,
     backgroundColor: 'rgba(255,68,68,0.9)',
     borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2 + 1,
   },
   leadingBadge: {
     position: 'absolute',
@@ -262,11 +339,11 @@ const styles = StyleSheet.create({
     right: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: Space.xs / 2 + 1,
     backgroundColor: 'rgba(0,180,80,0.9)',
     borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2 + 1,
   },
   wonBadge: {
     position: 'absolute',
@@ -274,15 +351,15 @@ const styles = StyleSheet.create({
     right: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: Space.xs / 2 + 1,
     backgroundColor: 'rgba(255,170,0,0.9)',
     borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2 + 1,
   },
   viewerBadgeText: {
     color: '#fff',
-    fontSize: 9,
+    fontSize: Type.meta.size - 3,
     fontWeight: '700',
   },
   body: {
@@ -292,7 +369,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   title: {
     flex: 1,
@@ -309,13 +386,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   seller: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   sellerMessageBtn: {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -329,24 +406,35 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   bidValue: {
-    color: Colors.brand,
+    color: colors.brand,
   },
   bidCountWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   bidCount: {},
+  bidHistoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginBottom: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  bidHistoryBtnText: {
+    color: colors.brand,
+    fontSize: Type.caption.size,
+  },
   progressTrack: {
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surfaceAlt,
     marginBottom: Space.sm,
   },
   progressFill: {
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.brand,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.brand,
   },
   actionRow: {
     flexDirection: 'row',
@@ -359,7 +447,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   watchBtnActive: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   actionBtnDisabled: {
     opacity: 0.52,

@@ -1,0 +1,249 @@
+name: Screenshots
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/screenshots.yml"
+      - "frontend/.maestro/**"
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to capture"
+        required: true
+        default: "ios"
+        type: choice
+        options:
+          - ios
+          - android
+          - both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-flight-gates:
+    name: Pre-flight quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: TypeScript typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Design token lint
+        run: npm run lint:design-tokens
+        working-directory: frontend
+
+  screenshots-ios:
+    name: iOS screenshots (Maestro)
+    needs: pre-flight-gates
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'ios' || inputs.platform == 'both'
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      APP_ID: com.thryftverse.app
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.tools" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build iOS dev client
+        working-directory: frontend
+        run: |
+          eas build \
+            --platform ios \
+            --profile development-simulator \
+            --message "screenshots:${GITHUB_SHA}" \
+            --wait \
+            --json > eas-build-ios.json
+          BUILD_ID=$(jq -r 'if type == "array" then .[0].id else .id end // empty' eas-build-ios.json)
+          BUILD_SHA=$(jq -r 'if type == "array" then .[0].gitCommitHash else .gitCommitHash end // empty' eas-build-ios.json)
+          BUILD_URL=$(jq -r 'if type == "array" then .[0].artifacts.buildUrl else .artifacts.buildUrl end // empty' eas-build-ios.json)
+          test -n "$BUILD_ID"
+          test "$BUILD_SHA" = "$GITHUB_SHA"
+          test -n "$BUILD_URL"
+          echo "EAS_BUILD_ID=$BUILD_ID" >> "$GITHUB_ENV"
+          echo "EAS_BUILD_URL=$BUILD_URL" >> "$GITHUB_ENV"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Download and install iOS build
+        working-directory: frontend
+        run: |
+          curl --fail --location --retry 3 "$EAS_BUILD_URL" --output build.tar.gz
+          mkdir -p build
+          tar -xzf build.tar.gz -C build
+          test -n "$(find build -maxdepth 2 -name '*.app' -print -quit)"
+
+      - name: Boot iOS simulator
+        run: |
+          SIM_ID=$(xcrun simctl create "ThryftVerseScreenshots" "iPhone 15" "iOS17.4")
+          echo "SIM_ID=$SIM_ID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM_ID"
+          sleep 15
+
+      - name: Install app on simulator
+        run: |
+          xcrun simctl install "$SIM_ID" frontend/build/*.app
+
+      - name: Run Maestro screenshot flows
+        working-directory: frontend
+        run: |
+          mkdir -p .maestro/screenshots
+          for flow in .maestro/flows/*.yaml; do
+            maestro test "$flow" \
+              --env APP_ID=$APP_ID \
+              --test-output-dir=.maestro/screenshots
+          done
+          EXPECTED_SCREENSHOTS=$(grep -R --include='*.yaml' -c 'takeScreenshot' .maestro/flows | awk -F: '{sum += $2} END {print sum + 0}')
+          ACTUAL_SCREENSHOTS=$(find .maestro/screenshots -type f -name '*.png' | wc -l | tr -d ' ')
+          test "$ACTUAL_SCREENSHOTS" -ge "$EXPECTED_SCREENSHOTS"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-ios-${{ github.sha }}
+          path: |
+            frontend/.maestro/screenshots/**
+            frontend/eas-build-ios.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Shutdown simulator
+        if: always()
+        run: |
+          xcrun simctl shutdown "$SIM_ID" || true
+          xcrun simctl delete "$SIM_ID" || true
+
+  screenshots-android:
+    name: Android screenshots (Maestro)
+    needs: pre-flight-gates
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'android' || inputs.platform == 'both'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APP_ID: com.thryftverse.app
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.tools" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0777"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android dev client
+        working-directory: frontend
+        run: |
+          eas build \
+            --platform android \
+            --profile development \
+            --message "screenshots:${GITHUB_SHA}" \
+            --wait \
+            --json > eas-build-android.json
+          BUILD_ID=$(jq -r 'if type == "array" then .[0].id else .id end // empty' eas-build-android.json)
+          BUILD_SHA=$(jq -r 'if type == "array" then .[0].gitCommitHash else .gitCommitHash end // empty' eas-build-android.json)
+          BUILD_URL=$(jq -r 'if type == "array" then .[0].artifacts.buildUrl else .artifacts.buildUrl end // empty' eas-build-android.json)
+          test -n "$BUILD_ID"
+          test "$BUILD_SHA" = "$GITHUB_SHA"
+          test -n "$BUILD_URL"
+          echo "EAS_BUILD_ID=$BUILD_ID" >> "$GITHUB_ENV"
+          echo "EAS_BUILD_URL=$BUILD_URL" >> "$GITHUB_ENV"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Download Android build
+        working-directory: frontend
+        run: |
+          curl --fail --location --retry 3 "$EAS_BUILD_URL" --output app.apk
+          test -s app.apk
+
+      - name: Boot Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          script: |
+            adb install -r frontend/app.apk
+            cd frontend && mkdir -p .maestro/screenshots
+            for flow in .maestro/flows/*.yaml; do
+              maestro test "$flow" \
+                --env APP_ID=$APP_ID \
+                --test-output-dir=.maestro/screenshots
+            done
+            EXPECTED_SCREENSHOTS=$(grep -R --include='*.yaml' -c 'takeScreenshot' .maestro/flows | awk -F: '{sum += $2} END {print sum + 0}')
+            ACTUAL_SCREENSHOTS=$(find .maestro/screenshots -type f -name '*.png' | wc -l | tr -d ' ')
+            test "$ACTUAL_SCREENSHOTS" -ge "$EXPECTED_SCREENSHOTS"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-android-${{ github.sha }}
+          path: |
+            frontend/.maestro/screenshots/**
+            frontend/eas-build-android.json
+          if-no-files-found: error
+          retention-days: 30

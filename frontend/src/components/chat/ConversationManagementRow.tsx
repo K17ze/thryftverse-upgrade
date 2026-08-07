@@ -2,8 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Conversation } from '../../data/mockData';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 
@@ -76,11 +76,12 @@ export function ConversationManagementRow({
   secondaryDestructive?: boolean;
   isLast?: boolean;
 }) {
+  const { colors } = useAppTheme();
   const identity = resolveIdentity(conversation, currentUserId);
-  const actionColor = destructive ? Colors.danger : Colors.textPrimary;
+  const actionColor = destructive ? colors.danger : colors.textPrimary;
 
   return (
-    <View style={[styles.row, !isLast && styles.divider]}>
+    <View style={[styles.row, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
       <AnimatedPressable
         style={styles.main}
         onPress={onOpen}
@@ -97,25 +98,25 @@ export function ConversationManagementRow({
             contentFit="cover"
           />
         ) : (
-          <View style={styles.avatarFallback}>
+          <View style={[styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons
               name={identity.isGroup ? 'people-outline' : 'person-outline'}
               size={20}
-              color={Colors.textSecondary}
+              color={colors.textSecondary}
             />
           </View>
         )}
 
         <View style={styles.copy}>
           <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={1}>
+            <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
               {identity.title}
             </Text>
-            <Text style={styles.time} numberOfLines={1}>
+            <Text style={[styles.time, { color: colors.textMuted }]} numberOfLines={1}>
               {formatActivity(conversation.lastMessageTime)}
             </Text>
           </View>
-          <Text style={styles.preview} numberOfLines={1}>
+          <Text style={[styles.preview, { color: colors.textMuted }]} numberOfLines={1}>
             {conversation.lastMessage?.trim() || 'No messages yet'}
           </Text>
         </View>
@@ -145,7 +146,7 @@ export function ConversationManagementRow({
           <Ionicons
             name={secondaryActionIcon}
             size={19}
-            color={secondaryDestructive ? Colors.danger : Colors.textPrimary}
+            color={secondaryDestructive ? colors.danger : colors.textPrimary}
           />
         </AnimatedPressable>
       ) : null}
@@ -160,30 +161,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: Space.md,
   },
-  divider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
   main: {
     minWidth: 0,
     flex: 1,
     minHeight: 74,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.md,
   },
   avatar: {
     width: 46,
     height: 46,
-    borderRadius: 23,
+    borderRadius: Radius.full,
   },
   avatarFallback: {
     width: 46,
     height: 46,
-    borderRadius: 23,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
   },
   copy: {
     minWidth: 0,
@@ -194,25 +190,26 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
   },
   title: {
     minWidth: 0,
     flex: 1,
-    color: Colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   time: {
     flexShrink: 0,
-    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: Type.meta.letterSpacing,
   },
   preview: {
-    color: Colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   action: {
     width: 52,

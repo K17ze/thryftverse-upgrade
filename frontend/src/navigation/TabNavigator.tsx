@@ -3,14 +3,22 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useNavigation } from '@react-navigation/native';
-import type { StackNavigationProp } from '@react-navigation/stack';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TabParamList, RootStackParamList } from './types';
 import { Space, Radius, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { useStore } from '../store/useStore';
 import { CachedImage } from '../components/CachedImage';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -20,7 +28,8 @@ import MyProfileScreen from '../screens/MyProfileScreen';
 const Tab = createBottomTabNavigator<TabParamList>();
 
 const NAV_HEIGHT = 60;
-const CREATE_CONTROL_SIZE = 36;
+const CREATE_HIT_SIZE = 52;
+const CREATE_CONTROL_SIZE = 40;
 const AVATAR_SIZE = 27;
 
 interface TabIconProps {
@@ -40,8 +49,8 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
     : undefined;
 
   return (
-    <View style={tabStyles.tabIconWrap}>
-      <Ionicons name={iconName} size={24} color={color} />
+    <View style={tabStyles.tabIconWrap} accessible={false} importantForAccessibility="no-hide-descendants">
+      <Ionicons name={iconName} size={26} color={color} />
       {displayBadge && (
         <View
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
@@ -75,6 +84,8 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
 
   return (
     <View
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
       style={[
         tabStyles.avatarWrap,
         focused && { borderWidth: 2, borderColor: colors.textPrimary },
@@ -95,11 +106,70 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
   );
 };
 
+/**
+ * Create tab button with spring-based press feedback (Motion.spring.tap).
+ * Extracted as a component so it can use hooks (useMotionConfig) for the
+ * Reanimated scale animation while respecting reduced motion.
+ */
+const AnimatedPressableRe = Reanimated.createAnimatedComponent(Pressable);
+
+interface CreateTabButtonProps {
+  onPress: () => void;
+  onLongPress?: (() => void) | null;
+  accessibilityState?: { disabled?: boolean; selected?: boolean; checked?: boolean; busy?: boolean; expanded?: boolean };
+  testID?: string;
+  brandColor: string;
+  surfaceColor: string;
+}
+
+const CreateTabButton = ({
+  onPress,
+  onLongPress,
+  accessibilityState,
+  testID,
+  brandColor,
+  surfaceColor,
+}: CreateTabButtonProps) => {
+  const { spring } = useMotionConfig();
+  const scale = useSharedValue(1);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <AnimatedPressableRe
+      style={[tabStyles.createButton, animStyle]}
+      onPressIn={() => {
+        // Spring-based tap feedback — snappy, settles fast (Motion.spring.tap).
+        // When reduced motion is on, the spring is critically damped so the
+        // scale change is effectively instant.
+        scale.value = withSpring(0.9, spring.tap);
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, spring.tap);
+      }}
+      onPress={onPress}
+      onLongPress={onLongPress ?? undefined}
+      accessibilityRole="button"
+      accessibilityLabel="Create"
+      accessibilityHint="Opens camera to list a new item"
+      accessibilityState={accessibilityState}
+      testID={testID}
+    >
+      <View style={[tabStyles.createControl, { backgroundColor: brandColor }]}>
+        <Ionicons name="add" size={24} color={surfaceColor} />
+      </View>
+    </AnimatedPressableRe>
+  );
+};
+
 export default function TabNavigator() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
-  const { colors } = useAppTheme();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { colors, isDark } = useAppTheme();
+  const currentUser = useStore((s) => s.currentUser);
   const conversations = useStore((s) => s.conversations);
   const messageRequests = useStore((s) => s.messageRequests);
   const requestIds = React.useMemo(() => new Set(messageRequests), [messageRequests]);
@@ -123,15 +193,28 @@ export default function TabNavigator() {
           headerShown: false,
           tabBarShowLabel: false,
           tabBarHideOnKeyboard: true,
+          // Instagram pattern: edge-to-edge transparent bar with frosted
+          // glass blur background. Content scrolls behind the bar, and the
+          // LiquidGlassBackdrop applies iOS 26 Liquid Glass on supported
+          // devices (BlurView fallback elsewhere). No floating pill, no
+          // solid background — the glass IS the background.
           tabBarStyle: {
-            ...tabStyles.floatingTabBar,
-            backgroundColor: colors.surfaceElevated,
-            borderColor: colors.border,
-            shadowColor: colors.shadow,
-            height: NAV_HEIGHT,
-            bottom: Math.max(insets.bottom, Space.sm),
-            paddingBottom: 0,
+            position: 'absolute',
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: colors.border,
+            backgroundColor: 'transparent',
+            height: NAV_HEIGHT + insets.bottom,
+            paddingBottom: insets.bottom,
+            elevation: 0,
+            shadowOpacity: 0,
           },
+          tabBarBackground: () => (
+            <LiquidGlassBackdrop
+              intensity={isDark ? 70 : 90}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+          ),
           tabBarItemStyle: tabStyles.tabBarItem,
           tabBarActiveTintColor: colors.textPrimary,
           tabBarInactiveTintColor: colors.textMuted,
@@ -140,7 +223,7 @@ export default function TabNavigator() {
           tabPress: (e: any) => {
             const currentTab = e.target?.split('-')[0];
             if (currentTab !== lastTabRef.current) {
-              haptic.light();
+              haptic.patterns.tabSwitch();
               lastTabRef.current = currentTab;
             }
           },
@@ -171,21 +254,14 @@ export default function TabNavigator() {
           component={View}
           options={{
             tabBarButton: (props: any) => (
-              <Pressable
-                {...props}
-                style={tabStyles.createButton}
+              <CreateTabButton
                 onPress={handleCreatePress}
                 onLongPress={props.onLongPress}
-                accessibilityRole="button"
-                accessibilityLabel="Create"
-                accessibilityHint="Opens create actions"
                 accessibilityState={props.accessibilityState}
                 testID={props.testID}
-              >
-                <View style={[tabStyles.createControl, { backgroundColor: colors.brand }]}>
-                  <Ionicons name="add" size={24} color={colors.surface} />
-                </View>
-              </Pressable>
+                brandColor={colors.brand}
+                surfaceColor={colors.surface}
+              />
             ),
           }}
         />
@@ -213,7 +289,9 @@ export default function TabNavigator() {
             tabBarIcon: ({ color, focused }) => (
               <ProfileTabIcon color={color} focused={focused} />
             ),
-            tabBarAccessibilityLabel: 'Profile',
+            tabBarAccessibilityLabel: currentUser?.displayName
+              ? `Profile, ${currentUser.displayName}`
+              : 'Profile',
           }}
         />
       </Tab.Navigator>
@@ -224,19 +302,6 @@ export default function TabNavigator() {
 
 // Static layout styles (no theme-dependent colors)
 const tabStyles = StyleSheet.create({
-  floatingTabBar: {
-    position: 'absolute',
-    left: Space.md,
-    right: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.xxl,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 8,
-    overflow: 'hidden',
-  },
   tabBarItem: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -255,10 +320,10 @@ const tabStyles = StyleSheet.create({
     right: -10,
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     borderWidth: 1.5,
   },
   badgeText: {
@@ -271,8 +336,8 @@ const tabStyles = StyleSheet.create({
   createButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 48,
-    height: NAV_HEIGHT,
+    width: CREATE_HIT_SIZE,
+    height: CREATE_HIT_SIZE,
   },
   createControl: {
     width: CREATE_CONTROL_SIZE,

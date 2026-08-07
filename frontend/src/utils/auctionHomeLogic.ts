@@ -19,6 +19,7 @@ export interface AuctionHomeItem {
   minimumNextBidGbp: number;
   bidCount: number;
   buyNowPriceGbp: number | null;
+  reservePriceGbp: number | null;
   viewerState: AuctionViewerState;
   isWatched: boolean;
   winnerBidderId: string | null;

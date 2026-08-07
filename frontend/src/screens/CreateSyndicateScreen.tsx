@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -16,15 +16,18 @@ import { useCurrencyContext } from '../context/CurrencyContext';
 import { toFiat, toIze, formatIzeAmount } from '../utils/currency';
 import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAuthoringFlows';
 import { getCreateCoOwnInitialState } from '../utils/syndicatePrefill';
-import { createCoOwnAsset } from '../services/marketApi';
+import { createCoOwnAsset, fetchIssuerVerification, signRecourseAgreement } from '../services/marketApi';
 import { fetchUserListingsFromApi, type ListingApiItem } from '../services/listingsApi';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useBackendData } from '../context/BackendDataContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
 import { useHaptic } from '../hooks/useHaptic';
 import { haptics } from '../utils/haptics';
 import {
@@ -36,14 +39,14 @@ import {
   CoOwnStateCanvas,
 } from '../components/coown';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'CreateCoOwn'>;
 
 // The backend enforces a maximum of 20 units per Co-Own issuance.
 // This is a real backend constraint, not a UI-only limit.
 const MAX_UNITS = 20;
 
-type Stage = 'select' | 'configure' | 'review';
+type Stage = 'select' | 'configure' | 'review' | 'recourse';
 
 export default function CreateCoOwnScreen() {
   const navigation = useNavigation<NavT>();
@@ -57,6 +60,8 @@ export default function CreateCoOwnScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
+  const { refreshListings } = useBackendData();
+  const queryClient = useQueryClient();
 
   const prefill = route.params;
 
@@ -102,6 +107,36 @@ export default function CreateCoOwnScreen() {
   const [totalUnitsInput, setTotalUnitsInput] = React.useState(initialState.totalUnitsInput);
   const [unitPriceInput, setUnitPriceInput] = React.useState(initialState.unitPriceInput);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [recourseAccepted, setRecourseAccepted] = React.useState(false);
+  const [createdAssetId, setCreatedAssetId] = React.useState<string | null>(null);
+
+  // ── WS2: Issuer KYC gate ──
+  // The backend requires 'id' or 'seller' tier to issue. Fetch the
+  // current tier so we can show a blocking notice before the user
+  // reaches the issue button (fail fast, don't let them fill the form
+  // only to hit a 403).
+  const [issuerTier, setIssuerTier] = React.useState<'email' | 'id' | 'seller' | null | 'loading'>('loading');
+  React.useEffect(() => {
+    if (!issuerId) { setIssuerTier(null); return; }
+    let cancelled = false;
+    fetchIssuerVerification(issuerId)
+      .then((result) => { if (!cancelled) setIssuerTier(result?.tier ?? 'email'); })
+      .catch(() => { if (!cancelled) setIssuerTier('email'); });
+    return () => { cancelled = true; };
+  }, [issuerId]);
+  const canIssue = issuerTier === 'id' || issuerTier === 'seller';
+
+  // ── Trust profile (WS1) ──
+  // Legal vehicle type is required for issuance (equity-market pattern:
+  // no listing without a disclosed legal wrapper). Defaults to 'spv'.
+  const [legalVehicleType, setLegalVehicleType] = React.useState<'spv' | 'llc' | 'trust' | 'series_llc' | 'none'>('spv');
+  const [legalVehicleName, setLegalVehicleName] = React.useState('');
+  const [legalVehicleJurisdiction, setLegalVehicleJurisdiction] = React.useState('');
+  const [custodianName, setCustodianName] = React.useState('');
+  const [custodianLocation, setCustodianLocation] = React.useState('');
+  const [custodyInsured, setCustodyInsured] = React.useState(false);
+  const [custodyInsurer, setCustodyInsurer] = React.useState('');
+  const [authenticityMethod, setAuthenticityMethod] = React.useState('');
 
   const handleTotalUnitsChange = React.useCallback((value: string) => {
     const sanitized = sanitizeIntegerInput(value);
@@ -163,7 +198,7 @@ export default function CreateCoOwnScreen() {
     setIsSubmitting(true);
     try {
       const imageUrl = getListingCoverUri(selectedListing.images, selectedListing.imageUrl ?? '');
-      await createCoOwnAsset({
+      const result = await createCoOwnAsset({
         listingId: selectedListing.id,
         issuerId,
         title: `${selectedListing.title} Split`,
@@ -172,11 +207,54 @@ export default function CreateCoOwnScreen() {
         unitPriceGbp: unitPriceGBP,
         unitPriceStable,
         settlementMode: 'ONEZE',
+        // ── Trust profile (WS1) ──
+        legalVehicleType,
+        legalVehicleName: legalVehicleType !== 'none' ? legalVehicleName.trim() || undefined : undefined,
+        legalVehicleJurisdiction: legalVehicleJurisdiction.trim() || undefined,
+        custodianName: custodianName.trim() || undefined,
+        custodianLocation: custodianLocation.trim() || undefined,
+        custodyInsured: custodyInsured || undefined,
+        custodyInsurer: custodyInsured ? custodyInsurer.trim() || undefined : undefined,
+        authenticityMethod: authenticityMethod.trim() || undefined,
+        authenticityStatus: authenticityMethod.trim() ? 'verified' : 'unverified',
       });
-      show('Co-Own issued successfully', 'success');
-      navigation.goBack();
+      // Store the created asset ID for the recourse signing step
+      const assetId = result.assetId;
+      setCreatedAssetId(assetId);
+      // Move to the recourse agreement signing stage
+      setStage('recourse');
     } catch (err) {
       show('Failed to issue co-own. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const signAndFinish = async () => {
+    if (!createdAssetId) {
+      show('Asset not created yet', 'error');
+      return;
+    }
+    if (!recourseAccepted) {
+      show('You must accept the recourse agreement to continue', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await signRecourseAgreement(createdAssetId, { personalGuarantee: true });
+      show('Co-Own issued successfully', 'success');
+      // The backend pauses the listing when a co-own asset is created from
+      // it. Refresh the feed + invalidate the listing detail so the paused
+      // status propagates immediately when the user returns.
+      void refreshListings();
+      if (selectedListing) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'assets'] });
+      navigation.goBack();
+    } catch (err) {
+      show('Failed to sign recourse agreement. The asset was created but cannot be traded until signed.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -204,11 +282,12 @@ export default function CreateCoOwnScreen() {
     ? getListingCoverUri(selectedListing.images, selectedListing.imageUrl ?? '')
     : '';
 
-  const canProceedToConfigure = !!selectedListing;
+  const canProceedToConfigure = !!selectedListing && canIssue;
   const canProceedToReview = !!selectedListing
     && Number(totalUnitsInput) >= 1
     && Number(totalUnitsInput) <= MAX_UNITS
-    && Number(unitPriceInput) > 0;
+    && Number(unitPriceInput) > 0
+    && canIssue;
 
   const handleNext = () => {
     if (stage === 'select' && canProceedToConfigure) {
@@ -225,6 +304,10 @@ export default function CreateCoOwnScreen() {
       setStage('select');
     } else if (stage === 'review') {
       setStage('configure');
+    } else if (stage === 'recourse') {
+      // Don't go back to review — the asset is already created.
+      // Going back would create a duplicate. Navigate out instead.
+      navigation.goBack();
     } else {
       navigation.goBack();
     }
@@ -234,6 +317,7 @@ export default function CreateCoOwnScreen() {
     select: 'Select listing',
     configure: 'Configure',
     review: 'Review & issue',
+    recourse: 'Seller liability',
   };
 
   const renderListingCard = ({ item }: { item: ListingApiItem }) => {
@@ -335,6 +419,23 @@ export default function CreateCoOwnScreen() {
               title="Select a listing"
               description="Choose one of your active listings to split into Co-Own units."
             >
+              {/* ── WS2: KYC gate ──
+                  Issuers must have 'id' or 'seller' tier verification to
+                  issue. Show a blocking notice before the listing selector
+                  so the user doesn't fill the form only to hit a 403. */}
+              {issuerTier !== 'loading' && !canIssue && (
+                <View style={[styles.kycGateCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <Ionicons name="lock-closed-outline" size={20} color={colors.warning} />
+                  <View style={styles.kycGateBody}>
+                    <Text style={[styles.kycGateTitle, { color: colors.textPrimary }]}>
+                      Identity verification required
+                    </Text>
+                    <Text style={[styles.kycGateText, { color: colors.textSecondary }]}>
+                      Complete ID verification to issue Co-Own assets. This protects buyers and meets regulatory standards.
+                    </Text>
+                  </View>
+                </View>
+              )}
               <FlashList
                 data={issuerListings}
                 horizontal
@@ -382,7 +483,7 @@ export default function CreateCoOwnScreen() {
               </View>
 
               {/* Total units */}
-              <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.formCard}>
                 <View style={styles.formLabelRow}>
                   <Text style={[styles.formLabel, { color: colors.textMuted }]}>Total units</Text>
                   <Text style={[styles.formHint, { color: colors.textMuted }]}>Max {MAX_UNITS}</Text>
@@ -413,7 +514,7 @@ export default function CreateCoOwnScreen() {
               </View>
 
               {/* Unit price */}
-              <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.formCard}>
                 <Text style={[styles.formLabel, { color: colors.textMuted }]}>Unit price ({currencyCode})</Text>
                 <AppInput
                   value={unitPriceInput}
@@ -425,8 +526,114 @@ export default function CreateCoOwnScreen() {
                 />
               </View>
 
+              {/* ── Legal & custody (WS1) ──
+                  Equity-market pattern: the legal wrapper and custody
+                  arrangement must be disclosed before issuance. The
+                  legal vehicle type is required; other fields are
+                  optional but shown so the issuer can substantiate
+                  trust signals on the asset detail screen. */}
+              <View style={styles.formCard}>
+                <Text style={[styles.formLabel, { color: colors.textMuted }]}>Legal vehicle</Text>
+                <Text style={[styles.formHint, { color: colors.textMuted, marginBottom: Space.sm }]}>
+                  Required — the legal structure that holds the asset
+                </Text>
+                <View style={styles.vehicleTypeRow}>
+                  {(['spv', 'llc', 'trust', 'series_llc', 'none'] as const).map((vt) => (
+                    <AnimatedPressable
+                      key={vt}
+                      style={[
+                        styles.vehicleTypeChip,
+                        {
+                          backgroundColor: legalVehicleType === vt ? colors.surfaceAlt : 'transparent',
+                          borderColor: legalVehicleType === vt ? colors.border : colors.borderSubtle,
+                        },
+                      ]}
+                      onPress={() => { haptic.selection(); setLegalVehicleType(vt); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Legal vehicle: ${vt}`}
+                      scaleValue={0.96}
+                      hapticFeedback="light"
+                    >
+                      <Text style={[styles.vehicleTypeText, { color: legalVehicleType === vt ? colors.textPrimary : colors.textSecondary }]}>
+                        {vt === 'spv' ? 'SPV' : vt === 'series_llc' ? 'Series LLC' : vt === 'llc' ? 'LLC' : vt === 'trust' ? 'Trust' : 'None'}
+                      </Text>
+                    </AnimatedPressable>
+                  ))}
+                </View>
+                {legalVehicleType !== 'none' && (
+                  <>
+                    <AppInput
+                      value={legalVehicleName}
+                      onChangeText={setLegalVehicleName}
+                      placeholder="Vehicle name"
+                      accessibilityLabel="Legal vehicle name"
+                    />
+                    <AppInput
+                      value={legalVehicleJurisdiction}
+                      onChangeText={setLegalVehicleJurisdiction}
+                      placeholder="Jurisdiction (e.g. England, Delaware)"
+                      accessibilityLabel="Legal vehicle jurisdiction"
+                    />
+                  </>
+                )}
+              </View>
+
+              <View style={styles.formCard}>
+                <Text style={[styles.formLabel, { color: colors.textMuted }]}>Custodian (optional)</Text>
+                <AppInput
+                  value={custodianName}
+                  onChangeText={setCustodianName}
+                  placeholder="Custodian name"
+                  accessibilityLabel="Custodian name"
+                />
+                <AppInput
+                  value={custodianLocation}
+                  onChangeText={setCustodianLocation}
+                  placeholder="Storage location"
+                  accessibilityLabel="Custodian location"
+                />
+                <View style={styles.insuranceRow}>
+                  <AnimatedPressable
+                    style={[styles.insuranceToggle, { borderColor: custodyInsured ? colors.brand : colors.border }]}
+                    onPress={() => { haptic.selection(); setCustodyInsured((v) => !v); }}
+                    accessibilityRole="switch"
+                    accessibilityLabel="Toggle custody insurance"
+                    accessibilityState={{ checked: custodyInsured }}
+                    scaleValue={0.96}
+                    hapticFeedback="light"
+                  >
+                    <Ionicons
+                      name={custodyInsured ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={18}
+                      color={custodyInsured ? colors.brand : colors.textMuted}
+                    />
+                    <Text style={[styles.insuranceToggleText, { color: custodyInsured ? colors.textPrimary : colors.textSecondary }]}>
+                      Insured
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+                {custodyInsured && (
+                  <AppInput
+                    value={custodyInsurer}
+                    onChangeText={setCustodyInsurer}
+                    placeholder="Insurer name"
+                    accessibilityLabel="Custody insurer name"
+                  />
+                )}
+              </View>
+
+              <View style={styles.formCard}>
+                <Text style={[styles.formLabel, { color: colors.textMuted }]}>Authenticity (optional)</Text>
+                <AppInput
+                  value={authenticityMethod}
+                  onChangeText={setAuthenticityMethod}
+                  placeholder="Verification method (e.g. third-party appraisal)"
+                  accessibilityLabel="Authenticity verification method"
+                />
+              </View>
+
               {/* Estimated value */}
-              <View style={[styles.estimateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.estimateCard, { borderTopColor: colors.border }]}>
                 <Text style={[styles.formLabel, { color: colors.textMuted }]}>Estimated value</Text>
                 <View style={styles.estimatedRow}>
                   <View>
@@ -470,7 +677,7 @@ export default function CreateCoOwnScreen() {
               </View>
 
               {/* Summary */}
-              <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.summaryCard, { borderTopColor: colors.border }]}>
                 <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Issuance summary</Text>
                 <View style={[styles.summaryRow, { borderColor: colors.border }]}>
                   <Text style={[styles.summaryKey, { color: colors.textSecondary }]}>Listing</Text>
@@ -490,6 +697,17 @@ export default function CreateCoOwnScreen() {
                   <Text style={[styles.summaryKey, { color: colors.textSecondary }]} numberOfLines={1}>Settlement</Text>
                   <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>TVUSD</Text>
                 </View>
+                <View style={[styles.summaryRow, { borderColor: colors.border }]}>
+                  <Text style={[styles.summaryKey, { color: colors.textSecondary }]} numberOfLines={1}>Legal vehicle</Text>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {legalVehicleType === 'spv' ? 'SPV'
+                      : legalVehicleType === 'series_llc' ? 'Series LLC'
+                      : legalVehicleType === 'llc' ? 'LLC'
+                      : legalVehicleType === 'trust' ? 'Trust'
+                      : 'None'}
+                    {legalVehicleType !== 'none' && legalVehicleName ? ` · ${legalVehicleName}` : ''}
+                  </Text>
+                </View>
                 <View style={[styles.totalRow, { borderColor: colors.border }]}>
                   <Text style={[styles.totalKey, { color: colors.textPrimary }]} numberOfLines={1}>Total value</Text>
                   <Text style={[styles.totalValue, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -500,6 +718,86 @@ export default function CreateCoOwnScreen() {
 
               {/* Risk disclosure */}
               <CoOwnRiskDisclosure />
+            </CoOwnIssueStudioStep>
+          </Reanimated.View>
+        )}
+
+        {/* ── Stage 4: Recourse agreement — seller signs personal liability ── */}
+        {stage === 'recourse' && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+            <CoOwnIssueStudioStep
+              stepNumber={4}
+              totalSteps={4}
+              title="Seller liability agreement"
+              description="You are personally liable for safeguarding this asset. Read carefully before signing."
+            >
+              {/* Liability summary */}
+              <View style={[styles.recourseSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.recourseLiabilityRow}>
+                  <Ionicons name="shield-checkmark" size={20} color={colors.brand} />
+                  <View style={styles.recourseLiabilityBody}>
+                    <Text style={[styles.recourseLiabilityLabel, { color: colors.textMuted }]}>
+                      Personal liability
+                    </Text>
+                    <Text style={[styles.recourseLiabilityValue, { color: colors.textPrimary }]}>
+                      {estimatedValue > 0
+                        ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' })
+                        : '—'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.recourseLiabilityNote, { color: colors.textSecondary }]}>
+                  If you fail to safeguard the physical asset, prove authenticity on demand, or produce the item when requested by a unit holder, you are legally liable to repay the total traded value of this asset.
+                </Text>
+              </View>
+
+              {/* Obligations list */}
+              <View style={styles.recourseObligationsList}>
+                <Text style={[styles.recourseObligationsTitle, { color: colors.textSecondary }]}>
+                  Your obligations
+                </Text>
+                {([
+                  { icon: 'cube-outline', text: 'Safeguard the physical asset in the condition stated' },
+                  { icon: 'search-outline', text: 'Prove authenticity when requested by a unit holder' },
+                  { icon: 'hand-right-outline', text: 'Produce the physical item on demand within 14 days' },
+                  { icon: 'cash-outline', text: 'Repay the total traded value if you fail any obligation' },
+                ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((ob, i) => (
+                  <View key={i} style={[styles.recourseObligationRow, i < 3 && { borderBottomColor: colors.borderSubtle }]}>
+                    <Ionicons name={ob.icon} size={16} color={colors.textMuted} />
+                    <Text style={[styles.recourseObligationText, { color: colors.textSecondary }]}>
+                      {ob.text}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Acceptance checkbox */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.recourseAcceptRow,
+                  { borderColor: recourseAccepted ? colors.brand : colors.border },
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => { haptic.selection(); setRecourseAccepted(!recourseAccepted); }}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: recourseAccepted }}
+                accessibilityLabel="Accept personal liability agreement"
+              >
+                <View style={[
+                  styles.recourseCheckbox,
+                  {
+                    backgroundColor: recourseAccepted ? colors.brand : 'transparent',
+                    borderColor: recourseAccepted ? colors.brand : colors.border,
+                  },
+                ]}>
+                  {recourseAccepted && (
+                    <Ionicons name="checkmark" size={14} color={colors.background} />
+                  )}
+                </View>
+                <Text style={[styles.recourseAcceptText, { color: colors.textPrimary }]}>
+                  I understand and accept personal liability for this asset
+                </Text>
+              </Pressable>
             </CoOwnIssueStudioStep>
           </Reanimated.View>
         )}
@@ -517,6 +815,18 @@ export default function CreateCoOwnScreen() {
             disabled={isSubmitting}
             hapticFeedback="heavy"
             accessibilityLabel="Issue co-own"
+            style={{ flex: 1 }}
+          />
+        ) : stage === 'recourse' ? (
+          <AppButton
+            title={isSubmitting ? 'Signing...' : 'Sign & finish'}
+            icon={<Ionicons name="shield-checkmark" size={16} color={colors.background} />}
+            onPress={() => void signAndFinish()}
+            variant="primary"
+            size="lg"
+            disabled={isSubmitting || !recourseAccepted}
+            hapticFeedback="heavy"
+            accessibilityLabel="Sign recourse agreement and finish"
             style={{ flex: 1 }}
           />
         ) : (
@@ -550,9 +860,9 @@ const styles = StyleSheet.create({
     paddingRight: Space.md,
   },
   listingCard: {
-    width: 160,
+    width: Space.xl * 5,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm,
     gap: Space.xs,
     position: 'relative',
@@ -563,15 +873,15 @@ const styles = StyleSheet.create({
   },
   listingImage: {
     width: '100%',
-    height: 120,
+    height: Space.xxl * 2 + Space.lg,
   },
   listingMeta: {
-    gap: 2,
+    gap: Space.xs,
   },
   listingTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   listingPrice: {
     fontSize: Type.caption.size,
@@ -581,9 +891,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: Space.md + Space.xs,
+    height: Space.md + Space.xs,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -601,17 +911,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   previewImage: {
-    width: 56,
-    height: 56,
+    width: Space.xl + Space.lg,
+    height: Space.xl + Space.lg,
   },
   previewMeta: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs,
   },
   previewTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   previewPrice: {
     fontSize: Type.caption.size,
@@ -626,27 +936,25 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   contextImage: {
-    width: 56,
-    height: 56,
+    width: Space.xl + Space.lg,
+    height: Space.xl + Space.lg,
     borderRadius: Radius.md,
   },
   contextInfo: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs,
   },
   contextTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   contextPrice: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   formCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     gap: Space.sm,
   },
   formLabelRow: {
@@ -657,7 +965,7 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   formHint: {
@@ -672,18 +980,74 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
   },
   unitPresetText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
-  estimateCard: {
-    borderRadius: Radius.lg,
+  vehicleTypeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+    marginBottom: Space.sm,
+  },
+  vehicleTypeChip: {
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    alignItems: 'center',
+  },
+  vehicleTypeText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  kycGateCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: Space.sm,
+    padding: Space.md,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.md,
+  },
+  kycGateBody: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  kycGateTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  kycGateText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+  },
+  insuranceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+  },
+  insuranceToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  insuranceToggleText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  estimateCard: {
+    paddingVertical: Space.md,
+    gap: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   estimatedRow: {
     flexDirection: 'row',
@@ -693,16 +1057,16 @@ const styles = StyleSheet.create({
   estimatedValue: {
     fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   estimatedSub: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   stablePreview: {
     alignItems: 'flex-end',
-    gap: 2,
+    gap: Space.xs,
   },
   stableLabel: {
     fontSize: Type.meta.size,
@@ -721,33 +1085,32 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   reviewAssetImage: {
-    width: 64,
-    height: 64,
+    width: Space.xl * 2,
+    height: Space.xl * 2,
     borderRadius: Radius.md,
   },
   reviewAssetInfo: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs,
   },
   reviewAssetTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   reviewAssetSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   summaryCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     gap: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   summaryLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.3,
+    letterSpacing: LetterSpacing.wide + 0.18,
     textTransform: 'uppercase',
     marginBottom: Space.sm,
   },
@@ -790,7 +1153,87 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
     flexShrink: 0,
+  },
+  // ── Recourse agreement stage ──
+  recourseSummaryCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.sm,
+  },
+  recourseLiabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  recourseLiabilityBody: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  recourseLiabilityLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: LetterSpacing.wide + 0.08,
+    textTransform: 'uppercase',
+  },
+  recourseLiabilityValue: {
+    fontSize: Type.priceList.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
+  },
+  recourseLiabilityNote: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.body.size + 6,
+  },
+  recourseObligationsList: {
+    gap: 0,
+    marginTop: Space.md,
+  },
+  recourseObligationsTitle: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: LetterSpacing.wide + 0.18,
+    textTransform: 'uppercase',
+    marginBottom: Space.sm,
+  },
+  recourseObligationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  recourseObligationText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.body.lineHeight - 1,
+  },
+  recourseAcceptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    marginTop: Space.md,
+  },
+  recourseCheckbox: {
+    width: Control.icon,
+    height: Control.icon,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard + Stroke.hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recourseAcceptText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    lineHeight: Type.body.lineHeight - 1,
   },
 });

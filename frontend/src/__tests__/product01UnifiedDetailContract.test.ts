@@ -44,6 +44,7 @@ const baseListing: Listing = {
   images: ['https://cdn.example.com/img1.jpg', 'https://cdn.example.com/img2.jpg'],
   likes: 12,
   views: 340,
+  status: 'active',
   sellerId: 'seller_001',
   seller: { id: 'seller_001', username: 'vintage_co', avatar: null },
   category: 'women',
@@ -146,7 +147,7 @@ describe('PRODUCT-01 direct adapter', () => {
 
   it('sets availability=sold and suppresses buy when isSold', () => {
     const vm = buildDirectViewModel({
-      listing: { ...baseListing, isSold: true },
+      listing: { ...baseListing, isSold: true, status: 'sold' },
       currentUserId: 'buyer_001',
     });
     expect(vm.availability).toBe('sold');
@@ -399,6 +400,16 @@ describe('PRODUCT-01 co-own adapter', () => {
     expect(coOwn.holders).toBe(8);
     expect(coOwn.marketMovePct24h).toBe(2.5);
     expect(coOwn.volume24hGbp).toBe(500);
+  });
+
+  it('preserves missing market movement and volume as null', () => {
+    const vm = buildCoOwnViewModel({
+      asset: { ...baseAsset, marketMovePct24h: null, volume24hGbp: null },
+      viewerUnits: 0,
+    });
+    const coOwn = vm as Extract<typeof vm, { family: 'co_own' }>;
+    expect(coOwn.marketMovePct24h).toBeNull();
+    expect(coOwn.volume24hGbp).toBeNull();
   });
 });
 

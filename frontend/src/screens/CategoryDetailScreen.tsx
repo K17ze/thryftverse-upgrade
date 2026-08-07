@@ -9,15 +9,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
 import { CATEGORIES } from '../constants/categories';
 import { useBackendData } from '../context/BackendDataContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Type, Control, Stroke } from '../theme/designTokens';
 
 const normalize = (value?: string) =>
   (value ?? '').trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -26,6 +27,8 @@ export default function CategoryDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
+  const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
   const categoryId = route.params?.categoryId as string | undefined;
 
   const category = useMemo(() => {
@@ -49,17 +52,88 @@ export default function CategoryDetailScreen() {
 
     return listings.filter((listing) => {
       const categoryToken = normalize(listing.category);
-      const subcategoryToken = normalize(listing.subcategory);
+      const subcategoryToken = normalize(listing.subcategory ?? undefined);
       return categoryTokens.has(categoryToken) || categoryTokens.has(subcategoryToken);
     });
   }, [category, listings]);
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: colors.background,
+        },
+        content: {
+          paddingBottom: Space.xl,
+        },
+        summary: {
+          paddingHorizontal: Space.md,
+          paddingTop: Space.xs,
+          paddingBottom: Space.md,
+          gap: Space.xs,
+        },
+        count: {
+          color: colors.textPrimary,
+          fontFamily: Typography.family.semibold,
+          fontSize: Type.body.size,
+          lineHeight: Type.body.lineHeight,
+        },
+        summaryText: {
+          color: colors.textSecondary,
+          fontFamily: Typography.family.regular,
+          fontSize: Type.captionElevated.size,
+          lineHeight: Type.captionElevated.lineHeight + 1,
+        },
+        categoryRail: {
+          paddingHorizontal: Space.md,
+          paddingBottom: Space.lg,
+          gap: Space.lg,
+        },
+        categoryAction: {
+          minHeight: Control.hit,
+          justifyContent: 'center',
+          borderBottomWidth: Stroke.standard,
+          borderBottomColor: colors.border,
+        },
+        categoryActionText: {
+          color: colors.textPrimary,
+          fontFamily: Typography.family.semibold,
+          fontSize: Type.body.size,
+        },
+        grid: {
+          paddingTop: Space.xs,
+        },
+        loadingGrid: {
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: Space.sm,
+          paddingHorizontal: Space.md,
+        },
+        loadingColumn: {
+          width: '48%',
+          marginBottom: Space.md,
+        },
+        skeletonLine: {
+          marginTop: Space.sm,
+        },
+        skeletonMeta: {
+          marginTop: Space.xs + 2,
+        },
+        emptyWrap: {
+          minHeight: Space.xxl * 7 + Space.lg,
+          justifyContent: 'center',
+        },
+      }),
+    [colors]
+  );
 
   if (!category) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar
-          barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-          backgroundColor={Colors.background}
+          barStyle={!isDark ? 'dark-content' : 'light-content'}
+          backgroundColor={colors.background}
         />
         <ScreenHeader title="Category" onBack={() => navigation.goBack()} />
         <EmptyState
@@ -78,8 +152,8 @@ export default function CategoryDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
-        barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'}
-        backgroundColor={Colors.background}
+        barStyle={!isDark ? 'dark-content' : 'light-content'}
+        backgroundColor={colors.background}
       />
       <ScreenHeader title={category.name} onBack={() => navigation.goBack()} />
 
@@ -133,7 +207,7 @@ export default function CategoryDetailScreen() {
             ))}
           </View>
         ) : gridData.length > 0 ? (
-          <Reanimated.View entering={FadeIn.duration(220)} style={styles.grid}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(220)} style={styles.grid}>
             <PinterestMasonryGrid
               items={gridData}
               onPressItem={(item) =>
@@ -172,69 +246,3 @@ export default function CategoryDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingBottom: Space.xl,
-  },
-  summary: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
-    paddingBottom: Space.md,
-    gap: 4,
-  },
-  count: {
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  summaryText: {
-    color: Colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  categoryRail: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.lg,
-  },
-  categoryAction: {
-    minHeight: 44,
-    justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  categoryActionText: {
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: 14,
-  },
-  grid: {
-    paddingTop: Space.xs,
-  },
-  loadingGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-  },
-  loadingColumn: {
-    width: '48%',
-    marginBottom: Space.md,
-  },
-  skeletonLine: {
-    marginTop: Space.sm,
-  },
-  skeletonMeta: {
-    marginTop: 6,
-  },
-  emptyWrap: {
-    minHeight: 360,
-    justifyContent: 'center',
-  },
-});

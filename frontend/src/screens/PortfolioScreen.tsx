@@ -5,7 +5,7 @@ import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -13,7 +13,7 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { haptics } from '../utils/haptics';
@@ -37,7 +37,7 @@ import { parseApiError } from '../lib/apiClient';
 import { useBackendData } from '../context/BackendDataContext';
 import { useConnectivity } from '../hooks/useConnectivity';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function PortfolioScreen() {
   const navigation = useNavigation<NavT>();
@@ -501,7 +501,7 @@ export default function PortfolioScreen() {
             <View style={[styles.portfolioTabRow, { borderColor: colors.border }]}>
               <Pressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('positions'); }}
-                style={[styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }]}
+                style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
                 accessibilityRole="tab"
                 accessibilityLabel="Positions tab"
                 accessibilityState={{ selected: activePortfolioTab === 'positions' }}
@@ -518,7 +518,7 @@ export default function PortfolioScreen() {
               </Pressable>
               <Pressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('insights'); }}
-                style={[styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }]}
+                style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
                 accessibilityRole="tab"
                 accessibilityLabel="Insights tab"
                 accessibilityState={{ selected: activePortfolioTab === 'insights' }}
@@ -545,10 +545,10 @@ export default function PortfolioScreen() {
                 Shows the best and worst positions by unrealized P&L without
                 "TOP PERFORMER" / "LAGGING" labels that gamify holding. */}
             {(performers.best || performers.worst) && (
-              <View style={[styles.insightCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.insightCard, { borderBottomColor: colors.border }]}>
                 {performers.best && performers.best.avgEntryPriceGbp > 0 && (
                   <Pressable
-                    style={styles.insightRow}
+                    style={({ pressed }) => [styles.insightRow, pressed && { opacity: 0.7 }]}
                     onPress={() => handlePositionPress(performers.best!)}
                     accessibilityRole="button"
                     accessibilityLabel={`Best position: ${performers.best.title}`}
@@ -572,7 +572,7 @@ export default function PortfolioScreen() {
                 )}
                 {performers.worst && performers.worst.avgEntryPriceGbp > 0 && performers.worst.assetId !== performers.best?.assetId && (
                   <Pressable
-                    style={[styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+                    style={({ pressed }) => [styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }, pressed && { opacity: 0.7 }]}
                     onPress={() => handlePositionPress(performers.worst!)}
                     accessibilityRole="button"
                     accessibilityLabel={`Worst position: ${performers.worst.title}`}
@@ -600,9 +600,9 @@ export default function PortfolioScreen() {
             {/* Allocation breakdowns — collapsible for progressive disclosure.
                 Collapsed by default to calm the screen; expands on tap. */}
             {allocationBars.length > 0 && (
-              <View style={[styles.allocationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.allocationCard, { borderBottomColor: colors.border }]}>
                 <Pressable
-                  style={styles.allocationHeader}
+                  style={({ pressed }) => [styles.allocationHeader, pressed && { opacity: 0.7 }]}
                   onPress={() => setAllocationExpanded((prev) => !prev)}
                   accessibilityRole="button"
                   accessibilityLabel={allocationExpanded ? 'Collapse allocation breakdown' : 'Expand allocation breakdown'}
@@ -698,7 +698,7 @@ export default function PortfolioScreen() {
 
             {/* Realised returns — income surface from closed positions */}
             {summary.totalRealizedGbp !== 0 && (
-              <View style={[styles.realisedCard, { backgroundColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}08`, borderColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}30` }]}>
+              <View style={[styles.realisedCard, { borderBottomColor: colors.border }]}>
                 <View style={styles.realisedHeader}>
                   <View style={[styles.realisedIcon, { backgroundColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}15` }]}>
                     <Ionicons
@@ -739,7 +739,7 @@ export default function PortfolioScreen() {
             {/* Watchlist summary */}
             {coOwnWatchlist.length > 0 && (
               <AnimatedPressable
-                style={[styles.watchlistRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={[styles.watchlistRow, { borderBottomColor: colors.border }]}
                 onPress={() => navigation.navigate('CoOwnHub', { initialSegment: 'watchlist' })}
                 accessibilityRole="button"
                 accessibilityLabel={`Open watchlist with ${coOwnWatchlist.length} watched assets`}
@@ -760,7 +760,7 @@ export default function PortfolioScreen() {
             )}
 
             {/* Ownership rights — what Co-Own entitles */}
-            <View style={[styles.rightsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.rightsCard, { borderBottomColor: colors.border }]}>
               <View style={styles.rightsHeader}>
                 <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
                 <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Rights are instrument-specific</Text>
@@ -833,36 +833,37 @@ const styles = StyleSheet.create({
   summaryCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.lg,
-    gap: Space.sm,
-    marginBottom: Space.lg,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+    gap: Space.xs,
+    marginBottom: Space.md,
   },
   summaryLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 1.0,
+    letterSpacing: LetterSpacing.caps + 0.18,
     textTransform: 'uppercase',
   },
   summaryValue: {
     fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.5,
+    letterSpacing: Type.priceLarge.letterSpacing,
   },
   summaryStats: {
     flexDirection: 'row',
-    paddingTop: Space.sm,
+    paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   summaryStat: {
     flex: 1,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
-    gap: 3,
+    gap: Space.xs,
   },
   summaryStatLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   summaryStatValue: {
@@ -870,37 +871,35 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
   },
   allocationCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm,
-    marginBottom: Space.lg,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+    marginBottom: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   // ── Portfolio tab toggle ──
   portfolioTabRow: {
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.lg,
-    marginTop: Space.md,
+    marginBottom: Space.md,
+    marginTop: Space.sm,
   },
   portfolioTab: {
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
-    borderBottomWidth: 2,
+    borderBottomWidth: Stroke.emphasis,
     borderBottomColor: 'transparent',
     marginRight: Space.sm,
   },
   portfolioTabText: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   // ── Position insight (calm replacement for gamification cards) ──
   insightCard: {
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.lg,
+    marginBottom: Space.md,
     overflow: 'hidden',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   insightRow: {
     flexDirection: 'row',
@@ -917,13 +916,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
     minWidth: 0,
   },
   allocationTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   allocationHeader: {
     flexDirection: 'row',
@@ -935,7 +934,7 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.caption.letterSpacing,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     marginBottom: Space.xs,
   },
   issuerSection: {
@@ -947,7 +946,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   barItem: {
-    gap: 4,
+    gap: Space.xs,
   },
   barHeader: {
     flexDirection: 'row',
@@ -964,29 +963,28 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   barTrack: {
-    height: 4,
-    borderRadius: 2,
+    height: Space.xs,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
   },
   barFill: {
-    height: 4,
-    borderRadius: 2,
+    height: Space.xs,
+    borderRadius: Radius.sm,
   },
   sectionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Space.md,
+    marginBottom: Space.sm,
   },
   sectionActions: {
     flexDirection: 'row',
     gap: Space.md,
   },
   realisedCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.lg,
+    paddingVertical: Space.sm,
+    marginBottom: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   realisedHeader: {
     flexDirection: 'row',
@@ -994,20 +992,20 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   realisedIcon: {
-    width: 32,
-    height: 32,
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   realisedHeaderText: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   realisedLabel: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: 0.4,
+    letterSpacing: LetterSpacing.wide + 0.28,
   },
   realisedCaption: {
     fontSize: Type.caption.size,
@@ -1022,26 +1020,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     marginBottom: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   watchlistIcon: {
-    width: 32,
-    height: 32,
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   watchlistBody: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   watchlistTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   watchlistSub: {
     fontSize: Type.caption.size,
@@ -1050,42 +1047,41 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   sectionLink: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   rightsCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    paddingVertical: Space.md,
     gap: Space.sm,
     marginBottom: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rightsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
   },
   rightsTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   rightsList: {
-    gap: 6,
+    gap: Space.xs,
   },
   rightsItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
   },
   rightsText: {
     flex: 1,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 17,
+    lineHeight: Type.caption.lineHeight + 1,
   },
   // ── Phase 3: today's change row ──
   todayChangeRow: {

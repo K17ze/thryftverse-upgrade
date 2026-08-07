@@ -1,0 +1,35 @@
+appId: ${APP_ID}
+---
+tags:
+  - flagship
+  - inbox
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+
+- tapOn:
+    text: "Inbox"
+    optional: true
+
+- extendedWaitUntil:
+    visible:
+      id: "inbox-screen"
+      optional: true
+    timeout: 15000
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: inbox_first_viewport
+
+# Open the first conversation to capture the chat surface.
+- tapOn:
+    point: 50%, 25%
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: chat_first_viewport

@@ -1,39 +1,50 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, RouteProp, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { TypeStyles, Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'MyListings'>;
 
 function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => void }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const statusColor =
-    item.status === 'active' ? Colors.success
-    : item.status === 'paused' ? Colors.textMuted
-    : item.status === 'sold' ? Colors.brand
-    : Colors.danger;
+    item.status === 'active' ? colors.success
+    : item.status === 'paused' ? colors.textMuted
+    : item.status === 'sold' ? colors.brand
+    : colors.danger;
 
   return (
-    <AnimatedPressable style={styles.row} onPress={onPress} activeOpacity={0.85}>
+    <AnimatedPressable
+      style={styles.row}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessibilityLabel={`${item.title}, £${item.priceGbp.toFixed(2)}, status: ${item.status}`}
+      accessibilityRole="button"
+      accessibilityHint="Tap to view listing details"
+    >
       {item.images[0] ? (
         <CachedImage uri={item.images[0]} style={styles.rowImage} containerStyle={styles.rowImageWrap} contentFit="cover" />
       ) : (
         <View style={[styles.rowImageWrap, styles.rowImageFallback]}>
-          <Ionicons name="bag-handle-outline" size={20} color={Colors.textMuted} />
+          <Ionicons name="bag-handle-outline" size={20} color={colors.textMuted} />
         </View>
       )}
       <View style={styles.rowBody}>
@@ -46,16 +57,18 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
           {item.category ? <Text style={styles.rowCategory}>{item.category}</Text> : null}
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </AnimatedPressable>
   );
 }
 
-function StatCard({ icon, label, value, tone }: { icon: string; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
-  const color = tone === 'success' ? Colors.success : tone === 'brand' ? Colors.brand : Colors.textPrimary;
+function StatCard({ icon, label, value, tone }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const color = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
   return (
     <View style={styles.statCard}>
-      <Ionicons name={icon as any} size={16} color={color} />
+      <Ionicons name={icon} size={16} color={color} />
       <Text style={[styles.statValue, { color }]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
@@ -63,11 +76,14 @@ function StatCard({ icon, label, value, tone }: { icon: string; label: string; v
 }
 
 export default function MyListingsScreen() {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { show } = useToast();
   const currentUser = useStore((s) => s.currentUser);
   const filterType = route.params?.type;
+  const reducedMotionEnabled = useReducedMotion();
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
@@ -91,12 +107,16 @@ export default function MyListingsScreen() {
     }
   }, [currentUser?.id, show]);
 
-  useEffect(() => {
-    let mounted = true;
-    setIsLoading(true);
-    load().finally(() => { if (mounted) setIsLoading(false); });
-    return () => { mounted = false; };
-  }, [load]);
+  // useFocusEffect ensures listings re-fetch when the user navigates back
+  // (e.g., after editing or managing a listing from this screen).
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      setIsLoading(true);
+      load().finally(() => { if (mounted) setIsLoading(false); });
+      return () => { mounted = false; };
+    }, [load])
+  );
 
   const onRefresh = async () => {
     setIsRefreshing(true);
@@ -126,20 +146,16 @@ export default function MyListingsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
-        <ScreenHeader title={headerTitle} onBack={() => navigation.goBack()} />
-        <View style={styles.body}>
-          <ActivityIndicator size="large" color={Colors.brand} />
-        </View>
-      </SafeAreaView>
+      <FlagshipScreen header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}>
+        <FlagshipState variant="loading" />
+      </FlagshipScreen>
     );
   }
 
   const renderHeader = () => {
     if (listings.length === 0) return null;
     return (
-      <View style={styles.headerSection}>
+      <Reanimated.View style={styles.headerSection} entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         {/* Analytics summary */}
         <View style={styles.statsGrid}>
           <StatCard
@@ -180,7 +196,7 @@ export default function MyListingsScreen() {
             accessibilityLabel="Create new listing"
             accessibilityRole="button"
           >
-            <Ionicons name="add-circle-outline" size={18} color={Colors.brand} />
+            <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
             <Text style={styles.quickActionText}>New listing</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -190,7 +206,7 @@ export default function MyListingsScreen() {
             accessibilityLabel="View seller analytics"
             accessibilityRole="button"
           >
-            <Ionicons name="bar-chart-outline" size={18} color={Colors.brand} />
+            <Ionicons name="bar-chart-outline" size={18} color={colors.brand} />
             <Text style={styles.quickActionText}>Analytics</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -200,7 +216,7 @@ export default function MyListingsScreen() {
             accessibilityLabel="Manage auctions"
             accessibilityRole="button"
           >
-            <Ionicons name="trophy-outline" size={18} color={Colors.brand} />
+            <Ionicons name="trophy-outline" size={18} color={colors.brand} />
             <Text style={styles.quickActionText}>Auctions</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -210,9 +226,21 @@ export default function MyListingsScreen() {
             accessibilityLabel="View payout account"
             accessibilityRole="button"
           >
-            <Ionicons name="wallet-outline" size={18} color={Colors.brand} />
+            <Ionicons name="wallet-outline" size={18} color={colors.brand} />
             <Text style={styles.quickActionText}>Payouts</Text>
           </AnimatedPressable>
+          {filterType === 'coown' && (
+            <AnimatedPressable
+              style={styles.quickActionBtn}
+              onPress={() => navigation.navigate('SellerVerification')}
+              activeOpacity={0.85}
+              accessibilityLabel="View verification requests"
+              accessibilityRole="button"
+            >
+              <Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} />
+              <Text style={styles.quickActionText}>Verification</Text>
+            </AnimatedPressable>
+          )}
         </View>
 
         {/* Listings header */}
@@ -221,15 +249,16 @@ export default function MyListingsScreen() {
             {analytics.total} {analytics.total === 1 ? 'listing' : 'listings'}
           </Text>
         </View>
-      </View>
+      </Reanimated.View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
-      <ScreenHeader title={headerTitle} onBack={() => navigation.goBack()} />
-
+    <FlagshipScreen
+      header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       {listings.length === 0 ? (
         <View style={styles.body}>
           <EmptyState
@@ -241,11 +270,11 @@ export default function MyListingsScreen() {
           />
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={listings}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
           ListHeaderComponent={renderHeader}
           renderItem={({ item }) => (
             <ListingRow
@@ -253,16 +282,19 @@ export default function MyListingsScreen() {
               onPress={() => navigation.push('ManageListing', { itemId: item.id })}
             />
           )}
+          // Performance: long seller lists; FlashList v2 handles recycling
+          // automatically.
         />
       )}
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   body: {
     flex: 1,
@@ -290,19 +322,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    gap: 2,
+    borderColor: colors.border,
+    gap: Space.xs / 2,
   },
   statValue: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -313,17 +345,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   quickActionText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   listingsHeaderRow: {
     flexDirection: 'row',
@@ -334,30 +366,30 @@ const styles = StyleSheet.create({
   listingsHeaderText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     padding: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   rowImageWrap: {
-    width: 64,
-    height: 64,
+    width: Space.xxl + Space.md,
+    height: Space.xxl + Space.md,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   rowImage: {
-    width: 64,
-    height: 64,
+    width: Space.xxl + Space.md,
+    height: Space.xxl + Space.md,
   },
   rowImageFallback: {
     alignItems: 'center',
@@ -365,38 +397,39 @@ const styles = StyleSheet.create({
   },
   rowBody: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   rowTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   rowPrice: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   rowMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'capitalize',
   },
   rowCategory: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

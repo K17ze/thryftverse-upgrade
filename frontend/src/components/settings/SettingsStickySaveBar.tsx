@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
 import { AppButton } from '../ui/AppButton';
 
@@ -12,6 +12,22 @@ interface SettingsStickySaveBarProps {
   loading?: boolean;
 }
 
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    bar: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.md + 8,
+      backgroundColor: colors.background,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+  });
+
 export function SettingsStickySaveBar({
   label,
   loadingLabel = 'Saving...',
@@ -19,6 +35,9 @@ export function SettingsStickySaveBar({
   disabled = false,
   loading = false,
 }: SettingsStickySaveBarProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.bar}>
       <AppButton
@@ -33,18 +52,3 @@ export function SettingsStickySaveBar({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  bar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md + 8,
-    backgroundColor: Colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-});

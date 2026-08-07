@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, StatusBar, useWindowDimensions, Keyboard } from
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -36,7 +36,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, DockConstants } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import {
@@ -60,7 +60,7 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Trade'>;
 
 const TRADE_SIDE_OPTIONS: Array<{ value: TradeSide; label: string; accessibilityLabel: string }> = [
@@ -418,6 +418,21 @@ export default function TradeScreen() {
               <Text style={[styles.alertText, { color: colors.textSecondary }]}>
                 This instrument has rights rows marked "To be confirmed". Trading is blocked until all rights are confirmed.
               </Text>
+              {/* WS5: surface TBC reason and ETA when the backend provides them. */}
+              {asset?.rights?.tbcReason ? (
+                <Text style={[styles.alertText, { color: colors.textSecondary, marginTop: Space.xs }]}>
+                  Reason: {asset.rights.tbcReason}
+                </Text>
+              ) : null}
+              {asset?.rights?.tbcEtaDate ? (
+                <Text style={[styles.alertText, { color: colors.textSecondary, marginTop: Space.xs }]}>
+                  Expected by {new Date(asset.rights.tbcEtaDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                </Text>
+              ) : (
+                <Text style={[styles.alertText, { color: colors.textMuted, marginTop: Space.xs }]}>
+                  No confirmation date available.
+                </Text>
+              )}
             </View>
           </Reanimated.View>
         )}
@@ -455,6 +470,9 @@ export default function TradeScreen() {
             totalLabel={<CoOwnNumericText value={quote.netValue} unit="1ZE" size="priceLarge" align="right" showUnit={false} />}
             totalCaption={side === 'buy' ? 'Including 1% fee' : 'After 1% fee'}
             settlementLabel={settlementLabel}
+            escrowPartner={asset?.escrowPartner ?? null}
+            escrowTermsUrl={asset?.escrowTermsUrl ?? null}
+            settlementEtaHours={asset?.settlementEtaHours ?? null}
             availableUnits={executableUnits}
             sellableUnits={yourUnits}
             maxUnits={maxUnits}
@@ -707,7 +725,7 @@ const styles = StyleSheet.create({
   alertCard: {
     borderRadius: Radius.lg,
     padding: Space.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.md,
   },
   alertRow: {
@@ -727,14 +745,7 @@ const styles = StyleSheet.create({
   alertText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 20,
-  },
-  inputCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm,
-    marginBottom: Space.md,
+    lineHeight: Type.body.lineHeight,
   },
   illustrativeBanner: {
     flexDirection: 'row',
@@ -773,7 +784,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   ticketContextCol: {
-    width: 100,
+    width: Space.xxl * 2 + Space.xs,
     gap: Space.xs,
     paddingTop: Space.sm,
   },
@@ -785,7 +796,7 @@ const styles = StyleSheet.create({
   contextLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   contextValue: {
@@ -795,7 +806,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   limitRow: {
@@ -806,15 +817,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   modePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
     flexShrink: 0,
   },
   modePillText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: 0.4,
+    letterSpacing: LetterSpacing.wide + 0.28,
   },
   maxLink: {
     fontSize: Type.caption.size,

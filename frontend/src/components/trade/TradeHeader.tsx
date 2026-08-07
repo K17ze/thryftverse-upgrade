@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Type , Space, Radius  } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Headline } from '../ui/Text';
@@ -25,6 +25,9 @@ export function TradeHeader({
   showClose = false,
   backIcon = 'chevron-back',
 }: TradeHeaderProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const handlePress = () => {
     if (showClose && onClose) {
       onClose();
@@ -49,7 +52,7 @@ export function TradeHeader({
             <Ionicons
               name={showClose ? 'close' : backIcon}
               size={22}
-              color={Colors.textPrimary}
+              color={colors.textPrimary}
             />
           </AnimatedPressable>
         )}
@@ -72,7 +75,7 @@ export function TradeHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -100,9 +103,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

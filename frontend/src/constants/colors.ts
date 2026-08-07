@@ -94,7 +94,7 @@ const LIGHT_COLORS = {
 type ThemeColors = { [Key in keyof typeof DARK_COLORS]: string };
 
 function resolveActiveTheme(): ThemeMode {
-  const runtimeThemeOverride = (globalThis as any)[THEME_OVERRIDE_GLOBAL_KEY] as
+  const runtimeThemeOverride = (globalThis as Record<string, unknown>)[THEME_OVERRIDE_GLOBAL_KEY] as
     | ThemeMode
     | null
     | undefined;

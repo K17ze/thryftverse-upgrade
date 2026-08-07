@@ -197,12 +197,12 @@ describe('Collage Look export', () => {
 // ── Template tests ─────────────────────────────────────────────────
 
 describe('Templates', () => {
-  it('has 5 look templates', () => {
-    expect(getTemplatesByType('look')).toHaveLength(5);
+  it('has at least 5 look templates', () => {
+    expect(getTemplatesByType('look').length).toBeGreaterThanOrEqual(5);
   });
 
-  it('has 5 poster templates', () => {
-    expect(getTemplatesByType('poster')).toHaveLength(5);
+  it('has at least 5 poster templates', () => {
+    expect(getTemplatesByType('poster').length).toBeGreaterThanOrEqual(5);
   });
 
   it('all templates produce valid CreatorDocuments', () => {

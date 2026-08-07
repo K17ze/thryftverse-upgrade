@@ -1,8 +1,8 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import {
   normaliseOrderStatus,
@@ -41,8 +41,11 @@ interface OrderLedgerRowProps {
 }
 
 function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const statusLabel = humaniseStatus(order.status);
-  const statusColor = getStatusColor(order.status, Colors.textMuted);
+  const statusColor = getStatusColor(order.status, colors.textMuted);
   const cancelled = isCancelledStatus(order.status);
   const terminal = isTerminalStatus(order.status);
   const dateLabel = formatDate(order.createdAt);
@@ -75,7 +78,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
     <Pressable
       style={styles.row}
       onPress={onPress}
-      hitSlop={{ top: 4, bottom: 4 }}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
@@ -104,13 +107,13 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
 
         {trackingLine && (
           <Text style={styles.tracking} numberOfLines={1}>
-            <Ionicons name="cube-outline" size={11} color={Colors.textMuted} /> {trackingLine}
+            <Ionicons name="cube-outline" size={11} color={colors.textMuted} /> {trackingLine}
           </Text>
         )}
 
         {nextAction && (
           <View style={styles.nextActionRow}>
-            <Ionicons name="arrow-forward-circle-outline" size={12} color={Colors.brand} />
+            <Ionicons name="arrow-forward-circle-outline" size={12} color={colors.brand} />
             <Text style={styles.nextActionText}>{nextAction}</Text>
           </View>
         )}
@@ -124,14 +127,14 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
                   <View
                     style={[
                       styles.progressDot,
-                      isCompleted && { backgroundColor: Colors.textPrimary },
+                      isCompleted && { backgroundColor: colors.textPrimary },
                     ]}
                   />
                   {i < progressStages.length - 1 && (
                     <View
                       style={[
                         styles.progressLine,
-                        i < currentStageIndex && { backgroundColor: Colors.textPrimary },
+                        i < currentStageIndex && { backgroundColor: colors.textPrimary },
                       ]}
                     />
                   )}
@@ -145,7 +148,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
         )}
       </View>
 
-      <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} style={styles.chevron} />
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={styles.chevron} />
     </Pressable>
   );
 }
@@ -154,7 +157,7 @@ export const OrderLedgerRow = memo(OrderLedgerRowImpl);
 
 const THUMB_SIZE = 88;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -166,7 +169,7 @@ const styles = StyleSheet.create({
   thumbContainer: {
     width: THUMB_SIZE,
     height: THUMB_SIZE * 1.25,
-    borderRadius: 6,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   thumb: {
@@ -175,70 +178,70 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs / 2 + 1,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginBottom: 2,
+    gap: Space.xs + 1,
+    marginBottom: Space.xs / 2,
   },
   statusDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
   },
   title: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 20,
   },
   total: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 1,
   },
   context: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   tracking: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 1,
   },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
+    gap: Space.xs,
+    marginTop: Space.xs + 2,
   },
   progressDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.border,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.border,
   },
   progressLine: {
     width: 16,
     height: 1.5,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
   progressLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    marginLeft: 4,
+    color: colors.textSecondary,
+    marginLeft: Space.xs,
   },
   chevron: {
     marginTop: 2,
@@ -246,12 +249,12 @@ const styles = StyleSheet.create({
   nextActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: Space.xs,
+    marginTop: Space.xs,
   },
   nextActionText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
+    color: colors.brand,
   },
 });

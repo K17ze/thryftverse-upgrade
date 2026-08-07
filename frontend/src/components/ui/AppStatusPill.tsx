@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTheme, Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Space } from '../../theme/designTokens';
 
 export type AppStatusTone = 'neutral' | 'accent' | 'positive' | 'negative' | 'warning';
 export type AppStatusSize = 'sm' | 'md';
@@ -91,15 +91,15 @@ export function AppStatusPill({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 999,
+    borderRadius: Radius.full,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
   sizeSm: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
   },
   sizeMd: {
     paddingHorizontal: 10,

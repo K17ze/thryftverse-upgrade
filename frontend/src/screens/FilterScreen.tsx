@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   AnimatedPressable,
 } from '../components/AnimatedPressable';
@@ -23,8 +23,8 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Typography, Radius, Space, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -38,22 +38,15 @@ import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { haptics } from '../utils/haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { isSustainableGrade } from '../utils/sustainabilityScore';
 
 const { height, width } = Dimensions.get('window');
 const SNAP_HALF = height * 0.5;
 const SNAP_FULL = height * 0.1;
 const OVERLAY_BG = 'rgba(0,0,0,0.45)';
-const SHEET_BG = Colors.surface;
-const HANDLE_BG = Colors.borderLight;
-const CHIP_BG = Colors.surface;
-const CHIP_BORDER = Colors.border;
-const DIVIDER_COLOR = Colors.border;
-const RETRY_BANNER_BG = Colors.surface;
-const RETRY_BUTTON_BG = Colors.surface;
-const FOOTER_BG = Colors.background;
-const APPLY_DISABLED_BG = Colors.border;
 
-type SortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low';
+type SortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
 type ConditionOption = 'Any' | 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
 type FilterRoute = RouteProp<RootStackParamList, 'Filter'>;
 
@@ -62,6 +55,8 @@ const SORT_OPTIONS: Array<{ value: SortOption; label: string; accessibilityLabel
   { value: 'Newest', label: 'Newest', accessibilityLabel: 'Sort by newest items' },
   { value: 'Price: Low to High', label: 'Price: Low to High', accessibilityLabel: 'Sort by price low to high' },
   { value: 'Price: High to Low', label: 'Price: High to Low', accessibilityLabel: 'Sort by price high to low' },
+  { value: 'Most liked', label: 'Most liked', accessibilityLabel: 'Sort by most liked items' },
+  { value: 'Ending soon', label: 'Ending soon', accessibilityLabel: 'Sort by ending soon' },
 ];
 
 const CONDITION_OPTIONS: Array<{ value: ConditionOption; label: string; accessibilityLabel: string }> = [
@@ -108,6 +103,9 @@ export default function FilterScreen() {
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
   const { show } = useToast();
   const { mySizes, setMySizes, toggleMySize, filterPresets, saveFilterPreset, removeFilterPreset } = useSettingsPreferences();
+  const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const categoryId = route.params?.categoryId ?? 'search';
   const title = route.params?.title;
   const subcategoryId = route.params?.subcategoryId;
@@ -119,16 +117,17 @@ export default function FilterScreen() {
   const [presetName, setPresetName] = useState('');
   const [selectedCondition, setSelectedCondition] = useState<ConditionOption>(browseFilters.condition);
   const [showAllBrands, setShowAllBrands] = useState(false);
+  const [sustainableOnly, setSustainableOnly] = useState<boolean>(browseFilters.sustainableOnly);
 
   const translateY = useSharedValue(height);
   const contextY = useSharedValue(0);
 
   useEffect(() => {
-    translateY.value = withTiming(SNAP_HALF, { duration: 200 });
-  }, []);
+    translateY.value = withTiming(SNAP_HALF, { duration: reducedMotion ? 0 : 200 });
+  }, [reducedMotion]);
 
   const closeBottomSheet = () => {
-    translateY.value = withTiming(height, { duration: 180 }, () => {
+    translateY.value = withTiming(height, { duration: reducedMotion ? 0 : 180 }, () => {
       runOnJS(navigation.goBack)();
     });
   };
@@ -147,10 +146,10 @@ export default function FilterScreen() {
         runOnJS(closeBottomSheet)();
       } else if (translateY.value < SNAP_HALF - 50) {
         // Snap to full (90% height)
-        translateY.value = withTiming(SNAP_FULL, { duration: 180 });
+        translateY.value = withTiming(SNAP_FULL, { duration: reducedMotion ? 0 : 180 });
       } else {
         // Snap back to half
-        translateY.value = withTiming(SNAP_HALF, { duration: 180 });
+        translateY.value = withTiming(SNAP_HALF, { duration: reducedMotion ? 0 : 180 });
       }
     });
 
@@ -216,19 +215,19 @@ export default function FilterScreen() {
   const renderLoadingState = () => (
     <View style={styles.loadingStateWrap}>
       <View style={styles.loadingSection}>
-        <SkeletonLoader width="32%" height={14} borderRadius={7} style={{ marginBottom: 12 }} />
+        <SkeletonLoader width="32%" height={Space.md - 2} borderRadius={Radius.md - 1} style={{ marginBottom: Space.sm + Space.xs }} />
         <View style={styles.loadingChipRow}>
           {Array.from({ length: 4 }).map((_, index) => (
-            <SkeletonLoader key={`filter_sort_loading_${index}`} width={120} height={42} borderRadius={21} />
+            <SkeletonLoader key={`filter_sort_loading_${index}`} width={Space.xxl + Space.xxl + Space.lg} height={Space.xl + Space.sm + 2} borderRadius={Radius.xl + 1} />
           ))}
         </View>
       </View>
 
       <View style={styles.loadingSection}>
-        <SkeletonLoader width="24%" height={14} borderRadius={7} style={{ marginBottom: 12 }} />
+        <SkeletonLoader width="24%" height={Space.md - 2} borderRadius={Radius.md - 1} style={{ marginBottom: Space.sm + Space.xs }} />
         <View style={styles.loadingChipWrap}>
           {Array.from({ length: 8 }).map((_, index) => (
-            <SkeletonLoader key={`filter_brand_loading_${index}`} width={104} height={42} borderRadius={21} />
+            <SkeletonLoader key={`filter_brand_loading_${index}`} width={Space.xxl + Space.xxl + Space.sm} height={Space.xl + Space.sm + 2} borderRadius={Radius.xl + 1} />
           ))}
         </View>
       </View>
@@ -290,6 +289,20 @@ export default function FilterScreen() {
         return false;
       }
 
+      // Sustainable — client-side heuristic: only A/B graded items.
+      if (
+        sustainableOnly &&
+        !isSustainableGrade({
+          condition: listing.condition,
+          category: listing.category,
+          subcategory: listing.subcategory,
+          brand: listing.brand,
+          sellerLocation: listing.seller?.location ?? null,
+        })
+      ) {
+        return false;
+      }
+
       return true;
     }).length;
   };
@@ -299,6 +312,7 @@ export default function FilterScreen() {
     setSelectedBrands([]);
     setSelectedSizes([]);
     setSelectedCondition('Any');
+    setSustainableOnly(false);
   };
 
   const handleApply = () => {
@@ -307,6 +321,7 @@ export default function FilterScreen() {
       brands: selectedBrands,
       sizes: selectedSizes,
       condition: selectedCondition,
+      sustainableOnly,
     });
     closeBottomSheet();
   };
@@ -335,7 +350,7 @@ export default function FilterScreen() {
   };
 
   const hasActiveSelection =
-    selectedBrands.length > 0 || selectedSizes.length > 0 || selectedCondition !== 'Any' || activeSort !== 'Recommended';
+    selectedBrands.length > 0 || selectedSizes.length > 0 || selectedCondition !== 'Any' || activeSort !== 'Recommended' || sustainableOnly;
 
   const resultCount = getResultsCount();
   const applyLabel = showFilterLoadingState ? 'Loading options...' : `Show ${resultCount} items`;
@@ -380,7 +395,7 @@ export default function FilterScreen() {
               accessibilityLabel="Open category tree"
               accessibilityHint="Shows the full category tree for this filter context"
             >
-              <Ionicons name="funnel-outline" size={14} color={Colors.textPrimary} />
+              <Ionicons name="funnel-outline" size={14} color={colors.textPrimary} />
               <Text style={styles.contextText} numberOfLines={1}>
                 {title ?? categoryId}
               </Text>
@@ -409,7 +424,7 @@ export default function FilterScreen() {
                   <TextInput
                     style={styles.presetInput}
                     placeholder="Preset name (e.g. Streetwear M)"
-                    placeholderTextColor={Colors.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={presetName}
                     onChangeText={setPresetName}
                     autoFocus
@@ -423,7 +438,7 @@ export default function FilterScreen() {
                     accessibilityLabel="Save preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="checkmark" size={18} color={Colors.surface} />
+                    <Ionicons name="checkmark" size={18} color={colors.surface} />
                   </AnimatedPressable>
                   <AnimatedPressable
                     style={styles.presetCancelBtn}
@@ -431,7 +446,7 @@ export default function FilterScreen() {
                     accessibilityLabel="Cancel saving preset"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="close" size={18} color={Colors.textMuted} />
+                    <Ionicons name="close" size={18} color={colors.textMuted} />
                   </AnimatedPressable>
                 </View>
               ) : (
@@ -444,7 +459,7 @@ export default function FilterScreen() {
                         accessibilityLabel={`Apply filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="bookmark" size={12} color={Colors.brand} />
+                        <Ionicons name="bookmark" size={12} color={colors.brand} />
                         <Text style={styles.presetChipText} numberOfLines={1}>{preset.name}</Text>
                       </AnimatedPressable>
                       <AnimatedPressable
@@ -453,7 +468,7 @@ export default function FilterScreen() {
                         accessibilityLabel={`Remove filter preset ${preset.name}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={14} color={Colors.textMuted} />
+                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
                       </AnimatedPressable>
                     </View>
                   ))}
@@ -470,7 +485,7 @@ export default function FilterScreen() {
               accessibilityLabel="Save current filters as a preset"
               accessibilityRole="button"
             >
-              <Ionicons name="bookmark-outline" size={14} color={Colors.brand} />
+              <Ionicons name="bookmark-outline" size={14} color={colors.brand} />
               <Text style={styles.presetsEmptyCtaText}>Save current filters as a preset</Text>
             </AnimatedPressable>
           )}
@@ -588,7 +603,7 @@ export default function FilterScreen() {
                       >
                         <AppButton
                           title={s}
-                          icon={isMySize ? <Ionicons name="star" size={11} color={Colors.brand} /> : undefined}
+                          icon={isMySize ? <Ionicons name="star" size={11} color={colors.brand} /> : undefined}
                           iconContainerStyle={styles.chipIconWrap}
                           variant="secondary"
                           size="sm"
@@ -607,7 +622,7 @@ export default function FilterScreen() {
                   <View style={styles.saveSizesRow}>
                     <AppButton
                       title={selectedSizes.every(s => mySizes.includes(s)) ? 'All saved' : 'Save as my sizes'}
-                      icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={14} color={Colors.brand} /> : undefined}
+                      icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={14} color={colors.brand} /> : undefined}
                       iconContainerStyle={styles.chipIconWrap}
                       variant="secondary"
                       size="sm"
@@ -639,6 +654,56 @@ export default function FilterScreen() {
                     optionTextActiveStyle={styles.chipTextActive}
                   />
                 </ScrollView>
+
+                <View style={styles.sectionDivider} />
+
+                {/* Sustainability Section — client-side heuristic toggle */}
+                <Text style={styles.sectionHeading}>Sustainability</Text>
+                <Pressable
+                  onPress={() => {
+                    haptics.press();
+                    setSustainableOnly((prev) => !prev);
+                  }}
+                  style={styles.sustainableRow}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: sustainableOnly }}
+                  accessibilityLabel="Toggle sustainable items only"
+                >
+                  <View style={styles.sustainableLabelWrap}>
+                    <Ionicons
+                      name="leaf"
+                      size={16}
+                      color={sustainableOnly ? colors.success : colors.textSecondary}
+                    />
+                    <View style={styles.sustainableTextWrap}>
+                      <Text style={[styles.sustainableTitle, { color: colors.textPrimary }]}>
+                        Sustainable only
+                      </Text>
+                      <Text style={[styles.sustainableCaption, { color: colors.textMuted }]}>
+                        Estimated grade A or B items
+                      </Text>
+                    </View>
+                  </View>
+                  <View
+                    style={[
+                      styles.sustainableToggle,
+                      {
+                        borderColor: sustainableOnly ? colors.success : colors.border,
+                        backgroundColor: sustainableOnly ? `${colors.success}22` : colors.surfaceAlt,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.sustainableToggleThumb,
+                        {
+                          backgroundColor: sustainableOnly ? colors.success : colors.textMuted,
+                          alignSelf: sustainableOnly ? 'flex-end' : 'flex-start',
+                        },
+                      ]}
+                    />
+                  </View>
+                </Pressable>
               </>
             )}
 
@@ -663,173 +728,178 @@ export default function FilterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
   sheet: {
     position: 'absolute',
     bottom: 0,
     width: width,
     height: height,
-    backgroundColor: SHEET_BG,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
+    shadowOffset: { width: 0, height: -(Space.sm - 2) },
     shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 16,
+    shadowRadius: Space.md,
+    elevation: Space.md,
   },
   handleContainer: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: Space.sm + Space.xs,
   },
   handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: HANDLE_BG,
+    width: Space.xl + Space.xs,
+    height: Space.xs,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.borderSubtle,
   },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingHorizontal: Space.lg,
+    paddingBottom: Space.md,
   },
-  headerTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, letterSpacing: -0.3 },
+  headerTitle: { fontSize: Type.priceList.size, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: Type.priceList.letterSpacing },
   clearBtn: {
-    minHeight: 32,
-    borderRadius: 16,
-    paddingHorizontal: 8,
+    minHeight: Control.chromeCompact,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Space.sm,
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  clearText: { color: Colors.brand, fontSize: 15, fontFamily: Typography.family.semibold },
+  clearText: { color: colors.brand, fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
   statusRow: {
-    paddingHorizontal: 24,
-    paddingBottom: 8,
+    paddingHorizontal: Space.lg,
+    paddingBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: Space.sm + 2,
   },
   statusMeta: {
-    color: Colors.textMuted,
-    fontSize: 13,
+    color: colors.textMuted,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
   },
   contextActionRow: {
-    marginHorizontal: 24,
-    marginBottom: 8,
+    marginHorizontal: Space.lg,
+    marginBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: Space.sm,
   },
   contextIdentity: {
     flex: 1,
-    minHeight: 32,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: CHIP_BORDER,
-    backgroundColor: CHIP_BG,
-    paddingHorizontal: 10,
+    minHeight: Control.chromeCompact,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+    paddingHorizontal: Space.sm + 2,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: Space.xs + 3,
   },
   contextText: {
     flex: 1,
-    color: Colors.textPrimary,
-    fontSize: 12,
+    color: colors.textPrimary,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
 
-  // Filter presets
+  // Filter presets — flat canvas, no card container (hairline separators only)
   presetsWrap: {
-    marginHorizontal: 24,
-    marginBottom: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    marginHorizontal: Space.lg,
+    marginBottom: Space.sm,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: 0,
+    borderRadius: Radius.none,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    borderTopWidth: Stroke.hairline,
+    borderTopColor: colors.border,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
   },
   presetsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   presetsLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
+    color: colors.textMuted,
+    letterSpacing: Type.metaElevated.letterSpacing,
     textTransform: 'uppercase',
   },
   presetsSaveLink: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   presetsScroll: {
-    gap: 8,
+    gap: Space.sm,
   },
   presetChipWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    paddingLeft: 10,
-    paddingRight: 4,
-    paddingVertical: 3,
+    backgroundColor: 'transparent',
+    borderRadius: Radius.xl,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    paddingLeft: Space.sm + 2,
+    paddingRight: Space.xs,
+    paddingVertical: Space.xs - 1,
   },
   presetChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
+    gap: Space.xs + 2,
+    paddingVertical: Space.xs + 2,
   },
   presetChipText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-    maxWidth: 120,
+    color: colors.textPrimary,
+    maxWidth: Space.xxl + Space.xxl + Space.lg,
   },
   presetRemoveBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: Space.lg + Space.xs,
+    height: Space.lg + Space.xs,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   presetInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
   },
   presetInput: {
     flex: 1,
-    height: 38,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    fontSize: 14,
+    height: Space.xl + Space.xs + 2,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: Space.md,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   presetSaveBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: Colors.brand,
+    width: Space.xl + Space.xs + 2,
+    height: Space.xl + Space.xs + 2,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -837,184 +907,227 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   presetCancelBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: Space.xl + Space.xs + 2,
+    height: Space.xl + Space.xs + 2,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   presetsEmptyCta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 24,
-    marginBottom: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: `${Colors.brand}0A`,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}30`,
+    gap: Space.sm,
+    marginHorizontal: Space.lg,
+    marginBottom: Space.sm,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md + 2,
+    borderRadius: Radius.none,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   presetsEmptyCtaText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
+    color: colors.brand,
   },
 
   syncRetryBanner: {
-    marginHorizontal: 24,
-    marginBottom: 8,
-    backgroundColor: RETRY_BANNER_BG,
+    marginHorizontal: Space.lg,
+    marginBottom: Space.sm,
+    backgroundColor: colors.surface,
   },
   syncRetryBtn: {
-    backgroundColor: RETRY_BUTTON_BG,
+    backgroundColor: colors.surface,
   },
 
-  scrollContent: { paddingTop: 8, paddingBottom: 40 },
+  scrollContent: { paddingTop: Space.sm, paddingBottom: Space.xxl + Space.xs + Space.xs },
   loadingStateWrap: {
-    paddingHorizontal: 20,
-    gap: 22,
+    paddingHorizontal: Space.xl,
+    gap: Space.xl + 2,
   },
   loadingSection: {
-    gap: 8,
+    gap: Space.sm,
   },
   loadingChipRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: Space.sm + 2,
   },
   loadingChipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: Space.sm + 2,
   },
 
   sectionHeading: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    paddingHorizontal: 20,
-    marginBottom: 12,
-    letterSpacing: -0.2,
+    color: colors.textPrimary,
+    paddingHorizontal: Space.xl,
+    marginBottom: Space.md,
+    letterSpacing: Type.bodyLarge.letterSpacing,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingRight: 20,
-    marginBottom: 12,
+    paddingRight: Space.md + Space.xs,
+    marginBottom: Space.sm + Space.xs,
   },
   seeAllBtn: {
-    minHeight: 32,
-    borderRadius: 16,
-    paddingHorizontal: 8,
+    minHeight: Control.chromeCompact,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Space.sm,
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  seeAllText: { color: Colors.brand, fontSize: 14, fontFamily: Typography.family.semibold },
+  seeAllText: { color: colors.brand, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
 
-  hScroll: { paddingHorizontal: 20, gap: 8 },
+  hScroll: { paddingHorizontal: Space.xl, gap: Space.sm },
 
   wrapContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 20,
-    gap: 8,
+    paddingHorizontal: Space.xl,
+    gap: Space.sm,
   },
 
   chip: {
-    minHeight: 36,
-    paddingHorizontal: 14,
-    borderRadius: 18,
-    backgroundColor: CHIP_BG,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: CHIP_BORDER,
+    minHeight: Control.chrome,
+    paddingHorizontal: Space.md - 2,
+    borderRadius: Radius.full,
+    backgroundColor: 'transparent',
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
   },
-  sizeChip: { minWidth: 56, alignItems: 'center' },
+  sizeChip: { minWidth: Space.xxl + Space.sm, alignItems: 'center' },
   mySizeChip: {
-    borderColor: Colors.brand,
-    borderWidth: 1.5,
+    borderColor: colors.brand,
+    borderWidth: Stroke.standard + Stroke.hairline,
   },
   mySizeMarkedChip: {
-    borderWidth: 1.5,
-    borderColor: Colors.brand,
+    borderWidth: Stroke.standard + Stroke.hairline,
+    borderColor: colors.brand,
   },
   mySizesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 8,
-    gap: 8,
+    paddingHorizontal: Space.xl,
+    marginBottom: Space.sm,
+    gap: Space.sm,
   },
   mySizesLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   mySizesScroll: {
-    gap: 6,
+    gap: Space.xs + 2,
   },
   saveSizesRow: {
-    paddingHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 4,
+    paddingHorizontal: Space.md + Space.xs,
+    marginTop: Space.sm + 2,
+    marginBottom: Space.xs,
   },
   saveSizesBtn: {
     alignSelf: 'flex-start',
-    minHeight: 32,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.brand,
+    minHeight: Control.chromeCompact,
+    borderRadius: Radius.xl,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.brand,
     backgroundColor: 'transparent',
   },
   saveSizesBtnText: {
-    color: Colors.brand,
-    fontSize: 13,
+    color: colors.brand,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
-  chipActive: { backgroundColor: Colors.textPrimary, borderColor: Colors.textPrimary },
+  chipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
 
   chipIconWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: Control.iconCompact,
+    height: Control.iconCompact,
+    borderRadius: Radius.full,
   },
 
-  chipText: { fontSize: 14, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-  chipTextActive: { color: Colors.background, fontFamily: Typography.family.bold },
+  chipText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  chipTextActive: { color: colors.background, fontFamily: Typography.family.bold },
+
+  // ── Sustainability toggle ──
+  sustainableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md + Space.xs,
+    paddingVertical: Space.sm,
+    minHeight: Control.hit,
+  },
+  sustainableLabelWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  sustainableTextWrap: {
+    flexDirection: 'column',
+  },
+  sustainableTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  sustainableCaption: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.xs / 4,
+  },
+  sustainableToggle: {
+    width: Control.hit,
+    height: Space.lg + 2,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+    justifyContent: 'center',
+    padding: Space.xs / 2,
+  },
+  sustainableToggleThumb: {
+    width: Space.md + Space.xs,
+    height: Space.md + Space.xs,
+    borderRadius: Radius.full,
+  },
 
   sectionDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: DIVIDER_COLOR,
-    marginVertical: 20,
-    marginHorizontal: 20,
+    height: Stroke.hairline,
+    backgroundColor: colors.border,
+    marginVertical: Space.md + Space.xs,
+    marginHorizontal: Space.md + Space.xs,
   },
 
   footer: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 22,
-    backgroundColor: FOOTER_BG,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: DIVIDER_COLOR,
+    paddingHorizontal: Space.md + Space.xs,
+    paddingTop: Space.md - 2,
+    paddingBottom: Platform.OS === 'ios' ? Space.xl : Space.lg - 2,
+    backgroundColor: colors.background,
+    borderTopWidth: Stroke.hairline,
+    borderTopColor: colors.border,
   },
   applyBtn: {
     width: '100%',
-    minHeight: 52,
-    borderRadius: 16,
+    minHeight: Space.xxl + Space.xs,
+    borderRadius: Radius.xl,
   },
   applyBtnDisabled: {
     opacity: 0.6,
   },
   applyBtnText: {
-    color: Colors.textPrimary,
-    fontSize: 16,
+    color: colors.textPrimary,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide,
   },
   applyBtnTextDisabled: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

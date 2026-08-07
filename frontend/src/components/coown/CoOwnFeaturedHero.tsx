@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -34,6 +34,8 @@ export function CoOwnFeaturedHero({
   actionLabel = 'View details',
   index = 0,
 }: CoOwnFeaturedHeroProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const imageHeight = Math.min(width * 0.62, 280);
@@ -42,7 +44,7 @@ export function CoOwnFeaturedHero({
   const statusLabel =
     status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
   const statusColor =
-    status === 'open' ? Colors.success : status === 'paused' ? Colors.textSecondary : Colors.textMuted;
+    status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
   return (
     <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 4) * 60).duration(350)}>
@@ -57,7 +59,7 @@ export function CoOwnFeaturedHero({
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={300} />
           ) : (
             <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="cube-outline" size={40} color={Colors.textMuted} />
+              <Ionicons name="cube-outline" size={40} color={colors.textMuted} />
             </View>
           )}
           <View style={styles.imageOverlay}>
@@ -88,7 +90,7 @@ export function CoOwnFeaturedHero({
 
           {issuerLabel && (
             <View style={styles.issuerRow}>
-              <Ionicons name="person-circle-outline" size={14} color={Colors.textSecondary} />
+              <Ionicons name="person-circle-outline" size={14} color={colors.textSecondary} />
               <Text style={styles.issuerText} numberOfLines={1}>{issuerLabel}</Text>
             </View>
           )}
@@ -101,7 +103,7 @@ export function CoOwnFeaturedHero({
               accessibilityLabel={actionLabel}
             >
               <Text style={styles.actionText}>{actionLabel}</Text>
-              <Ionicons name="arrow-forward" size={16} color={Colors.background} />
+              <Ionicons name="arrow-forward" size={16} color={colors.background} />
             </Pressable>
           )}
         </View>
@@ -110,21 +112,21 @@ export function CoOwnFeaturedHero({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     marginHorizontal: Space.md,
     marginBottom: Space.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     ...Elevation.subtle,
   },
   imageWrap: {
     width: '100%',
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   image: {
     width: '100%',
@@ -151,7 +153,7 @@ const styles = StyleSheet.create({
   statusDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   statusText: {
     fontSize: Type.meta.size,
@@ -165,14 +167,14 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: Type.metaElevated.size,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   title: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 30,
     letterSpacing: -0.5,
     marginBottom: Space.xs,
@@ -186,12 +188,12 @@ const styles = StyleSheet.create({
   unitPrice: {
     fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   perUnit: {
     fontSize: Type.body.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   allocationRow: {
     gap: 6,
@@ -199,18 +201,18 @@ const styles = StyleSheet.create({
   },
   allocationBarBg: {
     height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   allocationBarFill: {
     height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.brand,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.brand,
   },
   allocationText: {
     fontSize: Type.caption.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   issuerRow: {
     flexDirection: 'row',
@@ -220,7 +222,7 @@ const styles = StyleSheet.create({
   },
   issuerText: {
     fontSize: Type.caption.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     flex: 1,
   },
   actionBtn: {
@@ -228,13 +230,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
   },
   actionText: {
     fontSize: Type.bodyEmphasis.size,
     fontWeight: '600',
-    color: Colors.background,
+    color: colors.background,
   },
 });

@@ -139,6 +139,25 @@ function mapApiConversationToApp(
   };
 }
 
+export async function createDmConversationOnApi(input: {
+  recipientUserId: string;
+  itemId?: string;
+}): Promise<Conversation> {
+  const payload = await fetchJson<{
+    ok: true;
+    conversation: ApiConversationPayload;
+  }>('/chat/dm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipientUserId: input.recipientUserId,
+      itemId: input.itemId,
+    }),
+  });
+
+  return mapApiConversationToApp(payload.conversation, []);
+}
+
 export async function createGroupConversationOnApi(input: {
   title: string;
   memberIds: string[];
@@ -427,4 +446,80 @@ export async function joinGroupByInviteOnApi(inviteToken: string): Promise<{
     joined: payload.joined,
     conversation: mapApiConversationToApp(payload.conversation, []),
   };
+}
+
+// ---------------------------------------------------------------------------
+// P0-7: Cross-device chat composer state persistence.
+// The composer draft, reply target and pending attachment references are
+// persisted per (user, conversation) so a draft started on one device
+// restores on another. Callers should debounce PUTs (1–2s) and call
+// DELETE after a successful send.
+// ---------------------------------------------------------------------------
+
+export interface ComposerPendingAttachment {
+  kind: 'image' | 'video' | 'file' | 'audio';
+  objectKey: string;
+  finalizationId: string;
+  fileName?: string;
+  contentType?: string;
+  sizeBytes?: number;
+}
+
+export interface ChatComposerState {
+  draftText: string;
+  replyToMessageId: string | null;
+  pendingAttachments: ComposerPendingAttachment[];
+  activeBotId: string | null;
+  linkedListingId: string | null;
+  schemaVersion: number;
+  metadata: Record<string, unknown>;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export async function fetchComposerStateFromApi(
+  conversationId: string
+): Promise<ChatComposerState> {
+  const payload = await fetchJson<{ ok: true; state: ChatComposerState }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/composer-state`
+  );
+  return payload.state;
+}
+
+export async function upsertComposerStateOnApi(
+  conversationId: string,
+  state: {
+    draftText: string;
+    replyToMessageId?: string | null;
+    pendingAttachments?: ComposerPendingAttachment[];
+    activeBotId?: string | null;
+    linkedListingId?: string | null;
+    schemaVersion?: number;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<ChatComposerState> {
+  const payload = await fetchJson<{ ok: true; state: ChatComposerState }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/composer-state`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        draftText: state.draftText,
+        replyToMessageId: state.replyToMessageId ?? null,
+        pendingAttachments: state.pendingAttachments ?? [],
+        activeBotId: state.activeBotId ?? null,
+        linkedListingId: state.linkedListingId ?? null,
+        schemaVersion: state.schemaVersion ?? 1,
+        metadata: state.metadata ?? {},
+      }),
+    }
+  );
+  return payload.state;
+}
+
+export async function clearComposerStateOnApi(conversationId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/composer-state`,
+    { method: 'DELETE' }
+  );
 }

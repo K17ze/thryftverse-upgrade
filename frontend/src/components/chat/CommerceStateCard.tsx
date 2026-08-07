@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { OrderStatusStepper, OrderStepperStage } from '../orders/OrderStatusStepper';
@@ -45,15 +45,15 @@ interface StateConfig {
   nextStep?: string;
 }
 
-function getStateConfig(type: CommerceStateType): StateConfig {
+function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConfig {
   switch (type) {
     case 'order_placed':
       return {
         title: 'Order placed',
         subtitle: 'The seller has been notified.',
         icon: 'receipt-outline',
-        iconColor: Colors.brand,
-        iconBg: `${Colors.brand}15`,
+        iconColor: colors.brand,
+        iconBg: `${colors.brand}15`,
         stage: 'placed',
         nextStep: 'Awaiting payment confirmation',
       };
@@ -62,8 +62,8 @@ function getStateConfig(type: CommerceStateType): StateConfig {
         title: 'Payment confirmed',
         subtitle: 'Your payment has been processed.',
         icon: 'checkmark-circle-outline',
-        iconColor: Colors.success,
-        iconBg: `${Colors.success}15`,
+        iconColor: colors.success,
+        iconBg: `${colors.success}15`,
         stage: 'paid',
         nextStep: 'Seller preparing for dispatch',
       };
@@ -72,8 +72,8 @@ function getStateConfig(type: CommerceStateType): StateConfig {
         title: 'Order shipped',
         subtitle: 'The parcel has been dispatched.',
         icon: 'cube-outline',
-        iconColor: Colors.brand,
-        iconBg: `${Colors.brand}15`,
+        iconColor: colors.brand,
+        iconBg: `${colors.brand}15`,
         stage: 'shipped',
         nextStep: 'In carrier transit',
       };
@@ -82,8 +82,8 @@ function getStateConfig(type: CommerceStateType): StateConfig {
         title: 'In transit',
         subtitle: 'Your parcel is on the way.',
         icon: 'car-outline',
-        iconColor: Colors.brand,
-        iconBg: `${Colors.brand}15`,
+        iconColor: colors.brand,
+        iconBg: `${colors.brand}15`,
         stage: 'in_transit',
         nextStep: 'Out for delivery',
       };
@@ -92,8 +92,8 @@ function getStateConfig(type: CommerceStateType): StateConfig {
         title: 'Delivered',
         subtitle: 'Delivery has been confirmed.',
         icon: 'checkmark-done-circle-outline',
-        iconColor: Colors.success,
-        iconBg: `${Colors.success}15`,
+        iconColor: colors.success,
+        iconBg: `${colors.success}15`,
         stage: 'delivered',
       };
     case 'order_cancelled':
@@ -101,8 +101,8 @@ function getStateConfig(type: CommerceStateType): StateConfig {
         title: 'Order cancelled',
         subtitle: 'This order has been cancelled.',
         icon: 'close-circle-outline',
-        iconColor: Colors.danger,
-        iconBg: `${Colors.danger}15`,
+        iconColor: colors.danger,
+        iconBg: `${colors.danger}15`,
         isFailure: true,
         failureLabel: 'Cancelled',
       };
@@ -111,8 +111,8 @@ function getStateConfig(type: CommerceStateType): StateConfig {
         title: 'Refunded',
         subtitle: 'Your payment has been refunded.',
         icon: 'cash-outline',
-        iconColor: Colors.danger,
-        iconBg: `${Colors.danger}15`,
+        iconColor: colors.danger,
+        iconBg: `${colors.danger}15`,
         isFailure: true,
         failureLabel: 'Refunded',
       };
@@ -132,7 +132,9 @@ export function CommerceStateCard({
   timestamp,
   onPress,
 }: CommerceStateCardProps) {
-  const config = useMemo(() => getStateConfig(type), [type]);
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const config = useMemo(() => getStateConfig(type, colors), [type, colors]);
 
   const formattedTimestamp = useMemo(() => {
     if (!timestamp) return null;
@@ -150,7 +152,7 @@ export function CommerceStateCard({
     <AnimatedPressable
       style={[
         styles.container,
-        { borderColor: Colors.border, borderLeftColor: config.iconColor },
+        { borderColor: colors.border, borderLeftColor: config.iconColor },
       ]}
       onPress={onPress}
       activeOpacity={0.85}
@@ -162,7 +164,7 @@ export function CommerceStateCard({
       {/* Header row */}
       <View style={styles.headerRow}>
         <View style={[styles.headerIcon, { backgroundColor: config.iconBg }]}>
-          <Ionicons name={config.icon as any} size={16} color={config.iconColor} />
+          <Ionicons name={config.icon} size={16} color={config.iconColor} />
         </View>
         <View style={styles.headerBody}>
           <Text style={styles.title} numberOfLines={1}>{config.title}</Text>
@@ -173,7 +175,7 @@ export function CommerceStateCard({
             {formattedTimestamp}
           </Text>
         ) : (
-          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
         )}
       </View>
 
@@ -184,7 +186,7 @@ export function CommerceStateCard({
             <CachedImage uri={itemImage} style={styles.itemImage} contentFit="cover" />
           ) : (
             <View style={[styles.itemImage, styles.itemImageFallback]}>
-              <Ionicons name="shirt-outline" size={14} color={Colors.textMuted} />
+              <Ionicons name="shirt-outline" size={14} color={colors.textMuted} />
             </View>
           )}
           <Text style={styles.itemTitle} numberOfLines={2}>{itemTitle ?? 'Item'}</Text>
@@ -203,7 +205,7 @@ export function CommerceStateCard({
       {/* Next step hint — what happens next in the lifecycle */}
       {config.nextStep && !config.isFailure ? (
         <View style={styles.nextStepRow}>
-          <Ionicons name="hourglass-outline" size={11} color={Colors.textMuted} />
+          <Ionicons name="hourglass-outline" size={11} color={colors.textMuted} />
           <Text style={styles.nextStepText} numberOfLines={1}>
             Next: {config.nextStep}
           </Text>
@@ -213,7 +215,7 @@ export function CommerceStateCard({
       {/* Tracking info */}
       {(trackingNumber || carrier) && (
         <View style={styles.trackingRow}>
-          <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
+          <Ionicons name="location-outline" size={12} color={colors.textMuted} />
           <Text style={styles.trackingText} numberOfLines={1}>
             {carrier ? `${carrier}` : ''}
             {carrier && trackingNumber ? ' · ' : ''}
@@ -235,12 +237,12 @@ export function CommerceStateCard({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderLeftWidth: 3,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     padding: Space.md,
     gap: Space.sm,
     maxWidth: 320,
@@ -263,20 +265,20 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   timestamp: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     flexShrink: 0,
     maxWidth: 80,
     textAlign: 'right',
@@ -285,7 +287,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     padding: Space.sm,
   },
@@ -296,15 +298,15 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   itemImageFallback: {
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   itemTitle: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 17,
   },
   trackingRow: {
@@ -314,9 +316,9 @@ const styles = StyleSheet.create({
   },
   trackingText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.1,
   },
   nextStepRow: {
@@ -326,9 +328,9 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   nextStepText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 0.1,
   },
   footerRow: {
@@ -337,17 +339,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   orderIdText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.3,
   },
   viewDetailsText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
 });

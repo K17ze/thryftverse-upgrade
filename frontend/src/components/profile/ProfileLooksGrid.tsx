@@ -10,17 +10,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import type { LookApiItem } from '../../services/looksApi';
-import type { StackNavigationProp } from '@react-navigation/stack';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_GAP = 8;
 const TILE_WIDTH = (SCREEN_W - Space.md * 2 - GRID_GAP) / 2;
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export interface ProfileLooksGridProps {
   looks: LookApiItem[];
@@ -41,10 +41,12 @@ export function ProfileLooksGrid({
   onCreateLook,
   navigation,
 }: ProfileLooksGridProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (isLoading && looks.length === 0) {
     return (
       <View style={styles.stateWrap} accessibilityLabel="Loading looks">
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -52,7 +54,7 @@ export function ProfileLooksGrid({
   if (error && looks.length === 0) {
     return (
       <View style={styles.stateWrap}>
-        <Ionicons name="cloud-offline-outline" size={32} color={Colors.textMuted} />
+        <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
         <Text style={styles.stateTitle}>Looks could not be loaded</Text>
         <Pressable
           style={styles.retryBtn}
@@ -69,7 +71,7 @@ export function ProfileLooksGrid({
   if (looks.length === 0 && !error) {
     return (
       <View style={styles.stateWrap}>
-        <Ionicons name="camera-outline" size={32} color={Colors.textMuted} />
+        <Ionicons name="camera-outline" size={32} color={colors.textMuted} />
         <Text style={styles.stateTitle}>No Looks yet</Text>
         {isSelfProfile ? (
           <>
@@ -123,11 +125,11 @@ export function ProfileLooksGrid({
             ) : null}
             <View style={styles.tileMeta}>
               <View style={styles.metaItem}>
-                <Ionicons name="pricetag-outline" size={12} color={Colors.textMuted} />
+                <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
                 <Text style={styles.metaText}>{look.tags.length}</Text>
               </View>
               <View style={styles.metaItem}>
-                <Ionicons name="heart-outline" size={12} color={Colors.textMuted} />
+                <Ionicons name="heart-outline" size={12} color={colors.textMuted} />
                 <Text style={styles.metaText}>{look.likeCount}</Text>
               </View>
             </View>
@@ -138,7 +140,8 @@ export function ProfileLooksGrid({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -153,22 +156,22 @@ const styles = StyleSheet.create({
     aspectRatio: 0.8,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   tileImage: {
     width: '100%',
     height: '100%',
   },
   tileCaption: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 6,
   },
   tileMeta: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   metaItem: {
     flexDirection: 'row',
@@ -176,9 +179,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   metaText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   stateWrap: {
     alignItems: 'center',
@@ -188,38 +191,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   stateTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   stateSubtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   retryBtn: {
-    marginTop: 4,
+    marginTop: Space.xs,
     paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: Colors.brand,
-    borderRadius: 16,
+    paddingVertical: Space.sm,
+    backgroundColor: colors.brand,
+    borderRadius: Radius.xl,
   },
   retryBtnText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
   createBtn: {
-    marginTop: 4,
+    marginTop: Space.xs,
     paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: Colors.brand,
-    borderRadius: 16,
+    paddingVertical: Space.sm,
+    backgroundColor: colors.brand,
+    borderRadius: Radius.xl,
   },
   createBtnText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
-});
+  });
+}

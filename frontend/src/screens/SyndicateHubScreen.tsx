@@ -1,17 +1,17 @@
 import React from 'react';
 import {
-  FlatList,
   RefreshControl,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -19,8 +19,9 @@ import { fetchCoOwnHoldings, listCoOwnAssets } from '../services/marketApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
-import { Radius, Space, Type, Typography } from '../theme/designTokens';
+import { Radius, Space, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
+import { getCategoryFocalPoint } from '../utils/media';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
@@ -41,7 +42,7 @@ import {
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type SortOption = 'newest' | 'available' | 'allocation';
 type HubSegment = 'active' | 'new_issues' | 'watchlist';
 
@@ -96,16 +97,8 @@ const SECTION_TITLES: Record<HubSegment, string> = {
   watchlist: 'Watchlist',
 };
 
-function normalizeInitialSegment(value: 'active' | 'auctions' | 'new_issues' | 'watchlist' | undefined): HubSegment {
+function normalizeInitialSegment(value: 'active' | 'new_issues' | 'watchlist' | undefined): HubSegment {
   return value === 'new_issues' || value === 'watchlist' ? value : 'active';
-}
-
-function getFocalPoint(category: string): { x: number; y: number } {
-  const normalized = category.toLowerCase();
-  if (normalized.includes('vehicle') || normalized.includes('car')) return { x: 0.5, y: 0.58 };
-  if (normalized.includes('bag') || normalized.includes('shoe')) return { x: 0.5, y: 0.56 };
-  if (normalized.includes('watch') || normalized.includes('jewel') || normalized.includes('art')) return { x: 0.5, y: 0.5 };
-  return { x: 0.5, y: 0.46 };
 }
 
 function getStatus(asset: HubAsset): CoOwnAssetStatus {
@@ -212,10 +205,14 @@ export default function CoOwnHubScreen() {
     return () => { cancelled = true; };
   }, [actingUserId, listings, show]);
 
-  React.useEffect(() => {
-    const cleanup = loadData();
-    return cleanup;
-  }, [loadData]);
+  // useFocusEffect ensures the hub re-fetches co-own assets whenever the
+  // user navigates back to it (e.g., after creating a new co-own asset).
+  useFocusEffect(
+    React.useCallback(() => {
+      const cleanup = loadData();
+      return cleanup;
+    }, [loadData])
+  );
 
   React.useEffect(() => {
     if (route.params?.initialSegment) {
@@ -345,7 +342,7 @@ export default function CoOwnHubScreen() {
       allocatedPct,
       statusLabel: getStatusLabel(asset),
       status: getStatus(asset),
-      focalPoint: getFocalPoint(asset.category),
+      focalPoint: getCategoryFocalPoint(asset.category),
     };
   }), [format1ze, formatLocal, highlightAssets]);
 
@@ -406,7 +403,7 @@ export default function CoOwnHubScreen() {
         gainLossLabel={costBasisGbp > 0 ? `${sign}${format1ze(Math.abs(gainLossGbp))}` : undefined}
         gainLossPct={gainLossPct}
         portfolioWeightPct={portfolioWeightPct}
-        focalPoint={getFocalPoint(item.category)}
+        focalPoint={getCategoryFocalPoint(item.category)}
         onPress={() => navigation.navigate('AssetDetail', { assetId: item.id })}
       />
     );
@@ -457,7 +454,6 @@ export default function CoOwnHubScreen() {
         <View style={styles.highlightsSection}>
           <View style={styles.highlightsHeading}>
             <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>MARKET HIGHLIGHTS</Text>
-            <Text style={[styles.highlightsHint, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{highlights.length > 1 ? 'Swipe to explore' : 'Featured market'}</Text>
           </View>
           <CoOwnMarketHighlightsCarousel items={highlights} onPressItem={handleHighlightPress} />
         </View>
@@ -487,7 +483,7 @@ export default function CoOwnHubScreen() {
             </AnimatedPressable>
           </View>
           {holdingsError ? (
-            <View style={[styles.inlineState, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+            <View style={[styles.inlineState, { borderBottomColor: colors.border }]}>
               <View style={styles.inlineStateBody}>
                 <Text style={[styles.inlineStateTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>Positions unavailable</Text>
                 <Text style={[styles.inlineStateText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Your markets are still available. Retry to load portfolio holdings.</Text>
@@ -502,7 +498,7 @@ export default function CoOwnHubScreen() {
               </AnimatedPressable>
             </View>
           ) : yourPositions.length > 0 ? (
-            <FlatList
+            <FlashList
               data={yourPositions}
               renderItem={renderPosition}
               keyExtractor={(position) => position.id}
@@ -514,11 +510,10 @@ export default function CoOwnHubScreen() {
               snapToAlignment="start"
               decelerationRate="fast"
               disableIntervalMomentum
-              removeClippedSubviews
               accessibilityLabel="Your positions"
             />
           ) : (
-            <View style={[styles.inlineState, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+            <View style={[styles.inlineState, { borderBottomColor: colors.border }]}>
               <View style={styles.inlineStateIcon}>
                 <Ionicons name="pie-chart-outline" size={18} color={colors.textMuted} />
               </View>
@@ -561,7 +556,7 @@ export default function CoOwnHubScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Close market search"
                     >
-                      <Ionicons name="close" size={17} color={colors.textSecondary} />
+                      <Ionicons name="close" size={18} color={colors.textSecondary} />
                     </AnimatedPressable>
                   }
                   autoFocus
@@ -593,7 +588,7 @@ export default function CoOwnHubScreen() {
               accessibilityLabel={`Sort instruments, currently ${SORT_LABELS[sortBy]}`}
               accessibilityState={{ expanded: isSortExpanded }}
             >
-              <Ionicons name="swap-vertical-outline" size={17} color={colors.textSecondary} />
+              <Ionicons name="swap-vertical-outline" size={18} color={colors.textSecondary} />
               <Text style={[styles.controlText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>{SORT_LABELS[sortBy]}</Text>
             </AnimatedPressable>
           </View>
@@ -647,7 +642,7 @@ export default function CoOwnHubScreen() {
               statusLabel={getStatusLabel(asset)}
               status={getStatus(asset)}
               isWatched={coOwnWatchlist.includes(asset.id)}
-              focalPoint={getFocalPoint(asset.category)}
+              focalPoint={getCategoryFocalPoint(asset.category)}
               onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
               onToggleWatch={() => toggleCoOwnWatch(asset.id)}
             />
@@ -689,11 +684,11 @@ export default function CoOwnHubScreen() {
             haptics.tap();
             navigation.navigate('CreateCoOwn');
           }}
-          style={[styles.creatorLink, { borderColor: colors.border }]}
+          style={[styles.creatorLink, { borderBottomColor: colors.border }]}
           accessibilityRole="button"
           accessibilityLabel="Issue a new Co-Own item"
         >
-          <View style={[styles.creatorIcon, { backgroundColor: colors.surfaceAlt }]}> 
+          <View style={[styles.creatorIcon, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="add-outline" size={20} color={colors.textSecondary} />
           </View>
           <View style={styles.creatorBody}>
@@ -715,7 +710,7 @@ export default function CoOwnHubScreen() {
           accessibilityRole="button"
           accessibilityLabel="View market ledger"
         >
-          <Ionicons name="receipt-outline" size={17} color={colors.textSecondary} />
+          <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
           <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>Market ledger</Text>
           <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
         </AnimatedPressable>
@@ -790,11 +785,11 @@ export default function CoOwnHubScreen() {
       <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
-      <FlatList
+      <FlashList
         data={hubRows}
         renderItem={renderRow}
         keyExtractor={(item) => item.key}
-        stickyHeaderIndices={[2]}
+        stickyHeaderIndices={[1]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -805,9 +800,6 @@ export default function CoOwnHubScreen() {
           />
         }
         keyboardShouldPersistTaps="handled"
-        removeClippedSubviews
-        initialNumToRender={8}
-        windowSize={7}
       />
     </SafeAreaView>
   );
@@ -821,35 +813,30 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xxl,
   },
   highlightsSection: {
-    paddingTop: Space.xs,
-    paddingBottom: Space.sm,
+    paddingTop: Space.sm,
+    paddingBottom: Space.md,
   },
   highlightsHeading: {
-    minHeight: 28,
+    minHeight: Space.xl - Space.xs,
     paddingHorizontal: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  highlightsHint: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
   tabsSurface: {
-    minHeight: 50,
+    minHeight: Control.hit + 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     justifyContent: 'flex-end',
   },
   tabsRow: {
-    minHeight: 49,
+    minHeight: Control.hit + 5,
     paddingHorizontal: Space.sm,
     flexDirection: 'row',
     alignItems: 'stretch',
   },
   tab: {
     minWidth: 0,
-    minHeight: 49,
+    minHeight: Control.hit + 5,
     flex: 1,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
@@ -859,19 +846,19 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
-    letterSpacing: -0.1,
+    letterSpacing: LetterSpacing.normal - 0.1,
     textAlign: 'center',
   },
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
-    width: 24,
-    height: 2,
-    borderRadius: 1,
+    width: Space.lg + 4,
+    height: Stroke.emphasis,
+    borderRadius: Stroke.hairline,
   },
   majorSection: {
     paddingTop: Space.lg,
-    paddingBottom: Space.xl,
+    paddingBottom: Space.lg,
   },
   sectionHeader: {
     paddingHorizontal: Space.md,
@@ -884,28 +871,28 @@ const styles = StyleSheet.create({
   sectionHeadingGroup: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   sectionEyebrow: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 1,
+    letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
   },
   sectionTitle: {
     fontSize: Type.title.size,
     lineHeight: Type.title.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.45,
+    letterSpacing: LetterSpacing.tight,
   },
   sectionAction: {
-    minHeight: 44,
+    minHeight: Control.hit,
     paddingLeft: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   sectionActionText: {
     fontSize: Type.captionElevated.size,
@@ -919,25 +906,24 @@ const styles = StyleSheet.create({
     width: POSITION_CARD_GAP,
   },
   inlineState: {
-    minHeight: 92,
+    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     marginHorizontal: Space.md,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   inlineStateIcon: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   inlineStateBody: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   inlineStateTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -950,8 +936,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   inlineRetry: {
-    minWidth: 64,
-    minHeight: 44,
+    minWidth: Space.xxl + Space.xl + Space.xs,
+    minHeight: Control.hit,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
@@ -963,7 +949,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   instrumentsHeader: {
-    paddingTop: Space.xs,
+    paddingTop: Space.sm,
     paddingBottom: Space.md,
   },
   resultCount: {
@@ -971,7 +957,7 @@ const styles = StyleSheet.create({
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
-    paddingBottom: 4,
+    paddingBottom: Space.xs,
   },
   marketControls: {
     paddingHorizontal: Space.md,
@@ -984,20 +970,20 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   inputAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   controlButton: {
-    minHeight: 44,
-    paddingHorizontal: 12,
+    minHeight: Control.hit,
+    paddingHorizontal: Space.sm + 4,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   searchControl: {
     flex: 1,
@@ -1015,8 +1001,8 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   sortOption: {
-    minHeight: 44,
-    paddingHorizontal: 12,
+    minHeight: Control.hit,
+    paddingHorizontal: Space.sm + 4,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
@@ -1029,7 +1015,7 @@ const styles = StyleSheet.create({
   },
   instrumentRow: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.lg,
+    paddingBottom: Space.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
@@ -1038,26 +1024,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   instrumentsEmptyWrap: {
-    minHeight: 260,
+    minHeight: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl - 4,
     paddingHorizontal: Space.md,
   },
   remainingContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    gap: Space.lg,
+    paddingTop: Space.lg,
+    gap: Space.md,
   },
   creatorLink: {
-    minHeight: 76,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: Space.xxl + Space.xl + Space.xs,
+    paddingVertical: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   creatorIcon: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1066,7 +1051,7 @@ const styles = StyleSheet.create({
   creatorBody: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   creatorTitle: {
     fontSize: Type.bodyEmphasis.size,
@@ -1079,7 +1064,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   ledgerLink: {
-    minHeight: 44,
+    minHeight: Control.hit,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis, Meta } from '../ui/Text';
@@ -35,6 +35,8 @@ export function LinkPreviewCard({
   onPress,
   style,
 }: LinkPreviewCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [localPreview, setLocalPreview] = useState<LinkPreviewData | undefined>(preview);
 
   useEffect(() => {
@@ -83,27 +85,27 @@ export function LinkPreviewCard({
           <BodyEmphasis numberOfLines={1}>{localPreview.domain}</BodyEmphasis>
         )}
         {localPreview.description ? (
-          <Caption color={Colors.textSecondary} numberOfLines={2}>
+          <Caption color={colors.textSecondary} numberOfLines={2}>
             {localPreview.description}
           </Caption>
         ) : (
-          <Caption color={Colors.textSecondary} numberOfLines={1}>{url}</Caption>
+          <Caption color={colors.textSecondary} numberOfLines={1}>{url}</Caption>
         )}
         <View style={styles.domainRow}>
-          <Ionicons name="link-outline" size={12} color={Colors.textMuted} />
-          <Caption color={Colors.textMuted}>{localPreview.domain}</Caption>
+          <Ionicons name="link-outline" size={12} color={colors.textMuted} />
+          <Caption color={colors.textMuted}>{localPreview.domain}</Caption>
         </View>
       </View>
     </AnimatedPressable>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     borderWidth: 0.5,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
     marginTop: Space.xs + 2,
   },

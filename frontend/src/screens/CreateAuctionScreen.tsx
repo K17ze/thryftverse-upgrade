@@ -1,13 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, StatusBar, Text, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors, ActiveTheme } from '../constants/colors';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -21,7 +20,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { Motion } from '../constants/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
@@ -29,8 +28,10 @@ import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
 import { EmptyState } from '../components/EmptyState';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const AUCTION_WINDOW_HOURS = 6;
 const DURATION_OPTIONS = [
@@ -48,12 +49,14 @@ const START_WINDOWS = [
 ];
 
 export default function CreateAuctionScreen() {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
-  const { listings } = useBackendData();
+  const { listings, refreshListings } = useBackendData();
+  const queryClient = useQueryClient();
   const reducedMotionEnabled = useReducedMotion();
 
   const currentUser = useStore((state) => state.currentUser);
@@ -69,11 +72,12 @@ export default function CreateAuctionScreen() {
   const [startInMinutes, setStartInMinutes] = React.useState(0);
   const [durationHours, setDurationHours] = React.useState(6);
   const [startingBidInput, setStartingBidInput] = React.useState('');
+  const [reservePriceInput, setReservePriceInput] = React.useState('');
   const [buyNowEnabled, setBuyNowEnabled] = React.useState(true);
   const [buyNowInput, setBuyNowInput] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [stage, setStage] = React.useState(0);
-  const [resultData, setResultData] = React.useState<{ auctionId: string; title: string; imageUrl: string; startLabel: string; durationLabel: string; startingBid: string; buyNow: string | null } | null>(null);
+  const [resultData, setResultData] = React.useState<{ auctionId: string; title: string; imageUrl: string; startLabel: string; durationLabel: string; startingBid: string; reservePrice: string | null; buyNow: string | null } | null>(null);
 
   const fromGbpToDisplay = React.useCallback(
     (amountGbp: number) => {
@@ -131,6 +135,19 @@ export default function CreateAuctionScreen() {
       return;
     }
 
+    let reservePriceGbp: number | undefined;
+    if (reservePriceInput.trim()) {
+      reservePriceGbp = fromDisplayToGbp(Number(reservePriceInput));
+      if (!Number.isFinite(reservePriceGbp) || reservePriceGbp <= 0) {
+        show('Enter a valid reserve price', 'error');
+        return;
+      }
+      if (reservePriceGbp < startingBid) {
+        show('Reserve price must be at least the starting bid', 'error');
+        return;
+      }
+    }
+
     let buyNowPriceGbp: number | undefined;
     if (buyNowEnabled) {
       buyNowPriceGbp = fromDisplayToGbp(Number(buyNowInput));
@@ -153,6 +170,7 @@ export default function CreateAuctionScreen() {
         endsAt: new Date(endsAtMs).toISOString(),
         startingBidGbp: startingBid,
         idempotencyKey,
+        ...(reservePriceGbp ? { reservePriceGbp } : {}),
         ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}),
       });
       const startLabel = startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`;
@@ -164,9 +182,16 @@ export default function CreateAuctionScreen() {
         startLabel,
         durationLabel,
         startingBid: `${currencyCode} ${startingBidInput}`,
+        reservePrice: reservePriceInput ? `${currencyCode} ${reservePriceInput}` : null,
         buyNow: buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : null,
       });
       show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
+      // The backend pauses the listing when an auction is created from it.
+      // Refresh the feed + invalidate the listing detail so the paused
+      // status propagates immediately.
+      void refreshListings();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
+      void queryClient.invalidateQueries({ queryKey: ['auctions', 'home'] });
     } catch (e) {
       show('Failed to launch auction. Please try again.', 'error');
     } finally {
@@ -199,7 +224,7 @@ export default function CreateAuctionScreen() {
         </View>
         {selected && (
           <View style={styles.selectedTick}>
-            <Ionicons name="checkmark" size={14} color={Colors.textInverse} />
+            <Ionicons name="checkmark" size={14} color={colors.textInverse} />
           </View>
         )}
       </AnimatedPressable>
@@ -212,7 +237,7 @@ export default function CreateAuctionScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <TradeHeader
         title="Launch Auction"
@@ -234,7 +259,7 @@ export default function CreateAuctionScreen() {
             <View key={label} style={styles.stepItem}>
               <View style={[styles.stepDot, isReached && styles.stepDotActive, isComplete && styles.stepDotComplete]}>
                 {isComplete ? (
-                  <Ionicons name="checkmark" size={12} color={Colors.textInverse} />
+                  <Ionicons name="checkmark" size={12} color={colors.textInverse} />
                 ) : (
                   <Text style={[styles.stepDotText, isReached && styles.stepDotTextActive]}>{i + 1}</Text>
                 )}
@@ -260,7 +285,7 @@ export default function CreateAuctionScreen() {
               title="No listings available"
               subtitle="Create a listing first to launch an auction."
               ctaLabel="Create Listing"
-              onCtaPress={() => (navigation as any).navigate('Sell')}
+              onCtaPress={() => navigation.navigate('Sell')}
             />
           </Reanimated.View>
         ) : (
@@ -371,6 +396,23 @@ export default function CreateAuctionScreen() {
 
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
                   <TradeCard style={styles.formCard}>
+                    <Meta style={styles.sectionLabel}>RESERVE PRICE (OPTIONAL)</Meta>
+                    <AppInput
+                      value={reservePriceInput}
+                      onChangeText={setReservePriceInput}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                      prefix={currencyCode}
+                      accessibilityLabel="Reserve price (optional)"
+                      accessibilityHint="Minimum sale price — item won't sell unless reserve is met"
+                      helperText="Minimum sale price — item won't sell unless reserve is met"
+                      containerStyle={styles.input}
+                    />
+                  </TradeCard>
+                </Reanimated.View>
+
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(150)}>
+                  <TradeCard style={styles.formCard}>
                     <View style={styles.buyNowRow}>
                       <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
                       <AnimatedPressable
@@ -451,7 +493,20 @@ export default function CreateAuctionScreen() {
                         </Body>
                         {startingBidInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
+                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, goldRates))}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={styles.termsRow}>
+                      <Meta style={styles.termsLabel}>Reserve price</Meta>
+                      <View style={styles.termsValueCol}>
+                        <Body style={styles.termsValue}>
+                          {reservePriceInput ? `${currencyCode} ${reservePriceInput}` : 'None'}
+                        </Body>
+                        {reservePriceInput && (
+                          <Text style={styles.termsIzeText}>
+                            {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, goldRates))}
                           </Text>
                         )}
                       </View>
@@ -464,7 +519,7 @@ export default function CreateAuctionScreen() {
                         </Body>
                         {buyNowEnabled && buyNowInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
+                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, goldRates))}
                           </Text>
                         )}
                       </View>
@@ -476,12 +531,12 @@ export default function CreateAuctionScreen() {
                   <View style={styles.termsCard}>
                     <Meta style={styles.termsSectionLabel}>TERMS & FEES</Meta>
                     <View style={styles.termsInlineRow}>
-                      <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
+                      <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
                       <Text style={styles.termsInlineLabel}>Platform fee</Text>
                       <Text style={styles.termsInlineValue}>3% of winning bid</Text>
                     </View>
                     <View style={styles.termsInlineRow}>
-                      <Ionicons name="time-outline" size={13} color={Colors.textMuted} />
+                      <Ionicons name="time-outline" size={13} color={colors.textMuted} />
                       <Text style={styles.termsInlineLabel}>Settlement</Text>
                       <Text style={styles.termsInlineValue}>After auction ends</Text>
                     </View>
@@ -491,7 +546,7 @@ export default function CreateAuctionScreen() {
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(Motion.list.enterDuration).delay(250)}>
                   <AppButton
                     title={isSubmitting ? 'Launching...' : 'Launch Auction'}
-                    icon={isSubmitting ? undefined : <Ionicons name="flash-outline" size={16} color={Colors.background} />}
+                    icon={isSubmitting ? undefined : <Ionicons name="flash-outline" size={16} color={colors.background} />}
                     onPress={launchAuction}
                     variant="primary"
                     size="md"
@@ -537,14 +592,14 @@ export default function CreateAuctionScreen() {
       {/* ── Result overlay — crafted success moment ── */}
       {resultData && (
         <View style={styles.resultOverlay}>
-          <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+          <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
           <Reanimated.View
             entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}
             style={styles.resultCard}
           >
             {/* Success mark — refined, not a giant icon */}
             <View style={styles.resultIconWrap}>
-              <Ionicons name="checkmark" size={28} color={Colors.success} />
+              <Ionicons name="checkmark" size={28} color={colors.success} />
             </View>
             <Headline style={styles.resultTitle}>Auction Launched</Headline>
             <Meta style={styles.resultSubtitle}>{resultData.startLabel === 'Immediately' ? 'Your auction is now live' : 'Your auction is scheduled'}</Meta>
@@ -577,11 +632,24 @@ export default function CreateAuctionScreen() {
                   <Body style={styles.termsValue}>{resultData.startingBid}</Body>
                   {startingBidInput && (
                     <Text style={styles.termsIzeText}>
-                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode as any, goldRates))}
+                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, goldRates))}
                     </Text>
                   )}
                 </View>
               </View>
+              {resultData.reservePrice && (
+                <View style={styles.termsRow}>
+                  <Meta style={styles.termsLabel}>Reserve price</Meta>
+                  <View style={styles.termsValueCol}>
+                    <Body style={styles.termsValue}>{resultData.reservePrice}</Body>
+                    {reservePriceInput && (
+                      <Text style={styles.termsIzeText}>
+                        {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, goldRates))}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
               {resultData.buyNow && (
                 <View style={styles.termsRow}>
                   <Meta style={styles.termsLabel}>Buy now</Meta>
@@ -589,7 +657,7 @@ export default function CreateAuctionScreen() {
                     <Body style={styles.termsValue}>{resultData.buyNow}</Body>
                     {buyNowInput && (
                       <Text style={styles.termsIzeText}>
-                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode as any, goldRates))}
+                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, goldRates))}
                       </Text>
                     )}
                   </View>
@@ -622,15 +690,16 @@ export default function CreateAuctionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   headerLaunchBtn: {
     borderRadius: Radius.md,
-    minHeight: 34,
-    paddingHorizontal: 12,
+    minHeight: Control.chrome - 2,
+    paddingHorizontal: Space.sm + 4,
   },
   content: {
     paddingBottom: Space.xl,
@@ -647,11 +716,11 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   listingCard: {
-    width: 150,
-    backgroundColor: Colors.surface,
+    width: Space.xxl * 3 + Space.xs + 2,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
@@ -659,8 +728,8 @@ const styles = StyleSheet.create({
     }),
   },
   listingCardSelected: {
-    borderColor: Colors.brand,
-    borderWidth: 2,
+    borderColor: colors.brand,
+    borderWidth: Stroke.emphasis,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.16, shadowRadius: 12 },
       android: { elevation: 6 },
@@ -668,7 +737,7 @@ const styles = StyleSheet.create({
   },
   listingImageContainer: {
     width: '100%',
-    height: 170,
+    height: Space.xxl * 3 + Space.lg + 2,
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
     overflow: 'hidden',
@@ -681,21 +750,21 @@ const styles = StyleSheet.create({
     padding: Space.sm,
   },
   listingTitle: {
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   listingPrice: {},
   selectedTick: {
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.brand,
+    width: Control.icon,
+    height: Control.icon,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.surface,
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.surface,
   },
   // ── Preview card ──
   previewCard: {
@@ -704,7 +773,7 @@ const styles = StyleSheet.create({
   },
   previewImageContainer: {
     width: '100%',
-    height: 240,
+    height: Space.xxl * 5,
     borderRadius: Radius.lg,
     overflow: 'hidden',
   },
@@ -717,7 +786,7 @@ const styles = StyleSheet.create({
   },
   previewTitle: {},
   previewPrice: {
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   // ── Form cards ──
   formCard: {
@@ -735,21 +804,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
-    paddingVertical: 12,
-    minHeight: 44,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    paddingVertical: Space.sm + 4,
+    minHeight: Control.hit,
   },
   windowChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   windowChipText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
   windowChipTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.semibold,
   },
   input: {
@@ -764,26 +833,26 @@ const styles = StyleSheet.create({
   toggleChip: {
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    minWidth: 48,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs + 1,
+    minWidth: Space.xxl,
     alignItems: 'center',
   },
   toggleChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   toggleText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   toggleTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.bold,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   launchBtn: {
     marginHorizontal: Space.md,
@@ -801,67 +870,67 @@ const styles = StyleSheet.create({
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   stepDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    width: Space.md + 2,
+    height: Space.md + 2,
+    borderRadius: Radius.xl,
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepDotActive: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.brand,
+    borderColor: colors.brand,
+    backgroundColor: colors.brand,
   },
   stepDotComplete: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   stepDotText: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
     fontWeight: '700',
     fontFamily: Typography.family.bold,
   },
   stepDotTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   stepLabel: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
   },
   stepLabelActive: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   stepLabelCurrent: {
     fontFamily: Typography.family.semibold,
   },
   stepConnector: {
-    width: 28,
-    height: 1.5,
-    backgroundColor: Colors.border,
-    marginHorizontal: 6,
+    width: Space.lg + 4,
+    height: Stroke.emphasis,
+    backgroundColor: colors.border,
+    marginHorizontal: Space.xs + 2,
   },
   stepConnectorActive: {
-    backgroundColor: Colors.brand,
-    height: 2,
+    backgroundColor: colors.brand,
+    height: Stroke.emphasis,
   },
   // ── Review ──
   reviewHeadline: {
-    fontSize: 26,
+    fontSize: Type.priceLarge.size - 2,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
-    letterSpacing: -0.6,
+    letterSpacing: Type.title.letterSpacing,
   },
   reviewSubheadline: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingHorizontal: Space.md,
-    marginTop: 4,
+    marginTop: Space.xs,
     marginBottom: Space.sm,
   },
   stageNavRow: {
@@ -882,30 +951,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: Space.xs + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   termsLabel: {
-    color: Colors.textMuted,
-    fontSize: 10,
+    color: colors.textMuted,
+    fontSize: Type.meta.size - 1,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.6,
+    letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
   },
   termsValue: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
+    fontVariant: ['tabular-nums'],
   },
   termsValueCol: {
     alignItems: 'flex-end',
   },
   termsIzeText: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    marginTop: 1,
+    marginTop: Space.xs / 4,
     fontVariant: ['tabular-nums'],
   },
   // ── Terms & fees — inline, lighter than summary ──
@@ -917,31 +987,31 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,255,255,0.03)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     gap: Space.xs,
   },
   termsSectionLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size - 1,
+    color: colors.textMuted,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.6,
+    letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
     marginBottom: Space.xs,
   },
   termsInlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   termsInlineLabel: {
     flex: 1,
-    fontSize: 13,
-    color: Colors.textSecondary,
+    fontSize: Type.captionElevated.size,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
   },
   termsInlineValue: {
-    fontSize: 13,
-    color: Colors.textPrimary,
+    fontSize: Type.captionElevated.size,
+    color: colors.textPrimary,
     fontFamily: Typography.family.medium,
   },
   // ── Result overlay — crafted success moment ──
@@ -957,14 +1027,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
   },
   resultCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.xl,
     padding: Space.lg,
     width: '100%',
-    maxWidth: 380,
+    maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl - 4,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.3, shadowRadius: 24 },
       android: { elevation: 16 },
@@ -972,29 +1042,29 @@ const styles = StyleSheet.create({
   },
   resultIconWrap: {
     marginBottom: Space.sm,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: Space.xxl + Space.xxl + 8,
+    height: Space.xxl + Space.xxl + 8,
+    borderRadius: Space.lg + 4,
     backgroundColor: 'rgba(22,163,74,0.12)',
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
     borderColor: 'rgba(22,163,74,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   resultTitle: {
-    fontSize: 24,
+    fontSize: Type.title.size,
     textAlign: 'center',
-    letterSpacing: -0.5,
+    letterSpacing: Type.priceLarge.letterSpacing,
   },
   resultSubtitle: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: Space.xs,
     marginBottom: Space.md,
   },
   resultImageContainer: {
     width: '100%',
-    height: 180,
+    height: Space.xxl * 3 + Space.xl + Space.xs,
     borderRadius: Radius.lg,
     marginBottom: Space.md,
     overflow: 'hidden',
@@ -1015,4 +1085,5 @@ const styles = StyleSheet.create({
   resultBtn: {
     flex: 1,
   },
-});
+  });
+}

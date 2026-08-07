@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface RadioButtonProps {
@@ -9,7 +9,26 @@ interface RadioButtonProps {
   size?: number;
 }
 
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    radio: {
+      borderWidth: 2,
+      borderColor: colors.textMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    radioSelected: {
+      borderColor: colors.brand,
+    },
+    dot: {
+      backgroundColor: colors.brand,
+    },
+  });
+
 export function RadioButton({ selected, onPress, size = 22 }: RadioButtonProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <AnimatedPressable
       onPress={onPress}
@@ -42,18 +61,3 @@ export function RadioButton({ selected, onPress, size = 22 }: RadioButtonProps) 
     </AnimatedPressable>
   );
 }
-
-const styles = StyleSheet.create({
-  radio: {
-    borderWidth: 2,
-    borderColor: Colors.textMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioSelected: {
-    borderColor: Colors.brand,
-  },
-  dot: {
-    backgroundColor: Colors.brand,
-  },
-});

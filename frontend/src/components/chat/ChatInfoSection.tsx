@@ -2,8 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
-import { Space, Type, TypeStyles } from '../../theme/designTokens';
+import { Space, Type, TypeStyles, Radius } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Meta } from '../ui/Text';
 
 export function ChatInfoSection({
@@ -15,11 +15,12 @@ export function ChatInfoSection({
   children: React.ReactNode;
   danger?: boolean;
 }) {
+  const { colors } = useAppTheme();
   const rows = React.Children.toArray(children);
 
   return (
     <View style={styles.section}>
-      <Meta color={danger ? Colors.danger : Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={danger ? colors.danger : colors.textMuted} style={styles.sectionLabel}>
         {title.toUpperCase()}
       </Meta>
       <View>
@@ -52,14 +53,15 @@ export function ChatInfoRow({
   showChevron?: boolean;
   isLast?: boolean;
 }) {
-  const foreground = danger ? Colors.danger : Colors.textPrimary;
+  const { colors } = useAppTheme();
+  const foreground = danger ? colors.danger : colors.textPrimary;
   const content = (
-    <View style={[styles.row, !isLast && styles.rowDivider]}>
+    <View style={[styles.row, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
       <View style={styles.iconTarget} importantForAccessibility="no-hide-descendants">
         <Ionicons
           name={icon}
           size={20}
-          color={danger ? Colors.danger : Colors.textSecondary}
+          color={danger ? colors.danger : colors.textSecondary}
         />
       </View>
       <View style={styles.copy}>
@@ -67,18 +69,18 @@ export function ChatInfoRow({
           {label}
         </Text>
         {subtitle ? (
-          <Text style={styles.subtitle} numberOfLines={2}>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]} numberOfLines={2}>
             {subtitle}
           </Text>
         ) : null}
       </View>
       {detail ? (
-        <Text style={styles.detail} numberOfLines={1}>
+        <Text style={[styles.detail, { color: colors.textMuted }]} numberOfLines={1}>
           {detail}
         </Text>
       ) : null}
       {showChevron ? (
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       ) : null}
     </View>
   );
@@ -113,12 +115,8 @@ const styles = StyleSheet.create({
     minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
     gap: Space.sm,
-  },
-  rowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   iconTarget: {
     width: 32,
@@ -135,14 +133,12 @@ const styles = StyleSheet.create({
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
   subtitle: {
-    color: Colors.textMuted,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: TypeStyles.body.fontFamily,
   },
   detail: {
     maxWidth: '38%',
-    color: Colors.textMuted,
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
     textAlign: 'right',

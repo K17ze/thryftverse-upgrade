@@ -5,14 +5,16 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
   interpolate,
   Extrapolation,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Radius } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface SwipeableMessageProps {
   children: React.ReactNode;
@@ -21,11 +23,6 @@ interface SwipeableMessageProps {
   onActions?: () => void;
   replyThreshold?: number;
 }
-
-const SWIPE_SPRING = {
-  damping: 15,
-  stiffness: 150,
-};
 
 export function SwipeableMessage({
   children,
@@ -36,6 +33,9 @@ export function SwipeableMessage({
 }: SwipeableMessageProps) {
   const translateX = useSharedValue(0);
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const triggerReply = React.useCallback(() => {
     onReply?.();
@@ -69,8 +69,8 @@ export function SwipeableMessage({
         runOnJS(triggerActions)();
       }
 
-      // Spring back to original position
-      translateX.value = withSpring(0, SWIPE_SPRING);
+      // Snap back to original position with timing
+      translateX.value = withTiming(0, { duration: reducedMotion ? 0 : 200, easing: Easing.out(Easing.cubic) });
     });
 
   const foregroundStyle = useAnimatedStyle(() => ({
@@ -106,7 +106,7 @@ export function SwipeableMessage({
               <Ionicons
                 name={isMe ? 'ellipsis-horizontal' : 'arrow-undo'}
                 size={24}
-                color={Colors.textInverse}
+                color={colors.textInverse}
               />
             </View>
           </Reanimated.View>
@@ -121,7 +121,7 @@ export function SwipeableMessage({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     position: 'relative',
   },
@@ -135,13 +135,13 @@ const styles = StyleSheet.create({
   },
   backgroundLeft: {
     left: 0,
-    backgroundColor: `${Colors.textMuted}30`,
+    backgroundColor: `${colors.textMuted}30`,
     borderTopLeftRadius: Radius.lg,
     borderBottomLeftRadius: Radius.lg,
   },
   backgroundRight: {
     right: 0,
-    backgroundColor: `${Colors.brand}30`,
+    backgroundColor: `${colors.brand}30`,
     borderTopRightRadius: Radius.lg,
     borderBottomRightRadius: Radius.lg,
   },

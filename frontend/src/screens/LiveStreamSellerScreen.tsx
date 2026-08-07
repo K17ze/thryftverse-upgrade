@@ -1,0 +1,688 @@
+/**
+ * LiveStreamSellerScreen — broadcaster experience
+ *
+ * Pre-stream setup → live broadcast → post-stream summary
+ *
+ * Per AGENTS.md §11 (Truthful UI):
+ * - Demo mode is clearly labeled
+ * - Camera preview is a placeholder until real WebRTC is wired
+ */
+
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Pressable,
+  TextInput,
+  FlatList,
+  Image,
+  Dimensions,
+  StatusBar,
+  ScrollView,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useHaptic } from '../hooks/useHaptic';
+import { Space, Radius, Type, Control, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
+import { LIVE_SHOPPING_DEMO_MODE } from '../services/liveShoppingApi';
+
+type SellerPhase = 'setup' | 'live' | 'summary';
+
+interface LotItem {
+  id: string;
+  title: string;
+  imageUri: string;
+  startingPrice: number;
+  status: 'upcoming' | 'active' | 'sold' | 'passed';
+}
+
+const DEMO_LOTS: LotItem[] = [
+  { id: 'lot_1', title: 'Vintage Leather Jacket', imageUri: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=200', startingPrice: 30, status: 'active' },
+  { id: 'lot_2', title: 'Designer Sunglasses', imageUri: 'https://images.unsplash.com/photo-1572635196237-14b3f281509f?w=200', startingPrice: 20, status: 'upcoming' },
+  { id: 'lot_3', title: 'Retro Sneakers', imageUri: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200', startingPrice: 40, status: 'upcoming' },
+  { id: 'lot_4', title: 'Silk Scarf', imageUri: 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?w=200', startingPrice: 15, status: 'upcoming' },
+];
+
+export function LiveStreamSellerScreen() {
+  const navigation = useNavigation();
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const isDemo = LIVE_SHOPPING_DEMO_MODE;
+  const [phase, setPhase] = useState<SellerPhase>('setup');
+  const [title, setTitle] = useState('');
+  const [lots, setLots] = useState<LotItem[]>(isDemo ? DEMO_LOTS : []);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [currentLotIndex, setCurrentLotIndex] = useState(0);
+  const [liveDuration, setLiveDuration] = useState(0);
+  const [totalSales, setTotalSales] = useState(0);
+  const [lotsSold, setLotsSold] = useState(0);
+
+  const handleGoLive = useCallback(() => {
+    haptic.medium();
+    setPhase('live');
+    setViewerCount(1);
+  }, [haptic]);
+
+  const handleEndStream = useCallback(() => {
+    haptic.medium();
+    setPhase('summary');
+  }, [haptic]);
+
+  const handleNextLot = useCallback(() => {
+    setLots((prev) => prev.map((lot, i) => {
+      if (i === currentLotIndex) return { ...lot, status: 'sold' as const };
+      if (i === currentLotIndex + 1) return { ...lot, status: 'active' as const };
+      return lot;
+    }));
+    setCurrentLotIndex((i) => Math.min(i + 1, lots.length - 1));
+    setLotsSold((c) => c + 1);
+    setTotalSales((s) => s + 45);
+    haptic.light();
+  }, [currentLotIndex, lots.length, haptic]);
+
+  const handleSkipLot = useCallback(() => {
+    setLots((prev) => prev.map((lot, i) => {
+      if (i === currentLotIndex) return { ...lot, status: 'passed' as const };
+      if (i === currentLotIndex + 1) return { ...lot, status: 'active' as const };
+      return lot;
+    }));
+    setCurrentLotIndex((i) => Math.min(i + 1, lots.length - 1));
+    haptic.light();
+  }, [currentLotIndex, haptic]);
+
+  // ── Setup phase ──
+  if (phase === 'setup') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle="dark-content" />
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.header}>
+            <Pressable onPress={() => navigation.goBack()} style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel="Go back">
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
+            </Pressable>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Go Live</Text>
+            <View style={{ width: Control.hit }} />
+          </View>
+
+          <ScrollView style={styles.setupScroll} contentContainerStyle={styles.setupContent}>
+            {/* Demo banner */}
+            {isDemo && (
+              <View style={[styles.demoBanner, { backgroundColor: colors.warning + '18' }]} accessibilityRole="header">
+                <Ionicons name="flask-outline" size={16} color={colors.warning} />
+                <Text style={[styles.demoBannerText, { color: colors.warning }]}>Demo Mode — sample lots loaded</Text>
+              </View>
+            )}
+
+            {/* Camera preview placeholder */}
+            <View style={[styles.cameraPreview, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="videocam-outline" size={40} color={colors.textMuted} />
+              <Text style={[styles.cameraPreviewText, { color: colors.textMuted }]}>Camera Preview</Text>
+              <Pressable style={({ pressed }) => [styles.flipCameraBtn, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel="Flip camera">
+                <Ionicons name="camera-reverse-outline" size={20} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+
+            {/* Title input */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Stream Title</Text>
+              <TextInput
+                style={[styles.titleInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
+                placeholder="e.g. Vintage Finds Live Auction"
+                placeholderTextColor={colors.textMuted}
+                value={title}
+                onChangeText={setTitle}
+                maxLength={60}
+              />
+            </View>
+
+            {/* Lot selection */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Lots ({lots.length})</Text>
+              {lots.length > 0 ? (
+                <FlatList
+                  data={lots}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <View style={[styles.lotRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <Image source={{ uri: item.imageUri }} style={styles.lotImage} />
+                      <View style={styles.lotInfo}>
+                        <Text style={[styles.lotTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+                        <Text style={[styles.lotPrice, { color: colors.textSecondary }]}>Start: £{item.startingPrice}</Text>
+                      </View>
+                      <Ionicons name="reorder-three-outline" size={20} color={colors.textMuted} />
+                    </View>
+                  )}
+                  scrollEnabled={false}
+                />
+              ) : (
+                <View style={[styles.emptyLots, { borderColor: colors.border }]}>
+                  <Ionicons name="pricetags-outline" size={28} color={colors.textMuted} />
+                  <Text style={[styles.emptyLotsText, { color: colors.textSecondary }]}>No lots added yet</Text>
+                  <Text style={[styles.emptyLotsSubtext, { color: colors.textMuted }]}>Add listings to your stream before going live</Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+
+          <View style={[styles.setupFooter, { paddingBottom: insets.bottom || Space.md }]}>
+            <Pressable
+              onPress={handleGoLive}
+              disabled={lots.length === 0}
+              style={({ pressed }) => [styles.goLiveBtn, lots.length === 0 && styles.goLiveBtnDisabled, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Go live now"
+              accessibilityState={{ disabled: lots.length === 0 }}
+            >
+              <View style={styles.liveDot} />
+              <Text style={styles.goLiveBtnText}>Go Live Now</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // ── Live phase ──
+  if (phase === 'live') {
+    const currentLot = lots[currentLotIndex];
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={{ paddingTop: insets.top }}>
+          {/* Camera preview (small) */}
+          <View style={styles.sellerCameraPreview}>
+            <Ionicons name="videocam" size={24} color="rgba(255,255,255,0.5)" />
+            <Text style={styles.sellerCameraText}>Broadcasting</Text>
+            <View style={styles.liveBadgeSmall}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveBadgeTextSmall}>LIVE</Text>
+            </View>
+          </View>
+
+          {/* Stats bar */}
+          <View style={styles.sellerStatsBar}>
+            <View style={styles.sellerStat}>
+              <Ionicons name="eye-outline" size={14} color="rgba(255,255,255,0.6)" />
+              <Text style={styles.sellerStatText}>{viewerCount} viewers</Text>
+            </View>
+            <View style={styles.sellerStat}>
+              <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.6)" />
+              <Text style={styles.sellerStatText}>{Math.floor(liveDuration / 60)}:{(liveDuration % 60).toString().padStart(2, '0')}</Text>
+            </View>
+            <Pressable
+              onPress={handleEndStream}
+              style={({ pressed }) => [styles.endStreamBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="End stream"
+            >
+              <Text style={styles.endStreamBtnText}>End</Text>
+            </Pressable>
+          </View>
+
+          {/* Current lot */}
+          <View style={styles.sellerCurrentLot}>
+            <Image source={{ uri: currentLot?.imageUri }} style={styles.sellerLotImage} />
+            <View style={styles.sellerLotInfo}>
+              <Text style={styles.sellerLotTitle} numberOfLines={1}>{currentLot?.title}</Text>
+              <Text style={styles.sellerLotPrice}>£{currentLot?.startingPrice}</Text>
+            </View>
+          </View>
+
+          {/* Lot management */}
+          <View style={styles.sellerLotActions}>
+            <Pressable
+              onPress={handleSkipLot}
+              style={({ pressed }) => [styles.skipLotBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Skip current lot"
+            >
+              <Text style={styles.skipLotBtnText}>Skip</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleNextLot}
+              style={({ pressed }) => [styles.nextLotBtn, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Sell and go to next lot"
+            >
+              <Text style={styles.nextLotBtnText}>Sell & Next →</Text>
+            </Pressable>
+          </View>
+
+          {/* Upcoming lots */}
+          <Text style={styles.upcomingLabel}>Up Next</Text>
+          <FlatList
+            data={lots.slice(currentLotIndex + 1, currentLotIndex + 4)}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.upcomingLotRow}>
+                <Image source={{ uri: item.imageUri }} style={styles.upcomingLotImage} />
+                <Text style={styles.upcomingLotTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.upcomingLotPrice}>£{item.startingPrice}</Text>
+              </View>
+            )}
+            scrollEnabled={false}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  // ── Summary phase ──
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle="dark-content" />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.summaryContainer}>
+          <View style={[styles.summaryIcon, { backgroundColor: colors.success + '20' }]}>
+            <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+          </View>
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Stream Ended</Text>
+          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>Here's your stream summary</Text>
+
+          <View style={[styles.summaryStats, { backgroundColor: colors.surface }]}>
+            <View style={styles.summaryStatItem}>
+              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{viewerCount}</Text>
+              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Peak Viewers</Text>
+            </View>
+            <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.summaryStatItem}>
+              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{lotsSold}</Text>
+              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Lots Sold</Text>
+            </View>
+            <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.summaryStatItem}>
+              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>£{totalSales}</Text>
+              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Total Sales</Text>
+            </View>
+          </View>
+
+          <View style={styles.summaryActions}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => [styles.summaryDoneBtn, { backgroundColor: colors.brand }, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+            >
+              <Text style={styles.summaryDoneBtnText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
+  // ── Setup ──
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  backBtn: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: Type.bodyLarge.size,
+    fontFamily: Typography.family.semibold,
+  },
+  setupScroll: { flex: 1 },
+  setupContent: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xl,
+    gap: Space.lg,
+  },
+  cameraPreview: {
+    width: '100%',
+    aspectRatio: 9 / 16,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    maxHeight: 300,
+  },
+  cameraPreviewText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  flipCameraBtn: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm,
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inputGroup: { gap: Space.xs + 2 },
+  inputLabel: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.semibold,
+  },
+  titleInput: {
+    height: Space.xl + Space.sm + 6,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  lotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.hairline,
+    marginBottom: Space.xs,
+  },
+  lotImage: {
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.border,
+  },
+  lotInfo: { flex: 1, gap: Space.xs / 4 },
+  lotTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  lotPrice: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  demoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+  },
+  demoBannerText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  emptyLots: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.xl,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.hairline,
+    borderStyle: 'dashed',
+  },
+  emptyLotsText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  emptyLotsSubtext: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    textAlign: 'center',
+  },
+  setupFooter: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+  },
+  goLiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs + 2,
+    paddingVertical: Space.md + 2,
+    borderRadius: Radius.xxl,
+    backgroundColor: colors.danger,
+    minHeight: Control.hit + 4,
+  },
+  goLiveBtnDisabled: {
+    opacity: 0.4,
+  },
+  goLiveBtnText: {
+    fontSize: Type.bodyLarge.size,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+  },
+  liveDot: {
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: colors.textPrimary,
+  },
+  // ── Live ──
+  sellerCameraPreview: {
+    width: SCREEN_WIDTH,
+    height: Space.xxl * 4 + Space.sm,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+  },
+  sellerCameraText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  liveBadgeSmall: {
+    position: 'absolute',
+    top: Space.sm,
+    left: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+    backgroundColor: colors.danger,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2 + 1,
+    borderRadius: Radius.sm,
+  },
+  liveBadgeTextSmall: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+  },
+  sellerStatsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: colors.surface,
+  },
+  sellerStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+  },
+  sellerStatText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  endStreamBtn: {
+    marginLeft: 'auto',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.danger,
+  },
+  endStreamBtnText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+  sellerCurrentLot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: '#161616',
+  },
+  sellerLotImage: {
+    width: Space.xxl + Space.xl,
+    height: Space.xxl + Space.xl,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
+  sellerLotInfo: { flex: 1, gap: Space.xs / 2 },
+  sellerLotTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+  sellerLotPrice: {
+    fontSize: Type.bodyLarge.size,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+  },
+  sellerLotActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  skipLotBtn: {
+    flex: 1,
+    paddingVertical: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  skipLotBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+  nextLotBtn: {
+    flex: 2,
+    paddingVertical: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  nextLotBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+  },
+  upcomingLabel: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.semibold,
+    color: 'rgba(255,255,255,0.5)',
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+    textTransform: 'uppercase',
+    letterSpacing: LetterSpacing.caps,
+  },
+  upcomingLotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs + 2,
+  },
+  upcomingLotImage: {
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surfaceAlt,
+  },
+  upcomingLotTitle: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  upcomingLotPrice: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  // ── Summary ──
+  summaryContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.xl,
+    gap: Space.md,
+  },
+  summaryIcon: {
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryTitle: {
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
+  },
+  summarySubtitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: Radius.lg,
+    paddingVertical: Space.lg,
+    width: '100%',
+  },
+  summaryStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Space.xs / 2,
+  },
+  summaryStatValue: {
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
+  },
+  summaryStatLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  summaryStatDivider: {
+    width: Stroke.hairline,
+    height: Space.xxl + Space.xs,
+  },
+  summaryActions: {
+    width: '100%',
+    paddingTop: Space.md,
+  },
+  summaryDoneBtn: {
+    paddingVertical: Space.md + 2,
+    borderRadius: Radius.xxl,
+    alignItems: 'center',
+    minHeight: Control.hit + 4,
+    justifyContent: 'center',
+  },
+  summaryDoneBtnText: {
+    fontSize: Type.bodyLarge.size,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+  },
+});

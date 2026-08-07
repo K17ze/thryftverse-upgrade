@@ -177,10 +177,29 @@ export const config = {
     60,
     60 * 60
   ),
+  mediaProcessingEnabled: asBoolean(
+    process.env.MEDIA_PROCESSING_ENABLED,
+    false,
+  ),
+  mediaPublicationGateEnabled: asBoolean(
+    process.env.MEDIA_PUBLICATION_GATE_ENABLED,
+    nodeEnv === 'production',
+  ),
   decisionServiceUrl:
     process.env.DECISION_SERVICE_URL?.trim()
     || process.env.ML_SERVICE_URL?.trim()
     || 'http://localhost:8000',
+  decisionServiceTimeoutMs: asIntegerInRange(
+    'DECISION_SERVICE_TIMEOUT_MS',
+    process.env.DECISION_SERVICE_TIMEOUT_MS,
+    2_500,
+    100,
+    30_000
+  ),
+  decisionServiceToken: requiredSecret(
+    'DECISION_SERVICE_TOKEN',
+    'local-decision-service-token'
+  ),
   authAccessTokenSecret: requiredSecret('AUTH_ACCESS_TOKEN_SECRET', 'dev-only-access-secret-change-me'),
   authRefreshTokenSecret: requiredSecret('AUTH_REFRESH_TOKEN_SECRET', 'dev-only-refresh-secret-change-me'),
   authAccessTokenTtlSeconds: asNumber(process.env.AUTH_ACCESS_TOKEN_TTL_SECONDS, 15 * 60),
@@ -203,7 +222,17 @@ export const config = {
   openAiAgentDefaultModel: process.env.OPENAI_AGENT_DEFAULT_MODEL?.trim() || 'gpt-5.6-terra',
   openAiAgentMaxOutputTokens: asNumber(process.env.OPENAI_AGENT_MAX_OUTPUT_TOKENS, 900),
   openAiAgentTimeoutMs: asNumber(process.env.OPENAI_AGENT_TIMEOUT_MS, 30_000),
+  aiUsagePricingVersion: process.env.AI_USAGE_PRICING_VERSION?.trim() || 'unconfigured',
+  openAiInputCostMicrousdPerMillionTokens: asNumber(
+    process.env.OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS,
+    0
+  ),
+  openAiOutputCostMicrousdPerMillionTokens: asNumber(
+    process.env.OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS,
+    0
+  ),
   apiSecurityAdminToken: requiredSecret('API_SECURITY_ADMIN_TOKEN', 'local-security-admin-token'),
+  apiInternalServiceToken: requiredSecret('API_INTERNAL_SERVICE_TOKEN', 'local-internal-service-token'),
   apiEnableMockWebhooks: asBoolean(process.env.API_ENABLE_MOCK_WEBHOOKS, false),
   apiRateLimitMax: asIntegerInRange(
     'API_RATE_LIMIT_MAX',
@@ -213,6 +242,28 @@ export const config = {
     100_000
   ),
   apiRateLimitWindow: asRateLimitWindow(process.env.API_RATE_LIMIT_WINDOW),
+  corsAllowedOrigins: asCsvList(process.env.CORS_ALLOWED_ORIGINS),
+  authRateLimitMax: asIntegerInRange(
+    'AUTH_RATE_LIMIT_MAX',
+    process.env.AUTH_RATE_LIMIT_MAX,
+    10,
+    1,
+    10_000
+  ),
+  authRateLimitWindowMs: asIntegerInRange(
+    'AUTH_RATE_LIMIT_WINDOW_MS',
+    process.env.AUTH_RATE_LIMIT_WINDOW_MS,
+    900_000,
+    1_000,
+    86_400_000
+  ),
+  outboxDrainIntervalMs: asIntegerInRange(
+    'OUTBOX_DRAIN_INTERVAL_MS',
+    process.env.OUTBOX_DRAIN_INTERVAL_MS,
+    5_000,
+    1_000,
+    60_000
+  ),
   kycDefaultVendor: required('KYC_DEFAULT_VENDOR', 'stripe_identity'),
   kycVerificationBaseUrl:
     process.env.KYC_VERIFICATION_BASE_URL?.trim()
@@ -225,7 +276,15 @@ export const config = {
   googleOAuthClientIds: asCsvList(process.env.GOOGLE_OAUTH_CLIENT_IDS),
   appleOAuthAudience: process.env.APPLE_OAUTH_AUDIENCE?.trim() || null,
   stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+  stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY?.trim() || null,
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  stripeApplePayMerchantIdentifier:
+    process.env.STRIPE_APPLE_PAY_MERCHANT_IDENTIFIER?.trim() || null,
+  stripeGooglePayEnabled: asBoolean(process.env.STRIPE_GOOGLE_PAY_ENABLED, false),
+  paymentMetadataHmacSecret: requiredSecret(
+    'PAYMENT_METADATA_HMAC_SECRET',
+    'dev-only-payment-metadata-hmac-secret'
+  ),
   razorpayKeyId: process.env.RAZORPAY_KEY_ID,
   razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET,
   razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
@@ -242,6 +301,69 @@ export const config = {
   wisePlatformRecipientAccountId: process.env.WISE_PLATFORM_RECIPIENT_ACCOUNT_ID?.trim() || null,
   wisePlatformTransferReferencePrefix:
     process.env.WISE_PLATFORM_TRANSFER_REFERENCE_PREFIX?.trim() || 'THRYFTVERSE SWEEP',
+  buyerProtectionHoldHours: asIntegerInRange(
+    'BUYER_PROTECTION_HOLD_HOURS',
+    process.env.BUYER_PROTECTION_HOLD_HOURS,
+    48,
+    0,
+    168
+  ),
+  payoutDefaultMinimumGbp: asNumber(
+    process.env.PAYOUT_DEFAULT_MINIMUM_GBP,
+    10
+  ),
+  payoutNewSellerReservePct: asNumber(
+    process.env.PAYOUT_NEW_SELLER_RESERVE_PCT,
+    10
+  ),
+  payoutNewSellerReserveReleaseDays: asIntegerInRange(
+    'PAYOUT_NEW_SELLER_RESERVE_RELEASE_DAYS',
+    process.env.PAYOUT_NEW_SELLER_RESERVE_RELEASE_DAYS,
+    14,
+    0,
+    90
+  ),
+  payoutNewSellerThreshold: asIntegerInRange(
+    'PAYOUT_NEW_SELLER_THRESHOLD',
+    process.env.PAYOUT_NEW_SELLER_THRESHOLD,
+    10,
+    0,
+    1000
+  ),
+  // Per-seller risk-tier reserve percentages (P3.5). Applied in addition to
+  // the new-seller rolling reserve — the escrow release logic uses the higher
+  // of the new-seller reserve and the tier reserve.
+  sellerRiskTierElevatedReservePct: asNumber(
+    process.env.SELLER_RISK_TIER_ELEVATED_RESERVE_PCT,
+    5
+  ),
+  sellerRiskTierHighReservePct: asNumber(
+    process.env.SELLER_RISK_TIER_HIGH_RESERVE_PCT,
+    15
+  ),
+  paypalClientId: process.env.PAYPAL_CLIENT_ID?.trim() || null,
+  paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET?.trim() || null,
+  paypalApiBaseUrl:
+    process.env.PAYPAL_API_BASE_URL?.trim()
+    || (process.env.NODE_ENV === 'production'
+      ? 'https://api-m.paypal.com'
+      : 'https://api-m.sandbox.paypal.com'),
+  personaApiKey: process.env.PERSONA_API_KEY?.trim() || null,
+  personaTemplateId: process.env.PERSONA_TEMPLATE_ID?.trim() || null,
+  personaWebhookSecret: process.env.PERSONA_WEBHOOK_SECRET?.trim() || null,
+  personaApiBaseUrl:
+    process.env.PERSONA_API_BASE_URL?.trim() || 'https://withpersona.com/api/v1',
+  onfidoApiKey: process.env.ONFIDO_API_KEY?.trim() || null,
+  onfidoWebhookToken: process.env.ONFIDO_WEBHOOK_TOKEN?.trim() || null,
+  onfidoApiBaseUrl:
+    process.env.ONFIDO_API_BASE_URL?.trim() || 'https://api.onfido.com/v3.5',
+  webhookIpAllowlistEnabled:
+    process.env.WEBHOOK_IP_ALLOWLIST_ENABLED?.trim().toLowerCase() === 'true',
+  webhookAllowlistedIpRanges:
+    (process.env.WEBHOOK_ALLOWLISTED_IP_RANGES?.trim() ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   evriApiKey: process.env.EVRI_API_KEY?.trim() || process.env.SHIPPING_EVRI_API_KEY?.trim() || null,
   evriApiBaseUrl:
     process.env.EVRI_API_BASE_URL?.trim() || process.env.SHIPPING_EVRI_API_URL?.trim() || null,
@@ -341,3 +463,38 @@ export const config = {
     'dev-only-oneze-attestation-signing-secret'
   ),
 };
+
+// ── Startup validation for critical secrets ──────────────
+// The `requiredSecret()` helper above already fails fast in production for
+// secrets that have development fallbacks. `assertProductionReadiness()` (called
+// at the top of this module) covers required-presence, development-default
+// detection, minimum-length, and provider-set completeness checks.
+//
+// The checks below cover conditional requirements that depend on other config
+// values and therefore must run after the config object is fully resolved.
+
+if (nodeEnv === 'production') {
+  // When email delivery is set to Resend, both the API key and a verified
+  // from-address are mandatory — otherwise transactional emails (magic links,
+  // password resets, OTPs) silently fail.
+  if (config.authEmailProvider === 'resend') {
+    if (!config.resendApiKey) {
+      throw new Error(
+        'RESEND_API_KEY is required in production when AUTH_EMAIL_PROVIDER is "resend"'
+      );
+    }
+    if (!config.authEmailFrom) {
+      throw new Error(
+        'AUTH_EMAIL_FROM is required in production when AUTH_EMAIL_PROVIDER is "resend"'
+      );
+    }
+  }
+
+  // Sentry DSN is strongly recommended in production for error tracking.
+  // This is a warning, not a hard failure, to allow staged rollouts.
+  if (!config.sentryDsn) {
+    console.warn(
+      '[security] SENTRY_DSN is not set — production error tracking is disabled.'
+    );
+  }
+}

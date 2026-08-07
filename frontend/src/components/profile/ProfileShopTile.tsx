@@ -4,15 +4,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
-import { Colors } from '../../constants/colors';
-import { Space, Typography, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { SupportedCurrencyCode } from '../../constants/currencies';
 import { CurrencyDisplayMode } from '../../utils/currency';
 import type { ListingApiItem } from '../../services/listingsApi';
-
-const TEXT = Colors.textPrimary;
-const SECONDARY = Colors.textSecondary;
-const MUTED = Colors.textMuted;
 
 type PriceFormatter = (
   fiatAmount: number,
@@ -42,6 +38,8 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
   cardWidth,
   cardHeight,
 }: ProfileShopTileProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const showSold = isSold || item.status === 'sold';
   return (
     <AnimatedPressable
@@ -94,7 +92,8 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
   );
 });
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   gridCard: {},
   gridImageWrap: {
     borderRadius: Radius.sm,
@@ -117,16 +116,17 @@ const styles = StyleSheet.create({
   },
   soldText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  gridPrice: { fontSize: 14, fontFamily: Typography.family.bold, color: TEXT, marginTop: 6 },
-  gridBrand: { fontSize: 12, fontFamily: Typography.family.regular, color: SECONDARY, marginTop: 1 },
-  gridMeta: { fontSize: 11, fontFamily: Typography.family.regular, color: MUTED, marginTop: 1 },
-});
+  gridPrice: { fontSize: Type.body.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 6 },
+  gridBrand: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
+  gridMeta: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: 1 },
+  });
+}
 
 export { ProfileShopTile };

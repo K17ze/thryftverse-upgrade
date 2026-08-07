@@ -161,7 +161,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   topCenter: {
     flexDirection: 'row',
@@ -208,7 +207,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   pageDots: {
     flexDirection: 'row',
@@ -218,13 +216,13 @@ const styles = StyleSheet.create({
   pageDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(255,255,255,0.4)',
   },
   pageDotActive: {
     backgroundColor: '#fff',
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
 });

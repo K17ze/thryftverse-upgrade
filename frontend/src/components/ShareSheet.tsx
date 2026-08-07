@@ -15,8 +15,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Share, Pressable, Platform } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { Space, Radius , Typography  } from '../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 import { BottomSheet } from './BottomSheet';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
@@ -28,7 +28,6 @@ interface ShareOption {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   action: () => void;
-  tint?: string;
 }
 
 interface ShareSheetProps {
@@ -43,6 +42,7 @@ interface ShareSheetProps {
 }
 
 export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', imageUri, subtitle }: ShareSheetProps) {
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -96,31 +96,30 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.45} blurIntensity={30}>
       <View style={styles.container}>
-        <Text style={styles.sheetTitle}>Share</Text>
+        <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Share</Text>
 
-        {/* Preview card */}
-        <View style={styles.previewCard}>
-          <View style={styles.previewRow}>
-            <View style={styles.previewImageWrap}>
-              {imageUri ? (
-                <CachedImage uri={imageUri} style={styles.previewImage} contentFit="cover" />
-              ) : (
-                <View style={styles.previewIconFallback}>
-                  <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
-                </View>
-              )}
-            </View>
-            <View style={styles.previewTextCol}>
-              <Text style={styles.previewTitle} numberOfLines={1}>{title}</Text>
-              {subtitle ? (
-                <Text style={styles.previewSubtitle} numberOfLines={1}>{subtitle}</Text>
-              ) : null}
-              <Text style={styles.previewUrl} numberOfLines={1}>{url}</Text>
-            </View>
+        {/* Preview — flat, no card border. Per AGENTS.md surface budget. */}
+        <View style={styles.previewRow}>
+          <View style={[styles.previewImageWrap, { backgroundColor: colors.surfaceAlt }]}>
+            {imageUri ? (
+              <CachedImage uri={imageUri} style={styles.previewImage} contentFit="cover" />
+            ) : (
+              <View style={styles.previewIconFallback}>
+                <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+              </View>
+            )}
+          </View>
+          <View style={styles.previewTextCol}>
+            <Text style={[styles.previewTitle, { color: colors.textPrimary }]} numberOfLines={1}>{title}</Text>
+            {subtitle ? (
+              <Text style={[styles.previewSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{subtitle}</Text>
+            ) : null}
+            <Text style={[styles.previewUrl, { color: colors.textMuted }]} numberOfLines={1}>{url}</Text>
           </View>
         </View>
 
-        {/* Share options grid */}
+        {/* Share options — icon targets with transparent background.
+            Per Design.md: default icon containment is transparent. */}
         <View style={styles.optionsGrid}>
           {options.map((option) => (
             <AnimatedPressable
@@ -132,23 +131,26 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
               accessibilityLabel={option.label}
               accessibilityRole="button"
             >
-              <View style={styles.optionIconWrap}>
-                <Ionicons name={option.icon} size={24} color={Colors.textPrimary} />
+              <View style={[styles.optionIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name={option.icon} size={24} color={colors.textPrimary} />
               </View>
-              <Text style={styles.optionLabel}>{option.label}</Text>
+              <Text style={[styles.optionLabel, { color: colors.textSecondary }]}>
+                {option.label}
+              </Text>
             </AnimatedPressable>
           ))}
         </View>
 
-        {/* Cancel */}
-        <AnimatedPressable
+        {/* Cancel — quiet text action, not a bordered button */}
+        <Pressable
           style={styles.cancelBtn}
           onPress={onDismiss}
-          activeOpacity={0.85}
-          hapticFeedback="light"
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
         >
-          <Text style={styles.cancelText}>Cancel</Text>
-        </AnimatedPressable>
+          <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
+        </Pressable>
       </View>
     </BottomSheet>
   );
@@ -161,32 +163,25 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   sheetTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
     textAlign: 'center',
     marginBottom: Space.xs,
   },
-  previewCard: {
-    padding: Space.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.lg,
-  },
+  // ── Preview — flat, no card ──
   previewRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 4,
+    gap: Space.md,
+    paddingVertical: Space.sm,
   },
   previewImageWrap: {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
   previewImage: {
     width: '100%',
@@ -203,24 +198,25 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   previewTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   previewSubtitle: {
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   previewUrl: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
+  // ── Share options grid ──
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm + 4,
+    gap: Space.md,
     justifyContent: 'center',
     paddingVertical: Space.sm,
   },
@@ -232,31 +228,27 @@ const styles = StyleSheet.create({
   optionIconWrap: {
     width: 56,
     height: 56,
-    borderRadius: 16,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
   optionLabel: {
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
     textAlign: 'center',
   },
+  // ── Cancel — quiet text action ──
   cancelBtn: {
-    marginTop: Space.sm,
-    paddingVertical: Space.sm + 4,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
+    marginTop: Space.xs,
+    paddingVertical: Space.md,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   cancelText: {
-    fontSize: 16,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
 });

@@ -2,16 +2,50 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousDa
 import { queryKeys } from '../server/queryKeys';
 import { fetchRecommendations } from './recommendationService';
 import type { RecommendationSectionKey } from './recommendationTypes';
-import { fetchListingByIdFromApi } from '../../services/listingsApi';
-import type { ListingCommerceServerContext } from '../../services/listingsApi';
-import type { Listing } from '../../data/mockData';
+import {
+  fetchListingByIdFromApi,
+  fetchListingPriceHistory,
+  fetchListingQaSummary,
+  fetchListingSoldComparables,
+} from '../../services/listingsApi';
+import type { Listing, ListingCommerceServerContext } from '../../services/listingsApi';
 import { fetchJson } from '../../lib/apiClient';
 import type { SellerTrustSummary } from './listingDetailContract';
 import { mapBackendListingToListing } from '../../services/listingMapper';
+import { ENABLE_RUNTIME_MOCKS } from '../../constants/runtimeFlags';
+import { MOCK_LISTINGS, MOCK_USERS } from '../../data/mockData';
 
 export interface ListingDetailResult {
   listing: Listing;
   commerce?: ListingCommerceServerContext;
+}
+
+/**
+ * In fixture-design mode, if the live backend doesn't have a listing
+ * (e.g. the ID came from mock feed data), fall back to the mock listing
+ * so the detail screen remains inspectable during design work.
+ * In integration-truth / production modes, the error is surfaced honestly.
+ */
+function findMockListingDetail(listingId: string): ListingDetailResult | null {
+  if (!ENABLE_RUNTIME_MOCKS) return null;
+  const mockListing = MOCK_LISTINGS.find((l) => l.id === listingId);
+  if (!mockListing) return null;
+  const seller = MOCK_USERS.find((u) => u.id === mockListing.sellerId);
+  return {
+    listing: {
+      ...mockListing,
+      seller: seller
+        ? {
+            id: seller.id,
+            username: seller.username,
+            avatar: seller.avatar || null,
+            rating: seller.rating,
+            reviewCount: seller.reviewCount,
+            location: seller.location,
+          }
+        : null,
+    } as Listing,
+  };
 }
 
 export function useListingDetail(listingId: string | undefined) {
@@ -19,14 +53,20 @@ export function useListingDetail(listingId: string | undefined) {
     queryKey: listingId ? queryKeys.listing.detail(listingId) : ['listing', 'detail', 'none'],
     queryFn: async () => {
       if (!listingId) return null;
-      const res = await fetchListingByIdFromApi(listingId);
-      if (!res.ok || !res.listing) {
-        throw new Error(res.error || 'Listing not found');
+      try {
+        const res = await fetchListingByIdFromApi(listingId);
+        if (!res.ok || !res.listing) {
+          throw new Error(res.error || 'Listing not found');
+        }
+        return {
+          listing: mapBackendListingToListing(res.listing),
+          commerce: res.commerce,
+        } as ListingDetailResult;
+      } catch (error: any) {
+        const mockFallback = findMockListingDetail(listingId);
+        if (mockFallback) return mockFallback;
+        throw error;
       }
-      return {
-        listing: mapBackendListingToListing(res.listing),
-        commerce: res.commerce,
-      } as ListingDetailResult;
     },
     enabled: !!listingId,
     staleTime: 5 * 60 * 1000,
@@ -36,6 +76,36 @@ export function useListingDetail(listingId: string | undefined) {
       return failureCount < 2;
     },
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useListingSoldComparables(listingId: string | undefined) {
+  return useQuery({
+    queryKey: listingId ? ['listing', 'sold-comparables', listingId] : ['listing', 'sold-comparables', 'none'],
+    queryFn: () => fetchListingSoldComparables(listingId!),
+    enabled: !!listingId,
+    staleTime: 15 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useListingPriceHistory(listingId: string | undefined) {
+  return useQuery({
+    queryKey: listingId ? ['listing', 'price-history', listingId] : ['listing', 'price-history', 'none'],
+    queryFn: () => fetchListingPriceHistory(listingId!),
+    enabled: !!listingId,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useListingQaSummary(listingId: string | undefined) {
+  return useQuery({
+    queryKey: listingId ? ['listing', 'qa-summary', listingId] : ['listing', 'qa-summary', 'none'],
+    queryFn: () => fetchListingQaSummary(listingId!),
+    enabled: !!listingId,
+    staleTime: 60 * 1000,
+    retry: 1,
   });
 }
 

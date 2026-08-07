@@ -5,22 +5,39 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Linking,
   Platform,
   Pressable,
   AppState,
   Alert,
   ActivityIndicator,
+  Linking,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import Reanimated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import {
+  initPaymentSheet,
+  PaymentSheetError,
+  presentPaymentSheet,
+} from '@stripe/stripe-react-native';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { EmptyState } from '../components/EmptyState';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { useToast } from '../context/ToastContext';
+import { useNotifications } from '../hooks/useNotifications';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import { useBackendData } from '../context/BackendDataContext';
@@ -28,8 +45,10 @@ import { AddCardSheet } from '../components/checkout/AddCardSheet';
 import { CheckoutItemSummary } from '../components/checkout/CheckoutItemSummary';
 import { CheckoutSelectionRow } from '../components/checkout/CheckoutSelectionRow';
 import { CheckoutPaymentSelector } from '../components/checkout/CheckoutPaymentSelector';
+import { BottomSheet } from '../components/BottomSheet';
 import {
   createCommercePaymentIntent,
+  createStripeOrderSheet,
   createOrder,
   cancelOrder,
   getPaymentIntentStatus,
@@ -41,11 +60,18 @@ import {
 } from '../services/commerceApi';
 import { CapabilityCarrier, getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { CachedImage } from '../components/CachedImage';
+import { CommerceDetailOfflineBanner } from '../components/commerce/detail';
 import { BuyerProtectionStrip } from '../components/product';
 import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Typography, Radius, Stroke, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { createStableId } from '../utils/createStableId';
+import {
+  configureStripeMobile,
+  getStripeReturnUrl,
+} from '../platform/payments/stripeMobile';
+import { t } from '../i18n';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 
@@ -58,6 +84,7 @@ type CheckoutStage =
   | 'payment_failed';
 
 interface CheckoutPostageOption {
+  quoteId: string | null;
   carrierId: string | null;
   label: string;
   etaLabel: string;
@@ -67,15 +94,17 @@ interface CheckoutPostageOption {
 }
 
 const DEFAULT_POSTAGE_OPTION: CheckoutPostageOption = {
+  quoteId: null,
   carrierId: null,
-  label: 'Standard shipping',
-  etaLabel: '2-3 working days',
+  label: t('checkout.postage.default.label'),
+  etaLabel: t('checkout.postage.default.eta'),
   priceFromGbp: 2.89,
   liveQuote: false,
   tracking: false,
 };
 
 const UNAVAILABLE_REGION_POSTAGE_OPTION: CheckoutPostageOption = {
+  quoteId: null,
   carrierId: null,
   label: 'Shipping not available for your region',
   etaLabel: 'Unavailable',
@@ -97,6 +126,9 @@ function toEtaLabel(carrier: CapabilityCarrier): string {
 
 const PAYMENT_INTENT_POLL_ATTEMPTS = 12;
 const PAYMENT_INTENT_POLL_INTERVAL_MS = 1_500;
+// Extended polling for 3DS/SCA re-authentication: up to 5 minutes.
+const PAYMENT_INTENT_SCA_POLL_ATTEMPTS = 100;
+const PAYMENT_INTENT_SCA_POLL_INTERVAL_MS = 3_000;
 
 type CheckoutPaymentSettlementStatus = 'succeeded' | 'failed' | 'pending' | 'aborted';
 
@@ -110,7 +142,10 @@ async function waitForPaymentIntentSettlement(
   intentId: string,
   shouldContinue: () => boolean
 ): Promise<CheckoutPaymentSettlementStatus> {
-  for (let attempt = 0; attempt < PAYMENT_INTENT_POLL_ATTEMPTS; attempt += 1) {
+  let maxAttempts = PAYMENT_INTENT_POLL_ATTEMPTS;
+  let intervalMs = PAYMENT_INTENT_POLL_INTERVAL_MS;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (!shouldContinue()) {
       return 'aborted';
     }
@@ -126,6 +161,26 @@ async function waitForPaymentIntentSettlement(
       if (normalizedStatus === 'failed' || normalizedStatus === 'cancelled') {
         return 'failed';
       }
+
+      // ── 3DS/SCA re-authentication ─────────────────────────────────────
+      // When the intent requires action (e.g., 3DS challenge), extend the
+      // polling window and open the next_action_url for the user to
+      // authenticate with their bank.
+      if (normalizedStatus === 'requires_action' || normalizedStatus === 'requires_confirmation') {
+        const nextActionUrl = (latestIntent as { nextActionUrl?: string | null }).nextActionUrl;
+        if (nextActionUrl) {
+          // Open the bank's 3DS authentication page in the device browser.
+          try {
+            await Linking.openURL(nextActionUrl);
+          } catch {
+            // Linking may fail on some platforms; the user can also
+            // complete auth in the PaymentSheet.
+          }
+        }
+        // Switch to extended polling (5 min) to allow time for 3DS.
+        maxAttempts = PAYMENT_INTENT_SCA_POLL_ATTEMPTS;
+        intervalMs = PAYMENT_INTENT_SCA_POLL_INTERVAL_MS;
+      }
     } catch {
       // Continue polling until timeout to absorb transient API/network failures.
     }
@@ -134,8 +189,8 @@ async function waitForPaymentIntentSettlement(
       return 'aborted';
     }
 
-    if (attempt < PAYMENT_INTENT_POLL_ATTEMPTS - 1) {
-      await wait(PAYMENT_INTENT_POLL_INTERVAL_MS);
+    if (attempt < maxAttempts - 1) {
+      await wait(intervalMs);
     }
   }
 
@@ -167,8 +222,8 @@ function buildOrderSignature(params: {
 const STAGE_LABELS: Record<CheckoutStage, string> = {
   idle: '',
   creating_order: 'Creating your order…',
-  opening_payment: 'Opening secure payment…',
-  awaiting_payment: 'Waiting for payment confirmation…',
+  opening_payment: 'Preparing payment…',
+  awaiting_payment: 'Confirming payment…',
   payment_pending: 'Payment is still pending.',
   payment_failed: 'Payment failed. Try again.',
 };
@@ -178,7 +233,78 @@ export default function CheckoutScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { itemId } = route.params;
+  const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
   const { listings } = useBackendData();
+
+  // Theme-aware color overrides for the static styles. The static
+  // StyleSheet contains only non-color properties; colors are applied
+  // via this themed proxy so the screen is fully dark-mode compatible.
+  const t = useMemo(() => ({
+    container: { backgroundColor: colors.background },
+    header: { borderBottomColor: colors.border },
+    headerTitle: { color: colors.textPrimary },
+    sectionDivider: { backgroundColor: colors.border },
+    priceBreakdownCard: {},
+    priceBreakdownTitle: { color: colors.textMuted },
+    priceDivider: { backgroundColor: colors.border },
+    savingsBadge: { backgroundColor: `${colors.success}12` },
+    savingsText: { color: colors.success },
+    protectionIncludedText: { color: colors.success },
+    balanceToggle: { borderColor: colors.border },
+    balanceSwitch: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    balanceSwitchOn: { backgroundColor: colors.success, borderColor: colors.success },
+    balanceKnob: { backgroundColor: colors.textMuted },
+    balanceKnobOn: { backgroundColor: colors.textInverse },
+    balanceLabel: { color: colors.textPrimary },
+    balanceAmount: { color: colors.textMuted },
+    feedbackText: { color: colors.textSecondary },
+    feedbackTextError: { color: colors.danger },
+    orderErrorText: { color: colors.danger },
+    hintText: { color: colors.textMuted },
+    termsText: { color: colors.textMuted },
+    footer: { borderTopColor: colors.border, backgroundColor: colors.background },
+    footerTotalLabel: { color: colors.textSecondary },
+    footerTotalPrice: { color: colors.textPrimary },
+    payBtn: { backgroundColor: colors.brand },
+    payBtnText: { color: colors.textInverse },
+    signedOutTitle: { color: colors.textPrimary },
+    signedOutBody: { color: colors.textMuted },
+    signedOutBtn: { backgroundColor: colors.brand },
+    signedOutBtnText: { color: colors.textInverse },
+    capabilityRetryBtn: { borderColor: colors.border, backgroundColor: colors.surface },
+    capabilityRetryText: { color: colors.textPrimary },
+    partialDataBanner: { borderColor: `${colors.warning}59`, backgroundColor: `${colors.warning}14` },
+    partialDataMessage: { color: colors.warning },
+    partialDataAction: { borderColor: `${colors.warning}80`, backgroundColor: `${colors.surfaceAlt}99` },
+    partialDataActionText: { color: colors.warning },
+    applePayBtn: { backgroundColor: colors.brand },
+    applePayBtnText: { color: colors.textInverse },
+    paymentCard: { borderColor: colors.border, backgroundColor: colors.surface },
+    paymentCardWarning: { borderColor: colors.danger, backgroundColor: `${colors.danger}0A` },
+    paymentCardIcon: {},
+    paymentCardIconWarning: {},
+    paymentCardLabel: { color: colors.textMuted },
+    paymentCardTitle: { color: colors.textPrimary },
+    paymentCardSubtitle: { color: colors.textSecondary },
+    paymentCardChange: { color: colors.brand },
+    paymentCardWarningText: { color: colors.danger },
+    compactSummaryRow: { color: colors.textSecondary },
+    compactSummaryValue: { color: colors.textPrimary },
+    compactSummaryTotalLabel: { color: colors.textPrimary },
+    compactSummaryTotalValue: { color: colors.textPrimary },
+    compactSummaryDivider: { backgroundColor: colors.border },
+    breakdownChevronText: { color: colors.textMuted },
+    trustBadgeText: { color: colors.textMuted },
+    trustBadgeDot: { backgroundColor: colors.textMuted },
+    breakdownSheetTitle: { color: colors.textPrimary },
+    breakdownSheetLabel: { color: colors.textSecondary },
+    breakdownSheetValue: { color: colors.textPrimary },
+    breakdownSheetDivider: { backgroundColor: colors.border },
+    breakdownSheetTotalLabel: { color: colors.textPrimary },
+    breakdownSheetTotalValue: { color: colors.textPrimary },
+  }), [colors]);
   const currentUser = useStore((state) => state.currentUser);
   const savedAddress = useStore((state) => state.savedAddress);
   const saveAddress = useStore((state) => state.saveAddress);
@@ -188,6 +314,7 @@ export default function CheckoutScreen() {
   const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
 
   const [isHydrating, setIsHydrating] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isSelectingPayment, setIsSelectingPayment] = useState(false);
 
@@ -216,6 +343,7 @@ export default function CheckoutScreen() {
   const [stage, setStage] = useState<CheckoutStage>('idle');
   const [addCardSheetVisible, setAddCardSheetVisible] = useState(false);
   const [paymentSelectorVisible, setPaymentSelectorVisible] = useState(false);
+  const [breakdownSheetVisible, setBreakdownSheetVisible] = useState(false);
   const [postageOption, setPostageOption] = useState<CheckoutPostageOption>(DEFAULT_POSTAGE_OPTION);
   const [checkoutCapabilities, setCheckoutCapabilities] = useState<UserCountryCapabilities | null>(null);
   const [backendAddresses, setBackendAddresses] = useState<CommerceAddress[]>([]);
@@ -225,11 +353,12 @@ export default function CheckoutScreen() {
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
-  const { show } = useToast();
+  const { showError, showSuccess, showInfo } = useNotifications();
   const { formatFromFiat } = useFormattedPrice();
 
   const createdOrderIdRef = useRef<string | null>(null);
   const createdOrderSignatureRef = useRef<string | null>(null);
+  const orderIdempotencyKeyRef = useRef<string | null>(null);
   const pendingIntentIdRef = useRef<string | null>(null);
   const isSubmittingRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
@@ -247,7 +376,7 @@ export default function CheckoutScreen() {
     if (!currentUser?.id || !item) return false;
     if (isHydrating || isInteractionLocked) return false;
     if (!savedAddress?.id) return false;
-    if (!postageOption.carrierId) return false;
+    if (!postageOption.carrierId || !postageOption.quoteId) return false;
     // If balance covers the full total, payment method is not required
     const grossTotal = item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp;
     const balanceCoversFull = useBalance && walletBalance >= grossTotal;
@@ -256,7 +385,7 @@ export default function CheckoutScreen() {
       if (!isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type)) return false;
     }
     return true;
-  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp]);
+  }, [currentUser?.id, item, isHydrating, isInteractionLocked, savedAddress?.id, savedPaymentMethod?.id, postageOption.carrierId, postageOption.quoteId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp]);
 
   // --- Mount / unmount ---
   useEffect(() => {
@@ -407,6 +536,7 @@ export default function CheckoutScreen() {
           setPostageOption(UNAVAILABLE_REGION_POSTAGE_OPTION);
         } else {
           const fallbackOption: CheckoutPostageOption = {
+            quoteId: null,
             carrierId: primaryCarrier.id,
             label: primaryCarrier.label,
             etaLabel: toEtaLabel(primaryCarrier),
@@ -434,6 +564,7 @@ export default function CheckoutScreen() {
               const selectedQuote = quoteResponse.recommendedQuote ?? quoteResponse.quotes[0];
               if (selectedQuote) {
                 setPostageOption({
+                  quoteId: selectedQuote.quoteId,
                   carrierId: selectedQuote.carrierId,
                   label: selectedQuote.label,
                   etaLabel: toEtaLabelFromRange(selectedQuote.etaMinDays, selectedQuote.etaMaxDays),
@@ -443,7 +574,7 @@ export default function CheckoutScreen() {
                 });
               }
             } catch {
-              setShippingError('Could not get a live shipping quote. Showing estimated pricing.');
+              setShippingError('A current shipping quote is unavailable. Refresh before paying.');
             }
           }
         }
@@ -461,6 +592,15 @@ export default function CheckoutScreen() {
       void hydrateCheckout();
     }, [hydrateCheckout])
   );
+
+  const handleRefreshCheckout = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await hydrateCheckout();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [hydrateCheckout]);
 
   // --- Cancel stale order (result-bearing) ---
   const cancelStaleOrder = useCallback(async (): Promise<boolean> => {
@@ -488,6 +628,7 @@ export default function CheckoutScreen() {
 
       createdOrderIdRef.current = null;
       createdOrderSignatureRef.current = null;
+      orderIdempotencyKeyRef.current = null;
       pendingIntentIdRef.current = null;
 
       return true;
@@ -505,12 +646,15 @@ export default function CheckoutScreen() {
   const handlePay = useCallback(async () => {
     if (isSubmittingRef.current) return;
     if (!checkoutEligible) {
-      show('Complete address and payment details before paying.', 'error');
+      showError('Cannot pay yet', 'Complete address and payment details before paying.');
       return;
     }
 
     const userId = currentUser?.id;
     if (!userId || !item) return;
+
+    // Performance mark: checkout flow start (user confirmed payment).
+    performance.mark('checkout:start');
 
     const PLATFORM_CHARGE = calculatePlatformChargeGbp(item.price);
     const POSTAGE_FEE = postageOption.priceFromGbp;
@@ -564,9 +708,14 @@ export default function CheckoutScreen() {
         }
 
         setStage('creating_order');
+        if (!orderIdempotencyKeyRef.current) {
+          orderIdempotencyKeyRef.current = createStableId('order');
+        }
         const order = await createOrder({
           buyerId: userId,
           listingId: item.id,
+          idempotencyKey: orderIdempotencyKeyRef.current,
+          shippingQuoteId: postageOption.quoteId!,
           addressId: savedAddress?.id,
           paymentMethodId: savedPaymentMethod?.id,
           platformChargeGbp: PLATFORM_CHARGE,
@@ -591,7 +740,10 @@ export default function CheckoutScreen() {
 
       // Create payment intent
       setStage('opening_payment');
-      const intent = await createCommercePaymentIntent({ orderId });
+      const intent = await createCommercePaymentIntent({
+        orderId,
+        idempotencyKey: `payment_${orderId}`,
+      });
 
       if (
         !isMountedRef.current
@@ -602,25 +754,42 @@ export default function CheckoutScreen() {
 
       pendingIntentIdRef.current = intent.intentId;
 
-      if (intent.nextActionUrl) {
-        try {
-          const supported = await Linking.canOpenURL(intent.nextActionUrl);
-          if (!supported) {
-            setStage('payment_failed');
-            setOrderError('Unable to open payment page. Please try again.');
-            show('Unable to open payment action URL.', 'error');
-            isSubmittingRef.current = false;
-            return;
-          }
-          await Linking.openURL(intent.nextActionUrl);
-          show('Complete authentication in browser, then return.', 'info');
-        } catch {
-          setStage('payment_failed');
-          setOrderError('Could not open payment page. Please try again.');
-          show('Could not open payment page. Please try again.', 'error');
-          isSubmittingRef.current = false;
-          return;
-        }
+      const sheet = await createStripeOrderSheet(orderId);
+      await configureStripeMobile(sheet.publishableKey);
+      const { error: sheetInitializationError } = await initPaymentSheet({
+        merchantDisplayName: sheet.merchantDisplayName,
+        customerId: sheet.customerId,
+        customerSessionClientSecret: sheet.customerSessionClientSecret,
+        paymentIntentClientSecret: sheet.paymentIntentClientSecret,
+        returnURL: getStripeReturnUrl(),
+        allowsDelayedPaymentMethods: false,
+        applePay:
+          sheet.applePayEnabled && Platform.OS === 'ios'
+            ? { merchantCountryCode: sheet.merchantCountryCode }
+            : undefined,
+        googlePay:
+          sheet.googlePayEnabled && Platform.OS === 'android'
+            ? {
+                merchantCountryCode: sheet.merchantCountryCode,
+                currencyCode: sheet.currency,
+                testEnv: sheet.publishableKey.startsWith('pk_test_'),
+              }
+            : undefined,
+      });
+      if (sheetInitializationError) {
+        throw new Error(sheetInitializationError.message);
+      }
+
+      const { error: sheetPresentationError } = await presentPaymentSheet();
+      if (sheetPresentationError?.code === PaymentSheetError.Canceled) {
+        setStage('idle');
+        setOrderError(null);
+        pendingIntentIdRef.current = null;
+        isSubmittingRef.current = false;
+        return;
+      }
+      if (sheetPresentationError) {
+        throw new Error(sheetPresentationError.message);
       }
 
       if (
@@ -649,16 +818,18 @@ export default function CheckoutScreen() {
       }
 
       if (settlementStatus === 'succeeded') {
-        show('Payment completed', 'success');
+        showSuccess('Payment completed', 'Your payment was successful.');
         pendingIntentIdRef.current = null;
         isSubmittingRef.current = false;
+        // Performance mark: checkout flow complete (payment settled).
+        performance.mark('checkout:complete');
         handleSettlementNavigation('succeeded', orderId, attemptId);
         return;
       }
 
       if (settlementStatus === 'pending') {
         setStage('payment_pending');
-        show('Payment is processing. We will update your order shortly.', 'info');
+        showInfo('Payment processing', 'We will update your order shortly.');
         isSubmittingRef.current = false;
         handleSettlementNavigation('pending', orderId, attemptId);
         return;
@@ -668,7 +839,7 @@ export default function CheckoutScreen() {
       setStage('payment_failed');
       pendingIntentIdRef.current = null;
       setOrderError('Payment could not be completed. Please try again.');
-      show('Payment could not be completed. Please try again.', 'error');
+      showError('Payment failed', 'Payment could not be completed. Please try again.');
     } catch (error: any) {
       if (
         !isMountedRef.current
@@ -678,9 +849,12 @@ export default function CheckoutScreen() {
       }
 
       setStage('payment_failed');
-      const message = error?.message ?? 'Payment could not be completed. Please try again.';
+      const isNetworkError = isOffline || error?.code === 'NETWORK_ERROR' || error?.code === 'ECONNABORTED';
+      const message = isNetworkError
+        ? 'You appear to be offline. Check your connection and try again.'
+        : error?.message ?? 'Payment could not be completed. Please try again.';
       setOrderError(message);
-      show(message, 'error');
+      showError('Payment failed', message);
     } finally {
       isSubmittingRef.current = false;
     }
@@ -692,7 +866,9 @@ export default function CheckoutScreen() {
     postageOption.priceFromGbp,
     savedAddress?.id,
     savedPaymentMethod?.id,
-    show,
+    showError,
+    showSuccess,
+    showInfo,
     handleSettlementNavigation,
     cancelStaleOrder,
     useBalance,
@@ -761,7 +937,7 @@ export default function CheckoutScreen() {
           if (createdOrderIdRef.current) {
             const cancelled = await cancelStaleOrder();
             if (!cancelled) {
-              show('Checkout selection could not be changed. The existing order is still active.', 'info');
+              showInfo('Cannot change selection', 'The existing order is still active.');
               return;
             }
           }
@@ -778,10 +954,26 @@ export default function CheckoutScreen() {
     } catch {
       setPaymentError('Payment methods could not be refreshed after adding card.');
     }
-  }, [currentUser?.id, savedPaymentMethod?.id, cancelStaleOrder, savePaymentMethod, show]);
+  }, [currentUser?.id, savedPaymentMethod?.id, cancelStaleOrder, savePaymentMethod]);
 
   // --- Delivery selection change ---
   const canChangePostage = (checkoutCapabilities?.postage.carriers.length ?? 0) > 1;
+  const allowCardPayments = isPaymentMethodAllowed(checkoutCapabilities, 'card');
+
+  // --- Payment method change press ---
+  const handlePaymentPress = useCallback(() => {
+    haptics.tap();
+    if (!allowCardPayments && checkoutCapabilities) {
+      showError('Cards unavailable', 'Cards are unavailable for your region.');
+      navigation.navigate('Payments');
+      return;
+    }
+    if (backendPaymentMethods.length > 1) {
+      setPaymentSelectorVisible(true);
+    } else {
+      setAddCardSheetVisible(true);
+    }
+  }, [allowCardPayments, checkoutCapabilities, backendPaymentMethods.length, showError, navigation]);
 
   const handleDeliveryPress = useCallback(async () => {
     if (!canChangePostage) return;
@@ -889,19 +1081,19 @@ export default function CheckoutScreen() {
 
   if (!item) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+      <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
           <Pressable
-            style={styles.closeBtn}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Checkout</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <EmptyState
@@ -917,34 +1109,34 @@ export default function CheckoutScreen() {
 
   if (!currentUser) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+      <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
           <Pressable
-            style={styles.closeBtn}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Checkout</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.signedOutTitle}>Sign in to checkout</Text>
-          <Text style={styles.signedOutBody}>
+          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.signedOutTitle, t.signedOutTitle]}>Sign in to checkout</Text>
+          <Text style={[styles.signedOutBody, t.signedOutBody]}>
             You need to be signed in to complete your purchase.
           </Text>
           <Pressable
-            style={styles.signedOutBtn}
+            style={({ pressed }) => [styles.signedOutBtn, t.signedOutBtn, pressed && styles.signedOutBtnPressed]}
             onPress={() => navigation.navigate('Login')}
             accessibilityRole="button"
             accessibilityLabel="Sign in"
           >
-            <Text style={styles.signedOutBtnText}>Sign in</Text>
+            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]}>Sign in</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -953,34 +1145,34 @@ export default function CheckoutScreen() {
 
   if (isSelfPurchase) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+      <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
           <Pressable
-            style={styles.closeBtn}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Checkout</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="person-circle-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.signedOutTitle}>Cannot purchase your own listing</Text>
-          <Text style={styles.signedOutBody}>
+          <Ionicons name="person-circle-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.signedOutTitle, t.signedOutTitle]}>Cannot purchase your own listing</Text>
+          <Text style={[styles.signedOutBody, t.signedOutBody]}>
             You cannot buy an item you listed for sale.
           </Text>
           <Pressable
-            style={styles.signedOutBtn}
+            style={({ pressed }) => [styles.signedOutBtn, t.signedOutBtn, pressed && styles.signedOutBtnPressed]}
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Text style={styles.signedOutBtnText}>Go back</Text>
+            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]}>Go back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1002,8 +1194,6 @@ export default function CheckoutScreen() {
   const balanceApplied = useBalance ? Math.min(walletBalance, GROSS_TOTAL) : 0;
   const TOTAL = Math.max(0, GROSS_TOTAL - balanceApplied);
 
-  const allowCardPayments = isPaymentMethodAllowed(checkoutCapabilities, 'card');
-
   const addressNeedsSave = savedAddress && !savedAddress.id;
   const addressSubtitle = savedAddress
     ? `${savedAddress.streetAddress}${savedAddress.apartment ? `, ${savedAddress.apartment}` : ''}\n${savedAddress.city}${savedAddress.region ? `, ${savedAddress.region}` : ''} · ${savedAddress.postalCode}\n${savedAddress.country}`
@@ -1015,33 +1205,146 @@ export default function CheckoutScreen() {
       ? 'Retry payment'
       : stage === 'payment_pending'
         ? 'Waiting for confirmation…'
-        : 'Pay securely';
+        : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
+
+  // --- Partial data state (§14) ---
+  // Some checkout data is available but other parts are missing. The checkout
+  // remains usable — these are inline prompts, not full error states. Distinct
+  // from the row-level errorText (which surfaces fetch failures); these guide
+  // the user to complete the missing piece or proceed with a safe default.
+  const addressLoaded = backendAddresses.length > 0 || !!savedAddress?.id;
+  const paymentLoaded = backendPaymentMethods.length > 0 || !!savedPaymentMethod?.id;
+  const shippingReady = !!postageOption.carrierId && !!postageOption.quoteId;
+
+  const partialDataPrompt = useMemo(() => {
+    if (isHydrating || isInteractionLocked) return null;
+
+    // Shipping quote failed but address + payment are ready → proceed with
+    // standard (estimated) shipping. The carrier is still selected, only the
+    // live quote is unavailable.
+    if (shippingError && addressLoaded && paymentLoaded && !!postageOption.carrierId) {
+      return {
+        icon: 'cube-outline' as const,
+        message: 'Shipping quote unavailable — proceeding with standard shipping.',
+        action: { label: 'Try again', onPress: (): void => void hydrateCheckout() },
+      };
+    }
+
+    // Address missing but payment methods loaded → prompt to add an address.
+    if (!addressLoaded && paymentLoaded) {
+      return {
+        icon: 'location-outline' as const,
+        message: 'Add a delivery address to continue. Your payment methods are ready.',
+        action: { label: 'Add address', onPress: () => handleAddressPress() },
+      };
+    }
+
+    // Payment methods missing but address loaded → prompt to add a payment method.
+    if (!paymentLoaded && addressLoaded) {
+      return {
+        icon: 'card-outline' as const,
+        message: 'Add a payment method to continue. Your delivery address is ready.',
+        action: {
+          label: 'Add payment',
+          onPress: () => {
+            haptics.tap();
+            if (!allowCardPayments && checkoutCapabilities) {
+              navigation.navigate('Payments');
+              return;
+            }
+            if (backendPaymentMethods.length > 1) {
+              setPaymentSelectorVisible(true);
+            } else {
+              setAddCardSheetVisible(true);
+            }
+          },
+        },
+      };
+    }
+
+    return null;
+  }, [
+    isHydrating,
+    isInteractionLocked,
+    shippingError,
+    addressLoaded,
+    paymentLoaded,
+    postageOption.carrierId,
+    hydrateCheckout,
+    handleAddressPress,
+    haptics,
+    allowCardPayments,
+    checkoutCapabilities,
+    navigation,
+    backendPaymentMethods.length,
+  ]);
+
+  // Whether the row-level errorText should be suppressed because the partial-
+  // data banner already covers that case (avoids duplicate messaging).
+  const suppressAddressError = partialDataPrompt?.icon === 'location-outline';
+  const suppressPaymentError = partialDataPrompt?.icon === 'card-outline';
+  const suppressShippingError =
+    partialDataPrompt?.icon === 'cube-outline' && !!postageOption.carrierId;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       {/* 1. Compact close header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
         <Pressable
-          style={styles.closeBtn}
+          style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
           onPress={handleClose}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityRole="button"
           accessibilityLabel="Close checkout"
         >
-          <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          <Ionicons name="close" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Checkout</Text>
+        <Text style={[styles.headerTitle, t.headerTitle]}>Checkout</Text>
         <View style={styles.headerSpacer} />
       </View>
 
+      <CommerceDetailOfflineBanner isOffline={isOffline} />
+
+      {/* Partial-data inline prompt (§14). Quiet, friendly — the checkout is
+          still usable. Distinct from full error states. */}
+      {partialDataPrompt ? (
+        <View style={[styles.partialDataBanner, t.partialDataBanner]}>
+          <Ionicons name={partialDataPrompt.icon} size={15} color={colors.warning} />
+          <Text style={[styles.partialDataMessage, t.partialDataMessage]} numberOfLines={3}>
+            {partialDataPrompt.message}
+          </Text>
+          <Pressable
+            style={[styles.partialDataAction, t.partialDataAction]}
+            onPress={partialDataPrompt.action.onPress}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={partialDataPrompt.action.label}
+            accessibilityHint="Retry loading the missing checkout details"
+          >
+            <Text style={[styles.partialDataActionText, t.partialDataActionText]}>{partialDataPrompt.action.label}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 260 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
+        accessibilityElementsHidden={addCardSheetVisible || paymentSelectorVisible}
+        importantForAccessibility={addCardSheetVisible || paymentSelectorVisible ? 'no-hide-descendants' : 'auto'}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefreshCheckout}
+            tintColor={colors.textMuted}
+            colors={[colors.textMuted]}
+          />
+        }
       >
         {/* 2. Product and seller summary */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <CheckoutItemSummary
           title={item.title}
           imageUrl={getListingCoverUri(item.images, '')}
@@ -1059,7 +1362,7 @@ export default function CheckoutScreen() {
           onPressMessage={resolvedSeller.id ? () => { haptics.tap(); handleMessageSeller(); } : undefined}
         />
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, t.sectionDivider]} />
 
         {/* 3. Delivery address */}
         <CheckoutSelectionRow
@@ -1071,7 +1374,7 @@ export default function CheckoutScreen() {
           icon="location-outline"
           isFilled={!!savedAddress}
           warningText={addressNeedsSave ? 'Needs saving before payment' : undefined}
-          errorText={addressError ?? undefined}
+          errorText={suppressAddressError ? undefined : (addressError ?? undefined)}
           accessibilityLabel={
             savedAddress
               ? `Delivery address: ${savedAddress.name}, ${savedAddress.streetAddress}, ${savedAddress.city}, ${savedAddress.postalCode}, ${savedAddress.country}`
@@ -1092,142 +1395,146 @@ export default function CheckoutScreen() {
           errorText={
             !postageOption.carrierId
               ? 'Shipping not available for your region'
-              : shippingError ?? undefined
+              : suppressShippingError
+                ? undefined
+                : shippingError ?? undefined
           }
           accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, 'GBP')}`}
         />
 
-        {/* 5. Payment method */}
-        <CheckoutSelectionRow
-          label="Payment"
-          title={
-            savedPaymentMethod
-              ? savedPaymentMethod.label
-              : allowCardPayments
-                ? 'Add payment method'
-                : 'No payment method'
-          }
-          subtitle={
-            !allowCardPayments && checkoutCapabilities
-              ? 'Cards unavailable in your region'
-              : savedPaymentMethod?.details
-                ? savedPaymentMethod.details
-                : savedPaymentMethod
-                  ? undefined
-                  : 'Required before payment'
-          }
-          actionLabel={savedPaymentMethod ? 'Change' : 'Add'}
-          onPress={() => {
-            haptics.tap();
-            if (!allowCardPayments && checkoutCapabilities) {
-              show('Cards are unavailable for your region.', 'error');
-              navigation.navigate('Payments');
-              return;
-            }
-            if (backendPaymentMethods.length > 1) {
-              setPaymentSelectorVisible(true);
-            } else {
-              setAddCardSheetVisible(true);
-            }
-          }}
-          icon="card-outline"
-          isFilled={!!savedPaymentMethod}
-          errorText={paymentError ?? undefined}
+        {/* 5. Payment method card */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.paymentCard,
+            t.paymentCard,
+            !savedPaymentMethod && styles.paymentCardWarning,
+            !savedPaymentMethod && t.paymentCardWarning,
+            pressed && styles.paymentCardPressed,
+          ]}
+          onPress={handlePaymentPress}
+          accessibilityRole="button"
           accessibilityLabel={
             savedPaymentMethod
-              ? `Payment method: ${savedPaymentMethod.label}${savedPaymentMethod.details ? `, ${savedPaymentMethod.details}` : ''}`
+              ? `Payment method: ${savedPaymentMethod.label}${savedPaymentMethod.details ? `, ${savedPaymentMethod.details}` : ''}. Change payment method.`
               : 'Add payment method'
           }
           accessibilityHint="Add or change your payment method"
-        />
-
-        <View style={styles.sectionDivider} />
-
-        {/* 6. Price breakdown */}
-        <View style={styles.priceBreakdownCard}>
-          <View style={styles.priceBreakdownHeader}>
-            <Ionicons name="receipt-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.priceBreakdownTitle}>Order summary</Text>
-          </View>
-          <PriceRow label="Item" value={formatFromFiat(item.price, 'GBP')} />
-          <PriceRow label="Platform charge" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
-          <PriceRow
-            label={`Delivery${postageOption.liveQuote ? '' : ' (Estimated)'}`}
-            value={formatFromFiat(POSTAGE_FEE, 'GBP')}
-          />
-          <View style={styles.protectionIncludedRow}>
-            <Ionicons name="shield-checkmark-outline" size={12} color={Colors.success} />
-            <Text style={styles.protectionIncludedText}>
-              Includes buyer protection — funds held in escrow until you confirm
-            </Text>
-          </View>
-          <View style={styles.priceDivider} />
-          <PriceRow label="Total" value={formatFromFiat(GROSS_TOTAL, 'GBP')} bold />
-
-          {/* 6a. Balance-at-checkout toggle */}
-          {walletBalance > 0 && !balanceLoading && (
-            <View style={styles.balanceRow}>
-              <Pressable
-                style={styles.balanceToggle}
-                onPress={() => {
-                  haptics.tap();
-                  setUseBalance((v) => !v);
-                }}
-                accessibilityRole="switch"
-                accessibilityLabel="Use wallet balance"
-                accessibilityState={{ checked: useBalance }}
-              >
-                <View style={[styles.balanceSwitch, useBalance && styles.balanceSwitchOn]}>
-                  <View style={[styles.balanceKnob, useBalance && styles.balanceKnobOn]} />
-                </View>
-                <View style={styles.balanceTextCol}>
-                  <Text style={styles.balanceLabel}>Use wallet balance</Text>
-                  <Text style={styles.balanceAmount} numberOfLines={1}>
-                    {formatFromFiat(walletBalance, 'GBP')} available
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          )}
-
-          {useBalance && balanceApplied > 0 && (
-            <>
-              <PriceRow
-                label="Wallet balance applied"
-                value={`-${formatFromFiat(balanceApplied, 'GBP')}`}
+        >
+          <View style={styles.paymentCardLeft}>
+            <View style={[styles.paymentCardIcon, t.paymentCardIcon, !savedPaymentMethod && styles.paymentCardIconWarning, !savedPaymentMethod && t.paymentCardIconWarning]}>
+              <Ionicons
+                name={savedPaymentMethod?.type === 'apple_pay' ? 'logo-apple' : 'card-outline'}
+                size={18}
+                color={savedPaymentMethod ? colors.brand : colors.danger}
               />
-              <View style={styles.priceDivider} />
-              <PriceRow label="To pay" value={formatFromFiat(TOTAL, 'GBP')} bold />
-              <View style={styles.savingsBadge}>
-                <Ionicons name="wallet-outline" size={11} color={Colors.success} />
-                <Text style={styles.savingsText}>
-                  Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
+            </View>
+            <View style={styles.paymentCardTextCol}>
+              <Text style={[styles.paymentCardLabel, t.paymentCardLabel]}>Payment method</Text>
+              {savedPaymentMethod ? (
+                <>
+                  <Text style={[styles.paymentCardTitle, t.paymentCardTitle]} numberOfLines={1}>
+                    {savedPaymentMethod.label}
+                  </Text>
+                  {savedPaymentMethod.details ? (
+                    <Text style={[styles.paymentCardSubtitle, t.paymentCardSubtitle]} numberOfLines={1}>
+                      {savedPaymentMethod.details}
+                    </Text>
+                  ) : null}
+                </>
+              ) : (
+                <Text style={[styles.paymentCardWarningText, t.paymentCardWarningText]}>
+                  {!allowCardPayments && checkoutCapabilities
+                    ? 'Cards unavailable in your region'
+                    : 'No payment method — tap to add'}
                 </Text>
-              </View>
-            </>
-          )}
-        </View>
+              )}
+              {suppressPaymentError ? null : paymentError ? (
+                <View style={styles.paymentCardErrorRow}>
+                  <Ionicons name="alert-circle-outline" size={12} color={colors.danger} />
+                  <Text style={[styles.paymentCardWarningText, t.paymentCardWarningText]}>{paymentError}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+          <View style={styles.paymentCardRight}>
+            <Text style={[styles.paymentCardChange, t.paymentCardChange]}>
+              {savedPaymentMethod ? 'Change' : 'Add'}
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+          </View>
+        </Pressable>
+        </Reanimated.View>
 
-        {/* 6b. Buyer protection strip */}
+        <View style={[styles.sectionDivider, t.sectionDivider]} />
+
+        {/* 5b. Buyer protection strip — BEFORE price breakdown per Design.md:
+            "Trust information must appear before the irreversible payment step."
+            2026 research (Baymard): trust badges near the payment CTA lift
+            conversion up to 32% vs footer placement. Placing this above the
+            order summary ensures the user sees escrow protection before
+            reviewing costs and tapping Pay. */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <View style={styles.protectionStripWrap}>
           <BuyerProtectionStrip compact />
         </View>
+        </Reanimated.View>
+
+        {/* 6a. Balance-at-checkout toggle — kept inline so the user can
+            apply wallet credit before reviewing the compact total in the
+            sticky footer. */}
+        {walletBalance > 0 && !balanceLoading && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+          <View style={styles.balanceRow}>
+            <Pressable
+              style={({ pressed }) => [styles.balanceToggle, t.balanceToggle, pressed && styles.balanceTogglePressed]}
+              onPress={() => {
+                haptics.tap();
+                setUseBalance((v) => !v);
+              }}
+              accessibilityRole="switch"
+              accessibilityLabel="Use wallet balance"
+              accessibilityState={{ checked: useBalance }}
+            >
+              <View style={[styles.balanceSwitch, t.balanceSwitch, useBalance && t.balanceSwitchOn]}>
+                <View style={[styles.balanceKnob, t.balanceKnob, useBalance && t.balanceKnobOn]} />
+              </View>
+              <View style={styles.balanceTextCol}>
+                <Text style={[styles.balanceLabel, t.balanceLabel]}>Use wallet balance</Text>
+                <Text style={[styles.balanceAmount, t.balanceAmount]} numberOfLines={1}>
+                  {formatFromFiat(walletBalance, 'GBP')} available
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+          </Reanimated.View>
+        )}
+
+        {useBalance && balanceApplied > 0 && (
+          <View style={[styles.savingsBadge, t.savingsBadge]}>
+            <Ionicons name="wallet-outline" size={11} color={colors.success} />
+            <Text style={[styles.savingsText, t.savingsText]}>
+              Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
+            </Text>
+          </View>
+        )}
 
         {/* 7. Transaction feedback */}
         {stage !== 'idle' ? (
           <View style={styles.feedbackRow}>
             {isSubmitting ? (
-              <ActivityIndicator size="small" color={Colors.brand} />
+              <ActivityIndicator size="small" color={colors.brand} />
             ) : stage === 'payment_failed' ? (
-              <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+              <Ionicons name="alert-circle" size={16} color={colors.danger} />
             ) : stage === 'payment_pending' ? (
-              <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
+              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
             ) : null}
             <Text
               style={[
                 styles.feedbackText,
-                stage === 'payment_failed' && styles.feedbackTextError,
+                t.feedbackText,
+                stage === 'payment_failed' && t.feedbackTextError,
               ]}
+              accessibilityLiveRegion="polite"
             >
               {STAGE_LABELS[stage]}
             </Text>
@@ -1235,46 +1542,147 @@ export default function CheckoutScreen() {
         ) : null}
 
         {orderError ? (
-          <Text style={styles.orderErrorText}>{orderError}</Text>
+          <Text style={[styles.orderErrorText, t.orderErrorText]} accessibilityLiveRegion="polite">{orderError}</Text>
         ) : null}
 
         {capabilityError ? (
-          <Text style={styles.hintText}>{capabilityError}</Text>
+          <View style={styles.capabilityErrorRow}>
+            <Text style={[styles.hintText, t.hintText, { flex: 1 }]}>
+              {capabilityError}
+            </Text>
+            <Pressable
+              style={[styles.capabilityRetryBtn, t.capabilityRetryBtn]}
+              onPress={() => void hydrateCheckout()}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Try again"
+              accessibilityHint="Retry loading checkout details"
+            >
+              <Text style={[styles.capabilityRetryText, t.capabilityRetryText]}>Try again</Text>
+            </Pressable>
+          </View>
         ) : null}
 
-        <Text style={styles.termsText}>
+        <Text style={[styles.termsText, t.termsText]}>
           By tapping "Pay", you agree to our Terms of Sale and Privacy Policy.
         </Text>
       </ScrollView>
 
-      {/* 8. Sticky total + Pay footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
-        <View style={styles.footerTotalCol}>
-          <Text style={styles.footerTotalLabel}>Total</Text>
-          <Text style={styles.footerTotalPrice}>{formatFromFiat(TOTAL, 'GBP')}</Text>
-        </View>
+      {/* 8. Sticky compact order summary + trust badges + Pay footer */}
+      <View style={[styles.footer, t.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : Space.md }]}>
+        {/* Compact cost breakdown — inline above the CTA (2026 checkout UX) */}
         <Pressable
-          style={[
-            styles.payBtn,
-            (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
-          ]}
-          onPress={() => { haptics.press(); handlePay(); }}
-          disabled={!checkoutEligible || isInteractionLocked}
+          style={styles.compactSummary}
+          onPress={() => { haptics.tap(); setBreakdownSheetVisible(true); }}
           accessibilityRole="button"
-          accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} securely`}
-          accessibilityState={{
-            disabled: !checkoutEligible || isInteractionLocked,
-            busy: isSubmitting,
-          }}
+          accessibilityLabel={`Order summary. Item ${formatFromFiat(item.price, 'GBP')}, Delivery ${formatFromFiat(POSTAGE_FEE, 'GBP')}, Buyer protection ${formatFromFiat(PLATFORM_CHARGE, 'GBP')}. Total ${formatFromFiat(TOTAL, 'GBP')}. View full breakdown.`}
+          accessibilityHint="Open the full cost breakdown and returns policy"
         >
-          {isSubmitting ? (
-            <ActivityIndicator size="small" color={Colors.textInverse} />
-          ) : (
-            <Ionicons name="lock-closed" size={16} color={Colors.textInverse} />
+          <View style={styles.compactSummaryRow}>
+            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]}>Item</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]}>{formatFromFiat(item.price, 'GBP')}</Text>
+          </View>
+          <View style={styles.compactSummaryRow}>
+            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]}>Delivery</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]}>{formatFromFiat(POSTAGE_FEE, 'GBP')}</Text>
+          </View>
+          <View style={styles.compactSummaryRow}>
+            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]}>Buyer protection</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]}>{formatFromFiat(PLATFORM_CHARGE, 'GBP')}</Text>
+          </View>
+          {useBalance && balanceApplied > 0 && (
+            <View style={styles.compactSummaryRow}>
+              <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]}>Wallet applied</Text>
+              <Text style={[styles.compactSummaryVal, t.compactSummaryValue]}>-{formatFromFiat(balanceApplied, 'GBP')}</Text>
+            </View>
           )}
-          <Text style={styles.payBtnText}>{payLabel}</Text>
+          <View style={[styles.compactSummaryDivider, t.compactSummaryDivider]} />
+          <View style={styles.compactSummaryTotalRow}>
+            <View style={styles.compactSummaryTotalLeft}>
+              <Text style={[styles.compactSummaryTotalLabel, t.compactSummaryTotalLabel]}>Total</Text>
+              <Text
+                style={[styles.compactSummaryTotalValue, t.compactSummaryTotalValue]}
+                accessibilityLiveRegion="polite"
+                accessibilityLabel={`Total ${formatFromFiat(TOTAL, 'GBP')}`}
+              >
+                {formatFromFiat(TOTAL, 'GBP')}
+              </Text>
+            </View>
+            <View style={styles.breakdownChevron}>
+              <Text style={[styles.breakdownChevronText, t.breakdownChevronText]}>View full breakdown</Text>
+              <Ionicons name="chevron-up" size={14} color={colors.textMuted} />
+            </View>
+          </View>
         </Pressable>
+
+        {/* Trust badges — reduce anxiety at the payment moment */}
+        <View style={styles.trustBadges}>
+          <View style={styles.trustBadgeItem}>
+            <Ionicons name="lock-closed" size={12} color={colors.success} />
+            <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Secure payment</Text>
+          </View>
+          <View style={[styles.trustBadgeDot, t.trustBadgeDot]} />
+          <View style={styles.trustBadgeItem}>
+            <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
+            <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Buyer protection</Text>
+          </View>
+        </View>
+
+        {/* Pay button row */}
+        <View style={styles.footerPayRow}>
+          {/* Apple Pay as primary CTA on iOS when enabled */}
+          {Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay') && !isSubmitting && (
+            <Pressable
+              onPress={() => { haptics.press(); handlePay(); }}
+              style={({ pressed }) => [
+                styles.applePayBtn,
+                t.applePayBtn,
+                pressed && styles.payBtnPressed,
+                (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
+              ]}
+              disabled={!checkoutEligible || isInteractionLocked}
+              accessibilityRole="button"
+              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Apple Pay`}
+              accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
+            >
+              <Ionicons name="logo-apple" size={18} color={colors.textInverse} />
+              <Text style={[styles.applePayBtnText, t.applePayBtnText]}>Pay</Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.payBtn,
+              t.payBtn,
+              (!checkoutEligible || isInteractionLocked) && styles.payBtnDisabled,
+              pressed && !(!checkoutEligible || isInteractionLocked) && styles.payBtnPressed,
+            ]}
+            onPress={() => { haptics.press(); handlePay(); }}
+            disabled={!checkoutEligible || isInteractionLocked}
+            accessibilityRole="button"
+            accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')}`}
+            accessibilityState={{
+              disabled: !checkoutEligible || isInteractionLocked,
+              busy: isSubmitting,
+            }}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color={colors.textInverse} />
+            ) : (
+              <Ionicons name="lock-closed" size={16} color={colors.textInverse} />
+            )}
+            <Text style={[styles.payBtnText, t.payBtnText]}>{payLabel}</Text>
+          </Pressable>
+        </View>
       </View>
+
+      {/* Non-blocking progress overlay — keeps checkout visible (§14) */}
+      {(stage === 'creating_order' || stage === 'opening_payment') && (
+        <CheckoutProgressOverlay
+          label={STAGE_LABELS[stage]}
+          colors={colors}
+        />
+      )}
 
       {/* Sheets */}
       <AddCardSheet
@@ -1293,17 +1701,197 @@ export default function CheckoutScreen() {
           setPaymentSelectorVisible(false);
           setAddCardSheetVisible(true);
         }}
-        onExpressPay={(type) => {
-          setPaymentSelectorVisible(false);
-          show(`${type === 'apple_pay' ? 'Apple Pay' : 'Google Pay'} setup required — add a card first to enable express checkout.`, 'info');
-          setAddCardSheetVisible(true);
-        }}
       />
+      <BottomSheet
+        visible={breakdownSheetVisible}
+        onDismiss={() => setBreakdownSheetVisible(false)}
+        snapPoint={0.6}
+      >
+        <View style={styles.breakdownSheetContent}>
+          <Text style={[styles.breakdownSheetTitle, t.breakdownSheetTitle]}>Full breakdown</Text>
+          <PriceRow label="Item" value={formatFromFiat(item.price, 'GBP')} />
+          <PriceRow label="Platform charge" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
+          <PriceRow
+            label={`Delivery${postageOption.liveQuote ? '' : ' (Estimated)'}`}
+            value={formatFromFiat(POSTAGE_FEE, 'GBP')}
+          />
+          <View style={styles.protectionIncludedRow}>
+            <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
+            <Text style={[styles.protectionIncludedText, t.protectionIncludedText]}>
+              Includes buyer protection — funds held in escrow until you confirm
+            </Text>
+          </View>
+          {useBalance && balanceApplied > 0 && (
+            <>
+              <PriceRow
+                label="Wallet balance applied"
+                value={`-${formatFromFiat(balanceApplied, 'GBP')}`}
+              />
+              <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
+              <PriceRow label="To pay" value={formatFromFiat(TOTAL, 'GBP')} bold />
+            </>
+          )}
+          {!useBalance && (
+            <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
+          )}
+          <View style={styles.breakdownSheetTotalRow}>
+            <Text style={[styles.breakdownSheetTotalLabel, t.breakdownSheetTotalLabel]}>Total</Text>
+            <Text style={[styles.breakdownSheetTotalValue, t.breakdownSheetTotalValue]}>
+              {formatFromFiat(TOTAL, 'GBP')}
+            </Text>
+          </View>
+          <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
+          <View style={styles.breakdownSheetPolicyRow}>
+            <Ionicons name="return-down-back-outline" size={14} color={colors.textMuted} />
+            <Text style={[styles.breakdownSheetPolicyText, t.breakdownSheetLabel]}>
+              Returns accepted within 14 days. Refunds issued to your original payment method.
+            </Text>
+          </View>
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
 
+// ===========================================================================
+// Non-blocking progress overlay — shown during order creation / payment setup
+// Keeps the checkout context visible while communicating progress (§14).
+// ===========================================================================
+function CheckoutProgressOverlay({
+  label,
+  colors,
+}: {
+  label: string;
+  colors: ThemeColors;
+}) {
+  const reducedMotion = useReducedMotion();
+  const progressX = useSharedValue(-1);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    progressX.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-1, { duration: 0 }),
+      ),
+      -1,
+      false,
+    );
+    return () => {
+      progressX.value = -1;
+    };
+  }, [progressX, reducedMotion]);
+
+  const barStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: progressX.value * 100 }],
+  }));
+
+  return (
+    <Reanimated.View
+      entering={reducedMotion ? undefined : FadeInDown.duration(220)}
+      pointerEvents="none"
+      style={[
+        progressOverlayStyles.overlay,
+        { backgroundColor: `${colors.background}F2`, borderColor: colors.border },
+      ]}
+      accessibilityLabel={label}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+    >
+      <View style={progressOverlayStyles.row}>
+        <ActivityIndicator size="small" color={colors.brand} />
+        <Text style={[progressOverlayStyles.label, { color: colors.textPrimary }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      {/* Subtle indeterminate progress bar */}
+      <View style={[progressOverlayStyles.track, { backgroundColor: colors.border }]}>
+        <Reanimated.View
+          style={[
+            progressOverlayStyles.fill,
+            { backgroundColor: colors.brand },
+            reducedMotion ? undefined : barStyle,
+          ]}
+        />
+      </View>
+    </Reanimated.View>
+  );
+}
+
+const progressOverlayStyles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    top: 60,
+    left: Space.md,
+    right: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.hairline,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginBottom: Space.sm,
+  },
+  label: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  track: {
+    height: Space.xs - 1,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  fill: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '-40%',
+    width: '40%',
+    borderRadius: Radius.full,
+  },
+});
+
 function PriceRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  const { colors } = useAppTheme();
+  const priceStyles = useMemo(() => StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: Space.xs + 2,
+    },
+    label: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+    },
+    labelBold: {
+      fontSize: Type.bodyLarge.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+    },
+    value: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textPrimary,
+      fontVariant: ['tabular-nums'],
+    },
+    valueBold: {
+      fontSize: Type.bodyLarge.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      fontVariant: ['tabular-nums'],
+    },
+  }), [colors]);
+
   return (
     <View style={priceStyles.row}>
       <Text style={[priceStyles.label, bold && priceStyles.labelBold]}>{label}</Text>
@@ -1312,38 +1900,9 @@ function PriceRow({ label, value, bold }: { label: string; value: string; bold?:
   );
 }
 
-const priceStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
-  label: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-  },
-  labelBold: {
-    fontSize: 16,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  value: {
-    fontSize: 14,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-  },
-  valueBold: {
-    fontSize: 18,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-  },
-});
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -1352,21 +1911,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
   },
   closeBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  closeBtnPressed: {
+    opacity: 0.5,
+  },
   headerTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   headerSpacer: {
-    width: 44,
+    width: Control.hit,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -1374,51 +1934,42 @@ const styles = StyleSheet.create({
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginVertical: Space.sm,
   },
   priceBreakdownCard: {
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     marginTop: Space.sm,
   },
   priceBreakdownHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginBottom: Space.sm + 2,
   },
   priceBreakdownTitle: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: LetterSpacing.caps,
   },
   priceDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginVertical: Space.sm,
   },
   savingsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     marginTop: Space.xs,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: `${Colors.success}12`,
-    borderRadius: 6,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.sm,
     alignSelf: 'flex-start',
   },
   savingsText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
   },
   protectionStripWrap: {
     marginTop: Space.sm,
@@ -1426,15 +1977,14 @@ const styles = StyleSheet.create({
   protectionIncludedRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 5,
-    paddingTop: 6,
+    gap: Space.xs + 1,
+    paddingTop: Space.xs + 2,
   },
   protectionIncludedText: {
     flex: 1,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.success,
-    lineHeight: 15,
+    lineHeight: Type.meta.lineHeight,
   },
   balanceRow: {
     marginTop: Space.sm,
@@ -1442,52 +1992,43 @@ const styles = StyleSheet.create({
   balanceToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: Colors.surface,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    gap: Space.sm + 2,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md,
+    borderRadius: 0,
+    borderWidth: 0,
+  },
+  balanceTogglePressed: {
+    opacity: 0.7,
   },
   balanceSwitch: {
-    width: 40,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    width: Space.xxl - Space.sm,
+    height: Space.lg,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
     justifyContent: 'center',
-    padding: 2,
-  },
-  balanceSwitchOn: {
-    backgroundColor: Colors.success,
-    borderColor: Colors.success,
+    padding: Space.xs,
   },
   balanceKnob: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: Colors.textMuted,
+    width: Control.iconCompact,
+    height: Control.iconCompact,
+    borderRadius: Radius.full,
     alignSelf: 'flex-start',
   },
   balanceKnobOn: {
-    backgroundColor: '#fff',
     alignSelf: 'flex-end',
   },
   balanceTextCol: {
     flex: 1,
-    gap: 1,
+    gap: Space.xs - 3,
   },
   balanceLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   balanceAmount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   feedbackRow: {
     flexDirection: 'row',
@@ -1496,30 +2037,70 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
   },
   feedbackText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-  },
-  feedbackTextError: {
-    color: Colors.danger,
   },
   orderErrorText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
     paddingVertical: Space.sm,
   },
   hintText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     paddingVertical: Space.xs,
   },
+  partialDataBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.hairline,
+  },
+  partialDataMessage: {
+    flex: 1,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+  },
+  partialDataAction: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
+    borderRadius: Radius.sm,
+    borderWidth: Stroke.standard,
+    minHeight: Control.chromeCompact,
+    justifyContent: 'center',
+  },
+  partialDataActionText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  capabilityErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  capabilityRetryBtn: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
+    borderRadius: Radius.sm,
+    borderWidth: Stroke.standard,
+    minHeight: Control.chromeCompact,
+    justifyContent: 'center',
+  },
+  capabilityRetryText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
   termsText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
     textAlign: 'center',
     paddingTop: Space.md,
   },
@@ -1528,47 +2109,244 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm + 2,
+  },
+  compactSummary: {
+    paddingVertical: Space.sm,
+  },
+  compactSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space.xs + 1,
+  },
+  compactSummaryLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  compactSummaryVal: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
+  },
+  compactSummaryDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Space.xs + 1,
+  },
+  compactSummaryTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space.xs,
+  },
+  compactSummaryTotalLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.sm,
+  },
+  compactSummaryTotalLabel: {
+    fontSize: Type.bodyLarge.size,
+    fontFamily: Typography.family.semibold,
+  },
+  compactSummaryTotalValue: {
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  breakdownChevron: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  breakdownChevronText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  trustBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xs + 1,
+  },
+  trustBadgeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  trustBadgeText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  trustBadgeDot: {
+    width: 3,
+    height: 3,
+    borderRadius: Radius.full,
+    opacity: 0.3,
+  },
+  footerPayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
+    gap: Space.sm,
+    paddingTop: Space.xs,
+  },
+  paymentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    marginTop: Space.sm,
+  },
+  paymentCardPressed: {
+    opacity: 0.7,
+  },
+  paymentCardWarning: {
+    borderWidth: Stroke.emphasis,
+  },
+  paymentCardLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+  },
+  paymentCardIcon: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentCardIconWarning: {
+  },
+  paymentCardTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  paymentCardLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: LetterSpacing.caps,
+  },
+  paymentCardTitle: {
+    fontSize: Type.bodyLarge.size,
+    fontFamily: Typography.family.semibold,
+  },
+  paymentCardSubtitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  paymentCardWarningText: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.medium,
+  },
+  paymentCardErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.xs,
+  },
+  paymentCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  paymentCardChange: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+  },
+  breakdownSheetContent: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.lg,
+  },
+  breakdownSheetTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    marginBottom: Space.md,
+  },
+  breakdownSheetDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Space.sm,
+  },
+  breakdownSheetTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space.xs,
+  },
+  breakdownSheetTotalLabel: {
+    fontSize: Type.bodyLarge.size,
+    fontFamily: Typography.family.semibold,
+  },
+  breakdownSheetTotalValue: {
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  breakdownSheetPolicyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  breakdownSheetPolicyText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.body.lineHeight,
   },
   footerTotalCol: {
     flex: 1,
   },
   footerTotalLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   footerTotalPrice: {
-    fontSize: 22,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   payBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
     minWidth: 180,
-    paddingVertical: 14,
+    paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
-    borderRadius: 10,
-    backgroundColor: Colors.brand,
-    minHeight: 48,
+    borderRadius: Radius.sm,
+    minHeight: Space.xxl,
+  },
+  applePayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    minWidth: 140,
+    height: Space.xxl,
+    borderRadius: Radius.sm,
+    marginBottom: Space.xs,
+  },
+  applePayBtnText: {
+    fontSize: Type.subtitle.size,
+    fontWeight: '600',
   },
   payBtnDisabled: {
     opacity: 0.5,
   },
+  payBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
   payBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
   signedOutContainer: {
     flex: 1,
@@ -1578,31 +2356,31 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   signedOutTitle: {
-    fontSize: 18,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
     textAlign: 'center',
   },
   signedOutBody: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
   },
   signedOutBtn: {
     marginTop: Space.sm,
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     paddingHorizontal: Space.xl,
-    borderRadius: 10,
-    backgroundColor: Colors.brand,
-    minHeight: 48,
+    borderRadius: Radius.lg,
+    minHeight: Space.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  signedOutBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
   signedOutBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
 });

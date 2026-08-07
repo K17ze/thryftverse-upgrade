@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 /**
@@ -10,11 +12,11 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
  * profile/account editor.
  */
 export default function AccountSettingsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   useEffect(() => {
     // Replace so Back from EditProfile doesn't return to this redirect stub.
-    (navigation as any).replace('EditProfile');
+    navigation.replace('EditProfile', {});
   }, [navigation]);
 
   return (

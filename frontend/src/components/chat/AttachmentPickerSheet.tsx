@@ -3,14 +3,14 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Elevation, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -33,18 +33,18 @@ interface AttachmentOption {
   id: AttachmentType;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
-  color: string;
+  colorKey: 'brand' | 'success' | 'warning' | 'discovery' | 'social' | 'danger';
 }
 
 const OPTIONS: AttachmentOption[] = [
-  { id: 'gallery', label: 'Photo & Video', icon: 'images-outline', color: '#3B82F6' },
-  { id: 'camera', label: 'Camera', icon: 'camera-outline', color: '#10B981' },
-  { id: 'offer', label: 'Make Offer', icon: 'pricetag-outline', color: '#F59E0B' },
-  { id: 'shareListing', label: 'Share Listing', icon: 'share-outline', color: '#8B5CF6' },
-  { id: 'shareOrder', label: 'Order Status', icon: 'cube-outline', color: '#3B82F6' },
-  { id: 'requestPayment', label: 'Payment', icon: 'card-outline', color: '#22C55E' },
-  { id: 'inviteBot', label: 'Bot', icon: 'hardware-chip-outline', color: '#6366F1' },
-  { id: 'report', label: 'Report', icon: 'flag-outline', color: '#EF4444' },
+  { id: 'gallery', label: 'Photo & Video', icon: 'images-outline', colorKey: 'brand' },
+  { id: 'camera', label: 'Camera', icon: 'camera-outline', colorKey: 'success' },
+  { id: 'offer', label: 'Make Offer', icon: 'pricetag-outline', colorKey: 'warning' },
+  { id: 'shareListing', label: 'Share Listing', icon: 'share-outline', colorKey: 'discovery' },
+  { id: 'shareOrder', label: 'Order Status', icon: 'cube-outline', colorKey: 'brand' },
+  { id: 'requestPayment', label: 'Payment', icon: 'card-outline', colorKey: 'success' },
+  { id: 'inviteBot', label: 'Bot', icon: 'hardware-chip-outline', colorKey: 'social' },
+  { id: 'report', label: 'Report', icon: 'flag-outline', colorKey: 'danger' },
 ];
 
 interface AttachmentPickerSheetProps {
@@ -57,6 +57,7 @@ interface AttachmentPickerSheetProps {
 }
 
 export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = false, hasLinkedItem = false, hasLinkedOrder = false }: AttachmentPickerSheetProps) {
+  const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const opacity = useSharedValue(0);
@@ -66,7 +67,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
     if (visible) {
       setRendered(true);
       opacity.value = withTiming(1, { duration: 180 });
-      translateY.value = withSpring(0, { damping: 22, stiffness: 200 });
+      translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
     } else if (rendered) {
       opacity.value = withTiming(0, { duration: 150 });
       translateY.value = withTiming(SCREEN_HEIGHT * 0.5, { duration: 200 });
@@ -92,7 +93,7 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
       if (e.translationY > 100 || e.velocityY > 600) {
         runOnJS(onClose)();
       } else {
-        translateY.value = withSpring(0, { damping: 22, stiffness: 200 });
+        translateY.value = withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) });
       }
     });
 
@@ -117,8 +118,8 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
       </Reanimated.View>
 
       <GestureDetector gesture={gesture}>
-        <Reanimated.View style={[styles.sheet, sheetStyle]}>
-          <View style={styles.handle} />
+        <Reanimated.View style={[styles.sheet, { backgroundColor: colors.surfaceAlt }, sheetStyle]}>
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           <View style={styles.optionsGrid}>
             {visibleOptions.map((opt) => (
@@ -132,22 +133,24 @@ export function AttachmentPickerSheet({ visible, onClose, onSelect, isGroup = fa
                 accessibilityRole="button"
                 accessibilityLabel={opt.label}
               >
-                <View style={[styles.iconCircle, { backgroundColor: `${opt.color}18` }]}>
-                  <Ionicons name={opt.icon} size={24} color={opt.color} />
+                <View style={[styles.iconCircle, { backgroundColor: colors[opt.colorKey] + '18' }]}>
+                  <Ionicons name={opt.icon} size={24} color={colors[opt.colorKey]} />
                 </View>
-                <Caption color={Colors.textPrimary} style={styles.optionLabel}>{opt.label}</Caption>
+                <Caption color={colors.textPrimary} style={styles.optionLabel}>{opt.label}</Caption>
               </AnimatedPressable>
             ))}
           </View>
 
           <AnimatedPressable
-            style={styles.cancelBtn}
+            style={[styles.cancelBtn, { backgroundColor: colors.surfaceAlt }]}
             onPress={onClose}
             activeOpacity={0.8}
             scaleValue={0.98}
             hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
           >
-            <BodyEmphasis color={Colors.textPrimary}>Cancel</BodyEmphasis>
+            <BodyEmphasis color={colors.textPrimary}>Cancel</BodyEmphasis>
           </AnimatedPressable>
         </Reanimated.View>
       </GestureDetector>
@@ -166,7 +169,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: Colors.surfaceAlt,
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
@@ -177,8 +179,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
+    borderRadius: Radius.full,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
@@ -193,6 +194,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm,
+    minHeight: 44,
   },
   iconCircle: {
     width: 60,
@@ -202,14 +204,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   optionLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     textAlign: 'center',
   },
   cancelBtn: {
-    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     alignItems: 'center',
     marginTop: Space.sm,
+    minHeight: 44,
+    justifyContent: 'center',
   },
 });

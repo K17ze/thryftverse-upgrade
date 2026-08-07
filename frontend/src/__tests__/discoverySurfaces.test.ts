@@ -28,10 +28,10 @@ vi.mock('@react-navigation/native', () => ({
   useRoute: vi.fn(),
 }));
 
-// Mock @react-navigation/stack
-vi.mock('@react-navigation/stack', () => ({
-  StackNavigationProp: vi.fn(),
-  StackScreenProps: vi.fn(),
+// Mock @react-navigation/native-stack
+vi.mock('@react-navigation/native-stack', () => ({
+  NativeStackNavigationProp: vi.fn(),
+  NativeStackScreenProps: vi.fn(),
 }));
 
 // Mock the store
@@ -47,7 +47,7 @@ vi.mock('../store/useStore', () => ({
       notificationCount: 0,
       hasSeenPoster: false,
       customPosters: [],
-      browseFilters: { brands: [], sizes: [], condition: 'Any', sort: 'Recommended', query: '' },
+      browseFilters: { brands: [], sizes: [], condition: 'Any', sort: 'Recommended', query: '', sustainableOnly: false },
       updateBrowseFilters: vi.fn(),
       resetBrowseFilters: vi.fn(),
       customAuctions: [],
@@ -175,7 +175,7 @@ describe('Discovery surfaces — backend data truth', () => {
             id: 'l2',
             sellerId: 's2',
             title: 'Filtered item',
-            description: '',
+            description: 'Filtered listing description',
             priceGbp: 50,
             imageUrl: 'img.jpg',
             images: [],

@@ -12,7 +12,7 @@ import Reanimated, {
 
 const { width, height } = Dimensions.get('window');
 
-const COLORS = ['#d7b98f', '#FF6B6B', '#F7D794', '#ffffff'];
+const COLORS = ['#d7b98f', '#E06666', '#C9A46A', '#ffffff'];
 
 interface ParticleProps {
   x: number;

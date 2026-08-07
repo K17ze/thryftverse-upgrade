@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
@@ -7,6 +8,88 @@ type CreatorDocumentsRouteDependencies = {
   db: Pool;
   resolveAuthenticatedUserId: (request: FastifyRequest) => string;
 };
+
+// ── Layer payload schemas (parity with frontend composition.ts) ──────
+
+const TextLayerPayloadSchema = z.object({
+  text: z.string().min(1).max(500),
+  textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten']).default('clean'),
+  textColor: z.string().default('#ffffff'),
+  backgroundColor: z.string().optional(),
+  alignment: z.enum(['left', 'center', 'right']).default('center'),
+  lineHeight: z.number().min(0.8).max(3).optional(),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+const MediaLayerPayloadSchema = z.object({
+  mediaUri: z.string(),
+  mediaType: z.enum(['image', 'video']).default('image'),
+  contentFit: z.enum(['cover', 'contain', 'fill']).default('cover'),
+  thumbnailUri: z.string().optional(),
+  videoDurationMs: z.number().nullable().optional(),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+const ProductLayerPayloadSchema = z.object({
+  listingId: z.string().min(1),
+  snapshotTitle: z.string().default(''),
+  snapshotImageUrl: z.string().optional(),
+  snapshotPriceGbp: z.number().optional(),
+  availability: z.enum(['active', 'sold', 'deleted']).default('active'),
+  hotspotLabel: z.string().optional(),
+});
+
+const MentionLayerPayloadSchema = z.object({
+  userId: z.string().min(1),
+  username: z.string().min(1),
+});
+
+const LookLayerPayloadSchema = z.object({
+  lookId: z.string().min(1),
+  snapshotCaption: z.string().default(''),
+  snapshotImageUrl: z.string().optional(),
+});
+
+const VoteLayerPayloadSchema = z.object({
+  question: z.string().min(1).max(100),
+  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).length(2),
+});
+
+const DecorativeLayerPayloadSchema = z.object({
+  shape: z.enum(['circle', 'square', 'line', 'arrow', 'star', 'heart']),
+  color: z.string().default('#ffffff'),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+const BaseLayerSchema = z.object({
+  id: z.string().min(1),
+  x: z.number().min(-0.5).max(1.5).default(0.5),
+  y: z.number().min(-0.5).max(1.5).default(0.5),
+  width: z.number().min(0.05).max(2).default(0.4),
+  height: z.number().min(0.05).max(2).default(0.4),
+  scale: z.number().min(0.2).max(5).default(1),
+  rotation: z.number().min(-360).max(360).default(0),
+  zIndex: z.number().int().default(0),
+  locked: z.boolean().default(false),
+  hidden: z.boolean().default(false),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+const CreatorLayerSchema = z.discriminatedUnion('type', [
+  BaseLayerSchema.extend({ type: z.literal('media'), payload: MediaLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('text'), payload: TextLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('product'), payload: ProductLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('mention'), payload: MentionLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('look'), payload: LookLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('vote'), payload: VoteLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('decorative'), payload: DecorativeLayerPayloadSchema }),
+]);
+
+const CreatorPageSchema = z.object({
+  id: z.string().min(1).max(120),
+  durationMs: z.number().int().min(500).max(60_000).optional(),
+  layers: z.array(CreatorLayerSchema).default([]),
+});
 
 const creatorDocumentBodySchema = z.object({
   id: z.string().min(2).max(120),
@@ -19,16 +102,7 @@ const creatorDocumentBodySchema = z.object({
       value: z.string().max(500),
     }),
   }),
-  pages: z
-    .array(
-      z.object({
-        id: z.string().min(1).max(120),
-        layers: z.array(z.record(z.unknown())),
-        durationMs: z.number().int().min(500).max(60_000).optional(),
-      })
-    )
-    .min(1)
-    .max(10),
+  pages: z.array(CreatorPageSchema).min(1).max(10),
   metadata: z.object({
     title: z.string().max(120).default(''),
     caption: z.string().max(500).default(''),
@@ -53,6 +127,85 @@ const remixBodySchema = z.object({
   newDocumentId: z.string().min(2).max(120),
 });
 
+const publishBodySchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(160).optional(),
+});
+
+function parseIfMatchVersion(request: FastifyRequest): number | null {
+  const raw = Array.isArray(request.headers['if-match'])
+    ? request.headers['if-match'][0]
+    : request.headers['if-match'];
+  if (!raw) {
+    return null;
+  }
+  const normalized = raw.trim().replace(/^W\//, '').replace(/^"|"$/g, '');
+  const value = Number(normalized);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+const LOCAL_URI_PREFIXES = ['file://', 'ph://', 'asset://', 'data:', 'content://', 'assets-library://'];
+
+function isLocalUri(uri: string): boolean {
+  return LOCAL_URI_PREFIXES.some((prefix) => uri.startsWith(prefix));
+}
+
+function validateForPublish(doc: z.infer<typeof creatorDocumentBodySchema>): string[] {
+  const errors: string[] = [];
+
+  if (doc.pages.length === 0) {
+    errors.push('Document must have at least one page');
+  }
+
+  if (doc.type === 'look' && doc.pages.length !== 1) {
+    errors.push('Look documents must have exactly one page');
+  }
+
+  if (doc.pages.length > 10) {
+    errors.push('Documents cannot have more than 10 pages');
+  }
+
+  for (const page of doc.pages) {
+    for (const layer of page.layers) {
+      if (layer.type === 'media') {
+        if (isLocalUri(layer.payload.mediaUri)) {
+          errors.push(`Layer ${layer.id}: mediaUri is a local URI — must be uploaded before publish`);
+        }
+        if (layer.payload.thumbnailUri && isLocalUri(layer.payload.thumbnailUri)) {
+          errors.push(`Layer ${layer.id}: thumbnailUri is a local URI — must be uploaded before publish`);
+        }
+      }
+      if (layer.type === 'product' && layer.payload.snapshotImageUrl) {
+        if (isLocalUri(layer.payload.snapshotImageUrl)) {
+          errors.push(`Layer ${layer.id}: product snapshotImageUrl is a local URI`);
+        }
+      }
+      if (layer.type === 'look' && layer.payload.snapshotImageUrl) {
+        if (isLocalUri(layer.payload.snapshotImageUrl)) {
+          errors.push(`Layer ${layer.id}: look snapshotImageUrl is a local URI`);
+        }
+      }
+    }
+  }
+
+  if (doc.type === 'look') {
+    const hasMedia = doc.pages[0]?.layers.some((l) => l.type === 'media') ?? false;
+    if (!hasMedia) {
+      errors.push('Look documents must contain at least one media layer');
+    }
+  }
+
+  if (doc.type === 'poster') {
+    for (const page of doc.pages) {
+      const hasContent = page.layers.some((l) => l.type === 'media' || l.type === 'text');
+      if (!hasContent) {
+        errors.push(`Page ${page.id}: must contain at least one media or text layer`);
+      }
+    }
+  }
+
+  return errors;
+}
+
 export const registerCreatorDocumentRoutes = ({
   app,
   db,
@@ -66,8 +219,16 @@ export const registerCreatorDocumentRoutes = ({
     try {
       await client.query('BEGIN');
 
-      const existing = await client.query<{ creator_id: string }>(
-        `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
+      const existing = await client.query<{
+        creator_id: string;
+        status: string;
+        lock_version: number;
+      }>(
+        `SELECT creator_id, status, lock_version
+         FROM creator_documents
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
         [payload.id]
       );
 
@@ -77,20 +238,78 @@ export const registerCreatorDocumentRoutes = ({
         return { ok: false, error: 'Document belongs to another user' };
       }
 
-      await client.query(
-        `INSERT INTO creator_documents (id, creator_id, type, version, document_json, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())
-         ON CONFLICT (id) DO UPDATE
-         SET type = EXCLUDED.type,
-             version = EXCLUDED.version,
-             document_json = EXCLUDED.document_json,
-             updated_at = NOW()
-         WHERE creator_documents.creator_id = $2`,
-        [payload.id, actorUserId, payload.type, payload.version, JSON.stringify(payload)]
-      );
+      let serverVersion = 1;
+      if (existing.rowCount) {
+        if (existing.rows[0].status !== 'draft') {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'Published or archived documents are immutable; create a new draft',
+            code: 'CREATOR_DOCUMENT_IMMUTABLE',
+          };
+        }
+        const expectedVersion = parseIfMatchVersion(request);
+        if (expectedVersion === null) {
+          await client.query('ROLLBACK');
+          reply.code(428);
+          return {
+            ok: false,
+            error: 'If-Match with the current server version is required',
+            code: 'CREATOR_DOCUMENT_VERSION_REQUIRED',
+            serverVersion: existing.rows[0].lock_version,
+          };
+        }
+        if (expectedVersion !== existing.rows[0].lock_version) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'The document changed on another device',
+            code: 'CREATOR_DOCUMENT_VERSION_CONFLICT',
+            serverVersion: existing.rows[0].lock_version,
+          };
+        }
+        const updated = await client.query<{ lock_version: number }>(
+          `UPDATE creator_documents
+           SET type = $3,
+               version = $4,
+               document_json = $5,
+               lock_version = lock_version + 1,
+               updated_at = NOW()
+           WHERE id = $1 AND creator_id = $2 AND status = 'draft' AND lock_version = $6
+           RETURNING lock_version`,
+          [
+            payload.id,
+            actorUserId,
+            payload.type,
+            payload.version,
+            JSON.stringify(payload),
+            expectedVersion,
+          ],
+        );
+        if (!updated.rowCount) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'The document changed while it was being saved',
+            code: 'CREATOR_DOCUMENT_VERSION_CONFLICT',
+          };
+        }
+        serverVersion = updated.rows[0].lock_version;
+      } else {
+        await client.query(
+          `INSERT INTO creator_documents (
+             id, creator_id, type, version, document_json, lock_version, updated_at
+           )
+           VALUES ($1, $2, $3, $4, $5, 1, NOW())`,
+          [payload.id, actorUserId, payload.type, payload.version, JSON.stringify(payload)],
+        );
+      }
 
       await client.query('COMMIT');
-      return { ok: true, documentId: payload.id };
+      return { ok: true, documentId: payload.id, serverVersion };
     } catch (error) {
       await client.query('ROLLBACK');
       app.log.error({ err: error }, 'Failed to save creator document');
@@ -108,9 +327,11 @@ export const registerCreatorDocumentRoutes = ({
       id: string;
       type: string;
       document_json: string;
+      status: string;
+      lock_version: number;
       updated_at: string;
     }>(
-      `SELECT id, type, document_json, updated_at
+      `SELECT id, type, document_json, status, lock_version, updated_at
        FROM creator_documents
        WHERE creator_id = $1
        ORDER BY updated_at DESC
@@ -120,6 +341,8 @@ export const registerCreatorDocumentRoutes = ({
 
     const documents = result.rows.map((row) => ({
       ...JSON.parse(row.document_json),
+      status: row.status,
+      serverVersion: row.lock_version,
       serverUpdatedAt: row.updated_at,
     }));
 
@@ -134,9 +357,11 @@ export const registerCreatorDocumentRoutes = ({
       id: string;
       creator_id: string;
       document_json: string;
+      status: string;
+      lock_version: number;
       updated_at: string;
     }>(
-      `SELECT id, creator_id, document_json, updated_at
+      `SELECT id, creator_id, document_json, status, lock_version, updated_at
        FROM creator_documents
        WHERE id = $1 LIMIT 1`,
       [documentId]
@@ -156,6 +381,8 @@ export const registerCreatorDocumentRoutes = ({
       ok: true,
       document: {
         ...JSON.parse(result.rows[0].document_json),
+        status: result.rows[0].status,
+        serverVersion: result.rows[0].lock_version,
         serverUpdatedAt: result.rows[0].updated_at,
       },
     };
@@ -165,8 +392,8 @@ export const registerCreatorDocumentRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
 
-    const result = await db.query<{ creator_id: string }>(
-      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
+    const result = await db.query<{ creator_id: string; status: string }>(
+      `SELECT creator_id, status FROM creator_documents WHERE id = $1 LIMIT 1`,
       [documentId]
     );
 
@@ -179,9 +406,184 @@ export const registerCreatorDocumentRoutes = ({
       reply.code(403);
       return { ok: false, error: 'Access denied' };
     }
+    if (result.rows[0].status !== 'draft') {
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Published or archived documents cannot be deleted',
+        code: 'CREATOR_DOCUMENT_IMMUTABLE',
+      };
+    }
 
     await db.query(`DELETE FROM creator_documents WHERE id = $1`, [documentId]);
     return { ok: true };
+  });
+
+  app.post('/creator/documents/:documentId/publish', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { documentId } = documentIdParamsSchema.parse(request.params);
+    const body = publishBodySchema.parse(request.body ?? {});
+    const rawHeaderKey = Array.isArray(request.headers['idempotency-key'])
+      ? request.headers['idempotency-key'][0]
+      : request.headers['idempotency-key'];
+    const headerKey = rawHeaderKey
+      ? z.string().trim().min(8).max(160).parse(rawHeaderKey)
+      : undefined;
+
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Lock the owner row before validation and revision allocation. This
+      // serializes concurrent publish attempts for the same document.
+      const result = await client.query<{
+        creator_id: string;
+        document_json: string;
+        lock_version: number;
+      }>(
+        `SELECT creator_id, document_json, lock_version
+         FROM creator_documents
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [documentId]
+      );
+
+      if (!result.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(404);
+        return { ok: false, error: 'Document not found' };
+      }
+      if (result.rows[0].creator_id !== actorUserId) {
+        await client.query('ROLLBACK');
+        reply.code(403);
+        return { ok: false, error: 'Access denied' };
+      }
+
+      const doc = creatorDocumentBodySchema.parse(JSON.parse(result.rows[0].document_json));
+      const publishErrors = validateForPublish(doc);
+      if (publishErrors.length > 0) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return { ok: false, error: 'Publish validation failed', details: publishErrors };
+      }
+
+      const documentJson = JSON.stringify(doc);
+      const documentHash = crypto.createHash('sha256').update(documentJson).digest('hex');
+      const publishKey = body.idempotencyKey ?? headerKey ?? `content:${documentHash}`;
+
+      const existingRevision = await client.query<{
+        id: string;
+        revision_number: number;
+      }>(
+        `SELECT id, revision_number
+         FROM creator_document_revisions
+         WHERE document_id = $1 AND publish_key = $2
+         LIMIT 1`,
+        [documentId, publishKey],
+      );
+      if (existingRevision.rowCount) {
+        await client.query('COMMIT');
+        return {
+          ok: true,
+          documentId,
+          status: 'published',
+          revisionNumber: existingRevision.rows[0].revision_number,
+          idempotentReplay: true,
+        };
+      }
+
+      const allocation = await client.query<{ revision_number: number }>(
+        `UPDATE creator_documents
+         SET next_revision_number = next_revision_number + 1,
+             status = 'published',
+             lock_version = lock_version + 1,
+             published_at = COALESCE(published_at, NOW()),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING
+           next_revision_number - 1 AS revision_number,
+           lock_version`,
+        [documentId],
+      );
+      const nextRevision = allocation.rows[0].revision_number;
+      const revisionId = `rev_${crypto.randomUUID()}`;
+
+      await client.query(
+        `INSERT INTO creator_document_revisions (
+           id, document_id, creator_id, revision_number,
+           document_json, publish_key, document_hash
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          revisionId,
+          documentId,
+          actorUserId,
+          nextRevision,
+          documentJson,
+          publishKey,
+          documentHash,
+        ],
+      );
+
+      await client.query('COMMIT');
+
+      return {
+        ok: true,
+        documentId,
+        status: 'published',
+        revisionNumber: nextRevision,
+        idempotentReplay: false,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      app.log.error({ err: error }, 'Failed to publish creator document');
+      reply.code(500);
+      return { ok: false, error: 'Failed to publish document' };
+    } finally {
+      client.release();
+    }
+  });
+
+  app.get('/creator/documents/:documentId/revisions', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { documentId } = documentIdParamsSchema.parse(request.params);
+
+    const docResult = await db.query<{ creator_id: string }>(
+      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
+      [documentId]
+    );
+
+    if (!docResult.rowCount) {
+      reply.code(404);
+      return { ok: false, error: 'Document not found' };
+    }
+
+    if (docResult.rows[0].creator_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Access denied' };
+    }
+
+    const result = await db.query<{
+      id: string;
+      revision_number: string;
+      published_at: string;
+    }>(
+      `SELECT id, revision_number::text, published_at
+       FROM creator_document_revisions
+       WHERE document_id = $1
+       ORDER BY revision_number DESC`,
+      [documentId]
+    );
+
+    return {
+      ok: true,
+      revisions: result.rows.map((row) => ({
+        id: row.id,
+        revisionNumber: parseInt(row.revision_number, 10),
+        publishedAt: row.published_at,
+      })),
+    };
   });
 
   app.post('/creator/documents/:documentId/remix', async (request, reply) => {

@@ -1,8 +1,8 @@
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet, Modal, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors } from "../../constants/colors";
 import { Space, Radius, Type, Typography } from "../../theme/designTokens";
+import { useAppTheme } from "../../theme/ThemeContext";
 import { AnimatedPressable } from "../AnimatedPressable";
 
 export type ChatAction = "gallery" | "camera";
@@ -15,7 +15,7 @@ interface ChatActionSheetProps {
 
 interface ActionDef {
   id: ChatAction;
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   description: string;
   disabled?: boolean;
@@ -27,6 +27,7 @@ export function ChatActionSheet({
   onClose,
   onSelect,
 }: ChatActionSheetProps) {
+  const { colors } = useAppTheme();
   const actions = useMemo<ActionDef[]>(
     () => [
       {
@@ -48,18 +49,23 @@ export function ChatActionSheet({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
+        <Pressable
+          style={[styles.sheet, { backgroundColor: colors.surface }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={styles.header}>
-            <Text style={styles.title}>Attach</Text>
-            <Text style={styles.subtitle}>Share photos and videos in this chat</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Attach</Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              Share photos and videos in this chat
+            </Text>
           </View>
 
           <View style={styles.list}>
             {actions.map((action) => (
               <AnimatedPressable
                 key={action.id}
-                style={[styles.row, action.disabled && styles.rowDisabled]}
+                style={[styles.row, { backgroundColor: colors.surfaceAlt }, action.disabled && styles.rowDisabled]}
                 onPress={() => {
                   if (action.disabled) return;
                   onSelect(action.id);
@@ -77,31 +83,33 @@ export function ChatActionSheet({
                 <View
                   style={[
                     styles.iconCircle,
-                    action.disabled && styles.iconCircleDisabled,
+                    { backgroundColor: `${colors.brand}14` },
+                    action.disabled && { backgroundColor: colors.surfaceAlt },
                   ]}
                 >
                   <Ionicons
-                    name={action.icon as any}
+                    name={action.icon}
                     size={22}
-                    color={action.disabled ? Colors.textMuted : Colors.brand}
+                    color={action.disabled ? colors.textMuted : colors.brand}
                   />
                 </View>
                 <View style={styles.rowText}>
                   <Text
                     style={[
                       styles.rowLabel,
-                      action.disabled && styles.rowLabelDisabled,
+                      { color: colors.textPrimary },
+                      action.disabled && { color: colors.textMuted },
                     ]}
                   >
                     {action.label}
                   </Text>
-                  <Text style={styles.rowDescription}>
+                  <Text style={[styles.rowDescription, { color: colors.textMuted }]}>
                     {action.description}
                   </Text>
                 </View>
                 {action.disabled ? (
-                  <View style={styles.disabledBadge}>
-                    <Text style={styles.disabledBadgeText}>
+                  <View style={[styles.disabledBadge, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                    <Text style={[styles.disabledBadgeText, { color: colors.textMuted }]}>
                       {action.disabledReason}
                     </Text>
                   </View>
@@ -109,24 +117,23 @@ export function ChatActionSheet({
                   <Ionicons
                     name="chevron-forward"
                     size={18}
-                    color={Colors.textMuted}
+                    color={colors.textMuted}
                   />
                 )}
               </AnimatedPressable>
             ))}
           </View>
 
-          <AnimatedPressable
-            style={styles.cancelBtn}
+          <Pressable
+            style={[styles.cancelBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
             onPress={onClose}
-            activeOpacity={0.7}
-            scaleValue={0.98}
-            hapticFeedback="light"
             accessibilityRole="button"
             accessibilityLabel="Cancel"
           >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </AnimatedPressable>
+            <Text style={[styles.cancelText, { color: colors.textPrimary }]}>
+              Cancel
+            </Text>
+          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -140,7 +147,6 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: Colors.surface,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
@@ -156,8 +162,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
+    borderRadius: Radius.full,
     alignSelf: "center",
     marginBottom: Space.sm,
   },
@@ -166,13 +171,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   subtitle: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   list: {
@@ -185,7 +191,6 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
   },
   rowDisabled: {
     opacity: 0.6,
@@ -194,12 +199,8 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}14`,
     justifyContent: "center",
     alignItems: "center",
-  },
-  iconCircleDisabled: {
-    backgroundColor: Colors.surfaceAlt,
   },
   rowText: {
     flex: 1,
@@ -207,42 +208,38 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  rowLabelDisabled: {
-    color: Colors.textMuted,
   },
   rowDescription: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   disabledBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   disabledBadgeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    letterSpacing: Type.meta.letterSpacing,
   },
   cancelBtn: {
-    backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.lg,
-    paddingVertical: 14,
+    paddingVertical: Space.md + 2,
     alignItems: "center",
     marginTop: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    minHeight: 44,
+    justifyContent: "center",
   },
   cancelText: {
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
 });

@@ -13,9 +13,10 @@ import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../constants/colors';
-import { Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
 import { Linking } from 'react-native';
 
 const SHUTTER_SIZE = 80;
@@ -38,6 +39,9 @@ export default function VisualSearchCamera({
 }: VisualSearchCameraProps) {
   const { show } = useToast();
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const cameraRef = React.useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = React.useState<CameraType>('back');
@@ -79,8 +83,14 @@ export default function VisualSearchCamera({
     return () => { cancelled = true; };
   }, []);
 
-  const toggleFlash = () => setFlash((prev) => (prev === 'off' ? 'on' : 'off'));
-  const toggleFacing = () => setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+  const toggleFlash = () => {
+    haptic.selection();
+    setFlash((prev) => (prev === 'off' ? 'on' : 'off'));
+  };
+  const toggleFacing = () => {
+    haptic.light();
+    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+  };
 
   const takePhoto = async () => {
     if (!cameraRef.current) return;
@@ -90,6 +100,7 @@ export default function VisualSearchCamera({
         skipProcessing: false,
       });
       if (photo?.uri) {
+        haptic.medium();
         onPhotoCapture(photo.uri);
       }
     } catch {
@@ -99,8 +110,8 @@ export default function VisualSearchCamera({
 
   const handleShutterPress = () => {
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: false }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: false }),
     ]).start();
     takePhoto();
   };
@@ -110,8 +121,8 @@ export default function VisualSearchCamera({
     setFocusPoint({ x: locationX, y: locationY });
     focusAnim.setValue(0);
     Animated.sequence([
-      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: true, delay: 400 }),
+      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: false, delay: 400 }),
     ]).start(() => setFocusPoint(null));
   };
 
@@ -120,7 +131,7 @@ export default function VisualSearchCamera({
   if (!permission) {
     return (
       <View style={styles.permissionOverlay}>
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -238,6 +249,7 @@ export default function VisualSearchCamera({
           onPress={toggleFacing}
           hitSlop={16}
           accessibilityLabel="Switch camera"
+          accessibilityRole="button"
         >
           <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
           <Text style={styles.bottomLabel}>Flip</Text>
@@ -252,7 +264,7 @@ export default function VisualSearchCamera({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   permissionOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: '#000',
@@ -268,26 +280,26 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: 18,
     color: '#fff',
-    marginTop: 8,
+    marginTop: Space.sm,
   },
   permissionText: {
     fontFamily: Typography.family.regular,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
     lineHeight: 20,
   },
   permissionBtn: {
-    marginTop: 16,
-    paddingHorizontal: 24,
+    marginTop: Space.md,
+    paddingHorizontal: Space.lg,
     paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: Colors.brand,
+    borderRadius: Radius.xxl,
+    backgroundColor: colors.brand,
   },
   permissionBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
-    color: Colors.textInverse,
+    fontSize: Type.body.size,
+    color: colors.textInverse,
   },
   focusReticle: {
     position: 'absolute',
@@ -295,7 +307,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderWidth: 2,
     borderColor: '#fff',
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     pointerEvents: 'none',
   },
   // Corner brackets
@@ -375,7 +387,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingBottom: Space.sm,
   },
   topRightControls: {
     flexDirection: 'row',
@@ -384,7 +396,7 @@ const styles = StyleSheet.create({
   topIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -397,8 +409,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.md,
   },
   galleryBtn: {
     alignItems: 'center',
@@ -408,7 +420,7 @@ const styles = StyleSheet.create({
   galleryThumb: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     borderWidth: 2,
     borderColor: '#fff',
     backgroundColor: 'rgba(255,255,255,0.15)',
@@ -420,7 +432,7 @@ const styles = StyleSheet.create({
   },
   bottomLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.85)',
   },
   shutterOuter: {
@@ -443,14 +455,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 120,
     alignSelf: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   modeText: {
     fontFamily: Typography.family.medium,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: '#fff',
   },
 });

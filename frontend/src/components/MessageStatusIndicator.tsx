@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Type } from '../theme/designTokens';
 import { Caption } from './ui/Text';
 
@@ -18,6 +18,8 @@ export function MessageStatusIndicator({
   timestamp,
   size = 'sm',
 }: MessageStatusIndicatorProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const iconSize = size === 'sm' ? 12 : 14;
 
   const renderIcon = () => {
@@ -28,7 +30,7 @@ export function MessageStatusIndicator({
             <Ionicons
               name="time-outline"
               size={iconSize}
-              color={Colors.textMuted}
+              color={colors.textMuted}
             />
           </View>
         );
@@ -38,7 +40,7 @@ export function MessageStatusIndicator({
           <Ionicons
             name="checkmark-outline"
             size={iconSize}
-            color={Colors.textMuted}
+            color={colors.textMuted}
           />
         );
 
@@ -47,7 +49,7 @@ export function MessageStatusIndicator({
           <Ionicons
             name="checkmark-done-outline"
             size={iconSize}
-            color={Colors.textMuted}
+            color={colors.textMuted}
           />
         );
 
@@ -56,7 +58,7 @@ export function MessageStatusIndicator({
           <Ionicons
             name="checkmark-done"
             size={iconSize}
-            color={Colors.brand}
+            color={colors.brand}
           />
         );
 
@@ -65,7 +67,7 @@ export function MessageStatusIndicator({
           <Ionicons
             name="alert-circle-outline"
             size={iconSize}
-            color={Colors.danger}
+            color={colors.danger}
           />
         );
 
@@ -77,7 +79,7 @@ export function MessageStatusIndicator({
   return (
     <View style={styles.container}>
       {timestamp && (
-        <Caption color={Colors.textMuted} style={styles.timestamp}>
+        <Caption color={colors.textMuted} style={styles.timestamp}>
           {timestamp}
         </Caption>
       )}
@@ -86,22 +88,24 @@ export function MessageStatusIndicator({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  timestamp: {
-    fontSize: Type.meta.size,
-  },
-  iconContainer: {
-    width: 14,
-    height: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendingContainer: {
-    opacity: 0.7,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    timestamp: {
+      fontSize: Type.meta.size,
+    },
+    iconContainer: {
+      width: 14,
+      height: 14,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    sendingContainer: {
+      opacity: 0.7,
+    },
+  });
+}

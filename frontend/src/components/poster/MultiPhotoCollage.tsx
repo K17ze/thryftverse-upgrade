@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LayoutType } from './LayoutPicker';
 import { useToast } from '../../context/ToastContext';
 
+import { Radius } from '../../theme/designTokens';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 interface MultiPhotoCollageProps {
@@ -103,12 +104,12 @@ export default function MultiPhotoCollage({ layout, photos, onPhotosChange, canv
       return (
         <View style={[StyleSheet.absoluteFill, { gap: slotGap, padding: 20, backgroundColor: '#fff' }]}>
           <View style={{ flex: 1, flexDirection: 'row', gap: slotGap }}>
-            {renderSlot(0, { flex: 1, borderRadius: 4 })}
-            {renderSlot(1, { flex: 1, borderRadius: 4 })}
+            {renderSlot(0, { flex: 1, borderRadius: Radius.sm })}
+            {renderSlot(1, { flex: 1, borderRadius: Radius.sm })}
           </View>
           <View style={{ flex: 1, flexDirection: 'row', gap: slotGap }}>
-            {renderSlot(2, { flex: 1, borderRadius: 4 })}
-            {renderSlot(3, { flex: 1, borderRadius: 4 })}
+            {renderSlot(2, { flex: 1, borderRadius: Radius.sm })}
+            {renderSlot(3, { flex: 1, borderRadius: Radius.sm })}
           </View>
         </View>
       );

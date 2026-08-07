@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,11 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Colors } from '../constants/colors';
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { Type, Space, Radius, Typography, Stroke } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -27,7 +27,7 @@ import { LookMediaComposer, OutfitTag } from '../components/look/LookMediaCompos
 import { OutfitPieceEditor } from '../components/look/OutfitPieceEditor';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type Visibility = 'public' | 'private';
 
@@ -40,6 +40,8 @@ export default function CreateLookScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
@@ -109,7 +111,8 @@ export default function CreateLookScreen() {
       setIsPublishing(true);
       haptic.medium();
       try {
-        const mediaUrl = await uploadMedia(imageUri, 'looks');
+        const uploaded = await uploadMedia(imageUri, 'looks');
+        const mediaUrl = uploaded.publicUrl;
         const lookId = `look_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const internalTitle =
           caption
@@ -160,12 +163,12 @@ export default function CreateLookScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <Text style={styles.headerTitle}>Create Look</Text>
         <View style={styles.headerRight}>
           {isPublishing ? (
-            <ActivityIndicator size="small" color={Colors.brand} />
+            <ActivityIndicator size="small" color={colors.brand} />
           ) : null}
         </View>
       </View>
@@ -199,7 +202,7 @@ export default function CreateLookScreen() {
               value={caption}
               onChangeText={setCaption}
               placeholder="Share the story behind this outfit..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               maxLength={500}
               multiline
               textAlignVertical="top"
@@ -243,7 +246,7 @@ export default function CreateLookScreen() {
                     <Ionicons
                       name={opt.icon}
                       size={18}
-                      color={isActive ? Colors.brand : Colors.textSecondary}
+                      color={isActive ? colors.brand : colors.textSecondary}
                     />
                     <Text
                       style={[
@@ -286,10 +289,11 @@ export default function CreateLookScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -297,23 +301,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: Stroke.standard,
+    borderBottomColor: colors.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Space.xxl,
+    height: Space.xxl,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   headerRight: {
-    minWidth: 60,
+    minWidth: Space.xxl + Space.lg,
     alignItems: 'flex-end',
   },
   scrollContent: {
@@ -327,23 +331,23 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   captionInput: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-    minHeight: 80,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    color: colors.textPrimary,
+    minHeight: Space.xxl + Space.lg,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
   charCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
   },
   audienceRow: {
@@ -355,24 +359,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
+    gap: Space.xs + 2,
+    paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
   audienceBtnActive: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
     backgroundColor: 'rgba(99,102,241,0.06)',
   },
   audienceBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   audienceBtnTextActive: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.semibold,
   },
   publishSection: {
@@ -380,9 +384,9 @@ const styles = StyleSheet.create({
     paddingTop: Space.xl,
   },
   publishBtn: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.lg,
-    paddingVertical: 14,
+    paddingVertical: Space.md + 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -390,8 +394,9 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   publishBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: '#fff',
   },
-});
+  });
+}

@@ -1,21 +1,20 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
-import { Radius, Space, Type, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Radius, Space, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import type { ChatAgentConfig } from '../data/mockData';
 
-type Props = StackScreenProps<RootStackParamList, 'BotBuilder'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'BotBuilder'>;
 type BotCategory = 'assistant' | 'moderation' | 'commerce' | 'safety' | 'automation' | 'styling';
 
 const DEFAULT_CONFIG: ChatAgentConfig = {
@@ -73,7 +72,8 @@ const PERMISSIONS = [
 
 export default function BotBuilderScreen({ navigation, route }: Props) {
   const { botId } = route.params ?? {};
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const existingBot = useStore((state) =>
     state.customBots.find((bot) => bot.id === botId && bot.type === 'custom')
@@ -181,7 +181,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
       >
         <View style={styles.intro}>
           <View style={styles.agentMark}>
-            <Ionicons name="chatbubble-ellipses-outline" size={22} color={Colors.textPrimary} />
+            <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textPrimary} />
           </View>
           <View style={styles.introCopy}>
             <Text style={styles.introTitle}>A specialist for your conversations</Text>
@@ -254,13 +254,13 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           ) : null}
           {triggerMode === 'mention' && slug ? (
             <View style={styles.invocationPreview}>
-              <Ionicons name="at" size={17} color={Colors.textSecondary} />
+              <Ionicons name="at" size={17} color={colors.textSecondary} />
               <Text style={styles.invocationText}>People will type @{slug} followed by a request.</Text>
             </View>
           ) : null}
           {triggerMode === 'always' ? (
             <View style={styles.caution}>
-              <Ionicons name="information-circle-outline" size={17} color={Colors.textSecondary} />
+              <Ionicons name="information-circle-outline" size={17} color={colors.textSecondary} />
               <Text style={styles.cautionText}>
                 Every-message agents can add noise and use more model capacity. Use this only when constant participation is intentional.
               </Text>
@@ -319,7 +319,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
                     <Ionicons
                       name={enabled ? 'checkmark-circle' : 'ellipse-outline'}
                       size={24}
-                      color={enabled ? Colors.textPrimary : Colors.textMuted}
+                      color={enabled ? colors.textPrimary : colors.textMuted}
                     />
                   </AnimatedPressable>
                   {index < PERMISSIONS.length - 1 ? <View style={styles.divider} /> : null}
@@ -365,7 +365,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
             <Ionicons
               name={canPublish ? 'checkmark' : 'ellipsis-horizontal'}
               size={18}
-              color={Colors.textPrimary}
+              color={colors.textPrimary}
             />
           </View>
           <View style={styles.readinessCopy}>
@@ -414,6 +414,8 @@ function Section({
   detail: string;
   children: React.ReactNode;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.section}>
       <View>
@@ -434,6 +436,8 @@ function OptionGrid({
   selected: string;
   onSelect: (value: string) => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.optionGrid}>
       {options.map((option) => {
@@ -466,6 +470,8 @@ function ChoiceList({
   selected: string;
   onSelect: (value: string) => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.choiceList}>
       {options.map((option, index) => {
@@ -497,8 +503,9 @@ function ChoiceList({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -507,101 +514,97 @@ const styles = StyleSheet.create({
   intro: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: Space.md - 2,
     paddingVertical: Space.sm,
   },
   agentMark: {
-    width: 32,
-    height: 44,
+    width: Control.chromeCompact,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  introCopy: { flex: 1, gap: 3 },
+  introCopy: { flex: 1, gap: Space.xs - 1 },
   introTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
   },
   introBody: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
   },
-  section: { gap: 14 },
+  section: { gap: Space.md - 2 },
   sectionTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
   },
   sectionDetail: {
-    marginTop: 2,
-    color: Colors.textMuted,
+    marginTop: Space.xs - 2,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
   },
-  multilineShort: { minHeight: 88, alignItems: 'flex-start' },
+  multilineShort: { minHeight: Control.hit * 2, alignItems: 'flex-start' },
   instructionsInput: { minHeight: 156, alignItems: 'flex-start' },
-  multilineInput: { textAlignVertical: 'top', paddingTop: 12 },
+  multilineInput: { textAlignVertical: 'top', paddingTop: Space.sm + Space.xs },
   fieldLabel: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.captionElevated.size,
   },
   optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   option: {
-    minHeight: 44,
+    minHeight: Control.hit,
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: Space.md - 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
-  optionActive: { borderColor: Colors.textPrimary, backgroundColor: Colors.textPrimary },
+  optionActive: { borderColor: colors.textPrimary, backgroundColor: colors.textPrimary },
   optionText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
   },
-  optionTextActive: { color: Colors.textInverse, fontFamily: Typography.family.semibold },
-  choiceList: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  choiceRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  choiceCopy: { flex: 1, gap: 2 },
+  optionTextActive: { color: colors.textInverse, fontFamily: Typography.family.semibold },
+  choiceList: {},
+  choiceRow: { minHeight: Control.hit + Space.lg, flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  choiceCopy: { flex: 1, gap: Space.xs - 2 },
   choiceTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
   },
   choiceDetail: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
   },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.border },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   radio: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: Colors.textMuted,
+    width: Control.icon,
+    height: Control.icon,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
+    borderColor: colors.textMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioActive: { borderColor: Colors.textPrimary },
-  radioDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: Colors.textPrimary },
+  radioActive: { borderColor: colors.textPrimary },
+  radioDot: { width: Space.sm + Space.xs, height: Space.sm + Space.xs, borderRadius: Radius.md, backgroundColor: colors.textPrimary },
   invocationPreview: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   invocationText: {
     flex: 1,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
     fontSize: Type.captionElevated.size,
   },
@@ -609,61 +612,58 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
-    paddingTop: 2,
+    paddingTop: Space.xs - 2,
   },
   cautionText: {
     flex: 1,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: 17,
+    lineHeight: Type.captionElevated.lineHeight - 1,
   },
-  permissionList: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  permissionRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  permissionCopy: { flex: 1, gap: 3 },
+  permissionList: {},
+  permissionRow: { minHeight: Space.xxl + Space.lg, flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  permissionCopy: { flex: 1, gap: Space.xs - 1 },
   permissionTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
   },
   permissionDetail: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: 17,
+    lineHeight: Type.captionElevated.lineHeight - 1,
   },
   readiness: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.sm + Space.xs,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   readinessIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceAlt,
+    width: Control.chrome,
+    height: Control.chrome,
+    borderRadius: Radius.xxl,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  readinessCopy: { flex: 1, gap: 2 },
+  readinessCopy: { flex: 1, gap: Space.xs - 2 },
   readinessTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
   },
   readinessDetail: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: 17,
+    lineHeight: Type.captionElevated.lineHeight - 1,
   },
   actions: { flexDirection: 'row', gap: Space.sm },
   action: { flex: 1 },
-});
+  });
+}

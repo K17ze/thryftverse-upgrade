@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
+import { VoiceMessageBubble } from './VoiceMessageBubble';
 
 interface Reaction {
   emoji: string;
@@ -22,16 +23,23 @@ interface MessageBubbleProps {
   senderLabel?: string;
   timestamp?: string;
   status?: 'sending' | 'sent' | 'failed';
+  readStatus?: 'sending' | 'sent' | 'delivered' | 'read';
   reactions?: Reaction[];
   mediaUri?: string;
   mediaType?: 'image' | 'video';
   uploadStatus?: 'uploading' | 'failed' | 'sent';
+  voiceDurationMs?: number;
+  voiceWaveform?: number[];
   replyTo?: ReplyInfo | null;
   isFirstInCluster?: boolean;
   isLastInCluster?: boolean;
   showAvatar?: boolean;
   /** When true, shows a "Translated" badge above the message text */
   isTranslated?: boolean;
+  /** When true, renders a subtle AI visual distinction (sparkles icon, tinted bubble, AI badge). */
+  isAgent?: boolean;
+  /** Ionicon name for the agent avatar glyph — used when isAgent is true. */
+  agentAvatar?: string;
   onLongPress?: () => void;
   onReactionPress?: () => void;
   onRetry?: () => void;
@@ -39,33 +47,44 @@ interface MessageBubbleProps {
   onReplyPress?: () => void;
 }
 
-export function MessageBubble({
+function MessageBubbleBase({
   text,
   isMe,
   senderLabel,
   timestamp,
   status,
+  readStatus,
   reactions,
   mediaUri,
   mediaType,
   uploadStatus,
+  voiceDurationMs,
+  voiceWaveform,
   replyTo,
   isFirstInCluster = true,
   isLastInCluster = true,
   showAvatar = false,
   isTranslated = false,
+  isAgent = false,
+  agentAvatar,
   onLongPress,
   onReactionPress,
   onRetry,
   onMediaPress,
   onReplyPress,
 }: MessageBubbleProps) {
+  const { colors, isDark } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
 
-  const bubbleBg = isMe ? Colors.brand : Colors.surfaceAlt;
-  const bubbleText = isMe ? Colors.textInverse : Colors.textPrimary;
-  const metaColor = isMe ? `${Colors.textInverse}99` : Colors.textMuted;
+  const bubbleBg = isMe
+    ? colors.brand
+    : isAgent
+      ? `${colors.brand}${isDark ? '15' : '0D'}`
+      : colors.surfaceAlt;
+  const bubbleText = isMe ? colors.textInverse : colors.textPrimary;
+  const metaColor = isMe ? `${colors.textInverse}CC` : colors.textMuted;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
   const isTop = isFirstInCluster && !isLastInCluster;
@@ -91,16 +110,34 @@ export function MessageBubble({
   return (
     <View style={[styles.row, isMe && styles.rowRight]}>
       {showAvatar && !isMe ? (
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{(senderLabel ?? '?')[0].toUpperCase()}</Text>
-        </View>
+        isAgent ? (
+          <View style={[styles.agentAvatar, { backgroundColor: `${colors.brand}14` }]}>
+            <Ionicons
+              name={(agentAvatar ?? 'sparkles') as keyof typeof Ionicons.glyphMap}
+              size={14}
+              color={colors.brand}
+            />
+          </View>
+        ) : (
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{(senderLabel ?? '?')[0].toUpperCase()}</Text>
+          </View>
+        )
       ) : (
         <View style={styles.avatarSpacer} />
       )}
 
       <View style={styles.bubbleColumn}>
         {senderLabel && !isMe && isFirstInCluster ? (
-          <Text style={styles.senderName}>{senderLabel}</Text>
+          <View style={styles.senderLabelRow}>
+            <Text style={styles.senderName}>{senderLabel}</Text>
+            {isAgent ? (
+              <View style={[styles.aiChip, { backgroundColor: `${colors.brand}14` }]}>
+                <Ionicons name="sparkles" size={8} color={colors.brand} />
+                <Text style={[styles.aiChipText, { color: colors.brand }]}>AI</Text>
+              </View>
+            ) : null}
+          </View>
         ) : null}
 
         <Pressable
@@ -115,7 +152,7 @@ export function MessageBubble({
           ]}
         >
           {replyTo ? (
-            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${Colors.textInverse}40` : Colors.border }]}>
+            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${colors.textInverse}40` : colors.border }]}>
               <Text style={[styles.replyName, { color: metaColor }]}>
                 {replyTo.senderName}
               </Text>
@@ -134,16 +171,24 @@ export function MessageBubble({
               />
               {mediaType === 'video' ? (
                 <View style={styles.videoBadge}>
-                  <Ionicons name="play" size={14} color={Colors.textInverse} />
+                  <Ionicons name="play" size={14} color={colors.textInverse} />
                 </View>
               ) : null}
               {isUploading ? (
                 <View style={styles.uploadOverlay}>
-                  <Ionicons name="cloud-upload-outline" size={20} color={Colors.textInverse} />
+                  <Ionicons name="cloud-upload-outline" size={20} color={colors.textInverse} />
                   <Text style={styles.uploadText}>Sending...</Text>
                 </View>
               ) : null}
             </Pressable>
+          ) : null}
+
+          {voiceDurationMs != null ? (
+            <VoiceMessageBubble
+              durationMs={voiceDurationMs}
+              isMe={isMe}
+              waveform={voiceWaveform}
+            />
           ) : null}
 
           {text ? (
@@ -160,14 +205,27 @@ export function MessageBubble({
 
           <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
             {timestamp ? <Text style={[styles.timestamp, { color: metaColor }]}>{timestamp}</Text> : null}
-            {isMe && status ? (
+            {isMe && (readStatus || status) ? (
               <View style={styles.statusWrap}>
-                {isUploading ? (
-                  <Ionicons name="time-outline" size={10} color={metaColor} />
+                {isUploading || readStatus === 'sending' ? (
+                  <Ionicons name="time-outline" size={14} color={metaColor} />
                 ) : hasFailed ? (
-                  <Ionicons name="alert-circle" size={10} color={isMe ? Colors.textInverse : Colors.danger} />
+                  <Ionicons name="alert-circle" size={14} color={isMe ? colors.textInverse : colors.danger} />
+                ) : readStatus ? (
+                  <Ionicons
+                    name={readStatus === 'sent' ? 'checkmark' : 'checkmark-done'}
+                    size={14}
+                    color={readStatus === 'read' ? colors.brand : metaColor}
+                    accessibilityLabel={
+                      readStatus === 'read'
+                        ? 'Message read'
+                        : readStatus === 'delivered'
+                          ? 'Message delivered'
+                          : 'Message sent'
+                    }
+                  />
                 ) : (
-                  <Ionicons name="checkmark" size={10} color={metaColor} />
+                  <Ionicons name="checkmark" size={14} color={metaColor} accessibilityLabel="Message sent" />
                 )}
               </View>
             ) : null}
@@ -176,7 +234,7 @@ export function MessageBubble({
 
         {hasFailed && onRetry ? (
           <Pressable onPress={onRetry} style={styles.retryBadge}>
-            <Ionicons name="refresh" size={11} color={Colors.danger} />
+            <Ionicons name="refresh" size={11} color={colors.danger} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
@@ -196,7 +254,9 @@ export function MessageBubble({
   );
 }
 
-const styles = StyleSheet.create({
+export const MessageBubble = React.memo(MessageBubbleBase);
+
+const createStyles = (colors: any) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -210,15 +270,23 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: Space.xs,
+  },
+  agentAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Space.xs,
   },
   avatarText: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   avatarSpacer: {
     width: 28,
@@ -227,12 +295,31 @@ const styles = StyleSheet.create({
     maxWidth: '78%',
     gap: 3,
   },
+  senderLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginBottom: 2,
+    marginLeft: Space.xs,
+  },
   senderName: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.brand,
-    marginBottom: 2,
-    marginLeft: Space.xs,
+    color: colors.brand,
+  },
+  aiChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: Radius.full,
+  },
+  aiChipText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   bubble: {
     paddingHorizontal: Space.sm + 2,
@@ -240,15 +327,15 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   bubbleMe: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignSelf: 'flex-end',
   },
   bubbleThem: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignSelf: 'flex-start',
   },
   bubbleFailed: {
-    backgroundColor: `${Colors.danger}15`,
+    backgroundColor: `${colors.danger}15`,
   },
   replyBlock: {
     borderLeftWidth: 3,
@@ -275,10 +362,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   translatedLabel: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: TypeStyles.metadata.fontFamily,
   },
   metaRow: {
@@ -303,7 +390,7 @@ const styles = StyleSheet.create({
   mediaWrap: {
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   mediaImage: {
     width: '100%',
@@ -334,7 +421,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   uploadText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
@@ -347,13 +434,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,
-    backgroundColor: `${Colors.danger}14`,
+    backgroundColor: `${colors.danger}14`,
     alignSelf: 'flex-start',
   },
   retryText: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.danger,
+    color: colors.danger,
   },
   reactions: {
     flexDirection: 'row',
@@ -370,21 +457,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     minHeight: 28,
   },
   reactionChipActive: {
-    backgroundColor: `${Colors.brand}15`,
+    backgroundColor: `${colors.brand}15`,
   },
   reactionEmoji: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
   },
   reactionCount: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 });

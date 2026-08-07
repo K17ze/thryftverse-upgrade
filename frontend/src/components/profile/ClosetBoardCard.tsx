@@ -5,10 +5,11 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { Listing } from '../../data/mockData';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
@@ -29,6 +30,9 @@ export function ClosetBoardCard({
   onPress,
   index = 0,
 }: ClosetBoardCardProps) {
+  const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasCovers = covers.length > 0;
 
   return (
@@ -75,7 +79,7 @@ export function ClosetBoardCard({
                     )}
                     {covers.length === 2 && (
                       <View style={[styles.miniTile, styles.emptyMini]}>
-                        <Ionicons name="add" size={16} color={Colors.textMuted} />
+                        <Ionicons name="add" size={16} color={colors.textMuted} />
                       </View>
                     )}
                   </View>
@@ -84,7 +88,7 @@ export function ClosetBoardCard({
             </>
           ) : (
             <View style={styles.emptyCollage}>
-              <Ionicons name="folder-open-outline" size={28} color={Colors.textMuted} />
+              <Ionicons name="folder-open-outline" size={28} color={colors.textMuted} />
             </View>
           )}
         </View>
@@ -106,13 +110,14 @@ export function ClosetBoardCard({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     width: CARD_W,
     height: CARD_W * 1.15,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     position: 'relative',
   },
   collage: {
@@ -140,7 +145,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: Radius.sm,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
   },
@@ -160,11 +165,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 12,
-    paddingTop: 24,
+    paddingTop: Space.lg,
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 14,
+    fontSize: Type.body.size,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
@@ -172,11 +177,12 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-});
+  });
+}

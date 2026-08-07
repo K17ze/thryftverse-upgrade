@@ -1,19 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Space, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Space, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { fetchAiCapability, type AiCapabilitySummary } from '../services/aiTruthApi';
 
-type Props = StackScreenProps<RootStackParamList, 'BotDirectory'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'BotDirectory'>;
 type AgentCategory =
   | 'all'
   | 'assistant'
@@ -34,14 +34,26 @@ const CATEGORIES: Array<{ value: AgentCategory; label: string }> = [
 ];
 
 export default function BotDirectoryScreen({ navigation }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedCategory, setSelectedCategory] = useState<AgentCategory>('all');
   const systemAgents = useStore((state) => state.availableChatBots);
   const customAgents = useStore((state) => state.customBots);
   const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
 
+  // P0-9: Honest AI capability labeling. The header subtitle reflects
+  // the actual capability level — "AI specialists" only when a real
+  // provider is configured, "Heuristic specialists" on baselines, and
+  // "Assistant unavailable" when nothing is wired. The product must
+  // never market heuristic baselines as trained ML.
+  const [aiCapability, setAiCapability] = useState<AiCapabilitySummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   useEffect(() => {
-    void loadBotsFromApi();
+    fetchAiCapability().then(setAiCapability).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void loadBotsFromApi().finally(() => setIsLoading(false));
   }, [loadBotsFromApi]);
 
   const publishedCount = customAgents.filter(
@@ -55,15 +67,23 @@ export default function BotDirectoryScreen({ navigation }: Props) {
     [selectedCategory, systemAgents]
   );
 
+  const directorySubtitle = aiCapability
+    ? aiCapability.capabilityLevel === 'provider_backed'
+      ? 'AI specialists for your group conversations'
+      : aiCapability.capabilityLevel === 'heuristic_baseline'
+      ? 'Heuristic specialists for your group conversations'
+      : 'Assistant unavailable on this deployment'
+    : 'Specialists for your group conversations';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
+        backgroundColor={colors.background}
       />
       <ScreenHeader
         title="Agents"
-        subtitle="Specialists for your group conversations"
+        subtitle={directorySubtitle}
         onBack={() => navigation.goBack()}
         rightAction={
           <AnimatedPressable
@@ -72,9 +92,13 @@ export default function BotDirectoryScreen({ navigation }: Props) {
             scaleValue={0.92}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="Create an AI agent"
+            accessibilityLabel={
+              aiCapability?.capabilityLevel === 'provider_backed'
+                ? 'Create an AI agent'
+                : 'Create a specialist agent'
+            }
           >
-            <Ionicons name="add" size={23} color={Colors.textPrimary} />
+            <Ionicons name="add" size={22} color={colors.textPrimary} />
           </AnimatedPressable>
         }
       />
@@ -93,7 +117,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           accessibilityLabel="Open your agents"
         >
           <View style={styles.leadingIcon}>
-            <Ionicons name="person-outline" size={21} color={Colors.textPrimary} />
+            <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
           </View>
           <View style={styles.yourAgentsCopy}>
             <Text style={styles.yourAgentsTitle}>Your agents</Text>
@@ -103,7 +127,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                 : 'Create a private agent with its own instructions and voice'}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={19} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
         </AnimatedPressable>
 
         <View style={styles.sectionIntro}>
@@ -139,7 +163,19 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           </ScrollView>
         </View>
 
-        {filteredAgents.length === 0 ? (
+        {isLoading && filteredAgents.length === 0 ? (
+          <View style={styles.list}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={styles.skeletonRow}>
+                <View style={styles.skeletonIcon} />
+                <View style={styles.skeletonCopy}>
+                  <View style={styles.skeletonLine} />
+                  <View style={[styles.skeletonLine, { width: '70%' }]} />
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : filteredAgents.length === 0 ? (
           <EmptyState
             icon="chatbubble-ellipses-outline"
             title="No agents here yet"
@@ -162,7 +198,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                       category={agent.category}
                       name={agent.name}
                       size={21}
-                      color={Colors.textPrimary}
+                      color={colors.textPrimary}
                     />
                   </View>
                   <View style={styles.agentCopy}>
@@ -184,7 +220,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                       </Text>
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                 </AnimatedPressable>
                 {index < filteredAgents.length - 1 ? <View style={styles.divider} /> : null}
               </View>
@@ -196,50 +232,51 @@ export default function BotDirectoryScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: Space.xxl,
   },
   headerAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   yourAgents: {
-    minHeight: 82,
+    minHeight: Space.xxl + Space.xl + 2,
     marginHorizontal: Space.md,
     marginTop: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   leadingIcon: {
-    width: 32,
-    height: 44,
+    width: Control.chromeCompact,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   yourAgentsCopy: {
     flex: 1,
-    gap: 3,
+    gap: Space.xs - 1,
   },
   yourAgentsTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.subtitle.size,
   },
   yourAgentsDetail: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    lineHeight: 17,
+    lineHeight: Type.caption.lineHeight + 1,
   },
   sectionIntro: {
     paddingHorizontal: Space.md,
@@ -247,99 +284,122 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   sectionTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.subtitle.size,
   },
   sectionDetail: {
-    marginTop: 2,
-    color: Colors.textMuted,
+    marginTop: Space.xs - 2,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
   },
   filterBackground: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   filters: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    gap: 9,
+    gap: Space.sm + 1,
   },
   filter: {
-    minHeight: 38,
+    minHeight: Control.chrome + 2,
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    borderBottomWidth: 2,
+    paddingHorizontal: Space.xs + 2,
+    borderBottomWidth: Stroke.emphasis,
     borderBottomColor: 'transparent',
   },
   filterSelected: {
-    borderBottomColor: Colors.textPrimary,
+    borderBottomColor: colors.textPrimary,
   },
   filterText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     fontSize: Type.captionElevated.size,
   },
   filterTextSelected: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   list: {
     paddingHorizontal: Space.md,
   },
   agentRow: {
-    minHeight: 104,
+    minHeight: Space.xxl + Space.xxl + Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
+    gap: Space.md,
+    paddingVertical: Space.sm + 4,
   },
   agentCopy: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   agentName: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
   },
   agentDescription: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: Type.captionElevated.size,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   agentMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs + 1,
     overflow: 'hidden',
   },
   categoryText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
     textTransform: 'capitalize',
   },
   agentMetaText: {
     flexShrink: 1,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
   },
   statusText: {
     flexShrink: 0,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
   },
   metaDot: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: Type.caption.size,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginLeft: 44,
+    backgroundColor: colors.border,
+    marginLeft: Control.hit,
   },
-});
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.sm + 4,
+    minHeight: Space.xxl + Space.xxl + Space.sm,
+  },
+  skeletonIcon: {
+    width: Control.chromeCompact,
+    height: Control.hit,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceAlt,
+  },
+  skeletonCopy: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceAlt,
+  },
+  });
+}

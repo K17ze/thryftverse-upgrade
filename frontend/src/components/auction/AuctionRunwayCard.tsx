@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography, Elevation } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Elevation, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionStateBadge } from './AuctionStateBadge';
@@ -60,6 +60,8 @@ export function AuctionRunwayCard({
   personalActionLabel,
   onPersonalAction,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const cardWidth = cardWidthOverride ?? width * 0.85;
   const imageHeight = imageHeightOverride ?? 380;
@@ -70,11 +72,11 @@ export function AuctionRunwayCard({
     : viewerState === 'won' ? 'Won'
     : viewerState === 'lost' ? 'Lost'
     : null;
-  const personalColor = viewerState === 'outbid' ? Colors.danger
-    : viewerState === 'leading' ? Colors.success
-    : viewerState === 'won' ? Colors.success
-    : viewerState === 'lost' ? Colors.danger
-    : Colors.textSecondary;
+  const personalColor = viewerState === 'outbid' ? colors.danger
+    : viewerState === 'leading' ? colors.success
+    : viewerState === 'won' ? colors.success
+    : viewerState === 'lost' ? colors.danger
+    : colors.textSecondary;
 
   if (metadataBelow) {
     return (
@@ -113,7 +115,7 @@ export function AuctionRunwayCard({
                 <Ionicons
                   name={isWatching ? 'eye' : 'eye-outline'}
                   size={16}
-                  color={isWatching ? Colors.brand : '#FFFFFF'}
+                  color={isWatching ? colors.brand : '#FFFFFF'}
                 />
               </AnimatedPressable>
             )}
@@ -188,7 +190,7 @@ export function AuctionRunwayCard({
               <Ionicons
                 name={isWatching ? 'eye' : 'eye-outline'}
                 size={16}
-                color={isWatching ? Colors.brand : '#FFFFFF'}
+                color={isWatching ? colors.brand : '#FFFFFF'}
               />
             </AnimatedPressable>
           )}
@@ -213,11 +215,11 @@ export function AuctionRunwayCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
       android: { elevation: 1 },
@@ -280,7 +282,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
@@ -296,27 +298,27 @@ const styles = StyleSheet.create({
   },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.7)',
     letterSpacing: 0.2,
   },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 24,
-    color: '#FFFFFF',
-    letterSpacing: -0.6,
-    lineHeight: 28,
-    marginBottom: 4,
+    fontSize: Type.priceList.size,
+    color: colors.textInverse,
+    letterSpacing: -0.5,
+    lineHeight: 24,
+    marginBottom: Space.xs,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   bidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.65)',
   },
 
@@ -328,41 +330,41 @@ const styles = StyleSheet.create({
   },
   belowBrand: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
     letterSpacing: 0.2,
   },
   belowTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 24,
-    color: Colors.textPrimary,
-    letterSpacing: -0.6,
-    lineHeight: 28,
+    fontSize: Type.priceList.size,
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+    lineHeight: 24,
     marginBottom: 2,
   },
   belowMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   belowBidCount: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
   },
   personalActionBtn: {
     marginTop: Space.sm + 2,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.full,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignSelf: 'flex-start',
   },
   personalActionText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
-    color: Colors.textInverse,
+    fontSize: Type.captionElevated.size,
+    color: colors.textInverse,
     letterSpacing: 0.3,
   },
 });

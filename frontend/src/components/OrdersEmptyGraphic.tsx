@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, ActiveTheme } from '../constants/colors';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../theme/designTokens';
 
 interface Props {
   title?: string;
@@ -49,13 +49,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     color: Colors.textPrimary,
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: Typography.family.regular,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     color: Colors.textMuted,
     textAlign: 'center',
     maxWidth: 240,

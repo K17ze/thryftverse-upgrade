@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from '../ui/AppButton';
 import { haptics } from '../../utils/haptics';
@@ -42,6 +42,7 @@ export function BoostListingSheet({
   onClose,
   onBoost,
 }: BoostListingSheetProps) {
+  const { colors } = useAppTheme();
   const [selectedTierId, setSelectedTierId] = useState<string>(BOOST_TIERS[1].id);
 
   const selectedTier = BOOST_TIERS.find((t) => t.id === selectedTierId) ?? BOOST_TIERS[1];
@@ -57,8 +58,10 @@ export function BoostListingSheet({
 
   return (
     <BottomSheet visible={visible} onDismiss={onClose} snapPoint={0.6}>
-      <Text style={styles.title}>Boost your listing</Text>
-      <Text style={styles.subtitle}>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>
+        Boost your listing
+      </Text>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
         Promoted listings appear higher in search and feed results, reaching more buyers.
       </Text>
 
@@ -67,15 +70,18 @@ export function BoostListingSheet({
         showsVerticalScrollIndicator={false}
       >
         {isCurrentlyBoosted && (
-          <View style={styles.activeBoostBanner}>
-            <Ionicons name="rocket-outline" size={16} color={Colors.brand} />
-            <Text style={styles.activeBoostText}>
+          <View style={[styles.activeBoostBanner, { backgroundColor: `${colors.brand}12` }]}>
+            <Ionicons name="rocket-outline" size={16} color={colors.brand} />
+            <Text style={[styles.activeBoostText, { color: colors.brand }]}>
               Currently boosted until {new Date(currentBoostedUntil!).toLocaleDateString()}
             </Text>
           </View>
         )}
 
-        {BOOST_TIERS.map((tier) => {
+        {/* Tier selection — flat rows with hairline separators.
+            Per AGENTS.md: flat canvas, no cards. Selection state
+            communicated by radio icon, not border. */}
+        {BOOST_TIERS.map((tier, index) => {
           const isSelected = tier.id === selectedTierId;
           return (
             <Pressable
@@ -86,8 +92,8 @@ export function BoostListingSheet({
               }}
               style={({ pressed }) => [
                 styles.tierRow,
-                isSelected && styles.tierRowSelected,
-                pressed && styles.tierRowPressed,
+                index < BOOST_TIERS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle },
+                pressed && { opacity: 0.7 },
               ]}
               accessibilityRole="radio"
               accessibilityState={{ selected: isSelected }}
@@ -95,15 +101,21 @@ export function BoostListingSheet({
             >
               <View style={styles.tierInfo}>
                 <View style={styles.tierHeader}>
-                  <Text style={styles.tierLabel}>{tier.label}</Text>
-                  <Text style={styles.tierPrice}>£{tier.priceGbp.toFixed(2)}</Text>
+                  <Text style={[styles.tierLabel, { color: colors.textPrimary }]}>
+                    {tier.label}
+                  </Text>
+                  <Text style={[styles.tierPrice, { color: colors.brand }]}>
+                    £{tier.priceGbp.toFixed(2)}
+                  </Text>
                 </View>
-                <Text style={styles.tierDescription}>{tier.description}</Text>
+                <Text style={[styles.tierDescription, { color: colors.textSecondary }]}>
+                  {tier.description}
+                </Text>
               </View>
               {isSelected ? (
-                <Ionicons name="checkmark-circle" size={22} color={Colors.brand} />
+                <Ionicons name="checkmark-circle" size={22} color={colors.brand} />
               ) : (
-                <Ionicons name="radio-button-off" size={22} color={Colors.textMuted} />
+                <Ionicons name="radio-button-off" size={22} color={colors.textMuted} />
               )}
             </Pressable>
           );
@@ -127,16 +139,17 @@ export function BoostListingSheet({
 
 const styles = StyleSheet.create({
   title: {
-    fontSize: 18,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
     textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: Space.lg,
     marginBottom: Space.md,
@@ -148,36 +161,24 @@ const styles = StyleSheet.create({
   activeBoostBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: `${Colors.brand}12`,
     marginBottom: Space.sm,
   },
   activeBoostText: {
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
   },
+  // ── Tier rows — flat, hairline separators ──
   tierRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    marginBottom: Space.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  tierRowSelected: {
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
-  },
-  tierRowPressed: {
-    opacity: 0.7,
+    minHeight: 44,
   },
   tierInfo: {
     flex: 1,
@@ -189,19 +190,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   tierLabel: {
-    fontSize: 16,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   tierPrice: {
-    fontSize: 16,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
+    fontVariant: ['tabular-nums'],
   },
   tierDescription: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
   },
   footer: {
     paddingHorizontal: Space.md,

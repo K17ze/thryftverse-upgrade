@@ -5,7 +5,7 @@ import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -15,7 +15,7 @@ import {
   MarketHistoryCursor,
   listUserMarketHistory,
 } from '../services/marketApi';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
@@ -26,7 +26,7 @@ import { formatCoOwnIze } from '../utils/currency';
 import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
 
 type LedgerEntry = {
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   summaryStat: {
     flex: 1,
     minWidth: 0,
-    gap: 4,
+    gap: Space.xs,
   },
   summaryStatLabel: {
     fontSize: Type.meta.size,
@@ -392,10 +392,10 @@ const styles = StyleSheet.create({
   summaryStatValue: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   summaryStatDivider: {
-    width: 1,
+    width: Stroke.standard,
     alignSelf: 'stretch',
     marginHorizontal: Space.sm,
   },
@@ -413,6 +413,6 @@ const styles = StyleSheet.create({
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
   },
 });

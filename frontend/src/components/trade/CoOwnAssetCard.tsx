@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
@@ -57,6 +57,9 @@ export function CoOwnAssetCard({
   isSubmitting = false,
   compact = false,
 }: CoOwnAssetCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   const isPositive = marketMovePct24h >= 0;
   const isHoldingsMode = yourUnits > 0;
   const primaryDisabled = !isOpen || availableUnits === 0;
@@ -129,8 +132,8 @@ export function CoOwnAssetCard({
             {issuerAvatar ? (
               <CachedImage uri={issuerAvatar} style={styles.issuerAvatar} contentFit="cover" />
             ) : (
-              <View style={[styles.issuerAvatar, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ fontSize: 10, fontFamily: Typography.family.bold, color: Colors.textPrimary }}>
+              <View style={[styles.issuerAvatar, { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ fontSize: Type.meta.size - 2, fontFamily: Typography.family.bold, color: colors.textPrimary }}>
                   {issuerHandle.slice(0, 1).toUpperCase()}
                 </Text>
               </View>
@@ -151,7 +154,7 @@ export function CoOwnAssetCard({
             <Ionicons
               name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'}
               size={12}
-              color={Colors.textPrimary}
+              color={colors.textPrimary}
             />
           </AnimatedPressable>
         </View>
@@ -169,7 +172,7 @@ export function CoOwnAssetCard({
               <Ionicons
                 name={isHoldingsMode ? 'cash-outline' : 'wallet-outline'}
                 size={13}
-                color={!(primaryDisabled || isSubmitting) ? Colors.textInverse : Colors.textMuted}
+                color={!(primaryDisabled || isSubmitting) ? colors.textInverse : colors.textMuted}
               />
             }
             hapticFeedback="medium"
@@ -192,12 +195,12 @@ export function CoOwnAssetCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
@@ -220,7 +223,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   assetTitle: {
     flex: 1,
@@ -253,19 +256,19 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    minHeight: 34,
+    gap: Space.sm,
+    minHeight: Space.xl + Space.sm + 2,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   issuerAvatar: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.lg,
   },
   issuerText: {
     flex: 1,
@@ -273,10 +276,10 @@ const styles = StyleSheet.create({
   messageBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: Space.sm,

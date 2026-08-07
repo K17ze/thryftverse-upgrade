@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -17,8 +17,10 @@ interface PulseDotProps {
 
 export function PulseDot({
   size = 8,
-  color = Colors.brand,
+  color,
 }: PulseDotProps) {
+  const { colors } = useAppTheme();
+  const resolvedColor = color ?? colors.brand;
   const pulse = useSharedValue(0);
 
   React.useEffect(() => {
@@ -50,7 +52,7 @@ export function PulseDot({
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: color,
+            backgroundColor: resolvedColor,
           },
           dotStyle,
         ]}

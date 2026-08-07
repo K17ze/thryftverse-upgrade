@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CommerceStateCard, CommerceStateType } from './CommerceStateCard';
 
@@ -59,11 +59,11 @@ function formatCountdown(msRemaining: number): string {
   return `${seconds}s`;
 }
 
-function getExpiryTone(msRemaining: number): { color: string; icon: keyof typeof Ionicons.glyphMap } {
-  if (msRemaining <= 0) return { color: Colors.textMuted, icon: 'time-outline' };
-  if (msRemaining <= 60 * 60 * 1000) return { color: Colors.danger, icon: 'timer-outline' };
-  if (msRemaining <= 12 * 60 * 60 * 1000) return { color: Colors.warning, icon: 'timer-outline' };
-  return { color: Colors.textSecondary, icon: 'time-outline' };
+function getExpiryTone(msRemaining: number, colors: any): { color: string; icon: keyof typeof Ionicons.glyphMap } {
+  if (msRemaining <= 0) return { color: colors.textMuted, icon: 'time-outline' };
+  if (msRemaining <= 60 * 60 * 1000) return { color: colors.danger, icon: 'timer-outline' };
+  if (msRemaining <= 12 * 60 * 60 * 1000) return { color: colors.warning, icon: 'timer-outline' };
+  return { color: colors.textSecondary, icon: 'time-outline' };
 }
 
 /**
@@ -112,6 +112,8 @@ export function MarketplaceChatCard({
   onViewOrder,
   onExpire,
 }: MarketplaceChatCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   // Stable callback so the countdown hook doesn't re-run every render
   const handleExpire = useCallback(() => {
     onExpire?.();
@@ -126,7 +128,7 @@ export function MarketplaceChatCard({
     const priceLabel = formattedPrice ?? `£${offer.price.toFixed(2)}`;
     const origLabel = formattedOriginalPrice ?? `£${offer.originalPrice.toFixed(2)}`;
     const showCountdown = offer.expiresAt && (status === 'pending' || status === 'countered');
-    const tone = getExpiryTone(msRemaining);
+    const tone = getExpiryTone(msRemaining, colors);
     const counterRoundLabel = offer.counterRound && offer.counterRound > 0
       ? `Counter #${offer.counterRound}`
       : null;
@@ -140,13 +142,13 @@ export function MarketplaceChatCard({
         ) : null}
         {counterRoundLabel && (
           <View style={styles.counterRoundRow}>
-            <Ionicons name="swap-horizontal" size={11} color={Colors.textMuted} />
+            <Ionicons name="swap-horizontal" size={11} color={colors.textMuted} />
             <Text style={styles.counterRoundText}>{counterRoundLabel}</Text>
           </View>
         )}
         <View style={styles.offerPriceRow}>
           <View style={styles.offerPriceIdentity}>
-            <Ionicons name="pricetag-outline" size={15} color={Colors.textMuted} />
+            <Ionicons name="pricetag-outline" size={15} color={colors.textMuted} />
             <Text style={styles.offerPrice} numberOfLines={1}>{priceLabel}</Text>
             <Text style={styles.offerStrike} numberOfLines={1}>{origLabel}</Text>
           </View>
@@ -167,26 +169,26 @@ export function MarketplaceChatCard({
         ) : null}
         {status === 'declined' && (
           <View style={styles.offerStatusRow}>
-            <Ionicons name="close-circle-outline" size={12} color={Colors.danger} />
-            <Text style={[styles.offerStatusText, { color: Colors.danger }]}>Declined</Text>
+            <Ionicons name="close-circle-outline" size={12} color={colors.danger} />
+            <Text style={[styles.offerStatusText, { color: colors.danger }]}>Declined</Text>
           </View>
         )}
         {status === 'accepted' && (
           <View style={styles.offerStatusRow}>
-            <Ionicons name="checkmark-circle-outline" size={12} color={Colors.success} />
-            <Text style={[styles.offerStatusText, { color: Colors.success }]}>Accepted</Text>
+            <Ionicons name="checkmark-circle-outline" size={12} color={colors.success} />
+            <Text style={[styles.offerStatusText, { color: colors.success }]}>Accepted</Text>
           </View>
         )}
         {status === 'expired' && (
           <View style={styles.offerStatusRow}>
-            <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
-            <Text style={[styles.offerStatusText, { color: Colors.textMuted }]}>Expired</Text>
+            <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+            <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>Expired</Text>
           </View>
         )}
         {!status && isMe && (
           <View style={styles.offerStatusRow}>
-            <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
-            <Text style={[styles.offerStatusText, { color: Colors.textMuted }]}>Waiting for response</Text>
+            <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+            <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>Waiting for response</Text>
           </View>
         )}
         {/* Action buttons — only show when pending and not expired */}
@@ -214,7 +216,7 @@ export function MarketplaceChatCard({
     return (
       <View style={styles.statusInline}>
         <View style={styles.statusInlineIcon}>
-          <Ionicons name="cube-outline" size={16} color={Colors.textSecondary} />
+          <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
         </View>
         <View style={styles.statusInlineCopy}>
           <Text style={styles.statusInlineTitle}>{lines[0]}</Text>
@@ -227,7 +229,7 @@ export function MarketplaceChatCard({
   if (type === 'safety_notice' && text) {
     return (
       <View style={styles.noticeInline}>
-        <Ionicons name="shield-checkmark-outline" size={14} color={Colors.textMuted} />
+        <Ionicons name="shield-checkmark-outline" size={14} color={colors.textMuted} />
         <Text style={styles.noticeInlineText}>{text}</Text>
       </View>
     );
@@ -252,14 +254,14 @@ export function MarketplaceChatCard({
     return (
       <View style={styles.systemEvent}>
         <View style={styles.systemEventIcon}>
-          <Ionicons name="shield-checkmark-outline" size={16} color={Colors.textSecondary} />
+          <Ionicons name="shield-checkmark-outline" size={16} color={colors.textSecondary} />
         </View>
         <View style={styles.systemEventCopy}>
           <View style={styles.systemEventHeading}>
             {systemTitle ? <Text style={styles.systemEventTitle}>{systemTitle}</Text> : null}
             {systemVerified ? (
               <View style={styles.verifiedPill} accessibilityLabel="Verified system update">
-                <Ionicons name="checkmark" size={10} color={Colors.textSecondary} />
+                <Ionicons name="checkmark" size={10} color={colors.textSecondary} />
                 <Text style={styles.verifiedText}>Verified</Text>
               </View>
             ) : null}
@@ -273,42 +275,44 @@ export function MarketplaceChatCard({
   return null;
 }
 
-function StatusBadge({ tone, label, icon }: { tone: 'positive' | 'negative' | 'neutral'; label: string; icon: string }) {
-  const colors = {
-    positive: { text: Colors.success },
-    negative: { text: Colors.danger },
-    neutral: { text: Colors.textMuted },
+function StatusBadge({ tone, label, icon }: { tone: 'positive' | 'negative' | 'neutral'; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const toneColors = {
+    positive: { text: colors.success },
+    negative: { text: colors.danger },
+    neutral: { text: colors.textMuted },
   };
-  const c = colors[tone];
+  const c = toneColors[tone];
   return (
     <View style={styles.offerStatusRow}>
-      <Ionicons name={icon as any} size={12} color={c.text} />
+      <Ionicons name={icon} size={12} color={c.text} />
       <Text style={[styles.offerStatusText, { color: c.text }]}>{label}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   offerBlock: {
     width: '88%',
     maxWidth: 352,
     minWidth: 0,
     gap: Space.xs,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: Space.sm + 2,
     marginHorizontal: Space.md,
   },
   offerBlockMe: {
     alignSelf: 'flex-end',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   offerSender: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   offerPriceRow: {
     flexDirection: 'row',
@@ -326,17 +330,17 @@ const styles = StyleSheet.create({
   offerPrice: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   offerStrike: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textDecorationLine: 'line-through',
     flexShrink: 1,
   },
   offerDiscountBadge: {
-    backgroundColor: `${Colors.success}18`,
+    backgroundColor: `${colors.success}18`,
     borderRadius: Radius.sm,
     paddingHorizontal: 5,
     paddingVertical: 1,
@@ -345,7 +349,7 @@ const styles = StyleSheet.create({
   offerDiscountText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
-    color: Colors.success,
+    color: colors.success,
     fontVariant: ['tabular-nums'],
   },
   offerStatusRow: {
@@ -366,7 +370,7 @@ const styles = StyleSheet.create({
   counterRoundText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.3,
   },
   offerExpiryRow: {
@@ -374,7 +378,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: Space.xs + 2,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
     alignSelf: 'flex-start',
   },
@@ -390,7 +394,7 @@ const styles = StyleSheet.create({
     marginTop: Space.xs + 2,
     paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   offerPass: {
     flex: 1,
@@ -405,7 +409,7 @@ const styles = StyleSheet.create({
   offerPassText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   offerCounter: {
     flex: 1,
@@ -420,7 +424,7 @@ const styles = StyleSheet.create({
   offerCounterText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   offerAccept: {
     flex: 1.25,
@@ -430,12 +434,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   offerAcceptText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   statusInline: {
     alignSelf: 'center',
@@ -446,16 +450,16 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm + 2,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   statusInlineIcon: {
     width: 34,
     height: 34,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -468,13 +472,13 @@ const styles = StyleSheet.create({
   statusInlineTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'left',
   },
   statusInlineBody: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'left',
     lineHeight: Type.meta.lineHeight + 2,
   },
@@ -491,7 +495,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   systemEvent: {
     alignSelf: 'center',
@@ -502,16 +506,16 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm + 2,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   systemEventIcon: {
     width: 34,
     height: 34,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -530,14 +534,14 @@ const styles = StyleSheet.create({
   systemEventTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'left',
     flexShrink: 1,
   },
   systemEventText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'left',
     lineHeight: Type.meta.lineHeight + 2,
   },
@@ -548,11 +552,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs,
     paddingVertical: 2,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   verifiedText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 });

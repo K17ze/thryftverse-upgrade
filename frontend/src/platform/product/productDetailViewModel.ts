@@ -12,7 +12,7 @@
  * `listingDetailContract` types and emit a single typed union.
  */
 
-import type { Listing } from '../../data/mockData';
+import type { Listing } from '../../services/listingsApi';
 import type {
   AuctionDetail,
   AuctionViewerState,
@@ -28,7 +28,11 @@ import type {
   ListingCommerceContext,
   ListingEngagementSummary,
 } from './listingDetailContract';
-import { buildCommerceContext, buildEngagementSummary } from './listingDetailContract';
+import {
+  buildCapabilities,
+  buildCommerceContext,
+  buildEngagementSummary,
+} from './listingDetailContract';
 
 // ── Common primitives ────────────────────────────────────────────────────────
 
@@ -37,8 +41,18 @@ export type ListingFamily = 'direct' | 'auction' | 'co_own';
 export type MediaKind = 'image' | 'video';
 
 export interface ProductMediaItem {
+  id?: string;
   uri: string;
   kind: MediaKind;
+  posterUri?: string | null;
+  /** M05: When the poster was verified (backend-backed trust). */
+  posterVerifiedAt?: string | null;
+  altText?: string | null;
+  width?: number | null;
+  height?: number | null;
+  focalPoint?: { x: number; y: number } | null;
+  /** `contain` is the product-safe default; `cover` requires authored crop data. */
+  fit?: 'contain' | 'cover';
 }
 
 export type ViewerRole =
@@ -74,7 +88,7 @@ export interface ProductDetailCommon {
   underlyingListingId: string;
   /** Family-specific object id (listing id / auction id / asset id). */
   objectId: string;
-  title: string;
+  title: string | null;
   brand: string | null;
   category: string | null;
   subcategory: string | null;
@@ -106,7 +120,7 @@ export interface ProductDetailCommon {
 
 export interface DirectFamilyContext {
   family: 'direct';
-  itemPrice: number;
+  itemPrice: number | null;
   originalPrice: number | null;
   buyerProtectionTotal: number | null;
   commerce: ListingCommerceContext;
@@ -182,8 +196,8 @@ export interface CoOwnFamilyContext {
   viewerOwnershipPct: number;
   holders: number;
   settlementMode: CoOwnSettlementMode;
-  marketMovePct24h: number;
-  volume24hGbp: number;
+  marketMovePct24h: number | null;
+  volume24hGbp: number | null;
   isOpen: boolean;
   orderBook: CoOwnOrderBookSummary | null;
   capabilities: {
@@ -277,8 +291,9 @@ function buildCoOwnAttributes(
 // ── Availability resolution ──────────────────────────────────────────────────
 
 function resolveDirectAvailability(listing: Listing): AvailabilityState {
-  if (listing.isSold) return 'sold';
-  return 'available';
+  const capabilities = buildCapabilities(listing);
+  if (capabilities.isSold) return 'sold';
+  return capabilities.isAvailable ? 'available' : 'unavailable';
 }
 
 function resolveAuctionAvailability(
@@ -365,6 +380,7 @@ export function buildDirectViewModel(input: DirectAdapterInput): ProductDetailVi
   const isSavedToCollection = input.isSavedToCollection ?? false;
   const isOwner = !!currentUserId && listing.sellerId === currentUserId;
   const availability = resolveDirectAvailability(listing);
+  const listingCapabilities = buildCapabilities(listing, currentUserId);
 
   const common: ProductDetailCommon = {
     canonicalListingId: listing.id,
@@ -403,9 +419,6 @@ export function buildDirectViewModel(input: DirectAdapterInput): ProductDetailVi
     authenticity: commerce.authenticity,
   } : undefined);
 
-  const canBuy = !isOwner && availability === 'available';
-  const canOffer = canBuy;
-
   const direct: DirectFamilyContext = {
     family: 'direct',
     itemPrice: listing.price,
@@ -420,13 +433,13 @@ export function buildDirectViewModel(input: DirectAdapterInput): ProductDetailVi
     returnPolicy: commerceContext.returnPolicy,
     authenticity: commerceContext.authenticity,
     capabilities: {
-      canBuy,
-      canOffer,
+      canBuy: listingCapabilities.canBuy,
+      canOffer: listingCapabilities.canOffer,
       // Basket only when a real basket contract exists; none today.
       canBasket: false,
-      canMessage: !isOwner,
-      canManage: isOwner,
-      canEdit: isOwner,
+      canMessage: listingCapabilities.canMessage,
+      canManage: listingCapabilities.canManage,
+      canEdit: listingCapabilities.canEdit,
     },
   };
 
@@ -449,7 +462,24 @@ export function buildAuctionViewModel(input: AuctionAdapterInput): ProductDetail
   const isSavedToCollection = input.isSavedToCollection ?? false;
   const isSeller = auction.viewerState === 'seller';
   const availability = resolveAuctionAvailability(auction.lifecycle);
-  const media = mediaFromUris(auction.imageUrl ? [auction.imageUrl] : []);
+  const media: ProductMediaItem[] = auction.mediaItems?.length
+    ? auction.mediaItems
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((item) => ({
+          id: item.id,
+          uri: item.url,
+          kind: item.type,
+          posterUri: item.posterUrl,
+          width: item.width,
+          height: item.height,
+          focalPoint: item.focalX != null && item.focalY != null
+            ? { x: item.focalX, y: item.focalY }
+            : null,
+          fit: item.focalX != null && item.focalY != null ? 'cover' : 'contain',
+          altText: `${auction.title} ${item.type}`,
+        }))
+    : mediaFromUris(auction.imageUrl ? [auction.imageUrl] : []);
 
   const common: ProductDetailCommon = {
     canonicalListingId: auction.listingId,
@@ -543,7 +573,7 @@ export function buildCoOwnViewModel(input: CoOwnAdapterInput): ProductDetailView
   const isHolder = viewerUnits > 0;
   const availability = resolveCoOwnAvailability(asset);
   const media = mediaFromUris(asset.imageUrl ? [asset.imageUrl] : []);
-  const totalUnits = asset.totalUnits > 0 ? asset.totalUnits : 0;
+  const totalUnits = asset.totalUnits;
   const viewerOwnershipPct = totalUnits > 0 ? (viewerUnits / totalUnits) * 100 : 0;
 
   const common: ProductDetailCommon = {
@@ -596,14 +626,14 @@ export function buildCoOwnViewModel(input: CoOwnAdapterInput): ProductDetailView
     assetId: asset.id,
     unitPriceGbp: asset.unitPriceGbp,
     unitPriceStable: asset.unitPriceStable ?? null,
-    availableUnits: Math.max(0, asset.availableUnits),
+    availableUnits: asset.availableUnits,
     totalUnits,
     viewerUnits,
     viewerOwnershipPct,
     holders: asset.holders,
     settlementMode: asset.settlementMode,
-    marketMovePct24h: asset.marketMovePct24h ?? 0,
-    volume24hGbp: asset.volume24hGbp ?? 0,
+    marketMovePct24h: asset.marketMovePct24h ?? null,
+    volume24hGbp: asset.volume24hGbp ?? null,
     isOpen: marketOpen,
     orderBook: orderBookSummary,
     capabilities: {

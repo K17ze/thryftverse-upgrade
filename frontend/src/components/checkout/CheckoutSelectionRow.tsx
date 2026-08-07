@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Stroke, Type } from '../../theme/designTokens';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -39,8 +39,11 @@ export function CheckoutSelectionRow({
   isFilled = true,
   testID,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, isFilled && styles.wrapperFilled]}>
       <Pressable
         onPress={onPress ?? (() => {})}
         disabled={!onPress}
@@ -56,7 +59,7 @@ export function CheckoutSelectionRow({
               <Ionicons
                 name={icon}
                 size={16}
-                color={isFilled ? Colors.brand : Colors.textMuted}
+                color={isFilled ? colors.brand : colors.textMuted}
               />
             </View>
           )}
@@ -72,7 +75,7 @@ export function CheckoutSelectionRow({
             ) : null}
             {errorText ? (
               <View style={styles.alertRow}>
-                <Ionicons name="alert-circle-outline" size={12} color={Colors.danger} />
+                <Ionicons name="alert-circle-outline" size={12} color={colors.danger} />
                 <Text style={styles.errorText}>{errorText}</Text>
               </View>
             ) : null}
@@ -87,7 +90,7 @@ export function CheckoutSelectionRow({
             <Ionicons
               name="chevron-forward"
               size={14}
-              color={isFilled ? Colors.textMuted : Colors.brand}
+              color={isFilled ? colors.textMuted : colors.brand}
             />
           </View>
         </View>
@@ -96,10 +99,15 @@ export function CheckoutSelectionRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
+  },
+  wrapperFilled: {
+    borderLeftWidth: Stroke.standard,
+    borderLeftColor: colors.brand,
+    paddingLeft: Space.sm,
   },
   row: {
     flexDirection: 'row',
@@ -121,38 +129,38 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}12`,
+    backgroundColor: `${colors.brand}12`,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   iconWrapEmpty: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   textCol: {
     flex: 1,
     gap: 2,
   },
   label: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   titleEmpty: {
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 19,
   },
   alertRow: {
@@ -162,20 +170,20 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   warningText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: '#B8860B',
   },
   errorText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
+    color: colors.danger,
   },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingTop: 4,
+    paddingTop: Space.xs,
   },
   actionRow: {
     flexDirection: 'row',
@@ -183,11 +191,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   actionLabel: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   actionLabelAdd: {
-    color: Colors.brand,
+    color: colors.brand,
   },
 });

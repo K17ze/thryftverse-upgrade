@@ -6,18 +6,18 @@ import {
   Modal,
   FlatList,
   Keyboard,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppInput } from '../ui/AppInput';
 import { AppButton } from '../ui/AppButton';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useStore, Collection } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
-import { Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { useBackendData } from '../../context/BackendDataContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
@@ -29,6 +29,7 @@ interface Props {
 }
 
 export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
+  const { colors } = useAppTheme();
   const [newCollectionName, setNewCollectionName] = useState('');
   const [showCreateInput, setShowCreateInput] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -134,10 +135,9 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
     const count = collection.itemIds?.length ?? 0;
     const cover = getCollectionCover(collection);
     return (
-      <AnimatedPressable
-        style={[styles.collectionRow, selected && styles.collectionRowSelected]}
+      <Pressable
+        style={styles.collectionRow}
         onPress={() => handleToggleCollection(collection)}
-        activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityState={{ selected }}
         accessibilityLabel={`${selected ? 'Remove from' : 'Add to'} ${collection.name} collection`}
@@ -147,23 +147,23 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
           {cover ? (
             <CachedImage uri={cover} style={styles.collectionThumb} contentFit="cover" />
           ) : (
-            <View style={styles.collectionThumbEmpty}>
-              <Ionicons name="folder-open-outline" size={18} color={Colors.textMuted} />
+            <View style={[styles.collectionThumbEmpty, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="folder-open-outline" size={18} color={colors.textMuted} />
             </View>
           )}
           <View style={styles.collectionInfo}>
-            <Text style={styles.collectionName}>{collection.name}</Text>
-            <Text style={styles.collectionCount}>{count} {count === 1 ? 'item' : 'items'}</Text>
+            <Text style={[styles.collectionName, { color: colors.textPrimary }]}>{collection.name}</Text>
+            <Text style={[styles.collectionCount, { color: colors.textMuted }]}>
+              {count} {count === 1 ? 'item' : 'items'}
+            </Text>
           </View>
         </View>
         {selected ? (
-          <View style={styles.checkWrap}>
-            <Ionicons name="checkmark-circle" size={24} color={Colors.brand} />
-          </View>
+          <Ionicons name="checkmark-circle" size={24} color={colors.brand} />
         ) : (
-          <View style={styles.uncheckedWrap} />
+          <Ionicons name="ellipse-outline" size={24} color={colors.border} />
         )}
-      </AnimatedPressable>
+      </Pressable>
     );
   };
 
@@ -179,59 +179,76 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
       <KeyboardStickyView
         style={styles.overlay}
       >
-        <View style={[styles.card, { paddingBottom: Space.md + insets.bottom }]}>
-          {/* Header */}
+        <View style={[styles.card, { backgroundColor: colors.background, paddingBottom: Space.md + insets.bottom }]}>
+          {/* Header — flat, no border. Title + close. */}
           <View style={styles.header}>
-            <Text style={styles.title}>Save</Text>
-            <AnimatedPressable onPress={handleClose} accessibilityLabel="Close save modal">
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
-            </AnimatedPressable>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Save</Text>
+            <Pressable
+              onPress={handleClose}
+              hitSlop={12}
+              accessibilityLabel="Close save modal"
+              accessibilityRole="button"
+            >
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
+            </Pressable>
           </View>
 
-          {/* Item context */}
+          {/* Item context — flat, no card border. Per AGENTS.md surface budget. */}
           {item && (
             <View style={styles.itemContext}>
               {item.images?.[0] ? (
                 <CachedImage uri={item.images[0]} style={styles.itemThumb} contentFit="cover" />
               ) : (
-                <View style={styles.itemThumbEmpty}>
-                  <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+                <View style={[styles.itemThumbEmpty, { backgroundColor: colors.surfaceAlt }]}>
+                  <Ionicons name="image-outline" size={20} color={colors.textMuted} />
                 </View>
               )}
               <View style={styles.itemInfo}>
-                <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.itemBrand}>{item.brand}</Text>
+                <Text style={[styles.itemTitle, { color: colors.textPrimary }]} numberOfLines={2}>{item.title}</Text>
+                <Text style={[styles.itemBrand, { color: colors.textSecondary }]}>{item.brand}</Text>
               </View>
             </View>
           )}
 
-          {/* Saved Toggle */}
-          <AnimatedPressable
-            style={[styles.savedRow, saved && styles.savedRowActive]}
+          {/* Saved Toggle — flat row with hairline separator, not a bordered card.
+              Selection state communicated by icon fill, not border color. */}
+          <Pressable
+            style={[styles.savedRow, { borderBottomColor: colors.borderSubtle }]}
             onPress={handleToggleSaved}
-            activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityState={{ selected: saved }}
-            accessibilityLabel={saved ? 'Saved to items' : 'Save for later'}
+            accessibilityLabel={saved ? 'Remove from saved items' : 'Save for later'}
           >
             <View style={styles.savedRowLeft}>
-              <View style={[styles.savedIconWrap, { backgroundColor: saved ? `${Colors.success}20` : Colors.surfaceAlt }]}>
-                <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? Colors.success : Colors.textPrimary} />
-              </View>
+              <Ionicons
+                name={saved ? 'bookmark' : 'bookmark-outline'}
+                size={20}
+                color={saved ? colors.success : colors.textPrimary}
+              />
               <View>
-                <Text style={styles.savedRowTitle}>{saved ? 'Saved' : 'Save for later'}</Text>
-                <Text style={styles.savedRowSub}>{saved ? 'In your saved items' : 'Add to your saved items'}</Text>
+                <Text style={[styles.savedRowTitle, { color: colors.textPrimary }]}>
+                  {saved ? 'Saved' : 'Save for later'}
+                </Text>
+                <Text style={[styles.savedRowSub, { color: colors.textMuted }]}>
+                  {saved ? 'In your saved items' : 'Add to your saved items'}
+                </Text>
               </View>
             </View>
             <Ionicons
               name={saved ? 'checkmark-circle' : 'ellipse-outline'}
-              size={26}
-              color={saved ? Colors.success : Colors.border}
+              size={24}
+              color={saved ? colors.success : colors.border}
             />
-          </AnimatedPressable>
+          </Pressable>
 
-          {/* Collections List */}
-          <Text style={styles.sectionLabel}>Collections</Text>
+          {/* Collections section label */}
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+            Collections
+          </Text>
+
+          {/* Collections List — flat rows, no bordered cards.
+              Per AGENTS.md: flat canvas, spacing and hairlines are the
+              default utility structure. */}
           <FlatList
             data={collections}
             keyExtractor={(col) => col.id}
@@ -239,16 +256,18 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={(
               <View style={styles.emptyWrap}>
-                <Text style={styles.emptyText}>No collections yet. Create one below.</Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                  No collections yet. Create one below.
+                </Text>
               </View>
             )}
             renderItem={renderCollectionItem}
             contentContainerStyle={styles.listContent}
           />
 
-          {/* Create Collection */}
+          {/* Create Collection — flat action with hairline separator */}
           {showCreateInput ? (
-            <View style={styles.createWrap}>
+            <View style={[styles.createWrap, { borderTopColor: colors.borderSubtle }]}>
               <AppInput
                 value={newCollectionName}
                 onChangeText={setNewCollectionName}
@@ -268,16 +287,17 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
               />
             </View>
           ) : (
-            <AnimatedPressable
-              style={styles.createTrigger}
+            <Pressable
+              style={[styles.createTrigger, { borderTopColor: colors.borderSubtle }]}
               onPress={() => setShowCreateInput(true)}
-              activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Create new collection"
             >
-              <Ionicons name="add-circle-outline" size={20} color={Colors.brand} />
-              <Text style={styles.createTriggerText}>Create New Collection</Text>
-            </AnimatedPressable>
+              <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
+              <Text style={[styles.createTriggerText, { color: colors.brand }]}>
+                Create New Collection
+              </Text>
+            </Pressable>
           )}
         </View>
       </KeyboardStickyView>
@@ -291,6 +311,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
+  // ── Card (sheet container) — the one dominant panel ──
   card: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
@@ -298,66 +319,93 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
+  // ── Header ──
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Space.md,
+    minHeight: 44,
   },
   title: {
-    fontSize: 20,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
+  // ── Item context — flat, no card ──
+  itemContext: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.sm,
+    marginBottom: Space.sm,
+  },
+  itemThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  itemThumbEmpty: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  itemTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  itemBrand: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  // ── Saved toggle — flat row with hairline separator ──
   savedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Space.sm + 2,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Space.md,
-  },
-  savedRowActive: {
-    borderColor: Colors.success,
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
   },
   savedRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
-  savedIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: Space.md,
+    flex: 1,
   },
   savedRowTitle: {
-    fontSize: 14,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   savedRowSub: {
-    fontSize: 11,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 2,
   },
+  // ── Section label ──
   sectionLabel: {
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
-    color: Colors.textSecondary,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
     textTransform: 'uppercase',
-    letterSpacing: 0.7,
+    marginTop: Space.lg,
     marginBottom: Space.sm,
   },
+  // ── Collections list ──
   listContent: {
     paddingBottom: Space.sm,
   },
@@ -365,132 +413,73 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Space.sm + 4,
-    borderRadius: Radius.lg,
-    marginBottom: Space.xs,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  collectionRowSelected: {
-    borderColor: Colors.brand,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  collectionInfo: {
-    flex: 1,
-  },
-  collectionName: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    paddingVertical: Space.sm + 2,
+    minHeight: 44,
   },
   collectionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.md,
     flex: 1,
   },
   collectionThumb: {
     width: 44,
     height: 44,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   collectionThumbEmpty: {
     width: 44,
     height: 44,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+  },
+  collectionInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  collectionName: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
   },
   collectionCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 2,
   },
-  checkWrap: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  uncheckedWrap: {
-    width: 28,
-  },
-  itemContext: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    padding: Space.sm + 4,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
-    marginBottom: Space.md,
-  },
-  itemThumb: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  itemThumbEmpty: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  itemBrand: {
-    fontSize: 11,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
+  // ── Empty state ──
   emptyWrap: {
     alignItems: 'center',
     paddingVertical: Space.xl,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
+  // ── Create collection ──
   createWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: Space.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.md,
   },
   createTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
+    gap: Space.xs + 2,
     paddingVertical: Space.md,
     marginTop: Space.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
   },
   createTriggerText: {
-    fontSize: 14,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
 });

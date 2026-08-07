@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useStore } from '../store/useStore';
-import {
-  buildBankAccountPaymentMethod,
-  buildCardPaymentMethod,
-  isCheckoutReady,
-} from '../utils/checkoutFlow';
+import { isCheckoutReady } from '../utils/checkoutFlow';
 
 function resetStore() {
   useStore.setState(useStore.getInitialState(), true);
@@ -15,7 +11,7 @@ describe('checkout journey smoke', () => {
     resetStore();
   });
 
-  it('persists AddAddress -> AddCard path and unlocks checkout', () => {
+  it('uses a server-projected card selection to unlock checkout', () => {
     const state = useStore.getState();
 
     expect(isCheckoutReady(state.savedAddress, state.savedPaymentMethod)).toBe(false);
@@ -33,15 +29,21 @@ describe('checkout journey smoke', () => {
     expect(checkoutState.savedAddress?.city).toBe('Manchester');
     expect(isCheckoutReady(checkoutState.savedAddress, checkoutState.savedPaymentMethod)).toBe(false);
 
-    state.savePaymentMethod(buildCardPaymentMethod('1234', '12/28', 'Visa'));
+    state.savePaymentMethod({
+      id: 42,
+      type: 'card',
+      label: 'Visa •••• 4242',
+      details: 'Expires 12/28',
+      isDefault: true,
+    });
 
     checkoutState = useStore.getState();
     expect(checkoutState.savedPaymentMethod?.type).toBe('card');
-    expect(checkoutState.savedPaymentMethod?.label).toContain('1234');
+    expect(checkoutState.savedPaymentMethod?.label).toContain('4242');
     expect(isCheckoutReady(checkoutState.savedAddress, checkoutState.savedPaymentMethod)).toBe(true);
   });
 
-  it('supports bank-account payment persistence and clear flow', () => {
+  it('clears a provider selection when the server no longer returns it', () => {
     const state = useStore.getState();
 
     state.saveAddress({
@@ -52,11 +54,16 @@ describe('checkout journey smoke', () => {
       countryCode: 'GB',
       country: 'United Kingdom',
     });
-    state.savePaymentMethod(buildBankAccountPaymentMethod('7788', '04-00-04'));
+    state.savePaymentMethod({
+      id: 43,
+      type: 'card',
+      label: 'Mastercard •••• 4444',
+      details: 'Expires 04/30',
+      isDefault: false,
+    });
 
     let checkoutState = useStore.getState();
-    expect(checkoutState.savedPaymentMethod?.type).toBe('bank_account');
-    expect(checkoutState.savedPaymentMethod?.details).toBe('Sort code 04-00-04');
+    expect(checkoutState.savedPaymentMethod?.id).toBe(43);
     expect(isCheckoutReady(checkoutState.savedAddress, checkoutState.savedPaymentMethod)).toBe(true);
 
     state.clearSavedPaymentMethod();

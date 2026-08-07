@@ -13,10 +13,10 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, ActiveTheme } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBucketedServerClock, resolveAuctionTiming } from '../hooks/useServerClock';
@@ -36,7 +36,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
 import { haptics } from '../utils/haptics';
-import { Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { toIze, formatIzeAmount, formatFiatAmount } from '../utils/currency';
 import { BottomSheet } from '../components/BottomSheet';
 import {
@@ -62,7 +62,7 @@ import {
   type SellerSummary,
 } from '../services/marketApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type MarketSegment = 'live' | 'endingSoon' | 'upcoming' | 'watching';
 
@@ -84,6 +84,7 @@ function toViewModel(api: MarketAuction): AuctionHomeItem {
     minimumNextBidGbp: api.minimumNextBidGbp,
     bidCount: api.bidCount,
     buyNowPriceGbp: api.buyNowPriceGbp,
+    reservePriceGbp: api.reservePriceGbp ?? null,
     viewerState: api.viewerState,
     isWatched: api.isWatched,
     winnerBidderId: api.winnerBidderId ?? null,
@@ -114,6 +115,8 @@ const CategoryRailTile = memo(function CategoryRailTile({
   onPress: () => void;
   cardWidth: number;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const hasImage = Boolean(world.representativeImageUrl);
   return (
     <Pressable
@@ -131,7 +134,7 @@ const CategoryRailTile = memo(function CategoryRailTile({
         />
       ) : (
         // Deliberate editorial placeholder — not a skeleton
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surfaceAlt }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]} />
       )}
       {/* Restrained gradient only behind label */}
       <LinearGradient
@@ -159,6 +162,8 @@ const UpcomingRow = memo(function UpcomingRow({
   onPress: () => void;
   formatValueLockup: (amountGbp: number) => { izeText: string; localText: string | null };
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const valueLockup = formatValueLockup(item.startingBidGbp);
   const startDate = new Date(item.startsAt);
   const timeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -182,7 +187,7 @@ const UpcomingRow = memo(function UpcomingRow({
             contentFit="cover"
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
         )}
       </View>
       <View style={styles.upcomingBody}>
@@ -203,7 +208,7 @@ const UpcomingRow = memo(function UpcomingRow({
         accessibilityRole="button"
         accessibilityLabel="View auction"
       >
-        <Ionicons name="chevron-forward" size={18} color={Colors.brand} />
+        <Ionicons name="chevron-forward" size={18} color={colors.brand} />
       </Pressable>
     </Pressable>
   );
@@ -221,17 +226,19 @@ const ResultRow = memo(function ResultRow({
   onPress: () => void;
   formatValueLockup: (amountGbp: number) => { izeText: string; localText: string | null };
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
   const resultText = item.viewerState === 'won' ? 'Won'
     : item.viewerState === 'lost' ? 'Lost'
     : item.terminalReason === 'cancelled' ? 'Cancelled'
     : item.bidCount === 0 ? 'No bids'
     : 'Sold';
-  const resultColor = item.viewerState === 'won' ? Colors.success
-    : item.viewerState === 'lost' ? Colors.danger
-    : item.terminalReason === 'cancelled' ? Colors.textMuted
-    : item.bidCount === 0 ? Colors.textMuted
-    : Colors.textSecondary;
+  const resultColor = item.viewerState === 'won' ? colors.success
+    : item.viewerState === 'lost' ? colors.danger
+    : item.terminalReason === 'cancelled' ? colors.textMuted
+    : item.bidCount === 0 ? colors.textMuted
+    : colors.textSecondary;
   // Truthful continuation action
   const continuationLabel = item.viewerState === 'won' ? 'Continue'
     : item.viewerState === 'lost' ? 'View'
@@ -255,7 +262,7 @@ const ResultRow = memo(function ResultRow({
             contentFit="cover"
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
         )}
       </View>
       <View style={styles.resultBody}>
@@ -273,7 +280,7 @@ const ResultRow = memo(function ResultRow({
       {continuationLabel && (
         <View style={styles.resultActionWrap}>
           <Text style={styles.resultActionLabel}>{continuationLabel}</Text>
-          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
         </View>
       )}
     </Pressable>
@@ -313,6 +320,8 @@ const EMPTY_HOME_DATA: HomeData = {
 // ── Main screen ──
 export default function AuctionHomeScreen() {
   const navigation = useNavigation<NavT>();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { currencyCode, displayMode, goldRates } = useFormattedPrice();
   const { width } = useWindowDimensions();
   const [homeData, setHomeData] = React.useState<HomeData>(EMPTY_HOME_DATA);
@@ -430,9 +439,13 @@ export default function AuctionHomeScreen() {
     }
   }, [resync, clearResyncFailed, markResyncFailed]);
 
-  React.useEffect(() => {
-    void fetchHome();
-  }, [fetchHome]);
+  // useFocusEffect ensures the auction home re-fetches whenever the user
+  // navigates back to it (e.g., after creating a new auction).
+  useFocusEffect(
+    React.useCallback(() => {
+      void fetchHome();
+    }, [fetchHome])
+  );
 
   React.useEffect(() => {
     if (needsResync) {
@@ -627,6 +640,36 @@ export default function AuctionHomeScreen() {
     setFilterSort('endingSoon');
   }, []);
 
+  // ── Primary filter pills (Live / Upcoming / Ended) ──
+  // These are the prominent top-level filter mechanism. The segment rail
+  // below remains as a secondary refinement within the home composition.
+  const primaryFilterLiveActive = !isFiltering && activeSegment === 'live';
+  const primaryFilterUpcomingActive = !isFiltering && activeSegment === 'upcoming';
+  const primaryFilterEndedActive = isFiltering && filterStatus === 'ended';
+
+  const handlePrimaryFilterLive = useCallback(() => {
+    haptics.selection();
+    if (isFiltering) {
+      clearAllFilters();
+    }
+    setActiveSegment('live');
+  }, [isFiltering, clearAllFilters]);
+
+  const handlePrimaryFilterUpcoming = useCallback(() => {
+    haptics.selection();
+    if (isFiltering) {
+      clearAllFilters();
+    }
+    setActiveSegment('upcoming');
+  }, [isFiltering, clearAllFilters]);
+
+  const handlePrimaryFilterEnded = useCallback(() => {
+    haptics.selection();
+    setFilterStatus('ended');
+    setFilterSort('endingSoon');
+    setFilterCategory(null);
+  }, []);
+
   // ── 1ZE + local semantic display ──
   const formatDualPrice = useCallback((amountGbp: number): DualPriceResult => {
     const izeAmount = toIze(amountGbp, 'GBP', goldRates);
@@ -720,7 +763,7 @@ export default function AuctionHomeScreen() {
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
     if (filterStatus !== 'all') {
-      chips.push(filterStatus === 'live' ? 'Live' : filterStatus === 'scheduled' ? 'Scheduled' : 'Ended');
+      chips.push(filterStatus === 'live' ? 'Live' : filterStatus === 'scheduled' ? 'Upcoming' : 'Ended');
     }
     if (filterSort !== 'endingSoon') {
       chips.push(
@@ -918,14 +961,15 @@ export default function AuctionHomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close search"
           >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </Pressable>
           <TextInput
             value={searchQuery}
             onChangeText={handleSearchChange}
             placeholder="Search auctions…"
             autoFocus
-            placeholderTextColor={Colors.textMuted}
+            returnKeyType="search"
+            placeholderTextColor={colors.textMuted}
             style={styles.searchOverlayInput}
           />
           {searchQuery.length > 0 && (
@@ -935,7 +979,7 @@ export default function AuctionHomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Clear search"
             >
-              <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
+              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
             </Pressable>
           )}
         </View>
@@ -949,7 +993,7 @@ export default function AuctionHomeScreen() {
             ListEmptyComponent={
               searchState.status === 'loading' ? renderLoadingState() : (
                 searchState.status === 'error' ? (
-                  <EmptyState icon="cloud-offline-outline" title="Search failed" subtitle="Please try again" />
+                  <EmptyState icon="cloud-offline-outline" title="Search failed" subtitle="Please try again" ctaLabel="Retry" onCtaPress={handleRefresh} />
                 ) : (
                   <EmptyState icon="search-outline" title="No results" subtitle="Try a different search term" />
                 )
@@ -962,13 +1006,13 @@ export default function AuctionHomeScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={Colors.brand}
-                colors={[Colors.brand]}
-                progressBackgroundColor={Colors.surfaceAlt}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+                progressBackgroundColor={colors.surfaceAlt}
               />
             }
             onEndReached={loadMoreSearch}
-            onEndReachedThreshold={0.5}
+            onEndReachedThreshold={0.25}
           />
         ) : (
           <View style={styles.searchIdleContainer}>
@@ -991,7 +1035,7 @@ export default function AuctionHomeScreen() {
             accessibilityLabel="Clear filters and go back"
             style={styles.filterResultBackBtn}
           >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </Pressable>
           <View style={styles.filterResultTitleWrap}>
             <Text style={styles.filterResultTitle}>Filtered results</Text>
@@ -1005,7 +1049,7 @@ export default function AuctionHomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Open filter sheet"
           >
-            <Ionicons name="options-outline" size={24} color={Colors.textPrimary} />
+            <Ionicons name="options-outline" size={24} color={colors.textPrimary} />
           </Pressable>
         </View>
 
@@ -1017,11 +1061,11 @@ export default function AuctionHomeScreen() {
               </View>
             ))}
             <Pressable
-              onPress={clearAllFilters}
+              onPress={() => { haptics.tap(); clearAllFilters(); }}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Clear all filters"
-              style={styles.filterChipClear}
+              style={({ pressed }) => [styles.filterChipClear, pressed && { opacity: 0.6 }]}
             >
               <Text style={styles.filterChipClearText}>Clear all</Text>
             </Pressable>
@@ -1030,7 +1074,7 @@ export default function AuctionHomeScreen() {
 
         {filterResult.status === 'loading' ? renderLoadingState() :
          filterResult.status === 'error' ? (
-          <EmptyState icon="cloud-offline-outline" title="Filter failed" subtitle="Please try again" />
+          <EmptyState icon="cloud-offline-outline" title="Filter failed" subtitle="Please try again" ctaLabel="Retry" onCtaPress={() => setFilterRefreshTick((t) => t + 1)} />
          ) : filterResult.status === 'empty' ? (
           <EmptyState icon="filter-outline" title="No matches" subtitle="Try adjusting your filters" />
          ) : (
@@ -1045,13 +1089,13 @@ export default function AuctionHomeScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={Colors.brand}
-                colors={[Colors.brand]}
-                progressBackgroundColor={Colors.surfaceAlt}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+                progressBackgroundColor={colors.surfaceAlt}
               />
             }
             onEndReached={loadMoreFilters}
-            onEndReachedThreshold={0.5}
+            onEndReachedThreshold={0.25}
           />
         )}
 
@@ -1075,7 +1119,7 @@ export default function AuctionHomeScreen() {
   // ── Loading state ──
   if (loading && !homeData.attentionItem) {
     return (
-      <View style={[styles.container, { backgroundColor: Colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <AuctionMarketHeader
           title="Auctions"
           actions={headerActions}
@@ -1108,7 +1152,7 @@ export default function AuctionHomeScreen() {
   if (!hasActiveMarket && !hasAnyContent) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
         <AuctionMarketHeader
           title="Auctions"
           actions={headerActions}
@@ -1120,9 +1164,9 @@ export default function AuctionHomeScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={Colors.brand}
-              colors={[Colors.brand]}
-              progressBackgroundColor={Colors.surfaceAlt}
+              tintColor={colors.brand}
+              colors={[colors.brand]}
+              progressBackgroundColor={colors.surfaceAlt}
             />
           }
         >
@@ -1605,7 +1649,7 @@ export default function AuctionHomeScreen() {
                           contentFit="cover"
                         />
                       ) : (
-                        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.surface }]} />
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
                       )}
                     </View>
                     <View style={styles.endingSoonBody}>
@@ -1619,7 +1663,7 @@ export default function AuctionHomeScreen() {
                       <Text style={styles.endingSoonBids}>{item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}</Text>
                     </View>
                     <View style={styles.endingSoonTimeCol}>
-                      <Text style={[styles.endingSoonTime, isUrgent && { color: Colors.danger }]}>
+                      <Text style={[styles.endingSoonTime, isUrgent && { color: colors.danger }]}>
                         {timeLabel}
                       </Text>
                       {isUrgent && <View style={styles.urgencyBar} />}
@@ -1803,13 +1847,69 @@ export default function AuctionHomeScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} />
       <AuctionMarketHeader
         title="Auctions"
         context={headerContext}
         compactContext={compactHeaderContext}
         actions={headerActions}
       />
+      {/* Primary filter pills — prominent Live / Upcoming / Ended navigation */}
+      <View style={styles.primaryFilterBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.primaryFilterContent}
+        >
+          <Pressable
+            style={[
+              styles.primaryPill,
+              primaryFilterLiveActive && styles.primaryPillActive,
+            ]}
+            onPress={handlePrimaryFilterLive}
+            accessibilityRole="button"
+            accessibilityLabel="Filter live auctions"
+            accessibilityState={{ selected: primaryFilterLiveActive }}
+          >
+            <View style={[styles.primaryPillDot, { backgroundColor: primaryFilterLiveActive ? colors.textInverse : colors.danger }]} />
+            <Text style={[styles.primaryPillText, primaryFilterLiveActive && styles.primaryPillTextActive]}>Live</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.primaryPill,
+              primaryFilterUpcomingActive && styles.primaryPillActive,
+            ]}
+            onPress={handlePrimaryFilterUpcoming}
+            accessibilityRole="button"
+            accessibilityLabel="Filter upcoming auctions"
+            accessibilityState={{ selected: primaryFilterUpcomingActive }}
+          >
+            <Ionicons
+              name="time-outline"
+              size={15}
+              color={primaryFilterUpcomingActive ? colors.textInverse : colors.textSecondary}
+            />
+            <Text style={[styles.primaryPillText, primaryFilterUpcomingActive && styles.primaryPillTextActive]}>Upcoming</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.primaryPill,
+              primaryFilterEndedActive && styles.primaryPillActive,
+            ]}
+            onPress={handlePrimaryFilterEnded}
+            accessibilityRole="button"
+            accessibilityLabel="Filter ended auctions"
+            accessibilityState={{ selected: primaryFilterEndedActive }}
+          >
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={15}
+              color={primaryFilterEndedActive ? colors.textInverse : colors.textSecondary}
+            />
+            <Text style={[styles.primaryPillText, primaryFilterEndedActive && styles.primaryPillTextActive]}>Ended</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
       <ScrollView
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
@@ -1817,9 +1917,9 @@ export default function AuctionHomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
       >
@@ -1834,7 +1934,7 @@ export default function AuctionHomeScreen() {
         <AuctionSegmentRail
           segments={segments}
           activeKey={activeSegment}
-          onSelect={(key) => setActiveSegment(key as MarketSegment)}
+          onSelect={(key) => { haptics.selection(); setActiveSegment(key as MarketSegment); }}
         />
 
         {/* Selected market composition */}
@@ -1961,6 +2061,8 @@ const FilterSheet = memo(function FilterSheet({
   onReset: () => void;
   onApply: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss}>
       <View style={styles.filterSheetContent}>
@@ -1971,11 +2073,11 @@ const FilterSheet = memo(function FilterSheet({
           {(['all', 'live', 'scheduled', 'ended'] as const).map((opt) => (
             <Pressable
               key={opt}
-              style={[styles.filterOption, draftStatus === opt && styles.filterOptionActive]}
+              style={({ pressed }) => [styles.filterOption, draftStatus === opt && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
               onPress={() => { haptics.tap(); setDraftStatus(opt); }}
             >
               <Text style={[styles.filterOptionText, draftStatus === opt && styles.filterOptionTextActive]}>
-                {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Scheduled' : 'Ended'}
+                {opt === 'all' ? 'All' : opt === 'live' ? 'Live' : opt === 'scheduled' ? 'Upcoming' : 'Ended'}
               </Text>
             </Pressable>
           ))}
@@ -1986,7 +2088,7 @@ const FilterSheet = memo(function FilterSheet({
           {(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh'] as const).map((opt) => (
             <Pressable
               key={opt}
-              style={[styles.filterOption, draftSort === opt && styles.filterOptionActive]}
+              style={({ pressed }) => [styles.filterOption, draftSort === opt && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
               onPress={() => { haptics.tap(); setDraftSort(opt); }}
             >
               <Text style={[styles.filterOptionText, draftSort === opt && styles.filterOptionTextActive]}>
@@ -2001,7 +2103,7 @@ const FilterSheet = memo(function FilterSheet({
             <Text style={styles.filterSectionLabel}>Category</Text>
             <HorizontalRail style={styles.filterCategoryScroll}>
               <Pressable
-                style={[styles.filterOption, draftCategory === null && styles.filterOptionActive]}
+                style={({ pressed }) => [styles.filterOption, draftCategory === null && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
                 onPress={() => { haptics.tap(); setDraftCategory(null); }}
               >
                 <Text style={[styles.filterOptionText, draftCategory === null && styles.filterOptionTextActive]}>All</Text>
@@ -2009,7 +2111,7 @@ const FilterSheet = memo(function FilterSheet({
               {categoryOptions.map((cat) => (
                 <Pressable
                   key={cat}
-                  style={[styles.filterOption, draftCategory === cat && styles.filterOptionActive]}
+                  style={({ pressed }) => [styles.filterOption, draftCategory === cat && styles.filterOptionActive, pressed && styles.filterOptionPressed]}
                   onPress={() => { haptics.tap(); setDraftCategory(cat); }}
                 >
                   <Text style={[styles.filterOptionText, draftCategory === cat && styles.filterOptionTextActive]}>{cat}</Text>
@@ -2044,30 +2146,71 @@ const FilterSheet = memo(function FilterSheet({
   );
 });
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   contentContainer: {
     paddingBottom: Space.xxl + 24,
   },
 
+  // ── Primary filter pills (Live / Upcoming / Ended) ──
+  primaryFilterBar: {
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  primaryFilterContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+    alignItems: 'center',
+  },
+  primaryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    minHeight: 36,
+  },
+  primaryPillActive: {
+    backgroundColor: colors.brand,
+  },
+  primaryPillDot: {
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.full,
+  },
+  primaryPillText: {
+    fontSize: Type.bodyEmphasis.size,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  primaryPillTextActive: {
+    color: colors.textInverse,
+  },
+
   // ── Zone wrapper ──
   zoneWrap: {
     paddingHorizontal: Space.md,
-    marginTop: Space.lg + 4,
+    marginTop: Space.xl,
   },
 
   // ── Section title (no subtitle) ──
   sectionTitle: {
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontWeight: '700',
-    letterSpacing: -0.6,
-    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    marginBottom: Space.sm + 2,
+    marginBottom: Space.md,
   },
 
   // ── Attention zone ──
@@ -2079,7 +2222,7 @@ const styles = StyleSheet.create({
 
   // ── Horizontal discovery rail ──
   railWrap: {
-    marginTop: Space.md + 4,
+    marginTop: Space.lg,
     marginBottom: Space.xs,
   },
   railHeader: {
@@ -2087,20 +2230,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm + 2,
+    marginBottom: Space.md,
   },
   railTitle: {
-    fontSize: 18,
+    fontSize: Type.subtitle.size,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.5,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   railCount: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.2,
+    letterSpacing: LetterSpacing.wide + 0.08,
   },
   railContent: {
     paddingHorizontal: Space.md,
@@ -2110,7 +2253,7 @@ const styles = StyleSheet.create({
   // ── Composition ──
   compositionWrap: {
     paddingHorizontal: Space.md,
-    marginTop: Space.lg + 4,
+    marginTop: Space.xl,
   },
   compositionEmpty: {
     paddingHorizontal: Space.md,
@@ -2118,8 +2261,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   compositionEmptyText: {
-    fontSize: 14,
-    color: Colors.textMuted,
+    fontSize: Type.body.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   asymmetricRow: {
@@ -2151,62 +2294,62 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   endingSoonImageWrap: {
-    width: 76,
-    height: 76,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   endingSoonImage: {
-    width: 76,
-    height: 76,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
   },
   endingSoonBody: {
     flex: 1,
   },
   endingSoonTitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.size + 4,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
-    marginBottom: 3,
+    letterSpacing: Type.body.letterSpacing,
+    marginBottom: Space.xs / 2 + 1,
   },
   endingSoonPrice: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
-    marginBottom: 2,
+    letterSpacing: Type.priceList.letterSpacing,
+    marginBottom: Space.xs / 2,
   },
   endingSoonBids: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
   endingSoonTimeCol: {
     alignItems: 'flex-end',
   },
   endingSoonTime: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   urgencyBar: {
-    width: 24,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: Colors.danger,
-    marginTop: 4,
+    width: Space.lg + 4,
+    height: Stroke.emphasis,
+    borderRadius: Radius.full,
+    backgroundColor: colors.danger,
+    marginTop: Space.xs,
   },
 
   // ── Horizontal rail ──
@@ -2219,10 +2362,10 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   categoryTile: {
-    height: 148,
+    height: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl - 20,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   categoryTileOverlay: {
     position: 'absolute',
@@ -2230,14 +2373,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
   },
   categoryTileName: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontWeight: '700',
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.1,
+    letterSpacing: LetterSpacing.normal - 0.1,
   },
 
   // ── Upcoming rows ──
@@ -2248,50 +2391,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   upcomingImageWrap: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   upcomingImage: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
   },
   upcomingBody: {
     flex: 1,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   upcomingDate: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontWeight: '600',
-    letterSpacing: 0.2,
-    color: Colors.textSecondary,
+    letterSpacing: LetterSpacing.wide + 0.08,
+    color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   upcomingEyebrow: {
-    fontSize: 10,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    marginBottom: 1,
-    letterSpacing: 0.1,
+    marginBottom: Space.xs / 4,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   upcomingTitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.size + 4,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   upcomingNotify: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2304,49 +2447,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   resultImageWrap: {
-    width: 60,
-    height: 60,
+    width: Space.xxl + Space.xl + Space.xl - 4,
+    height: Space.xxl + Space.xl + Space.xl - 4,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
   },
   resultImage: {
-    width: 60,
-    height: 60,
+    width: Space.xxl + Space.xl + Space.xl - 4,
+    height: Space.xxl + Space.xl + Space.xl - 4,
   },
   resultBody: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   resultTitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.size + 4,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   resultOutcome: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontWeight: '500',
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   resultActionWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   resultActionLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    letterSpacing: 0.1,
+    color: colors.textMuted,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
 
   // ── Empty market ──
@@ -2367,19 +2510,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   searchOverlayInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: Colors.textPrimary,
+    paddingVertical: Space.sm + 2,
+    fontSize: Type.bodyEmphasis.size,
+    color: colors.textPrimary,
     fontFamily: Typography.family.medium,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   searchIdleContainer: {
     flex: 1,
@@ -2388,8 +2531,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xl,
   },
   searchIdleHint: {
-    fontSize: 14,
-    color: Colors.textMuted,
+    fontSize: Type.body.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
   },
@@ -2402,7 +2545,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   filterResultBackBtn: {
     padding: Space.xs,
@@ -2411,44 +2554,44 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filterResultTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
   },
   filterResultCount: {
-    fontSize: 12,
-    color: Colors.textSecondary,
+    fontSize: Type.caption.size,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   filterChipsRow: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
   filterChip: {
-    paddingVertical: 5,
-    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     marginRight: Space.xs,
   },
   filterChipText: {
-    fontSize: 12,
-    color: Colors.textPrimary,
+    fontSize: Type.caption.size,
+    color: colors.textPrimary,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   filterChipClear: {
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
     marginRight: Space.xs,
   },
   filterChipClearText: {
-    fontSize: 12,
-    color: Colors.danger,
+    fontSize: Type.caption.size,
+    color: colors.danger,
     fontFamily: Typography.family.medium,
   },
 
@@ -2457,17 +2600,17 @@ const styles = StyleSheet.create({
     padding: Space.lg,
   },
   filterSheetTitle: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     marginBottom: Space.lg,
   },
   filterSectionLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontWeight: '600',
-    letterSpacing: 0.2,
-    color: Colors.textSecondary,
+    letterSpacing: LetterSpacing.wide + 0.08,
+    color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
     marginTop: Space.md,
@@ -2481,25 +2624,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   filterOption: {
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     marginRight: Space.sm,
   },
   filterOptionActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  filterOptionPressed: {
+    opacity: 0.7,
   },
   filterOptionText: {
-    fontSize: 13,
-    color: Colors.textPrimary,
+    fontSize: Type.captionElevated.size,
+    color: colors.textPrimary,
     fontFamily: Typography.family.medium,
   },
   filterOptionTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   filterActionsRow: {
     flexDirection: 'row',
@@ -2507,28 +2653,29 @@ const styles = StyleSheet.create({
     marginTop: Space.xl,
   },
   filterResetBtn: {
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
   filterResetText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontSize: Type.body.size,
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
   filterApplyBtn: {
     flex: 1,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     marginLeft: Space.md,
   },
   filterApplyText: {
-    fontSize: 14,
-    color: Colors.textInverse,
+    fontSize: Type.body.size,
+    color: colors.textInverse,
     fontFamily: Typography.family.semibold,
   },
-});
+  });
+}

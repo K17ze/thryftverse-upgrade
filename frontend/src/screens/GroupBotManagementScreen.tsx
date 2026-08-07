@@ -7,12 +7,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
@@ -21,9 +22,9 @@ import {
   undeployBotFromConversationOnApi,
 } from '../services/chatApi';
 import { useStore } from '../store/useStore';
-import { Space, Type } from '../theme/designTokens';
+import { Space, Type, Radius, Control } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'GroupBotManagement'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'GroupBotManagement'>;
 
 type AgentRowModel = {
   id: string;
@@ -37,6 +38,8 @@ type AgentRowModel = {
 
 export default function GroupBotManagementScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const conversations = useStore((state) => state.conversations);
@@ -134,7 +137,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
               accessibilityLabel="My agents"
             >
               <View style={styles.headerAction}>
-                <Ionicons name="person-outline" size={21} color={Colors.textPrimary} />
+                <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
               </View>
             </AnimatedPressable>
           }
@@ -160,12 +163,11 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
         )}
 
         {deployedBots.length === 0 && availableToDeploy.length === 0 && (
-          <View style={styles.empty}>
-            <Ionicons name="chatbubble-ellipses-outline" size={30} color={Colors.textMuted} />
-            <Caption color={Colors.textMuted} style={styles.emptyText}>
-              No agents are ready to connect.
-            </Caption>
-          </View>
+          <EmptyState
+            icon="hardware-chip-outline"
+            title="No bots configured"
+            subtitle="No agents are ready to connect."
+          />
         )}
       </ScrollView>
     </FlagshipScreen>
@@ -181,9 +183,11 @@ function AgentSection({
   agents: AgentRowModel[];
   renderAgent: (bot: AgentRowModel) => React.ReactNode;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.section}>
-      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={colors.textMuted} style={styles.sectionLabel}>
         {title}
       </Meta>
       <View>
@@ -213,6 +217,8 @@ function AgentRow({
   onDeploy: () => void;
   onView: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const statusLabel =
     bot.status === 'available'
       ? 'Ready'
@@ -235,25 +241,25 @@ function AgentRow({
             category={bot.category}
             name={bot.name}
             size={21}
-            color={Colors.textPrimary}
+            color={colors.textPrimary}
           />
         </View>
 
         <View style={styles.agentText}>
           <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
-          <Caption color={Colors.textMuted} numberOfLines={1}>
+          <Caption color={colors.textMuted} numberOfLines={1}>
             {bot.description}
           </Caption>
           <View style={styles.detailLine}>
             <Caption
-              color={deployed ? Colors.textPrimary : Colors.textMuted}
+              color={deployed ? colors.textPrimary : colors.textMuted}
               style={styles.detailText}
               numberOfLines={1}
             >
               {deployed ? bot.commandHint : bot.type === 'custom' ? 'Your agent' : 'ThryftVerse agent'}
             </Caption>
             <View style={styles.metaDot} />
-            <Caption color={Colors.textMuted} style={styles.statusText} numberOfLines={1}>
+            <Caption color={colors.textMuted} style={styles.statusText} numberOfLines={1}>
               {statusLabel}
             </Caption>
           </View>
@@ -261,7 +267,7 @@ function AgentRow({
 
         {pending ? (
           <View style={styles.rowAction}>
-            <ActivityIndicator size="small" color={Colors.textMuted} />
+            <ActivityIndicator size="small" color={colors.textMuted} />
           </View>
         ) : (
           <AnimatedPressable
@@ -276,7 +282,7 @@ function AgentRow({
               <Ionicons
                 name={deployed ? 'remove' : 'add'}
                 size={deployed ? 20 : 21}
-                color={deployed ? Colors.danger : Colors.textPrimary}
+                color={deployed ? colors.danger : colors.textPrimary}
               />
             </View>
           </AnimatedPressable>
@@ -286,7 +292,8 @@ function AgentRow({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
@@ -300,66 +307,59 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
   agentRow: {
-    minHeight: 82,
+    minHeight: Space.xxl + Space.xxl + Space.xxl + 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: Space.sm + 4,
+    gap: Space.sm + 4,
   },
   agentIcon: {
-    width: 32,
-    height: 44,
+    width: Space.xl + Space.xs,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
   agentText: {
     flex: 1,
     justifyContent: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   detailLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
+    gap: Space.xs + 2,
+    marginTop: Space.xs / 2,
   },
   detailText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     flexShrink: 1,
   },
   metaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: Colors.textMuted,
+    width: Space.xs / 2 - 1,
+    height: Space.xs / 2 - 1,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.textMuted,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     flexShrink: 0,
   },
   rowAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginLeft: 44,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: Space.xxl,
-    gap: Space.md,
-  },
-  emptyText: {
-    textAlign: 'center',
+    backgroundColor: colors.border,
+    marginLeft: Control.hit,
   },
   headerAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
-});
+  });
+}

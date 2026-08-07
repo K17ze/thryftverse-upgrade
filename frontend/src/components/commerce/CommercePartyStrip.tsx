@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
@@ -49,6 +49,8 @@ export function CommercePartyStrip({
   showFollow = false,
   facts = [],
 }: CommercePartyStripProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const showSellerVerified = party.sellerAccountVerified === true;
   const showIssuerVerified = party.issuerIdentityVerified === true;
 
@@ -69,7 +71,7 @@ export function CommercePartyStrip({
               <CachedImage
                 uri={party.avatar}
                 style={styles.avatar}
-                containerStyle={{ width: 48, height: 48, borderRadius: 24 }}
+                containerStyle={{ width: 48, height: 48, borderRadius: Radius.xxl }}
                 contentFit="cover"
               />
             ) : (
@@ -87,10 +89,10 @@ export function CommercePartyStrip({
                 {party.displayName ?? party.username}
               </Text>
               {showSellerVerified && (
-                <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
               )}
               {showIssuerVerified && (
-                <Ionicons name="shield-checkmark-outline" size={14} color={Colors.success} />
+                <Ionicons name="shield-checkmark-outline" size={14} color={colors.success} />
               )}
             </View>
             {party.location ? (
@@ -132,7 +134,7 @@ export function CommercePartyStrip({
               accessibilityLabel={`${messageLabel} ${party.username}`}
               accessibilityRole="button"
             >
-              <Ionicons name="chatbubble-outline" size={16} color={Colors.textPrimary} />
+              <Ionicons name="chatbubble-outline" size={16} color={colors.textPrimary} />
               <Text style={styles.messageText}>{messageLabel}</Text>
             </AnimatedPressable>
           )}
@@ -156,18 +158,18 @@ export function CommercePartyStrip({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.sm,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -187,20 +189,20 @@ const styles = StyleSheet.create({
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
   },
   avatarFallback: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.xxl,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarFallbackText: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   profileInfo: {
     flex: 1,
@@ -211,32 +213,32 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   username: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   location: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 4,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   badge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 2,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.sm,
   },
   badgeText: {
     fontSize: 10,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   actionRow: {
     flexDirection: 'row',
@@ -245,36 +247,36 @@ const styles = StyleSheet.create({
   followBtn: {
     flex: 1,
     paddingVertical: 10,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   followingBtn: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   followText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   followingText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
     paddingVertical: 10,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
   },
   messageText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   factsRow: {
     flexDirection: 'row',
@@ -284,20 +286,20 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   factItem: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   factLabel: {
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   factValue: {
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   factsSeparator: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
   },
 });

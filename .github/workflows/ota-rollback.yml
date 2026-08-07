@@ -1,0 +1,68 @@
+name: OTA Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'EAS Update channel'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - preview
+      method:
+        description: 'Rollback method'
+        required: true
+        default: 'rollback'
+        type: choice
+        options:
+          - rollback
+          - republish
+
+jobs:
+  rollback:
+    name: OTA Rollback (${{ inputs.method }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.channel == 'production' && 'production' || 'preview' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Rollback to embedded bundle
+        if: inputs.method == 'rollback'
+        run: eas update:rollback --branch ${{ inputs.channel }}
+        env:
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+      - name: Republish previous update
+        if: inputs.method == 'republish'
+        run: |
+          echo "::warning::To republish a specific update, find the update group ID at https://expo.dev and run: eas update:republish --group <GROUP_ID> --branch ${{ inputs.channel }}"
+          echo "This workflow requires manual update group ID input. Use the EAS CLI directly."
+
+      - name: Notify rollback executed
+        if: success()
+        run: |
+          echo "::notice::OTA rollback (${{ inputs.method }}) executed on ${{ inputs.channel }} channel."
+
+      - name: Failure notification
+        if: failure()
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+            -d "{\"content\":\"OTA rollback FAILED on channel ${{ inputs.channel }}\"}" \
+            ${{ secrets.ALERTING_WEBHOOK_URL }} || true

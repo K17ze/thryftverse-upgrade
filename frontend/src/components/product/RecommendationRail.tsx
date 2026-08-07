@@ -5,13 +5,12 @@ import {
   StyleSheet,
   Pressable,
   useWindowDimensions,
-  AccessibilityInfo,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type, AspectRatio } from '../../theme/designTokens';
 import type { RecommendationSection } from '../../platform/product';
 import { isRecommendationLook } from '../../platform/product';
 import { ProductAnalytics } from '../../platform/product';
@@ -19,6 +18,7 @@ import { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 
 interface RailCardProps {
@@ -46,6 +46,8 @@ function RailCard({
   cardHeight,
   showAccent,
 }: RailCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
   const formattedPrice = formatFromFiat(item.price, 'GBP');
   const imageUri = item.images?.[0];
@@ -71,7 +73,7 @@ function RailCard({
           <CachedImage
             uri={imageUri}
             style={styles.cardImage}
-            containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.md }}
+            containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.lg }}
             contentFit="cover"
           />
         ) : (
@@ -107,7 +109,10 @@ export function RecommendationRail({
   onPressItem,
   onSeeAll,
 }: RecommendationRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
+  const reducedMotion = useReducedMotion();
 
   if (section.items.length === 0) return null;
 
@@ -116,15 +121,19 @@ export function RecommendationRail({
 
   const isComplementary = section.key === 'complete_the_look';
   const isPersonalised = section.personalised;
+  // Portrait 3:4 card geometry (2026 Poshmark/Depop standard).
+  // Card width targets 160–180px so taller portrait cards still show 2+ media
+  // objects in the first viewport. Height is derived from width via the 3:4
+  // ratio so the frame always matches the image crop.
   const cardWidth = isComplementary
-    ? (screenWidth - Space.md * 2 - Space.sm * 2) / 2.1
-    : (screenWidth - Space.md * 2 - Space.sm * 2) / 2.5;
-  const cardHeight = isComplementary ? 200 : 175;
+    ? (screenWidth - Space.md * 2 - Space.sm * 2) / 2.0
+    : (screenWidth - Space.md * 2 - Space.sm * 2) / 2.15;
+  const cardHeight = Math.round(cardWidth / AspectRatio.portrait);
   const showAccent = isPersonalised;
 
   return (
     <Reanimated.View
-      entering={FadeInDown.duration(300).springify().damping(18)}
+      entering={reducedMotion ? undefined : FadeInDown.duration(300).springify().damping(18)}
       style={styles.container}
     >
       <View style={styles.header}>
@@ -148,7 +157,7 @@ export function RecommendationRail({
           >
             <View style={styles.seeAllRow}>
               <Text style={styles.seeAll}>See all</Text>
-              <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
             </View>
           </Pressable>
         ) : null}
@@ -159,7 +168,7 @@ export function RecommendationRail({
           <Ionicons
             name={section.personalised ? 'sparkles' : 'pricetag'}
             size={12}
-            color={Colors.textMuted}
+            color={colors.textMuted}
           />
           <Text style={styles.reasonText}>{section.reason}</Text>
         </View>
@@ -191,112 +200,121 @@ export function RecommendationRail({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    marginTop: Space.lg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
-  },
-  headerLeft: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    fontSize: 17,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  subtitle: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  seeAllRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  seeAll: {
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-  reasonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
-  reasonText: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-  listContent: {
-    paddingHorizontal: Space.md,
-  },
-  card: {
-    width: 140,
-  },
-  cardAccent: {
-    borderWidth: 1.5,
-    borderColor: Colors.brand,
-    borderRadius: Radius.md + 2,
-    padding: 2,
-  },
-  cardImageWrap: {
-    width: 140,
-    height: 175,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cardImageFallback: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: Colors.surfaceAlt,
-  },
-  cardSoldBadge: {
-    position: 'absolute',
-    bottom: 6,
-    left: 6,
-    backgroundColor: Colors.success,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
-  cardSoldText: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
-    color: Colors.background,
-  },
-  cardBrand: {
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    marginTop: 6,
-  },
-  cardTitle: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    marginTop: 1,
-  },
-  cardPrice: {
-    fontSize: 15,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginTop: 2,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      marginTop: Space.lg,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      marginBottom: Space.xs,
+    },
+    headerLeft: {
+      flex: 1,
+      minWidth: 0,
+    },
+    title: {
+      fontSize: Type.subtitle.size,
+      lineHeight: Type.subtitle.lineHeight,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+    },
+    subtitle: {
+      fontSize: Type.captionElevated.size,
+      lineHeight: Type.captionElevated.lineHeight,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      marginTop: Space.xs,
+    },
+    seeAllRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    seeAll: {
+      fontSize: Type.captionElevated.size,
+      lineHeight: Type.captionElevated.lineHeight,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+    },
+    reasonRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      marginBottom: Space.sm,
+    },
+    reasonText: {
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+    },
+    listContent: {
+      paddingHorizontal: Space.md,
+    },
+    card: {
+      width: 160,
+    },
+    cardAccent: {
+      borderWidth: 1.5,
+      borderColor: colors.brand,
+      borderRadius: Radius.xl,
+      padding: 2,
+    },
+    cardImageWrap: {
+      width: 160,
+      height: 213,
+      borderRadius: Radius.lg,
+      overflow: 'hidden',
+      backgroundColor: colors.surfaceAlt,
+    },
+    cardImage: {
+      width: '100%',
+      height: '100%',
+    },
+    cardImageFallback: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: colors.surfaceAlt,
+    },
+    cardSoldBadge: {
+      position: 'absolute',
+      bottom: Space.xs,
+      left: Space.xs,
+      backgroundColor: colors.success,
+      paddingHorizontal: Space.xs,
+      paddingVertical: 2,
+      borderRadius: Radius.sm,
+    },
+    cardSoldText: {
+      fontSize: 10,
+      fontFamily: Typography.family.bold,
+      color: colors.background,
+    },
+    cardBrand: {
+      fontSize: Type.meta.size,
+      lineHeight: Type.meta.lineHeight,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      marginTop: Space.xs,
+    },
+    cardTitle: {
+      fontSize: Type.captionElevated.size,
+      lineHeight: Type.captionElevated.lineHeight,
+      fontFamily: Typography.family.regular,
+      color: colors.textPrimary,
+      marginTop: Space.xs,
+    },
+    cardPrice: {
+      fontSize: Type.bodyEmphasis.size,
+      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      marginTop: Space.xs,
+    },
+  });
+}

@@ -11,25 +11,28 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
 import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../../context/ToastContext';
 import { useBackendData } from '../../context/BackendDataContext';
+import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 /* ── Sub-components ── */
-function TrendingRailItem({ item, index, onPress }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void }) {
+function TrendingRailItem({ item, index, onPress, styles, reducedMotion }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
       <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
         <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
@@ -42,10 +45,27 @@ function TrendingRailItem({ item, index, onPress }: { item: { id: string; title:
 
 /* ── Main Tab ── */
 export default function EditTab() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { show } = useToast();
   const { listings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
+
+  const [trending, setTrending] = React.useState<TrendingListing[]>([]);
+  const [trendingLoading, setTrendingLoading] = React.useState(true);
+  const [trendingWindow, setTrendingWindow] = React.useState<'24h' | '7d' | '30d'>('24h');
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setTrendingLoading(true);
+    fetchTrendingListings({ window: trendingWindow, limit: 20 })
+      .then((items) => { if (!cancelled) setTrending(items); })
+      .catch(() => { if (!cancelled) setTrending([]); })
+      .finally(() => { if (!cancelled) setTrendingLoading(false); });
+    return () => { cancelled = true; };
+  }, [trendingWindow]);
 
   const toRailItem = (l: typeof listings[0]) => ({
     id: l.id,
@@ -56,12 +76,22 @@ export default function EditTab() {
   });
 
   const trendingListings = React.useMemo(() => {
+    if (trending.length > 0) {
+      return trending.map((t) => ({
+        id: t.id,
+        title: t.title,
+        brand: t.brand ?? '',
+        price: t.priceGbp,
+        image: t.images[0] ?? t.imageUrl ?? '',
+      }));
+    }
+    // Fallback to client-side sorting when backend returns no data
     return [...listings]
       .filter((l) => l.images && l.images.length > 0)
       .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
       .slice(0, 10)
       .map(toRailItem);
-  }, [listings]);
+  }, [trending, listings]);
 
   const newestListings = React.useMemo(() => {
     return [...listings]
@@ -92,13 +122,30 @@ export default function EditTab() {
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
       {/* Trending Rail */}
       {trendingListings.length > 0 && (
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <DiscoverySectionHeader
             kicker="What's hot"
             title="Trending Now"
             actionLabel="See all"
             onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
           />
+          <View style={styles.windowTabs}>
+            {(['24h', '7d', '30d'] as const).map((w) => {
+              const isActive = trendingWindow === w;
+              return (
+                <AnimatedPressable
+                  key={w}
+                  style={[styles.windowTab, isActive && styles.windowTabActive]}
+                  onPress={() => { haptic.selection(); setTrendingWindow(w); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.windowTabText, isActive && styles.windowTabTextActive]}>
+                    {w === '24h' ? '24 hours' : w === '7d' ? '7 days' : '30 days'}
+                  </Text>
+                </AnimatedPressable>
+              );
+            })}
+          </View>
           <HorizontalRail contentContainerStyle={styles.trendingScroll}>
             {trendingListings.map((item, i) => (
               <TrendingRailItem
@@ -106,6 +153,8 @@ export default function EditTab() {
                 item={item}
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                styles={styles}
+                reducedMotion={reducedMotionEnabled}
               />
             ))}
           </HorizontalRail>
@@ -114,7 +163,7 @@ export default function EditTab() {
 
       {/* New Arrivals */}
       {newestListings.length > 0 && (
-        <Reanimated.View entering={FadeInDown.duration(350).delay(80)} style={{ marginTop: Space.lg }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)} style={{ marginTop: Space.lg }}>
           <DiscoverySectionHeader
             kicker="Fresh listings"
             title="New Arrivals"
@@ -128,6 +177,8 @@ export default function EditTab() {
                 item={item}
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                styles={styles}
+                reducedMotion={reducedMotionEnabled}
               />
             ))}
           </HorizontalRail>
@@ -136,7 +187,7 @@ export default function EditTab() {
 
       {/* Price Drops */}
       {priceDropListings.length > 0 && (
-        <Reanimated.View entering={FadeInDown.duration(350).delay(120)} style={{ marginTop: Space.lg }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)} style={{ marginTop: Space.lg }}>
           <DiscoverySectionHeader
             kicker="Reduced"
             title="Price Drops"
@@ -150,6 +201,8 @@ export default function EditTab() {
                 item={item}
                 index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                styles={styles}
+                reducedMotion={reducedMotionEnabled}
               />
             ))}
           </HorizontalRail>
@@ -157,7 +210,7 @@ export default function EditTab() {
       )}
 
       {/* Style Quiz */}
-      <Reanimated.View entering={FadeInDown.duration(350).delay(160)} style={{ marginTop: Space.lg }}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)} style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
           kicker="Personalise"
           title="Find Your Aesthetic"
@@ -175,7 +228,7 @@ export default function EditTab() {
             </View>
           </View>
           <View style={styles.quizIconWrap}>
-            <Ionicons name="color-wand" size={28} color={Colors.brand} />
+            <Ionicons name="color-wand" size={28} color={colors.brand} />
           </View>
         </AnimatedPressable>
       </Reanimated.View>
@@ -185,7 +238,8 @@ export default function EditTab() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   scrollContent: {
     paddingTop: Space.sm,
     paddingBottom: Space.xl,
@@ -204,36 +258,62 @@ const styles = StyleSheet.create({
     width: 140,
     height: 180,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   trendingBrand: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: Type.meta.letterSpacing,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   trendingTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   trendingPrice: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
+    color: colors.brand,
     letterSpacing: Type.caption.letterSpacing,
+  },
+
+  /* Window Tabs */
+  windowTabs: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
+    marginBottom: Space.sm,
+  },
+  windowTab: {
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+  },
+  windowTabActive: {
+    backgroundColor: colors.brand,
+  },
+  windowTabText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  windowTabTextActive: {
+    color: '#fff',
   },
 
   /* Quiz Card */
   quizCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginHorizontal: Space.md,
     padding: Space.md,
     gap: Space.sm,
@@ -250,13 +330,13 @@ const styles = StyleSheet.create({
   quizTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   quizSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: 18,
   },
@@ -264,26 +344,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   quizPill: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.full,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
   quizPillText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
     letterSpacing: Type.meta.letterSpacing,
   },
   quizIconWrap: {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  });
+}

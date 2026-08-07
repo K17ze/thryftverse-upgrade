@@ -5,16 +5,16 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 // Co-Own specific educational slides — not generic explainer content.
 const SLIDES = [
@@ -181,15 +181,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   progressLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.3,
+    letterSpacing: LetterSpacing.wide + 0.18,
   },
   headerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.xxl,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -207,10 +207,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconRing: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 1,
+    width: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 8,
+    height: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 8,
+    borderRadius: Space.xxl + Space.xxl + Space.xxl + 8,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -218,27 +218,27 @@ const styles = StyleSheet.create({
     marginTop: Space.lg,
     fontSize: Type.display.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.8,
+    letterSpacing: LetterSpacing.tight - 0.38,
     textAlign: 'center',
-    lineHeight: 36,
+    lineHeight: Type.display.size - 2,
   },
   welcomeBadge: {
     marginTop: Space.md,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
   },
   welcomeBadgeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: 0.8,
+    letterSpacing: LetterSpacing.caps - 0.02,
     textTransform: 'uppercase',
   },
   body: {
     marginTop: Space.sm,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 23,
+    lineHeight: Type.body.size + 9,
     textAlign: 'center',
     paddingHorizontal: Space.md,
   },
@@ -248,27 +248,27 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.md,
-    gap: 8,
+    gap: Space.sm,
     alignSelf: 'stretch',
-    maxWidth: 320,
+    maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 16,
   },
   checklistTitle: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 2,
+    letterSpacing: LetterSpacing.caps - 0.02,
+    marginBottom: Space.xs / 2,
   },
   checklistItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
   },
   checklistText: {
     flex: 1,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 18,
+    lineHeight: Type.caption.size + 6,
   },
   footer: {
     paddingTop: Space.lg,
@@ -277,16 +277,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: Space.xs + 3,
     marginBottom: Space.lg,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: Space.xs / 2 + 2,
+    height: Space.xs / 2 + 2,
+    borderRadius: Radius.sm,
   },
   dotActive: {
-    width: 24,
+    width: Space.lg,
   },
   primaryBtn: {
     borderRadius: Radius.lg,

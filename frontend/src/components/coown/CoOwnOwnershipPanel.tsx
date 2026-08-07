@@ -10,11 +10,14 @@ export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
 
 /** Supply buckets — the instrument series structure (§01 §3). */
 export interface CoOwnSupplyBuckets {
-  authorised?: number;
-  issued?: number;
-  publicFloat?: number;
-  sponsorLocked?: number;
-  treasury?: number;
+  // Per spec 03_COOWN §6: nullable to support "do not infer treasury,
+  // authorised, issued, public float or sponsor locked from available
+  // units". The frontend must not fabricate these values.
+  authorised?: number | null;
+  issued?: number | null;
+  publicFloat?: number | null;
+  sponsorLocked?: number | null;
+  treasury?: number | null;
 }
 
 /**
@@ -28,8 +31,8 @@ export interface CoOwnOwnershipPanelProps {
   totalUnits: number;
   availableUnits: number;
   allocatedPct: number;
-  viewerUnits: number;
-  viewerPct: number;
+  viewerUnits: number | null;
+  viewerPct: number | null;
   settlementMode: CoOwnSettlementMode;
   feePct: number;
   holderCount: number;
@@ -71,20 +74,21 @@ export function CoOwnOwnershipPanel({
 
   // Use viewerPosition if available, fall back to legacy viewerUnits/viewerPct
   const hasViewerPosition = viewerPosition != null;
-  const viewerSettled = hasViewerPosition ? viewerPosition!.settled : viewerUnits;
+  const viewerDataAvailable = hasViewerPosition || (viewerUnits != null && viewerPct != null);
+  const viewerSettled = hasViewerPosition ? viewerPosition!.settled : viewerUnits ?? 0;
   const viewerReserved = hasViewerPosition ? viewerPosition!.reservedForSale : 0;
   const viewerPendingIn = hasViewerPosition ? viewerPosition!.pendingIn : 0;
   const viewerPendingOut = hasViewerPosition ? viewerPosition!.pendingOut : 0;
   const outstandingDenom = hasViewerPosition ? viewerPosition!.outstandingUnits : totalUnits;
   const computedViewerPct = hasViewerPosition && outstandingDenom > 0
     ? (viewerSettled / outstandingDenom) * 100
-    : viewerPct;
+    : viewerPct ?? 0;
 
   return (
     <View
       style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}
       accessibilityRole="summary"
-      accessibilityLabel={`Ownership panel. ${statusLabel}. ${allocatedPct}% allocated, ${availableUnits} units left. ${viewerSettled > 0 ? `You own ${viewerSettled} settled units, ${computedViewerPct.toFixed(2)}% of ${outstandingDenom.toLocaleString('en-GB')} outstanding.` : ''}${rightsVersion ? ` Rights version ${rightsVersion}.` : ''}`}
+      accessibilityLabel={`Ownership panel. ${statusLabel}. ${allocatedPct}% allocated, ${availableUnits} units left. ${!viewerDataAvailable ? 'Your position is unavailable.' : viewerSettled > 0 ? `You own ${viewerSettled} settled units, ${computedViewerPct.toFixed(2)}% of ${outstandingDenom.toLocaleString('en-GB')} outstanding.` : ''}${rightsVersion ? ` Rights version ${rightsVersion}.` : ''}`}
     >
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
@@ -160,7 +164,16 @@ export function CoOwnOwnershipPanel({
         </View>
       </View>
 
-      {viewerSettled > 0 || viewerPendingIn > 0 ? (
+      {!viewerDataAvailable ? (
+        <View style={[styles.viewerBlock, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={styles.viewerHeader}>
+            <Ionicons name="alert-circle-outline" size={18} color={colors.textMuted} />
+            <Text style={[styles.viewerTitle, { color: colors.textSecondary }]}>
+              Your position is unavailable
+            </Text>
+          </View>
+        </View>
+      ) : viewerSettled > 0 || viewerPendingIn > 0 ? (
         <View style={[styles.viewerBlock, { backgroundColor: colors.surfaceAlt }]}>
           <View style={styles.viewerHeader}>
             <Ionicons name="person-circle" size={18} color={colors.brand} />
@@ -190,11 +203,11 @@ export function CoOwnOwnershipPanel({
             <View style={styles.viewerStats}>
               <View style={styles.viewerStat}>
                 <Text style={[styles.viewerStatLabel, { color: colors.textMuted }]}>Units</Text>
-                <Text style={[styles.viewerStatValue, { color: colors.textPrimary }]}>{viewerUnits}</Text>
+                <Text style={[styles.viewerStatValue, { color: colors.textPrimary }]}>{viewerUnits ?? 0}</Text>
               </View>
               <View style={styles.viewerStat}>
                 <Text style={[styles.viewerStatLabel, { color: colors.textMuted }]}>Ownership</Text>
-                <Text style={[styles.viewerStatValue, { color: colors.textPrimary }]}>{viewerPct}%</Text>
+                <Text style={[styles.viewerStatValue, { color: colors.textPrimary }]}>{viewerPct ?? 0}%</Text>
               </View>
             </View>
           )}
@@ -223,7 +236,7 @@ function SupplyRow({
   note,
 }: {
   label: string;
-  value: number | undefined;
+  value: number | null | undefined;
   colors: ReturnType<typeof useAppTheme>['colors'];
   note?: string;
 }) {
@@ -307,14 +320,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
   },
   statusDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   statusText: {
     fontSize: Type.meta.size,

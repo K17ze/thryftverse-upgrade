@@ -1,0 +1,30 @@
+{
+  "configVersion": 1,
+  "ios": {
+    "apple": {
+      "info": {
+        "en-US": {
+          "title": "ThryftVerse",
+          "subtitle": "Buy, sell, and co-own",
+          "description": "ThryftVerse is a marketplace for buying, selling, and co-owning valuable items. Discover collectibles, bid in auctions, list your own items, and co-own high-value pieces with trusted community members. Manage your portfolio, track transactions, and connect with other collectors — all in one app.",
+          "keywords": "marketplace,auction,co-own,buy,sell,collectibles",
+          "marketingUrl": "https://thryftverse.com",
+          "privacyPolicyUrl": "https://thryftverse.com/privacy",
+          "supportUrl": "https://thryftverse.com/support"
+        }
+      }
+    }
+  },
+  "android": {
+    "googlePlay": {
+      "info": {
+        "en-US": {
+          "title": "ThryftVerse",
+          "shortDescription": "Buy, sell, and co-own valuable items",
+          "fullDescription": "ThryftVerse is a marketplace for buying, selling, and co-owning valuable items. Discover collectibles, bid in auctions, list your own items, and co-own high-value pieces with trusted community members. Manage your portfolio, track transactions, and connect with other collectors — all in one app.",
+          "privacyPolicyUrl": "https://thryftverse.com/privacy"
+        }
+      }
+    }
+  }
+}

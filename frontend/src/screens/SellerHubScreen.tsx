@@ -1,38 +1,42 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
 import { useStore } from '../store/useStore';
 import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 interface HubStat {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   value: string;
   tone: 'default' | 'success' | 'brand';
 }
 
 interface HubAction {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   subtitle: string;
   onPress: () => void;
   accessibilityLabel: string;
 }
 
+import { useReducedMotion } from '../hooks/useReducedMotion';
 export default function SellerHubScreen() {
+  const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
@@ -69,8 +73,8 @@ export default function SellerHubScreen() {
     const sold = listings.filter((l) => l.status === 'sold');
     const totalActiveValue = active.reduce((sum, l) => sum + l.priceGbp, 0);
     const totalSoldValue = sold.reduce((sum, l) => sum + l.priceGbp, 0);
-    const totalViews = listings.reduce((sum, l) => sum + ((l as any).views ?? 0), 0);
-    const totalLikes = listings.reduce((sum, l) => sum + ((l as any).likes ?? 0), 0);
+    const totalViews = listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
+    const totalLikes = listings.reduce((sum, l) => sum + (l.engagement?.likes ?? 0), 0);
     const conversionRate = totalViews > 0 ? (sold.length / totalViews) * 100 : 0;
 
     return [
@@ -101,11 +105,25 @@ export default function SellerHubScreen() {
       accessibilityLabel: 'View all your listings',
     },
     {
+      icon: 'grid-outline',
+      label: 'Inventory',
+      subtitle: 'Full inventory dashboard with filters and bulk actions',
+      onPress: () => navigation.navigate('InventoryManagement'),
+      accessibilityLabel: 'Open full inventory management',
+    },
+    {
       icon: 'bar-chart-outline',
       label: 'Analytics',
       subtitle: 'Views, likes, conversion and revenue',
       onPress: () => navigation.navigate('SellerAnalytics'),
       accessibilityLabel: 'View seller analytics dashboard',
+    },
+    {
+      icon: 'pulse-outline',
+      label: 'Creator Analytics',
+      subtitle: 'Content views, engagement and insights',
+      onPress: () => navigation.navigate('CreatorAnalyticsDashboard'),
+      accessibilityLabel: 'View creator analytics dashboard',
     },
     {
       icon: 'trophy-outline',
@@ -139,101 +157,175 @@ export default function SellerHubScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
-        <ScreenHeader title="Seller Hub" onBack={() => navigation.goBack()} />
-        <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={Colors.brand} />
-        </View>
-      </SafeAreaView>
+      <FlagshipScreen
+        header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />}
+      >
+        <FlagshipState variant="loading" />
+      </FlagshipScreen>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
-      <ScreenHeader title="Seller Hub" onBack={() => navigation.goBack()} />
+  const activeCount = listings.filter((l) => l.status === 'active').length;
+  const soldCount = listings.filter((l) => l.status === 'sold').length;
 
+  return (
+    <FlagshipScreen
+      header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
+        {/* Hero summary — seller overview */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="storefront" size={18} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                  {activeCount} active, {soldCount} sold
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                  {listings.length} total listing{listings.length === 1 ? '' : 's'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
+
         {/* Seller standards badges */}
         {sellerTrust ? (
-          <View style={styles.badgeSection}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.badgeSection}>
             <SellerStandardsBadges sellerTrust={sellerTrust} align="left" />
-          </View>
+          </Reanimated.View>
+        ) : null}
+
+        {/* Get Verified CTA — shown when seller is not yet verified */}
+        {sellerTrust && !sellerTrust.verified ? (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(90)}>
+            <View style={[styles.verifyCta, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.verifyCtaInfo}>
+                <Ionicons name="shield-checkmark-outline" size={20} color={colors.brand} />
+                <View style={styles.verifyCtaText}>
+                  <Text style={[styles.verifyCtaTitle, { color: colors.textPrimary }]}>Get verified</Text>
+                  <Text style={[styles.verifyCtaSubtitle, { color: colors.textMuted }]}>
+                    Build buyer trust with a verified badge
+                  </Text>
+                </View>
+              </View>
+              <AnimatedPressable
+                style={[styles.verifyCtaBtn, { backgroundColor: colors.brand }]}
+                onPress={() => navigation.navigate('KYCVerification')}
+                hapticFeedback="medium"
+                accessibilityRole="button"
+                accessibilityLabel="Start identity verification"
+              >
+                <Text style={[styles.verifyCtaBtnText, { color: colors.textInverse }]}>Start</Text>
+              </AnimatedPressable>
+            </View>
+          </Reanimated.View>
         ) : null}
 
         {/* Analytics dashboard */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Performance overview</Text>
-        </View>
-        <View style={styles.statsGrid}>
-          {stats.map((stat) => {
-            const color = stat.tone === 'success' ? Colors.success : stat.tone === 'brand' ? Colors.brand : Colors.textPrimary;
-            return (
-              <View key={stat.label} style={styles.statCard}>
-                <Ionicons name={stat.icon as any} size={16} color={color} />
-                <Text style={[styles.statValue, { color }]}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            );
-          })}
-        </View>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Performance overview</Text>
+          </View>
+          <View style={styles.statsGrid}>
+            {stats.map((stat) => {
+              const color = stat.tone === 'success' ? colors.success : stat.tone === 'brand' ? colors.brand : colors.textPrimary;
+              return (
+                <View key={stat.label} style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Ionicons name={stat.icon} size={16} color={color} />
+                  <Text style={[styles.statValue, { color }]}>{stat.value}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>{stat.label}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </Reanimated.View>
 
         {/* Quick actions */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Quick actions</Text>
-        </View>
-        <View style={styles.actionsList}>
-          {actions.map((action) => (
-            <AnimatedPressable
-              key={action.label}
-              style={styles.actionRow}
-              onPress={action.onPress}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={action.accessibilityLabel}
-            >
-              <View style={styles.actionIconWrap}>
-                <Ionicons name={action.icon as any} size={20} color={Colors.brand} />
-              </View>
-              <View style={styles.actionInfo}>
-                <Text style={styles.actionLabel}>{action.label}</Text>
-                <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </AnimatedPressable>
-          ))}
-        </View>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick actions</Text>
+          </View>
+          <View style={styles.actionsList}>
+            {actions.map((action) => (
+              <AnimatedPressable
+                key={action.label}
+                style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={action.onPress}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={action.accessibilityLabel}
+              >
+                <View style={styles.actionIconWrap}>
+                  <Ionicons name={action.icon} size={20} color={colors.brand} />
+                </View>
+                <View style={styles.actionInfo}>
+                  <Text style={[styles.actionLabel, { color: colors.textPrimary }]}>{action.label}</Text>
+                  <Text style={[styles.actionSubtitle, { color: colors.textMuted }]}>{action.subtitle}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </AnimatedPressable>
+            ))}
+          </View>
+        </Reanimated.View>
 
         {/* Primary CTA */}
-        <AppButton
-          title="Create new listing"
-          icon={<Ionicons name="add-circle-outline" size={18} color={Colors.background} />}
-          variant="primary"
-          size="lg"
-          style={styles.ctaBtn}
-          onPress={() => navigation.navigate('Sell')}
-          accessibilityLabel="Create a new listing"
-          hapticFeedback="light"
-        />
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+          <AppButton
+            title="Create new listing"
+            icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
+            variant="primary"
+            size="lg"
+            style={styles.ctaBtn}
+            onPress={() => navigation.navigate('Sell')}
+            accessibilityLabel="Create a new listing"
+            hapticFeedback="light"
+          />
+        </Reanimated.View>
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
   },
-  loadingBody: {
-    flex: 1,
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: Space.xl + Space.xs + 4,
+    height: Space.xl + Space.xs + 4,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.xs - 2,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
@@ -249,7 +341,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -262,19 +353,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   statValue: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   actionsList: {
     gap: Space.xs,
@@ -286,33 +374,69 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   actionIconWrap: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.xs + 4,
+    height: Space.xl + Space.xs + 4,
     borderRadius: Radius.md,
-    backgroundColor: `${Colors.brand}12`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionInfo: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   actionLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   actionSubtitle: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   ctaBtn: {
     marginTop: Space.lg,
   },
-});
+  verifyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.md,
+  },
+  verifyCtaInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  verifyCtaText: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  verifyCtaTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  verifyCtaSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  verifyCtaBtn: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+  },
+  verifyCtaBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
+  },
+  });
+}

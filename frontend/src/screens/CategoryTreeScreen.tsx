@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import { View,
@@ -11,16 +11,15 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
-import { Typography, Space, Radius } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Typography, Space, Radius, Type, Control, Stroke, LetterSpacing } from '../theme/designTokens';
 import { VisualCategoryTile } from '../components/discover/VisualCategoryTile';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 
 type RouteT = RouteProp<RootStackParamList, 'CategoryTree'>;
-const PILL_BG = Colors.surface;
-const PILL_BORDER = Colors.border;
 
 const TREES: Record<string, { title: string; subs: string[] }[]> = {
   Women: [
@@ -45,6 +44,9 @@ export default function CategoryTreeScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { show } = useToast();
+  const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { categoryPrefix } = route.params;
 
   const resolvedPrefix = TREES[categoryPrefix] ? categoryPrefix : 'Women';
@@ -52,32 +54,32 @@ export default function CategoryTreeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Editorial header */}
         <View style={styles.editorialHeader}>
           <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
           <Text style={styles.editorialTitle}>{resolvedPrefix}</Text>
           <Text style={styles.editorialSubtitle}>Curated categories, handpicked for you</Text>
         </View>
 
         {/* Premium full-width View All */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(100)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
           <AnimatedPressable
             style={styles.viewAllRow}
             onPress={() => navigation.navigate('Browse', { categoryId: resolvedPrefix.toLowerCase(), title: `All ${resolvedPrefix}` })}
             activeOpacity={0.92}
           >
             <Text style={styles.viewAllText}>View All {resolvedPrefix}</Text>
-            <Ionicons name="arrow-forward" size={20} color={Colors.background} />
+            <Ionicons name="arrow-forward" size={20} color={colors.background} />
           </AnimatedPressable>
         </Reanimated.View>
 
         {/* 2-column VisualCategoryTile grid */}
-        <Reanimated.View entering={FadeInDown.duration(350).delay(150)} style={styles.gridWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(150)} style={styles.gridWrap}>
           <View style={styles.grid}>
             {sections.map((section, index) => (
               <VisualCategoryTile
@@ -135,85 +137,87 @@ export default function CategoryTreeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
 
-  editorialHeader: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.lg,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginBottom: Space.sm,
-  },
-  editorialTitle: {
-    fontSize: 32,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.8,
-    lineHeight: 40,
-  },
-  editorialSubtitle: {
-    fontSize: 14,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    marginTop: Space.xs,
-    letterSpacing: 0.2,
-  },
+    editorialHeader: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.lg,
+    },
+    backBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      justifyContent: 'center',
+      alignItems: 'flex-start',
+      marginBottom: Space.sm,
+    },
+    editorialTitle: {
+      fontSize: Type.display.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      letterSpacing: Type.display.letterSpacing - 0.3,
+      lineHeight: Type.display.lineHeight + 2,
+    },
+    editorialSubtitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      marginTop: Space.xs,
+      letterSpacing: LetterSpacing.wide + 0.08,
+    },
 
-  viewAllRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Space.lg,
-    paddingHorizontal: Space.lg,
-    backgroundColor: Colors.brand,
-    marginHorizontal: Space.md,
-    marginBottom: Space.lg,
-    borderRadius: Radius.xl,
-  },
-  viewAllText: {
-    fontSize: 16,
-    fontFamily: Typography.family.bold,
-    color: Colors.background,
-    letterSpacing: 0.3,
-  },
+    viewAllRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: Space.lg,
+      paddingHorizontal: Space.lg,
+      backgroundColor: colors.brand,
+      marginHorizontal: Space.md,
+      marginBottom: Space.lg,
+      borderRadius: Radius.xl,
+    },
+    viewAllText: {
+      fontSize: Type.bodyLarge.size,
+      fontFamily: Typography.family.bold,
+      color: colors.background,
+      letterSpacing: LetterSpacing.wide + 0.18,
+    },
 
-  gridWrap: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.lg,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gridWrap: {
+      marginHorizontal: Space.md,
+      marginBottom: Space.lg,
+    },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Space.sm,
+    },
 
-  section: {
-    marginTop: Space.md,
-    paddingHorizontal: Space.md,
-  },
+    section: {
+      marginTop: Space.md,
+      paddingHorizontal: Space.md,
+    },
 
-  subsScroll: {
-    paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-    gap: Space.sm,
-  },
-  subPill: {
-    backgroundColor: PILL_BG,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: PILL_BORDER,
-  },
-  subPillText: {
-    color: Colors.textPrimary,
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-  },
-});
+    subsScroll: {
+      paddingTop: Space.sm,
+      paddingBottom: Space.sm,
+      gap: Space.sm,
+    },
+    subPill: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: Space.md - 2,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.full,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
+    },
+    subPillText: {
+      color: colors.textPrimary,
+      fontSize: Type.captionElevated.size,
+      fontFamily: Typography.family.medium,
+    },
+  });
+}

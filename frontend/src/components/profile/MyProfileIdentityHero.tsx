@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { ProfileTrustSignals } from './ProfileTrustSignals';
@@ -48,6 +48,8 @@ export function MyProfileIdentityHero({
   onEditProfile,
   onShare,
 }: MyProfileIdentityHeroProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const context = [
     location,
     memberSince ? `Member since ${memberSince}` : undefined,
@@ -71,24 +73,25 @@ export function MyProfileIdentityHero({
             />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
-              <Ionicons name="person-outline" size={34} color={Colors.textMuted} />
+              <Ionicons name="person-outline" size={34} color={colors.textMuted} />
             </View>
           )}
           <Pressable
-            style={styles.editAvatar}
+            style={styles.editAvatarHit}
             onPress={onEditAvatar}
-            hitSlop={8}
             accessibilityLabel="Edit profile photo"
             accessibilityRole="button"
           >
-            <Ionicons name="camera-outline" size={14} color={Colors.textInverse} />
+            <View style={styles.editAvatarVisible}>
+              <Ionicons name="camera-outline" size={13} color={colors.textInverse} />
+            </View>
           </Pressable>
         </View>
 
         <View style={styles.stats}>
-          <ProfileStat value={listingCount} label="Listings" />
-          <ProfileStat value={lookCount} label="Looks" />
-          <ProfileStat value={completedSales} label="Sold" />
+          <ProfileStat value={listingCount} label="Listings" styles={styles} />
+          <ProfileStat value={lookCount} label="Looks" styles={styles} />
+          <ProfileStat value={completedSales} label="Sold" styles={styles} />
         </View>
       </View>
 
@@ -105,8 +108,8 @@ export function MyProfileIdentityHero({
             size={17}
             color={
               VERIFICATION_TIERS[verificationTier].color === 'brand'
-                ? Colors.brand
-                : Colors.success
+                ? colors.brand
+                : colors.success
             }
             accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
           />
@@ -153,7 +156,7 @@ export function MyProfileIdentityHero({
           accessibilityLabel="Share profile"
           accessibilityRole="button"
         >
-          <Ionicons name="share-outline" size={17} color={Colors.textPrimary} />
+          <Ionicons name="share-outline" size={17} color={colors.textPrimary} />
           <Text style={styles.shareActionText}>Share profile</Text>
         </AnimatedPressable>
       </View>
@@ -161,7 +164,7 @@ export function MyProfileIdentityHero({
   );
 }
 
-function ProfileStat({ value, label }: { value: number; label: string }) {
+function ProfileStat({ value, label, styles }: { value: number; label: string; styles: ReturnType<typeof createStyles> }) {
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>
@@ -170,10 +173,11 @@ function ProfileStat({ value, label }: { value: number; label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingTop: 4,
+    paddingTop: Space.xs,
     paddingBottom: 12,
   },
   identityTop: {
@@ -189,25 +193,31 @@ const styles = StyleSheet.create({
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     borderWidth: 3,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
   avatarFallback: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
-  editAvatar: {
+  editAvatarHit: {
     position: 'absolute',
-    right: -1,
-    bottom: -1,
-    width: 29,
-    height: 29,
-    borderRadius: 15,
+    right: -10,
+    bottom: -10,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.textPrimary,
+  },
+  editAvatarVisible: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.textPrimary,
     borderWidth: 2,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
   stats: {
     flex: 1,
@@ -216,83 +226,84 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingLeft: Space.md,
-    transform: [{ translateY: 10 }],
+    marginTop: Space.xs,
   },
   stat: {
-    minWidth: 58,
+    minWidth: Space.xxl + Space.xl + Space.xs,
     alignItems: 'center',
-    gap: 1,
+    gap: Space.xs / 4,
   },
   statValue: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 17,
-    lineHeight: 21,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
   },
   statLabel: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: Type.caption.size,
   },
   displayNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs + 1,
   },
   displayName: {
     flexShrink: 1,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: 19,
-    letterSpacing: -0.35,
+    fontSize: Type.bodyLarge.size + 1,
+    letterSpacing: Type.bodyLarge.letterSpacing,
   },
   username: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     marginTop: 1,
   },
   bio: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.regular,
-    fontSize: 14,
+    fontSize: Type.body.size,
     lineHeight: 19,
-    marginTop: 8,
+    marginTop: Space.sm,
   },
   context: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     marginTop: 5,
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 13,
+    gap: Space.sm,
+    marginTop: Space.md + 1,
   },
   action: {
     flex: 1,
-    minHeight: 42,
+    minHeight: Space.xl + Space.sm + 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    borderRadius: 10,
+    gap: Space.xs + 2,
+    borderRadius: Radius.lg,
   },
   editAction: {
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   editActionText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
   },
   shareAction: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   shareActionText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
   },
-});
+  });
+}

@@ -86,7 +86,7 @@ export function FlagshipHeader({
             hapticFeedback="light"
             activeOpacity={0.62}
           >
-            <Ionicons name={effectiveBackIcon as any} size={Control.icon} color={colors.textPrimary} />
+            <Ionicons name={effectiveBackIcon} size={Control.icon} color={colors.textPrimary} />
           </AnimatedPressable>
         ) : (
           <View style={styles.iconBtnPlaceholder} />

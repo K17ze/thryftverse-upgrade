@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,12 @@ import {
   ScrollView,
   Linking,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -22,12 +23,25 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import {
   VERIFICATION_TIERS,
   VerificationTier,
 } from '../platform/product/listingDetailContract';
+import {
+  createKycSession,
+  fetchKycStatus,
+  fetchDac7TaxInfo,
+  saveDac7TaxInfo,
+  type Dac7TaxInfo,
+  type KycStatus,
+} from '../services/complianceApi';
+import { parseApiError } from '../lib/apiClient';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-type Props = StackScreenProps<RootStackParamList, 'Verification'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Verification'>;
 
 type KycStep = 'status' | 'identity' | 'document' | 'review';
 type Dac7Step = 'status' | 'details' | 'review';
@@ -42,31 +56,18 @@ const UK_COUNTRIES = ['GB', 'IE'];
 
 export default function VerificationScreen({ navigation }: Props) {
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
+  const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
   const coOwnCompliance = useStore((state) => state.coOwnCompliance);
   const updateCoOwnCompliance = useStore((state) => state.updateCoOwnCompliance);
 
   // Verification status — derived from user + compliance state
   const emailVerified = currentUser?.emailVerified ?? false;
-  const kycVerified = coOwnCompliance.kycVerified;
-  
-  const hasVerification = emailVerified || kycVerified;
-  const currentTier: VerificationTier = kycVerified ? 'id' : 'email';
-
-  const tierInfo = hasVerification
-    ? VERIFICATION_TIERS[currentTier]
-    : {
-        tier: 'email' as const,
-        label: 'Unverified',
-        icon: 'alert-circle-outline',
-        color: 'textSecondary',
-        description: 'Verify your email address to get started',
-      };
-
-  const iconColor = hasVerification ? colors.brand : colors.textSecondary;
-
-  const iconBgColor = colors.surfaceAlt;
+  const kycVerifiedLocal = coOwnCompliance.kycVerified;
 
   // KYC flow state
   const [kycStep, setKycStep] = React.useState<KycStep>('status');
@@ -88,10 +89,65 @@ export default function VerificationScreen({ navigation }: Props) {
   const [isSubmittingDac7, setIsSubmittingDac7] = React.useState(false);
 
   // DAC7 status — stored in compliance profile
-  const dac7Completed = (coOwnCompliance as any).dac7Completed ?? false;
+  const dac7CompletedLocal = coOwnCompliance.dac7Completed ?? false;
+
+  // Real backend status
+  const [backendKycStatus, setBackendKycStatus] = useState<KycStatus | null>(null);
+  const [backendDac7Info, setBackendDac7Info] = useState<Dac7TaxInfo | null>(null);
+  const [isStatusLoading, setIsStatusLoading] = useState(true);
+
+  // Load real compliance status from backend on mount
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setIsStatusLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const loadStatus = async () => {
+      try {
+        const [kycRes, dac7Res] = await Promise.all([
+          fetchKycStatus(currentUser.id).catch(() => null),
+          fetchDac7TaxInfo(currentUser.id).catch(() => null),
+        ]);
+        if (cancelled) return;
+        if (kycRes?.kycStatus) setBackendKycStatus(kycRes.kycStatus);
+        if (dac7Res?.taxInfo) setBackendDac7Info(dac7Res.taxInfo);
+      } catch {
+        // Non-critical — fall back to local state
+      } finally {
+        if (!cancelled) setIsStatusLoading(false);
+      }
+    };
+    void loadStatus();
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
+
+  // Effective status — merges local + backend
+  const kycBackendVerified = backendKycStatus?.status === 'verified';
+  const kycBackendPending = backendKycStatus?.status === 'pending';
+  const effectiveKycVerified = kycVerifiedLocal || kycBackendVerified;
+  const effectiveDac7Completed = dac7CompletedLocal || backendDac7Info != null;
+  const dac7BackendStatus = backendDac7Info?.status ?? null;
+
+  // Derived tier info
+  const hasVerification = emailVerified || effectiveKycVerified;
+  const currentTier: VerificationTier = effectiveKycVerified ? 'id' : 'email';
+
+  const tierInfo = hasVerification
+    ? VERIFICATION_TIERS[currentTier]
+    : {
+        tier: 'email' as const,
+        label: 'Unverified',
+        icon: 'alert-circle-outline',
+        color: 'textSecondary',
+        description: 'Verify your email address to get started',
+      };
+
+  const iconColor = hasVerification ? colors.brand : colors.textSecondary;
+  const iconBgColor = colors.surfaceAlt;
 
   const handleStartKyc = () => {
-    if (kycVerified) {
+    if (effectiveKycVerified) {
       show('Your identity is already verified', 'info');
       return;
     }
@@ -103,15 +159,48 @@ export default function VerificationScreen({ navigation }: Props) {
       show('Please fill in all fields', 'error');
       return;
     }
+    if (!currentUser?.id) {
+      show('Please log in to verify your identity', 'error');
+      return;
+    }
     setIsSubmittingKyc(true);
     try {
-      // Simulate submission — in production this would call a KYC provider
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      updateCoOwnCompliance({ kycVerified: true });
-      show('Identity verification submitted. We will review your documents within 24 hours.', 'success');
+      // Call the real backend KYC session endpoint
+      const result = await createKycSession({
+        legalName: kycFullName.trim(),
+        dateOfBirth: kycDob.trim(),
+        countryCode: kycCountry,
+      });
+
+      // Update local compliance state
+      updateCoOwnCompliance({ kycVerified: false });
+
+      // If the provider returned a verification URL, open it
+      if (result.session.verificationUrl) {
+        show('Opening identity verification...', 'success');
+        const canOpen = await Linking.canOpenURL(result.session.verificationUrl);
+        if (canOpen) {
+          await Linking.openURL(result.session.verificationUrl);
+        }
+        show('Complete verification in your browser. We will review within 24 hours.', 'success');
+      } else {
+        // Provider not configured — submission is recorded as pending
+        show('Identity verification submitted. We will review your documents within 24 hours.', 'success');
+      }
+
+      // Refresh backend status
+      try {
+        const statusRes = await fetchKycStatus(currentUser.id);
+        setBackendKycStatus(statusRes.kycStatus);
+      } catch {
+        // Non-critical
+      }
+
       setKycStep('status');
-    } catch {
-      show('Verification submission failed. Please try again.', 'error');
+    } catch (err) {
+      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+      const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
+      show(parsed.message, 'error');
     } finally {
       setIsSubmittingKyc(false);
     }
@@ -126,15 +215,36 @@ export default function VerificationScreen({ navigation }: Props) {
       show('Please confirm the self-declaration checkbox', 'error');
       return;
     }
+    if (!currentUser?.id) {
+      show('Please log in to save tax information', 'error');
+      return;
+    }
     setIsSubmittingDac7(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      // Store DAC7 completion in compliance profile
-      (updateCoOwnCompliance as any)({ dac7Completed: true, dac7Tin: dac7Tin, dac7Country: dac7Country });
+      // Persist DAC7 tax info to the backend
+      const result = await saveDac7TaxInfo(currentUser.id, {
+        tin: dac7Tin.trim(),
+        taxResidenceCountry: dac7Country,
+        isEuResident: dac7IsEuResident,
+        selfDeclared: true,
+      });
+
+      // Update local compliance state
+      updateCoOwnCompliance({
+        dac7Completed: true,
+        dac7Tin: dac7Tin.trim(),
+        dac7Country: dac7Country,
+      });
+
+      // Update backend status state
+      setBackendDac7Info(result.taxInfo);
+
       show('Tax information saved', 'success');
       setDac7Step('status');
-    } catch {
-      show('Failed to save tax information. Please try again.', 'error');
+    } catch (err) {
+      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+      const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
+      show(parsed.message, 'error');
     } finally {
       setIsSubmittingDac7(false);
     }
@@ -149,28 +259,39 @@ export default function VerificationScreen({ navigation }: Props) {
           onBack={() => navigation.goBack()}
         />
       }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
+      <KeyboardAwareScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
+      >
       {/* ── STATUS CARD ── */}
-      <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.statusIconWrap, { backgroundColor: iconBgColor }]}>
-          <Ionicons
-            name={tierInfo.icon as keyof typeof Ionicons.glyphMap}
-            size={22}
-            color={iconColor}
-          />
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.statusIconWrap, { backgroundColor: iconBgColor }]}>
+            <Ionicons
+              name={tierInfo.icon as keyof typeof Ionicons.glyphMap}
+              size={22}
+              color={iconColor}
+            />
+          </View>
+          <View style={styles.statusBody}>
+            <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>
+              {tierInfo.label}
+            </Text>
+            <Text style={[styles.statusDescription, { color: colors.textSecondary }]}>
+              {tierInfo.description}
+            </Text>
+          </View>
         </View>
-        <View style={styles.statusBody}>
-          <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>
-            {tierInfo.label}
-          </Text>
-          <Text style={[styles.statusDescription, { color: colors.textSecondary }]}>
-            {tierInfo.description}
-          </Text>
-        </View>
-      </View>
+      </Reanimated.View>
 
       {/* ── VERIFICATION STEPS ── */}
-      <SettingsSection title="Verification steps">
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        <SettingsSection title="Verification steps">
         <SettingsRow
           icon="mail-outline"
           iconColor={emailVerified ? colors.brand : colors.textMuted}
@@ -181,14 +302,27 @@ export default function VerificationScreen({ navigation }: Props) {
         />
         <SettingsRow
           icon="card-outline"
-          iconColor={kycVerified ? colors.brand : colors.textMuted}
+          iconColor={effectiveKycVerified ? colors.brand : kycBackendPending ? colors.warning : colors.textMuted}
           title="Identity verification"
-          subtitle={kycVerified ? 'ID verified' : 'Verify your identity with a government document'}
-          value={kycVerified ? 'Verified' : 'Start'}
+          subtitle={
+            effectiveKycVerified
+              ? 'ID verified'
+              : kycBackendPending
+              ? 'Verification under review'
+              : 'Verify your identity with a government document'
+          }
+          value={
+            effectiveKycVerified
+              ? 'Verified'
+              : kycBackendPending
+              ? 'Pending'
+              : 'Start'
+          }
           onPress={handleStartKyc}
           isLast
         />
       </SettingsSection>
+      </Reanimated.View>
 
       {/* ── KYC FLOW ── */}
       {kycStep !== 'status' ? (
@@ -197,7 +331,14 @@ export default function VerificationScreen({ navigation }: Props) {
             <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>
               {kycStep === 'identity' ? 'Your details' : kycStep === 'document' ? 'Document' : 'Review'}
             </Text>
-            <Pressable onPress={() => setKycStep('status')} accessibilityLabel="Cancel verification">
+            <Pressable
+              onPress={() => setKycStep('status')}
+              accessibilityLabel="Cancel verification"
+              accessibilityHint="Cancels the verification process and returns to status screen"
+              accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
               <Ionicons name="close-outline" size={22} color={colors.textMuted} />
             </Pressable>
           </View>
@@ -212,6 +353,8 @@ export default function VerificationScreen({ navigation }: Props) {
                 placeholder="As shown on your ID"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="words"
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Date of birth</Text>
               <TextInput
@@ -221,6 +364,8 @@ export default function VerificationScreen({ navigation }: Props) {
                 placeholder="DD/MM/YYYY"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Address line</Text>
               <TextInput
@@ -229,6 +374,8 @@ export default function VerificationScreen({ navigation }: Props) {
                 onChangeText={setKycAddressLine}
                 placeholder="Street address"
                 placeholderTextColor={colors.textMuted}
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
               <View style={styles.fieldRow}>
                 <View style={styles.fieldHalf}>
@@ -239,6 +386,8 @@ export default function VerificationScreen({ navigation }: Props) {
                     onChangeText={setKycCity}
                     placeholder="City"
                     placeholderTextColor={colors.textMuted}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
                   />
                 </View>
                 <View style={styles.fieldHalf}>
@@ -250,6 +399,7 @@ export default function VerificationScreen({ navigation }: Props) {
                     placeholder="Postcode"
                     placeholderTextColor={colors.textMuted}
                     autoCapitalize="characters"
+                    returnKeyType="done"
                   />
                 </View>
               </View>
@@ -377,7 +527,7 @@ export default function VerificationScreen({ navigation }: Props) {
                   accessibilityLabel="Submit verification"
                 >
                   {isSubmittingKyc ? (
-                    <ActivityIndicator size="small" color={Colors.textInverse} />
+                    <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
                     <Text style={styles.flowPrimaryBtnText}>Submit</Text>
                   )}
@@ -392,9 +542,13 @@ export default function VerificationScreen({ navigation }: Props) {
       <SettingsSection title="Tax information (DAC7)">
         <SettingsRow
           icon="document-text-outline"
-          iconColor={dac7Completed ? colors.brand : colors.textMuted}
+          iconColor={effectiveDac7Completed ? colors.brand : colors.textMuted}
           title="DAC7 tax details"
-          subtitle={dac7Completed ? 'Tax information provided' : 'Required for EU sellers under DAC7 regulation'}
+          subtitle={
+            effectiveDac7Completed
+              ? `Tax information provided · ${backendDac7Info?.taxResidenceCountry ?? dac7Country}`
+              : 'Required for EU sellers under DAC7 regulation'
+          }
           onPress={() => setDac7Step(dac7Step === 'status' ? 'details' : 'status')}
           isFirst
           isLast
@@ -407,7 +561,14 @@ export default function VerificationScreen({ navigation }: Props) {
             <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>
               {dac7Step === 'details' ? 'Tax details' : 'Review'}
             </Text>
-            <Pressable onPress={() => setDac7Step('status')} accessibilityLabel="Cancel">
+            <Pressable
+              onPress={() => setDac7Step('status')}
+              accessibilityLabel="Cancel"
+              accessibilityHint="Cancels and returns to status screen"
+              accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
               <Ionicons name="close-outline" size={22} color={colors.textMuted} />
             </Pressable>
           </View>
@@ -426,6 +587,7 @@ export default function VerificationScreen({ navigation }: Props) {
                 placeholder="Your TIN / National Insurance number"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="characters"
+                returnKeyType="done"
               />
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Country of tax residence</Text>
               <ScrollView
@@ -493,7 +655,7 @@ export default function VerificationScreen({ navigation }: Props) {
                   accessibilityLabel="Save tax information"
                 >
                   {isSubmittingDac7 ? (
-                    <ActivityIndicator size="small" color={Colors.textInverse} />
+                    <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
                     <Text style={styles.flowPrimaryBtnText}>Save</Text>
                   )}
@@ -516,24 +678,26 @@ export default function VerificationScreen({ navigation }: Props) {
         </Text>
         .
       </Text>
+      </KeyboardAwareScrollView>
     </FlagshipScreen>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     padding: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     marginBottom: Space.md,
   },
   statusIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: Control.chrome + 2,
+    height: Control.chrome + 2,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -541,7 +705,7 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   statusDescription: {
     fontSize: Type.body.size,
@@ -549,10 +713,10 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
   },
   flowCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     marginBottom: Space.md,
     overflow: 'hidden',
   },
@@ -562,7 +726,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   flowTitle: {
     fontSize: Type.body.size,
@@ -573,14 +737,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   input: {
-    height: 44,
+    height: Control.hit,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     paddingHorizontal: Space.sm,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
@@ -596,7 +760,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     padding: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   docOptionText: {
     flex: 1,
@@ -609,12 +773,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.lg,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     borderStyle: 'dashed',
   },
   uploadText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingHorizontal: Space.md,
@@ -623,15 +787,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     marginTop: Space.xs,
   },
   uploadBtnText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   flowNavRow: {
     flexDirection: 'row',
@@ -640,23 +804,23 @@ const styles = StyleSheet.create({
   },
   flowBackBtn: {
     flex: 1,
-    height: 44,
+    height: Control.hit,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   flowBackBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   flowPrimaryBtn: {
     flex: 1,
-    height: 44,
+    height: Control.hit,
     borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -666,7 +830,7 @@ const styles = StyleSheet.create({
   flowPrimaryBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   reviewRow: {
     flexDirection: 'row',
@@ -674,11 +838,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     gap: Space.md,
   },
   reviewLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   reviewValue: {
@@ -688,20 +852,20 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   countryScroll: {
-    marginVertical: -4,
+    marginVertical: -Space.xs,
   },
   countryScrollContent: {
-    gap: 6,
-    paddingVertical: 4,
+    gap: Space.xs + 2,
+    paddingVertical: Space.xs,
   },
   countryChip: {
     paddingHorizontal: Space.sm,
-    paddingVertical: 6,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.sm,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   countryChipText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   checkboxRow: {
@@ -712,12 +876,12 @@ const styles = StyleSheet.create({
   },
   checkboxText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   footerNote: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingHorizontal: Space.lg,
@@ -725,7 +889,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.lg,
   },
   footerLink: {
-    color: Colors.brand,
+    color: colors.brand,
     fontFamily: Typography.family.semibold,
   },
 });
+}

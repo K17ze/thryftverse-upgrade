@@ -3,13 +3,15 @@ import { View, StyleSheet, Pressable } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
   interpolate,
   interpolateColor,
 } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { haptics } from '../../utils/haptics';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
+import { Radius } from '../../theme/designTokens';
 interface PremiumToggleProps {
   value: boolean;
   onValueChange: (value: boolean) => void;
@@ -17,21 +19,19 @@ interface PremiumToggleProps {
 }
 
 export function PremiumToggle({ value, onValueChange, disabled = false }: PremiumToggleProps) {
+  const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const progress = useSharedValue(value ? 1 : 0);
 
   React.useEffect(() => {
-    progress.value = withSpring(value ? 1 : 0, {
-      damping: 15,
-      stiffness: 200,
-      mass: 0.8,
-    });
-  }, [value, progress]);
+    progress.value = withTiming(value ? 1 : 0, { duration: reducedMotion ? 0 : 180 });
+  }, [value, progress, reducedMotion]);
 
   const trackStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
       progress.value,
       [0, 1],
-      [Colors.border, Colors.brand]
+      [colors.border, colors.brand]
     ),
   }));
 
@@ -65,14 +65,14 @@ const styles = StyleSheet.create({
   track: {
     width: 50,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.xl,
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
   thumb: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },

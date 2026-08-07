@@ -11,9 +11,11 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { useToast } from '../../context/ToastContext';
+import { useHaptic } from '../../hooks/useHaptic';
 
+import { Radius, Type, Typography, Space } from '../../theme/designTokens';
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SHUTTER_SIZE = 88;
 const INNER_SHUTTER_SIZE = 72;
@@ -24,7 +26,9 @@ interface CameraCaptureProps {
 }
 
 export default function CameraCapture({ onPhotoCapture, onClose }: CameraCaptureProps) {
+  const { colors } = useAppTheme();
   const { show } = useToast();
+  const haptic = useHaptic();
   const cameraRef = React.useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = React.useState<CameraType>('back');
@@ -43,10 +47,12 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
   }, [permission]);
 
   const toggleFacing = () => {
+    haptic.light();
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   };
 
   const toggleFlash = () => {
+    haptic.light();
     setFlash((prev) => (prev === 'off' ? 'on' : 'off'));
   };
 
@@ -71,8 +77,8 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
 
     focusAnim.setValue(0);
     Animated.sequence([
-      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: true, delay: 400 }),
+      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: false, delay: 400 }),
     ]).start(() => setFocusPoint(null));
 
     const focusX = (locationX / SCREEN_W) * 2 - 1;
@@ -91,8 +97,8 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
 
   const handleShutterPress = () => {
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: false }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: false }),
     ]).start();
     takePhoto();
   };
@@ -100,7 +106,7 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
   if (!permission) {
     return (
       <View style={styles.permissionOverlay}>
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -108,7 +114,12 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
   if (!permission.granted) {
     return (
       <View style={styles.permissionOverlay}>
-        <Pressable style={styles.permissionBtn} onPress={requestPermission}>
+        <Pressable
+          style={({ pressed }) => [styles.permissionBtn, pressed && { opacity: 0.7 }]}
+          onPress={requestPermission}
+          accessibilityRole="button"
+          accessibilityLabel="Grant camera permission"
+        >
           <Ionicons name="camera-outline" size={32} color="#fff" />
         </Pressable>
       </View>
@@ -147,11 +158,23 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
 
       {/* Top controls */}
       <View style={styles.topBar} pointerEvents="box-none">
-        <Pressable style={styles.topIconBtn} onPress={onClose} hitSlop={12}>
+        <Pressable
+          style={({ pressed }) => [styles.topIconBtn, pressed && { opacity: 0.5 }]}
+          onPress={onClose}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Close camera"
+        >
           <Ionicons name="close" size={26} color="#fff" />
         </Pressable>
 
-        <Pressable style={styles.topIconBtn} onPress={toggleFlash} hitSlop={12}>
+        <Pressable
+          style={({ pressed }) => [styles.topIconBtn, pressed && { opacity: 0.5 }]}
+          onPress={toggleFlash}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={flash === 'on' ? 'Turn off flash' : 'Turn on flash'}
+        >
           <Ionicons
             name={flash === 'on' ? 'flash' : 'flash-off'}
             size={24}
@@ -159,25 +182,48 @@ export default function CameraCapture({ onPhotoCapture, onClose }: CameraCapture
           />
         </Pressable>
 
-        <Pressable style={styles.topIconBtn} onPress={toggleFacing} hitSlop={12}>
+        <Pressable
+          style={({ pressed }) => [styles.topIconBtn, pressed && { opacity: 0.5 }]}
+          onPress={toggleFacing}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Flip camera"
+        >
           <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
         </Pressable>
       </View>
 
       {/* Zoom slider (right edge) */}
       <View style={styles.zoomBar} pointerEvents="box-none">
-        <Pressable style={styles.zoomBtn} onPress={() => handleZoomChange(-0.1)} hitSlop={8}>
+        <Pressable
+          style={({ pressed }) => [styles.zoomBtn, pressed && { opacity: 0.5 }]}
+          onPress={() => handleZoomChange(-0.1)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Zoom out"
+        >
           <Ionicons name="remove" size={16} color="#fff" />
         </Pressable>
         <Text style={styles.zoomText}>{Math.round(zoom * 10)}x</Text>
-        <Pressable style={styles.zoomBtn} onPress={() => handleZoomChange(0.1)} hitSlop={8}>
+        <Pressable
+          style={({ pressed }) => [styles.zoomBtn, pressed && { opacity: 0.5 }]}
+          onPress={() => handleZoomChange(0.1)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Zoom in"
+        >
           <Ionicons name="add" size={16} color="#fff" />
         </Pressable>
       </View>
 
       {/* Shutter button */}
       <View style={styles.shutterWrap} pointerEvents="box-none">
-        <Pressable onPress={handleShutterPress} hitSlop={24}>
+        <Pressable
+          onPress={handleShutterPress}
+          hitSlop={24}
+          accessibilityRole="button"
+          accessibilityLabel="Capture photo"
+        >
           <Animated.View style={[styles.shutterOuter, { transform: [{ scale: scaleAnim }] }]}>
             <View style={styles.shutterInner} />
           </Animated.View>
@@ -211,14 +257,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     paddingTop: 52,
     paddingBottom: 12,
   },
   topIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -228,8 +274,8 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderWidth: 2,
-    borderColor: '#ffcc00',
-    borderRadius: 4,
+    borderColor: '#C9A46A',
+    borderRadius: Radius.sm,
     pointerEvents: 'none',
   },
   zoomBar: {
@@ -242,15 +288,15 @@ const styles = StyleSheet.create({
   zoomBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   zoomText: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 11,
-    fontFamily: 'Inter_700Bold',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.bold,
   },
   shutterWrap: {
     position: 'absolute',
@@ -281,8 +327,8 @@ const styles = StyleSheet.create({
   },
   hintText: {
     color: 'rgba(255,255,255,0.65)',
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
     marginTop: 14,
   },
 });

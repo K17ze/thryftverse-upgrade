@@ -1,27 +1,30 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Colors } from '../constants/colors';
-import { Space, Type, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ArchivedConversationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
+  const { colors } = useAppTheme();
   const conversations = useStore((s) => s.conversations);
   const archivedIds = useStore((s) => s.archivedConversationIds);
   const toggleArchived = useStore((s) => s.toggleArchivedConversation);
   const deleteConversation = useStore((s) => s.deleteConversation);
   const currentUser = useStore((s) => s.currentUser);
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const archivedConversations = useMemo(() => {
     return conversations.filter((c) => archivedIds.includes(c.id));
@@ -93,15 +96,13 @@ export default function ArchivedConversationsScreen() {
       }
     >
       {archivedConversations.length === 0 ? (
-        <View style={styles.empty}>
-          <Ionicons name="archive-outline" size={25} color={Colors.textMuted} />
-          <Text style={styles.emptyTitle}>
-            No archived conversations
-          </Text>
-          <Text style={styles.emptyBody}>
-            Conversations you archive stay out of your inbox without being deleted.
-          </Text>
-        </View>
+        <EmptyState
+          icon="archive-outline"
+          title="No archived conversations"
+          subtitle="Conversations you archive stay out of your inbox without being deleted."
+          ctaLabel="Browse conversations"
+          onCtaPress={() => navigation.goBack()}
+        />
       ) : (
         <View style={styles.list}>
           {archivedConversations.map((convo, index) => {
@@ -141,36 +142,18 @@ export default function ArchivedConversationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  list: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingHorizontal: Space.xl,
-    paddingTop: 72,
-  },
-  emptyTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginTop: Space.md,
-  },
-  emptyBody: {
-    maxWidth: 300,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: Space.xs,
-  },
-  clearAllBtn: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.danger,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    list: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    clearAllBtn: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.danger,
+      letterSpacing: Type.caption.letterSpacing,
+    },
+  });
+}

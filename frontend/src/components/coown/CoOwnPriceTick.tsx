@@ -111,9 +111,9 @@ export function CoOwnPriceTick({
   }));
 
   const directionColor = direction === 'up'
-    ? colors.success
+    ? colors.coownUp
     : direction === 'down'
-      ? colors.danger
+      ? colors.coownDown
       : colors.textSecondary;
 
   const glyph = direction === 'up' ? '▲' : direction === 'down' ? '▼' : '−';
@@ -143,6 +143,7 @@ export function CoOwnPriceTick({
           <Text
             style={[sizeStyle, { color: colors.textPrimary }]}
             numberOfLines={1}
+            accessibilityLiveRegion="polite"
             accessibilityLabel={`${label ?? 'Price'} ${value.toFixed(2)}${unit ? ` ${unit}` : ''}${hasChanged ? `, ${direction}` : ''}${ageLabel ? `, ${ageLabel}` : ''}`}
           >
             {showSign && hasChanged ? sign : ''}{value.toFixed(2)}
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
   },
   tickCell: {
     borderRadius: Radius.sm,
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     paddingVertical: 1,
   },
   body: {

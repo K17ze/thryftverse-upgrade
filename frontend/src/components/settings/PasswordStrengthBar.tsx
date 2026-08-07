@@ -1,14 +1,28 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
-import { Space, Radius } from '../../theme/designTokens';
-import { Caption } from '../ui/Text';
+import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 
 export type PasswordStrength = 'weak' | 'fair' | 'good' | 'strong';
 
 interface PasswordStrengthBarProps {
   password: string;
+  /** Show the per-requirement checklist below the bar */
+  showChecklist?: boolean;
 }
+
+interface Requirement {
+  label: string;
+  test: (pw: string) => boolean;
+}
+
+const REQUIREMENTS: Requirement[] = [
+  { label: 'At least 8 characters', test: (pw) => pw.length >= 8 },
+  { label: 'Uppercase letter', test: (pw) => /[A-Z]/.test(pw) },
+  { label: 'Number', test: (pw) => /[0-9]/.test(pw) },
+  { label: 'Special character', test: (pw) => /[^A-Za-z0-9]/.test(pw) },
+];
 
 function computeStrength(password: string): PasswordStrength {
   if (!password || password.length < 6) return 'weak';
@@ -23,27 +37,16 @@ function computeStrength(password: string): PasswordStrength {
   return 'strong';
 }
 
-function strengthLabelColor(strength: PasswordStrength): string {
+function strengthColor(strength: PasswordStrength, colors: ThemeColors): string {
   switch (strength) {
     case 'weak':
+      return colors.danger;
     case 'fair':
-      return Colors.textSecondary;
+      return colors.bronze;
     case 'good':
+      return colors.success;
     case 'strong':
-      return Colors.brand;
-  }
-}
-
-function strengthFillOpacity(strength: PasswordStrength): number {
-  switch (strength) {
-    case 'weak':
-      return 0.3;
-    case 'fair':
-      return 0.5;
-    case 'good':
-      return 0.75;
-    case 'strong':
-      return 1;
+      return colors.success;
   }
 }
 
@@ -60,48 +63,118 @@ function strengthLabel(strength: PasswordStrength): string {
   }
 }
 
-export function PasswordStrengthBar({ password }: PasswordStrengthBarProps) {
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      marginTop: Space.sm,
+      gap: Space.xs,
+    },
+    barRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    bars: {
+      flexDirection: 'row',
+      gap: Space.xs,
+      flex: 1,
+    },
+    segment: {
+      flex: 1,
+      height: 4,
+      borderRadius: Radius.sm,
+      backgroundColor: colors.border,
+    },
+    label: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: 0.2,
+      minWidth: 50,
+      textAlign: 'right',
+    },
+    checklist: {
+      gap: Space.xs + 2,
+      marginTop: Space.xs,
+    },
+    checklistItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs + 2,
+    },
+    checklistIcon: {
+      width: 18,
+      height: 18,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    checklistText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: 0.1,
+    },
+  });
+
+export function PasswordStrengthBar({ password, showChecklist = true }: PasswordStrengthBarProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const strength = computeStrength(password);
-  const labelColor = strengthLabelColor(strength);
+  const color = strengthColor(strength, colors);
   const segments = ['weak', 'fair', 'good', 'strong'] as PasswordStrength[];
   const activeIndex = segments.indexOf(strength);
 
   return (
     <View style={styles.container}>
-      <View style={styles.bars}>
-        {segments.map((seg, idx) => (
-          <View
-            key={seg}
-            style={[
-              styles.segment,
-              idx <= activeIndex && { backgroundColor: Colors.brand, opacity: strengthFillOpacity(strength) },
-            ]}
-          />
-        ))}
+      {/* Strength bar + label */}
+      <View style={styles.barRow}>
+        <View style={styles.bars}>
+          {segments.map((seg, idx) => (
+            <View
+              key={seg}
+              style={[
+                styles.segment,
+                idx <= activeIndex && { backgroundColor: color },
+              ]}
+            />
+          ))}
+        </View>
+        <Text style={[styles.label, { color }]}>
+          {strengthLabel(strength)}
+        </Text>
       </View>
-      <Caption color={labelColor} style={styles.label}>
-        {strengthLabel(strength)}
-      </Caption>
+
+      {/* Requirement checklist */}
+      {showChecklist && (
+        <View style={styles.checklist}>
+          {REQUIREMENTS.map((req) => {
+            const met = req.test(password);
+            return (
+              <View key={req.label} style={styles.checklistItem}>
+                <View
+                  style={[
+                    styles.checklistIcon,
+                    { backgroundColor: met ? colors.success + '18' : colors.surfaceAlt },
+                  ]}
+                >
+                  <Ionicons
+                    name={met ? 'checkmark' : 'close'}
+                    size={12}
+                    color={met ? colors.success : colors.textMuted}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.checklistText,
+                    { color: met ? colors.textPrimary : colors.textMuted },
+                  ]}
+                >
+                  {req.label}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    marginTop: Space.xs,
-  },
-  bars: {
-    flexDirection: 'row',
-    gap: Space.xs,
-  },
-  segment: {
-    flex: 1,
-    height: 4,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.border,
-  },
-  label: {
-    marginTop: Space.xs,
-    textAlign: 'right',
-  },
-});

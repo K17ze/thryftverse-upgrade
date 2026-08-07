@@ -3,20 +3,15 @@ import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-nati
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
-
-const BG = Colors.background;
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const SECONDARY = Colors.textSecondary;
-const BRAND = Colors.brand;
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Type } from '../../theme/designTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const TAB_HEIGHT = 44;
-const SPRING_CONFIG = { damping: 18, stiffness: 260, mass: 1 };
+const TIMING_CONFIG = { duration: 220, easing: Easing.out(Easing.cubic) };
 
 export type TabKey = 'Shop' | 'Looks' | 'Reviews';
 export type SegmentKey = 'forsale' | 'sold';
@@ -35,6 +30,9 @@ interface TabRailProps {
  * Reduced motion: instant assignment — no timing animation.
  */
 export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: TabRailProps) {
+  const { colors } = useAppTheme();
+  const reducedMotionHook = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const tabWidths = useRef<Record<string, number>>({});
   const tabOffsets = useRef<Record<string, number>>({});
   const underlineTranslateX = useSharedValue(0);
@@ -59,10 +57,10 @@ export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: Ta
       underlineTranslateX.value = targetX;
       underlineWidth.value = underlineW;
     } else {
-      underlineTranslateX.value = withSpring(targetX, SPRING_CONFIG);
-      underlineWidth.value = withSpring(underlineW, SPRING_CONFIG);
+      underlineTranslateX.value = withTiming(targetX, TIMING_CONFIG);
+      underlineWidth.value = withTiming(underlineW, TIMING_CONFIG);
     }
-  }, [measureTabs, reducedMotion, underlineTranslateX, underlineWidth]);
+  }, [measureTabs, reducedMotion, reducedMotionHook, underlineTranslateX, underlineWidth]);
 
   const onTabLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
     tabWidths.current[key] = e.nativeEvent.layout.width;
@@ -131,6 +129,9 @@ interface SegmentedControlProps<K extends string = SegmentKey> {
  * Reduced motion: instant assignment.
  */
 export function SegmentedControl<K extends string = SegmentKey>({ segments, activeKey, onChange, reducedMotion = false }: SegmentedControlProps<K>) {
+  const { colors } = useAppTheme();
+  const reducedMotionHook = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const segWidths = useRef<Record<string, number>>({});
   const segOffsets = useRef<Record<string, number>>({});
   const segUnderlineX = useSharedValue(0);
@@ -153,10 +154,10 @@ export function SegmentedControl<K extends string = SegmentKey>({ segments, acti
       segUnderlineX.value = offsetX;
       segUnderlineW.value = segW;
     } else {
-      segUnderlineX.value = withSpring(offsetX, SPRING_CONFIG);
-      segUnderlineW.value = withSpring(segW, SPRING_CONFIG);
+      segUnderlineX.value = withTiming(offsetX, TIMING_CONFIG);
+      segUnderlineW.value = withTiming(segW, TIMING_CONFIG);
     }
-  }, [measureSegments, reducedMotion, segUnderlineX, segUnderlineW]);
+  }, [measureSegments, reducedMotion, reducedMotionHook, segUnderlineX, segUnderlineW]);
 
   const onSegLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
     segWidths.current[key] = e.nativeEvent.layout.width;
@@ -202,12 +203,13 @@ export function SegmentedControl<K extends string = SegmentKey>({ segments, acti
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   tabRail: {
     flexDirection: 'row',
-    backgroundColor: BG,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
+    borderBottomColor: colors.border,
     position: 'relative',
   },
   tab: {
@@ -222,34 +224,34 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   tabLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: SECONDARY,
+    color: colors.textSecondary,
     letterSpacing: -0.2,
   },
   tabLabelActive: {
     fontFamily: Typography.family.bold,
-    color: TEXT,
+    color: colors.textPrimary,
   },
   tabCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: MUTED,
+    color: colors.textMuted,
     minWidth: 14,
   },
   tabCountActive: {
-    color: SECONDARY,
+    color: colors.textSecondary,
   },
   tabUnderline: {
     position: 'absolute',
     bottom: 0,
     height: 2,
-    backgroundColor: TEXT,
+    backgroundColor: colors.textPrimary,
     borderRadius: 1,
   },
   segmentControl: {
     flexDirection: 'row',
-    backgroundColor: BG,
+    backgroundColor: colors.background,
     position: 'relative',
   },
   segment: {
@@ -257,20 +259,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   segmentLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: MUTED,
+    color: colors.textMuted,
     letterSpacing: -0.1,
   },
   segmentLabelActive: {
     fontFamily: Typography.family.semibold,
-    color: TEXT,
+    color: colors.textPrimary,
   },
   segmentUnderline: {
     position: 'absolute',
     bottom: 0,
     height: 2,
-    backgroundColor: TEXT,
+    backgroundColor: colors.textPrimary,
     borderRadius: 1,
   },
-});
+  });
+}

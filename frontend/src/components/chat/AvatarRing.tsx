@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { CachedImage } from '../CachedImage';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Radius } from '../../theme/designTokens';
 import Reanimated, {
   useSharedValue,
@@ -29,6 +29,7 @@ export function AvatarRing({
   ringWidth = 2,
   fallbackInitials,
 }: AvatarRingProps) {
+  const { colors } = useAppTheme();
   const pulse = useSharedValue(0);
 
   React.useEffect(() => {
@@ -53,7 +54,7 @@ export function AvatarRing({
     };
   });
 
-  const ringColor = isUnread ? Colors.brand : 'transparent';
+  const ringColor = isUnread ? colors.brand : 'transparent';
   const outerGlowSize = size + 8;
 
   return (
@@ -67,7 +68,7 @@ export function AvatarRing({
               width: outerGlowSize,
               height: outerGlowSize,
               borderRadius: outerGlowSize / 2,
-              backgroundColor: Colors.brand,
+              backgroundColor: colors.brand,
             },
             glowStyle,
           ]}
@@ -104,12 +105,12 @@ export function AvatarRing({
               width: size - (isUnread ? ringWidth * 2 : 0),
               height: size - (isUnread ? ringWidth * 2 : 0),
               borderRadius: (size - (isUnread ? ringWidth * 2 : 0)) / 2,
-              backgroundColor: Colors.surface,
+              backgroundColor: colors.surface,
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
-            <Text style={{ fontSize: size * 0.35, color: Colors.textPrimary, fontWeight: '600' }}>
+            <Text style={{ fontSize: size * 0.35, color: colors.textPrimary, fontWeight: '600' }}>
               {fallbackInitials}
             </Text>
           </View>

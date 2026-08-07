@@ -15,6 +15,7 @@ import {
   SupportedLanguageOption,
 } from '../preferences/settingsPreferences';
 import { mapLanguageOptionToLocale, setI18nLocale } from '../i18n';
+import { setAnalyticsOptOut } from '../lib/telemetry';
 
 interface SettingsPreferencesContextValue {
   language: SupportedLanguageOption;
@@ -25,6 +26,7 @@ interface SettingsPreferencesContextValue {
   pushEnabledCount: number;
   pushTotalCount: number;
   isHydrated: boolean;
+  analyticsOptOut: boolean;
   setLanguage: (language: SupportedLanguageOption) => void;
   setEmailNotificationsEnabled: (enabled: boolean) => void;
   toggleEmailNotifications: () => void;
@@ -36,6 +38,8 @@ interface SettingsPreferencesContextValue {
   removeFilterPreset: (id: string) => void;
   setPushNotificationToggle: (key: string, enabled: boolean) => void;
   setAllPushNotificationToggles: (enabled: boolean) => void;
+  setAnalyticsOptOut: (optOut: boolean) => void;
+  toggleAnalyticsOptOut: () => void;
 }
 
 const DEFAULT_LANGUAGE = LANGUAGE_OPTIONS[0];
@@ -54,6 +58,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
   const [pushNotificationToggles, setPushNotificationToggles] = React.useState<PushNotificationToggles>(
     DEFAULT_PUSH_NOTIFICATION_TOGGLES
   );
+  const [analyticsOptOut, setAnalyticsOptOutState] = React.useState(false);
   const [isHydrated, setIsHydrated] = React.useState(false);
 
   React.useEffect(() => {
@@ -74,6 +79,10 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
         setMySizesState(settingsPreferences.mySizes);
         setFilterPresets(settingsPreferences.filterPresets);
         setPushNotificationToggles(storedPushToggles);
+        setAnalyticsOptOutState(settingsPreferences.analyticsOptOut);
+        // Sync the telemetry module so opt-out is respected before the
+        // first React re-render commits.
+        setAnalyticsOptOut(settingsPreferences.analyticsOptOut);
       })
       .catch(() => {
         // Keep defaults when persistence is unavailable.
@@ -104,10 +113,11 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       quietHours,
       mySizes,
       filterPresets,
+      analyticsOptOut,
     }).catch(() => {
       // Best-effort persistence should not block preferences updates.
     });
-  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, isHydrated]);
+  }, [language, emailNotificationsEnabled, quietHours, mySizes, filterPresets, analyticsOptOut, isHydrated]);
 
   React.useEffect(() => {
     if (!isHydrated) {
@@ -187,6 +197,21 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
     setPushNotificationToggles(nextState);
   }, []);
 
+  const setAnalyticsOptOutPref = React.useCallback((optOut: boolean) => {
+    setAnalyticsOptOutState(optOut);
+    // Keep the telemetry module flag in sync so every trackTelemetryEvent
+    // call honours the preference immediately.
+    setAnalyticsOptOut(optOut);
+  }, []);
+
+  const toggleAnalyticsOptOut = React.useCallback(() => {
+    setAnalyticsOptOutState((prev) => {
+      const next = !prev;
+      setAnalyticsOptOut(next);
+      return next;
+    });
+  }, []);
+
   const pushEnabledCount = React.useMemo(
     () => countEnabledPushNotificationToggles(pushNotificationToggles),
     [pushNotificationToggles]
@@ -203,6 +228,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       pushEnabledCount,
       pushTotalCount: PUSH_NOTIFICATION_DEFINITIONS.length,
       isHydrated,
+      analyticsOptOut,
       setLanguage,
       setEmailNotificationsEnabled,
       toggleEmailNotifications,
@@ -213,8 +239,11 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       removeFilterPreset,
       setPushNotificationToggle,
       setAllPushNotificationToggles,
+      setAnalyticsOptOut: setAnalyticsOptOutPref,
+      toggleAnalyticsOptOut,
     }),
     [
+      analyticsOptOut,
       emailNotificationsEnabled,
       filterPresets,
       isHydrated,
@@ -226,9 +255,11 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       removeFilterPreset,
       saveFilterPreset,
       setAllPushNotificationToggles,
+      setAnalyticsOptOutPref,
       setMySizes,
       setPushNotificationToggle,
       setQuietHours,
+      toggleAnalyticsOptOut,
       toggleEmailNotifications,
       toggleMySize,
     ]

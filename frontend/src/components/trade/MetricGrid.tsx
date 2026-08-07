@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Type , Space, Radius  } from '../../theme/designTokens';
 import { Motion } from '../../constants/motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -21,19 +21,20 @@ interface MetricGridProps {
   style?: ViewStyle;
 }
 
-function resolveToneColor(tone?: MetricItem['tone']) {
+function resolveToneColor(tone: MetricItem['tone'], colors: ThemeColors) {
   switch (tone) {
     case 'positive':
-      return Colors.success;
+      return colors.success;
     case 'negative':
-      return Colors.danger;
+      return colors.danger;
     case 'neutral':
     default:
-      return Colors.textPrimary;
+      return colors.textPrimary;
   }
 }
 
 export function MetricGrid({ metrics, columns = 3, style }: MetricGridProps) {
+  const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
 
   return (
@@ -56,7 +57,7 @@ export function MetricGrid({ metrics, columns = 3, style }: MetricGridProps) {
                 <View style={styles.iconWrap}>{metric.icon}</View>
               )}
               <BodyEmphasis
-                style={[styles.value, { color: resolveToneColor(metric.tone) }]}
+                style={[styles.value, { color: resolveToneColor(metric.tone, colors) }]}
                 numberOfLines={1}
               >
                 {metric.value}
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
     minHeight: 72,
   },
   iconWrap: {
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   value: {
     textAlign: 'center',

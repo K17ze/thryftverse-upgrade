@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Type, Radius, Stroke } from '../../theme/designTokens';
 
 export interface TimelineEntry {
   id: string;
@@ -18,17 +18,20 @@ interface Props {
 }
 
 export function OrderTrackingTimeline({ entries, warningText }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View>
       {warningText ? (
         <View style={styles.warningRow}>
-          <Ionicons name="alert-circle-outline" size={14} color={Colors.textMuted} />
+          <Ionicons name="alert-circle-outline" size={14} color={colors.textMuted} />
           <Text style={styles.warningText}>{warningText}</Text>
         </View>
       ) : null}
       {entries.map((entry, index) => {
         const isLast = index === entries.length - 1;
-        const iconName =
+        const iconName: React.ComponentProps<typeof Ionicons>['name'] =
           entry.state === 'failure'
             ? 'close-circle'
             : entry.state === 'completed'
@@ -38,17 +41,17 @@ export function OrderTrackingTimeline({ entries, warningText }: Props) {
                 : 'ellipse-outline';
         const iconColor =
           entry.state === 'failure'
-            ? Colors.danger
+            ? colors.danger
             : entry.state === 'completed'
-              ? Colors.brand
+              ? colors.brand
               : entry.state === 'active'
-                ? Colors.brand
-                : Colors.border;
+                ? colors.brand
+                : colors.border;
 
         return (
           <View key={entry.id} style={styles.entryRow}>
             <View style={styles.leftCol}>
-              <Ionicons name={iconName as any} size={20} color={iconColor} />
+              <Ionicons name={iconName} size={20} color={iconColor} />
               {!isLast ? (
                 <View
                   style={[
@@ -90,17 +93,17 @@ export function OrderTrackingTimeline({ entries, warningText }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   warningRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginBottom: Space.sm,
   },
   warningText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   entryRow: {
     flexDirection: 'row',
@@ -108,18 +111,18 @@ const styles = StyleSheet.create({
   },
   leftCol: {
     alignItems: 'center',
-    width: 24,
+    width: Space.xl,
   },
   connector: {
-    width: 2,
+    width: Stroke.emphasis,
     flex: 1,
-    backgroundColor: Colors.border,
-    marginVertical: 4,
-    minHeight: 32,
-    borderRadius: 1,
+    backgroundColor: colors.border,
+    marginVertical: Space.xs,
+    minHeight: Space.xl + Space.sm,
+    borderRadius: Radius.sm,
   },
   connectorCompleted: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   contentCol: {
     flex: 1,
@@ -132,30 +135,30 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   label: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     flexShrink: 1,
   },
   labelPending: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   labelActive: {
-    color: Colors.brand,
+    color: colors.brand,
   },
   date: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginLeft: Space.sm,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 18,
   },
   subtitlePending: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });

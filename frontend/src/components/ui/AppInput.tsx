@@ -10,7 +10,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Radius, Stroke, Typography } from '../../theme/designTokens';
+import { Radius, Stroke, Typography, Type } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 interface AppInputProps extends Omit<TextInputProps, 'style'> {
@@ -94,7 +94,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
 const styles = StyleSheet.create({
   label: {
     marginBottom: 6,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     lineHeight: 18,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0,
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   prefixText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
   },
   prefixNode: {
@@ -121,19 +121,19 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
     paddingVertical: 10,
   },
   helperText: {
     marginTop: 7,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     lineHeight: 16,
     fontFamily: Typography.family.medium,
   },
   errorText: {
     marginTop: 7,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     lineHeight: 16,
     fontFamily: Typography.family.semibold,
   },

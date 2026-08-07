@@ -25,6 +25,20 @@ export interface ThemeColors {
   danger: string;
   success: string;
   warning: string;
+  /** Co-Own financial truth — up/down movement only. Per Design.md
+   * proposed-semantic: coown-up #1C5631, coown-down #5F1616.
+   * Used for price deltas, position P/L, and market direction. */
+  coownUp: string;
+  coownDown: string;
+  /** Semantic accent colors from Design.md proposed-semantic section.
+   * Used for category icon badges and contextual accents — never decorative. */
+  social: string;
+  discovery: string;
+  commerceTrust: string;
+  /** Premium accent from Design.md proposed-luxury. Used sparingly for
+   * verified status, authenticated value, or curated distinction. */
+  antiqueGold: string;
+  bronze: string;
   overlay: string;
   input: string;
   inputText: string;
@@ -46,13 +60,20 @@ const DARK_COLORS: ThemeColors = {
   brandPressed: '#D8D0C3',
   textPrimary: '#FFFFFF',
   textSecondary: '#A3A3A3',
-  textMuted: '#666666',
+  textMuted: '#7A7A7A', // WCAG 2.2 AA: 4.64:1 on #0A0A0A (was #666666 at 3.05:1)
   textInverse: '#000000',
   border: '#262626',
   borderSubtle: '#333333',
-  danger: '#DC2626',
-  success: '#16A34A',
-  warning: '#F59E0B',
+  danger: '#9b0202',
+  success: '#215634',
+  warning: '#C9A46A',
+  coownUp: '#1C5631',
+  coownDown: '#5F1616',
+  social: '#9A6B7A',
+  discovery: '#B85566',
+  commerceTrust: '#4A7AC4',
+  antiqueGold: '#C9A46A',
+  bronze: '#8A6A3F',
   overlay: 'rgba(0,0,0,0.6)',
   input: '#1A1A1A',
   inputText: '#FFFFFF',
@@ -74,13 +95,20 @@ const LIGHT_COLORS: ThemeColors = {
   brandPressed: '#333333',
   textPrimary: '#000000',
   textSecondary: '#666666',
-  textMuted: '#999999',
+  textMuted: '#767676', // WCAG 2.2 AA: 4.65:1 on #FFFFFF (was #999999 at 2.85:1)
   textInverse: '#FFFFFF',
   border: '#E5E5E5',
   borderSubtle: '#F0F0F0',
-  danger: '#DC2626',
-  success: '#16A34A',
-  warning: '#F59E0B',
+  danger: '#9b0202',
+  success: '#215634',
+  warning: '#8A6A3F',
+  coownUp: '#1C5631',
+  coownDown: '#5F1616',
+  social: '#6B3245',
+  discovery: '#7B0E1E',
+  commerceTrust: '#06489A',
+  antiqueGold: '#C9A46A',
+  bronze: '#8A6A3F',
   overlay: 'rgba(0,0,0,0.4)',
   input: '#FFFFFF',
   inputText: '#000000',

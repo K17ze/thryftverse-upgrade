@@ -2,9 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, Dimensions, ViewStyle, ActivityIndicator, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
+import { ActiveTheme } from '../../constants/colors';
+import { FACE_FOCAL_POINT } from '../../utils/media';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Video, ResizeMode } from '../compat/Video';
 
@@ -45,6 +48,8 @@ export function FlagshipProfileMedia({
   onRetryCover,
   onRevertCover,
 }: FlagshipProfileMediaProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const effectiveCover = coverVideoUri || coverUri;
   const hasCover = Boolean(effectiveCover);
   const showCoverError = coverError != null && !isUploadingCover;
@@ -71,7 +76,12 @@ export function FlagshipProfileMedia({
             cacheBuster={cacheBuster}
           />
         ) : (
-          <View style={[styles.coverImage, { height: coverHeight }, styles.coverFallback]} />
+          <ImageEmptyGraphic
+            icon="image-outline"
+            width={SCREEN_W}
+            height={coverHeight}
+            style={styles.coverFallback}
+          />
         )}
 
         {/* Bottom gradient for text legibility */}
@@ -143,11 +153,24 @@ export function FlagshipProfileMedia({
                 style={styles.avatarImage}
                 contentFit="cover"
                 transition={300}
+                focalPoint={FACE_FOCAL_POINT}
                 cacheBuster={cacheBuster}
               />
             ) : (
               <View style={[styles.avatarImage, styles.avatarFallback]}>
-                <Ionicons name="person" size={32} color={Colors.textMuted} />
+                <LinearGradient
+                  colors={ActiveTheme === 'light'
+                    ? ['#F0EBE6', '#E2DDD6']
+                    : ['#1F1F1F', '#161616']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Ionicons
+                  name="person"
+                  size={32}
+                  color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.22)'}
+                />
               </View>
             )}
 
@@ -179,7 +202,7 @@ export function FlagshipProfileMedia({
 const DEFAULT_COVER_H = 220;
 const AVATAR_SIZE = 104;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root: {
     width: SCREEN_W,
   },
@@ -194,7 +217,7 @@ const styles = StyleSheet.create({
     height: DEFAULT_COVER_H,
   },
   coverFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   coverGradient: {
     position: 'absolute',
@@ -215,7 +238,7 @@ const styles = StyleSheet.create({
   editCoverVisible: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -232,12 +255,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.65)',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   coverErrorText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
   },
   coverErrorActions: {
     flexDirection: 'row',
@@ -245,14 +268,14 @@ const styles = StyleSheet.create({
   },
   coverErrorBtn: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.15)',
     minHeight: 44,
     justifyContent: 'center',
   },
   coverErrorBtnText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
@@ -266,8 +289,8 @@ const styles = StyleSheet.create({
     height: AVATAR_SIZE,
     borderRadius: Radius.full,
     borderWidth: 4,
-    borderColor: Colors.background,
-    backgroundColor: Colors.surface,
+    borderColor: colors.background,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -277,7 +300,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   avatarFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -288,10 +311,10 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: Radius.full,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
 });

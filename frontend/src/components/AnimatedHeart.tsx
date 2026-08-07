@@ -4,9 +4,9 @@ import Reanimated, {
   interpolate,
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withSequence,
   withTiming,
+  Easing,
   type SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -95,7 +95,7 @@ export function AnimatedHeart({
   isActive,
   onToggle,
   size = 24,
-  activeColor = '#FF6B6B',
+  activeColor = '#E06666',
   inactiveColor = '#ffffff',
 }: Props) {
   const haptic = useHaptic();
@@ -130,16 +130,16 @@ export function AnimatedHeart({
     }
 
     if (!isActive) {
-      // Filling — spring bounce up
+      // Filling — quick scale pop with ease-out
       scale.value = withSequence(
-        withSpring(1.35, { damping: 6, stiffness: 400 }),
-        withSpring(1, { damping: 12, stiffness: 300 }),
+        withTiming(1.3, { duration: 140, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 120, easing: Easing.inOut(Easing.quad) }),
       );
     } else {
       // Unfilling — quick deflate
       scale.value = withSequence(
         withTiming(0.85, { duration: 80 }),
-        withSpring(1, { damping: 12 }),
+        withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }),
       );
     }
   };

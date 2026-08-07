@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionValueLockup } from './AuctionValueLockup';
@@ -35,6 +35,8 @@ export function AuctionSupportingTile({
   onPress,
   cardWidth,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <AnimatedPressable
       style={[styles.card, cardWidth ? { width: cardWidth } : null]}
@@ -74,21 +76,21 @@ export function AuctionSupportingTile({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {
     flex: 1,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: 'transparent',
   },
   imageWrap: {
     position: 'relative',
     aspectRatio: 4 / 3,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   imageContainer: {
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   image: {
@@ -101,8 +103,8 @@ const styles = StyleSheet.create({
     left: Space.xs,
     width: 7,
     height: 7,
-    borderRadius: 999,
-    backgroundColor: Colors.danger,
+    borderRadius: Radius.full,
+    backgroundColor: colors.danger,
   },
   outbidDot: {
     position: 'absolute',
@@ -110,8 +112,8 @@ const styles = StyleSheet.create({
     right: Space.xs,
     width: 7,
     height: 7,
-    borderRadius: 999,
-    backgroundColor: Colors.danger,
+    borderRadius: Radius.full,
+    backgroundColor: colors.danger,
   },
   body: {
     paddingTop: Space.xs,
@@ -119,14 +121,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
-    color: Colors.textPrimary,
+    fontSize: Type.caption.size,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
     lineHeight: 16,
   },
   time: {
     fontFamily: Typography.family.regular,
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
   },
 });

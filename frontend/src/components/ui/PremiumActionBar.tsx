@@ -8,8 +8,8 @@ import {
   StyleProp,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface PremiumActionBarProps {
@@ -35,6 +35,8 @@ export function PremiumActionBar({
   errorText,
   style,
 }: PremiumActionBarProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isPrimaryDisabled = primaryDisabled || primaryLoading;
 
   return (
@@ -59,7 +61,7 @@ export function PremiumActionBar({
         accessibilityState={{ disabled: isPrimaryDisabled }}
       >
         {primaryLoading ? (
-          <ActivityIndicator size="small" color={Colors.background} />
+          <ActivityIndicator size="small" color={colors.background} />
         ) : (
           <Text style={styles.primaryText}>{primaryLabel}</Text>
         )}
@@ -85,31 +87,31 @@ export function PremiumActionBar({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Space.sm,
     gap: Space.sm,
   },
   errorBanner: {
-    backgroundColor: Colors.danger + '10',
+    backgroundColor: colors.danger + '10',
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     marginBottom: Space.sm,
   },
   errorBannerText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
     textAlign: 'center',
   },
   primaryBtn: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: Radius.lg,
     minHeight: 54,
     alignItems: 'center',
@@ -119,8 +121,8 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   primaryText: {
-    color: Colors.textInverse,
-    fontSize: 16,
+    color: colors.textInverse,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
   },
   secondaryBtn: {
@@ -129,15 +131,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   secondaryBtnDisabled: {
     opacity: 0.35,
   },
   secondaryText: {
-    color: Colors.textPrimary,
-    fontSize: 15,
+    color: colors.textPrimary,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
 });

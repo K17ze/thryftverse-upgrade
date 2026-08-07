@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, useWindowDimensions } from 'react-native';
 import { Canvas, Rect, Line } from '@shopify/react-native-skia';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
@@ -47,7 +47,6 @@ export interface CoOwnCandleChartProps {
 
 const RANGES: CoOwnCandleRange[] = ['1D', '1W', '1M', '3M', '1Y', 'ALL'];
 
-const CHART_WIDTH = 320;
 const CHART_HEIGHT = 140;
 const VOLUME_HEIGHT = 30;
 const CHART_PADDING = 8;
@@ -64,6 +63,9 @@ export function CoOwnCandleChart({
   style,
 }: CoOwnCandleChartProps) {
   const { colors } = useAppTheme();
+  const { width: screenWidth } = useWindowDimensions();
+  // Per spec 03_COOWN §4: chart is width-responsive.
+  const CHART_WIDTH = Math.min(Math.max(screenWidth - 32, 280), 440);
   const [crosshairIndex, setCrosshairIndex] = useState<number | null>(null);
 
   // Compute price range across all candles

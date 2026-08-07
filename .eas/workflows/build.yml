@@ -1,0 +1,33 @@
+name: Build
+on:
+  push:
+    branches: [main]
+jobs:
+  typecheck:
+    name: Typecheck
+    type: eas
+    image: linux
+    steps:
+      - run:
+          name: Install dependencies
+          command: cd frontend && npm ci --legacy-peer-deps
+      - run:
+          name: Typecheck
+          command: cd frontend && npx tsc --noEmit
+      - run:
+          name: Run tests
+          command: cd frontend && npm test
+
+  build-dev-android:
+    name: Android development build
+    type: build
+    needs: typecheck
+    build_profile: development
+    platform: android
+
+  build-dev-ios:
+    name: iOS development build
+    type: build
+    needs: typecheck
+    build_profile: development
+    platform: ios

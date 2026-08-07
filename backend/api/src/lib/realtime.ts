@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
+import { logger } from './logger.js';
 
 export interface RealtimeEnvelope {
   id: string;
@@ -8,6 +9,15 @@ export interface RealtimeEnvelope {
   type: string;
   payload: Record<string, unknown>;
   timestamp: string;
+  /** R01: per-topic monotonically increasing sequence number.
+   * Clients track the last seen sequence per topic and can request
+   * resync from that point after a reconnection. Zero means the
+   * sequence was not set (legacy event). */
+  seq?: number;
+  /** R01: schema version of the event payload. Clients use this to
+   * determine whether they can parse the payload. Unknown versions
+   * should be ignored gracefully. */
+  v?: number;
 }
 
 type RealtimeTransport = 'ws' | 'sse';
@@ -139,7 +149,7 @@ export async function startRealtimeBridge(publisher: Redis): Promise<void> {
   });
 
   subscriber.on('error', (error) => {
-    console.error('[realtime] Redis subscriber error', error);
+    logger.error({ err: error }, '[realtime] Redis subscriber error');
   });
 
   await subscriber.subscribe(REALTIME_CHANNEL);
@@ -183,14 +193,79 @@ function formatSseEvent(event: RealtimeEnvelope): string {
   return `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
-function createEnvelope(topic: string, type: string, payload: Record<string, unknown>): RealtimeEnvelope {
-  return {
+// R01: Per-topic monotonic sequence counter for event versioning.
+// This enables clients to detect gaps after reconnection and request
+// resync from the last seen sequence number.
+const topicSequenceMap = new Map<string, number>();
+
+// R07: Per-topic ring buffer of recent events for replay on gap.
+// Stores the last MAX_EVENTS_PER_TOPIC events so clients that detect
+// a sequence gap can replay missed events without a full resnapshot.
+const MAX_EVENTS_PER_TOPIC = 200;
+const topicEventBuffer = new Map<string, RealtimeEnvelope[]>();
+
+function nextSequenceForTopic(topic: string): number {
+  const next = (topicSequenceMap.get(topic) ?? 0) + 1;
+  topicSequenceMap.set(topic, next);
+  return next;
+}
+
+/** R01: Get the current sequence for a topic (for resync requests). */
+export function getTopicSequence(topic: string): number {
+  return topicSequenceMap.get(normalizeTopic(topic)) ?? 0;
+}
+
+/** R07: Replay events from a given sequence number. Returns events
+ * with seq > fromSeq, up to a maximum of MAX_EVENTS_PER_TOPIC.
+ * If fromSeq is 0, returns all buffered events. If the gap exceeds
+ * the buffer size, the client should do a full resnapshot instead. */
+export function replayEventsFromSequence(topic: string, fromSeq: number): RealtimeEnvelope[] {
+  const normalized = normalizeTopic(topic);
+  const buffer = topicEventBuffer.get(normalized);
+  if (!buffer || buffer.length === 0) return [];
+  return buffer.filter((e) => (e.seq ?? 0) > fromSeq);
+}
+
+/** R07: Check whether a replay can fill the gap. Returns false when
+ * the gap exceeds the buffer size, signaling the client to resnapshot. */
+export function canReplayGap(topic: string, fromSeq: number): boolean {
+  const normalized = normalizeTopic(topic);
+  const buffer = topicEventBuffer.get(normalized);
+  if (!buffer || buffer.length === 0) return false;
+  const oldest = buffer[0]?.seq ?? 0;
+  return fromSeq >= oldest - 1;
+}
+
+function bufferEvent(envelope: RealtimeEnvelope): void {
+  if (envelope.seq == null) return;
+  let buffer = topicEventBuffer.get(envelope.topic);
+  if (!buffer) {
+    buffer = [];
+    topicEventBuffer.set(envelope.topic, buffer);
+  }
+  buffer.push(envelope);
+  if (buffer.length > MAX_EVENTS_PER_TOPIC) {
+    buffer.shift();
+  }
+}
+
+function createEnvelope(topic: string, type: string, payload: Record<string, unknown>, options?: { seq?: boolean; version?: number }): RealtimeEnvelope {
+  const normalized = normalizeTopic(topic);
+  const envelope: RealtimeEnvelope = {
     id: runtimeId('rt_event'),
-    topic,
+    topic: normalized,
     type,
     payload,
     timestamp: new Date().toISOString(),
   };
+  // R01: Attach sequence and version when requested.
+  if (options?.seq !== false) {
+    envelope.seq = nextSequenceForTopic(normalized);
+  }
+  if (options?.version != null) {
+    envelope.v = options.version;
+  }
+  return envelope;
 }
 
 export function registerWsClient(input: {
@@ -354,10 +429,21 @@ export function publishRealtimeEvent(input: {
   type: string;
   payload: Record<string, unknown>;
   userId?: string;
+  /** R01: When true (default), attaches a per-topic sequence number. */
+  seq?: boolean;
+  /** R01: Event payload schema version. Clients use this for
+   * forward-compatible parsing. */
+  version?: number;
 }): number {
   const topic = normalizeTopic(input.topic);
-  const event = createEnvelope(topic, input.type, input.payload);
+  const event = createEnvelope(topic, input.type, input.payload, {
+    seq: input.seq,
+    version: input.version,
+  });
   const delivered = deliverLocalEvent(event, input.userId);
+
+  // R07: Buffer the event for replay on gap.
+  bufferEvent(event);
 
   if (realtimePublisher) {
     const message: RealtimeBusMessage = {
@@ -367,7 +453,7 @@ export function publishRealtimeEvent(input: {
     };
 
     void realtimePublisher.publish(REALTIME_CHANNEL, JSON.stringify(message)).catch((error) => {
-      console.error('[realtime] Redis publish failed', error);
+      logger.error({ err: error }, '[realtime] Redis publish failed');
     });
   }
 

@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 
 export interface ProductAttributeChipsProps {
   size?: string;
@@ -22,6 +22,8 @@ export function ProductAttributeChips({
   material,
   onSizePress,
 }: ProductAttributeChipsProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const chips: { label: string; value: string; onPress?: () => void }[] = [];
   if (size) chips.push({ label: 'Size', value: size, onPress: onSizePress });
   if (condition) chips.push({ label: 'Condition', value: condition });
@@ -41,7 +43,7 @@ export function ProductAttributeChips({
               <Text style={styles.chipLabel}>{chip.label}</Text>
               {isTappable ? (
                 <View style={styles.chipGuideIcon}>
-                  <Ionicons name="resize-outline" size={11} color={Colors.brand} />
+                  <Ionicons name="resize-outline" size={11} color={colors.brand} />
                 </View>
               ) : null}
             </View>
@@ -71,7 +73,8 @@ export function ProductAttributeChips({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -82,14 +85,14 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     minWidth: 80,
     minHeight: 48,
   },
   chipTappable: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}30`,
+    borderColor: `${colors.brand}30`,
   },
   chipPressed: {
     opacity: 0.7,
@@ -102,21 +105,22 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   chipLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   chipGuideIcon: {
     width: 18,
     height: 18,
-    borderRadius: 9,
-    backgroundColor: `${Colors.brand}12`,
+    borderRadius: Radius.lg,
+    backgroundColor: `${colors.brand}12`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   chipValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+  });
+}

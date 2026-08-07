@@ -15,12 +15,12 @@ export interface IdentityCardProps {
 
 export function IdentityCard({ user, onPress, variant = 'default' }: IdentityCardProps) {
   const { colors } = useAppTheme();
-  const avatarUri = (user as any)?.avatar || null;
+  const avatarUri = user?.avatar || null;
   const displayName = user?.username ?? 'Not signed in';
-  const handle = (user as any)?.handle ?? (user as any)?.username ?? '';
-  const hasRealReputation = user != null && ((user as any).rating != null || (user as any).reviewCount != null);
+  const handle = user?.handle ?? user?.username ?? '';
+  const hasRealReputation = user != null && (user.rating != null || user.reviewCount != null);
   const reputationLabel = hasRealReputation
-    ? `${(user as any).rating?.toFixed(1) ?? '0.0'} · ${(user as any).reviewCount ?? 0} reviews`
+    ? `${user.rating?.toFixed(1) ?? '0.0'} · ${user.reviewCount ?? 0} reviews`
     : null;
   const isCommanding = variant === 'commanding';
 
@@ -51,7 +51,7 @@ export function IdentityCard({ user, onPress, variant = 'default' }: IdentityCar
           ) : (
             <Text style={[styles.meta, { color: colors.textSecondary }]}>{isCommanding ? 'Tap to edit your profile' : 'Manage your account details, privacy and security'}</Text>
           )}
-          {(user as any)?.isVerified && (
+          {user?.isVerified && (
             <View style={[styles.verifiedRow, { backgroundColor: `${colors.success}18` }]}>
               <Ionicons name="checkmark-circle" size={12} color={colors.success} />
               <Text style={[styles.verifiedLabel, { color: colors.success }]}>Verified</Text>
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarInitial: {
-    fontSize: 24,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
   },
   text: {
@@ -115,10 +115,10 @@ const styles = StyleSheet.create({
   verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    gap: Space.xs,
+    marginTop: Space.xs,
+    paddingVertical: Space.xs / 2,
+    paddingHorizontal: Space.xs + 2,
     borderRadius: Radius.sm,
     alignSelf: 'flex-start',
   },
@@ -132,25 +132,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   avatarLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
+    borderRadius: Radius.full,
     overflow: 'hidden',
   },
   avatarImageLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
+    borderRadius: Radius.full,
   },
   avatarFallbackLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitialLarge: {
-    fontSize: 32,
+    fontSize: Type.display.size,
     fontFamily: Typography.family.bold,
   },
   nameLarge: {

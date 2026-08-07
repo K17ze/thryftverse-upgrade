@@ -45,6 +45,7 @@ vi.mock('react-native', async () => {
     Dimensions: {
       get: () => ({ width: 375, height: 812, scale: 3, fontScale: 1 }),
     },
+    useWindowDimensions: () => ({ width: 375, height: 812, scale: 3, fontScale: 1 }),
     Appearance: {
       getColorScheme: () => 'light',
       addChangeListener: () => ({ remove: () => {} }),
@@ -155,18 +156,34 @@ vi.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'Success', Warning: 'Warning', Error: 'Error' },
 }));
 
-vi.mock('expo-modules-core', () => ({
-  EventEmitter: class {
-    addListener() { return { remove: () => {} }; }
-    emit() {}
-    removeAllListeners() {}
-  },
-  requireNativeModule: () => ({
-    addListener: () => ({ remove: () => {} }),
-    removeListener: () => {},
-  }),
-  NativeModule: class {},
-}));
+vi.mock('expo-image', () => {
+  const React = require('react');
+  return {
+    default: React.forwardRef((props: any, ref: any) =>
+      React.createElement('Image', { ref, ...props })
+    ),
+  };
+});
+
+vi.mock('expo-modules-core', () => {
+  const React = require('react');
+  return {
+    EventEmitter: class {
+      addListener() { return { remove: () => {} }; }
+      emit() {}
+      removeAllListeners() {}
+    },
+    requireNativeModule: () => ({
+      addListener: () => ({ remove: () => {} }),
+      removeListener: () => {},
+    }),
+    requireNativeViewManager: (name: string) =>
+      React.forwardRef((props: any, ref: any) =>
+        React.createElement(name, { ref, ...props })
+      ),
+    NativeModule: class {},
+  };
+});
 
 vi.mock('expo-network', () => ({
   getNetworkStateAsync: vi.fn(() => Promise.resolve({ isConnected: true, type: 'wifi' })),
@@ -177,4 +194,19 @@ vi.mock('expo-secure-store', () => ({
   getItemAsync: vi.fn(() => Promise.resolve(null)),
   setItemAsync: vi.fn(() => Promise.resolve()),
   deleteItemAsync: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('expo-notifications', () => ({
+  getPermissionsAsync: vi.fn(() =>
+    Promise.resolve({ status: 'granted', canAskAgain: true, expires: 'never', granted: true }),
+  ),
+  requestPermissionsAsync: vi.fn(() =>
+    Promise.resolve({ status: 'granted', canAskAgain: true, expires: 'never', granted: true }),
+  ),
+  setNotificationChannelAsync: vi.fn(() => Promise.resolve()),
+  AndroidImportance: { MAX: 'max', HIGH: 'high', DEFAULT: 'default', LOW: 'low', MIN: 'min' },
+  addNotificationReceivedListener: () => ({ remove: () => {} }),
+  addNotificationResponseReceivedListener: () => ({ remove: () => {} }),
+  getLastNotificationResponseAsync: vi.fn(() => Promise.resolve(null)),
+  setNotificationHandler: vi.fn(),
 }));

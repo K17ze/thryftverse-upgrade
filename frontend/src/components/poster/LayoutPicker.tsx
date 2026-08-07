@@ -1,5 +1,5 @@
 import React from 'react';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 import {
   View,
   StyleSheet,
@@ -38,8 +38,8 @@ const LAYOUTS: { type: LayoutType; label: string; slots: number }[] = [
 ];
 
 function LayoutPreview({ type }: { type: LayoutType }) {
-  const boxStyle = { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 2, flex: 1 };
-  const boxStyleRound = { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 4, flex: 1 };
+  const boxStyle = { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.sm, flex: 1 };
+  const boxStyleRound = { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.sm, flex: 1 };
 
   switch (type) {
     case 'single':
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
-    paddingBottom: 24,
+    paddingBottom: Space.lg,
   },
   handleRow: {
     alignItems: 'center',
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   title: {
@@ -178,13 +178,13 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     color: '#fff',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: Space.md,
   },
   layoutGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     justifyContent: 'center',
   },
   layoutCard: {
@@ -198,11 +198,11 @@ const styles = StyleSheet.create({
   layoutPreview: {
     width: 80,
     height: 80,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.15)',
     backgroundColor: 'rgba(255,255,255,0.06)',
-    padding: 4,
+    padding: Space.xs,
     overflow: 'hidden',
   },
   layoutPreviewActive: {
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
   layoutLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.6)',
   },

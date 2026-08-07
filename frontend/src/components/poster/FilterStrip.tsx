@@ -40,12 +40,12 @@ export const FILTERS: FilterConfig[] = [
   { name: 'moon', label: 'Moon', overlayColor: '#1a1a2e', overlayOpacity: 0.25, saturation: 0 },
   { name: 'lark', label: 'Lark', overlayColor: '#7ec8e3', overlayOpacity: 0.08, contrast: 0.95, saturation: 1.15 },
   { name: 'reyes', label: 'Reyes', overlayColor: '#d4a76a', overlayOpacity: 0.22, saturation: 0.9 },
-  { name: 'juno', label: 'Juno', overlayColor: '#ffcc00', overlayOpacity: 0.1, contrast: 1.08, saturation: 1.2 },
-  { name: 'slumber', label: 'Slumber', overlayColor: '#5f27cd', overlayOpacity: 0.15, saturation: 0.9 },
+  { name: 'juno', label: 'Juno', overlayColor: '#C9A46A', overlayOpacity: 0.1, contrast: 1.08, saturation: 1.2 },
+  { name: 'slumber', label: 'Slumber', overlayColor: '#6B3245', overlayOpacity: 0.15, saturation: 0.9 },
   { name: 'crema', label: 'Crema', overlayColor: '#e2d5c2', overlayOpacity: 0.18, contrast: 0.92 },
-  { name: 'ludwig', label: 'Ludwig', overlayColor: '#ff6b6b', overlayOpacity: 0.08, contrast: 1.05, saturation: 1.1 },
-  { name: 'aden', label: 'Aden', overlayColor: '#48dbfb', overlayOpacity: 0.12, saturation: 0.85 },
-  { name: 'perpetua', label: 'Perpetua', overlayColor: '#1dd1a1', overlayOpacity: 0.08, contrast: 1.02 },
+  { name: 'ludwig', label: 'Ludwig', overlayColor: '#9A6B7A', overlayOpacity: 0.08, contrast: 1.05, saturation: 1.1 },
+  { name: 'aden', label: 'Aden', overlayColor: '#06489A', overlayOpacity: 0.12, saturation: 0.85 },
+  { name: 'perpetua', label: 'Perpetua', overlayColor: '#1C5631', overlayOpacity: 0.08, contrast: 1.02 },
 ];
 
 interface FilterStripProps {

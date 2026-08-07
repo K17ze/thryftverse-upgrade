@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,33 +11,53 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { Confetti } from '../components/Confetti';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography, Space, Type, Radius, FontSize } from '../theme/designTokens';
+import type { ThemeColors } from '../theme/ThemeContext';
+import { Typography, Space, Type, Radius, FontSize, Stroke, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
+import { useBackendData } from '../context/BackendDataContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
 
-type Props = StackScreenProps<RootStackParamList, 'ListingSuccess'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ListingSuccess'>;
 
 export default function ListingSuccessScreen({ navigation, route }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
+  const { refreshListings } = useBackendData();
+  const queryClient = useQueryClient();
+  const reducedMotionEnabled = useReducedMotion();
 
   const listingId = route.params?.listingId;
   const routeTitle = route.params?.title;
   const routePrice = typeof route.params?.price === 'number' ? route.params.price : null;
   const routeCategory = route.params?.categoryId;
   const routePhoto = route.params?.photoUri;
+  const smartSellEnabled = route.params?.smartSellEnabled === true;
 
   const [backendListing, setBackendListing] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+
+  // Refresh the feed and invalidate the listing detail query so the new
+  // listing appears immediately when the user navigates back to the feed
+  // or profile — without waiting for the 55-second polling cycle.
+  React.useEffect(() => {
+    void refreshListings();
+    if (listingId) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(listingId) });
+    }
+  }, [refreshListings, queryClient, listingId]);
 
   React.useEffect(() => {
     if (!listingId) return;
@@ -91,7 +111,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
   }, [listingId, listingTitle]);
 
   const handleCreateAnother = React.useCallback(() => {
-    navigation.navigate('Sell' as any);
+    navigation.navigate('Sell');
   }, [navigation]);
 
   const handleViewListing = React.useCallback(() => {
@@ -110,7 +130,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
+        backgroundColor={colors.background}
       />
       <Confetti />
 
@@ -119,9 +139,9 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Celebration Header */}
-        <View style={styles.heroSection}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(0)} style={styles.heroSection}>
           <View style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={64} color={Colors.brand} />
+            <Ionicons name="checkmark" size={64} color={colors.brand} />
           </View>
           <Text style={styles.heroBigText}>Published</Text>
           <Text style={styles.heroSubText}>
@@ -130,20 +150,21 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           {listingPrice ? (
             <Text style={styles.heroMicroCopy}>{listingPrice}</Text>
           ) : null}
-        </View>
+        </Reanimated.View>
 
         {/* Published status */}
-        <View style={styles.statusRow}>
-          <PremiumStatusPill tone={statusTone as any} label={statusLabel} icon="checkmark-circle" />
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(80)} style={styles.statusRow}>
+          <PremiumStatusPill tone={statusTone} label={statusLabel} icon="checkmark-circle" />
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
               {listingId}
             </Text>
           ) : null}
-        </View>
+        </Reanimated.View>
 
         {/* Product preview card */}
-        <ElevatedSurface variant="elevated" style={styles.summaryCard}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)}>
+          <ElevatedSurface variant="elevated" style={styles.summaryCard}>
           {listingPhoto ? (
             <CachedImage
               uri={listingPhoto}
@@ -158,7 +179,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               <Ionicons
                 name="bag-handle-outline"
                 size={20}
-                color={Colors.textMuted}
+                color={colors.textMuted}
               />
             </View>
           )}
@@ -173,8 +194,25 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             </Text>
           </View>
         </ElevatedSurface>
+        </Reanimated.View>
+
+        {/* Smart Sell demo banner (truthful UI) */}
+        {smartSellEnabled && (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(200)}>
+            <ElevatedSurface variant="surface" style={styles.smartSellBanner}>
+              <Ionicons name="sparkles" size={18} color={colors.brand} />
+              <View style={styles.smartSellBannerBody}>
+                <Text style={styles.smartSellBannerTitle}>Smart Sell enabled (demo)</Text>
+                <Text style={styles.smartSellBannerText}>
+                  Auto-negotiation settings are illustrative — no offers will be auto-accepted until a real backend is connected.
+                </Text>
+              </View>
+            </ElevatedSurface>
+          </Reanimated.View>
+        )}
 
         {/* Actions */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(240)}>
         <ElevatedSurface variant="surface" style={{ marginBottom: Space.xl }}>
         {listingId ? (
           <AnimatedPressable
@@ -187,7 +225,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 <Ionicons
                   name="eye-outline"
                   size={20}
-                  color={Colors.textPrimary}
+                  color={colors.textPrimary}
                 />
               </View>
               <Text style={styles.actionText}>view listing</Text>
@@ -195,7 +233,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Ionicons
               name="chevron-forward"
               size={16}
-              color={Colors.textMuted}
+              color={colors.textMuted}
             />
           </AnimatedPressable>
         ) : null}
@@ -211,7 +249,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 <Ionicons
                   name="settings-outline"
                   size={20}
-                  color={Colors.textPrimary}
+                  color={colors.textPrimary}
                 />
               </View>
               <Text style={styles.actionText}>manage listing</Text>
@@ -219,7 +257,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Ionicons
               name="chevron-forward"
               size={16}
-              color={Colors.textMuted}
+              color={colors.textMuted}
             />
           </AnimatedPressable>
         ) : null}
@@ -235,7 +273,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
                 <Ionicons
                   name="share-outline"
                   size={20}
-                  color={Colors.textPrimary}
+                  color={colors.textPrimary}
                 />
               </View>
               <Text style={styles.actionText}>share listing</Text>
@@ -243,7 +281,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Ionicons
               name="chevron-forward"
               size={16}
-              color={Colors.textMuted}
+              color={colors.textMuted}
             />
           </AnimatedPressable>
         ) : null}
@@ -258,7 +296,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               <Ionicons
                 name="add-circle-outline"
                 size={20}
-                color={Colors.textPrimary}
+                color={colors.textPrimary}
               />
             </View>
             <Text style={styles.actionText}>create another listing</Text>
@@ -266,7 +304,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           <Ionicons
             name="chevron-forward"
             size={16}
-            color={Colors.textMuted}
+            color={colors.textMuted}
           />
         </AnimatedPressable>
 
@@ -280,62 +318,66 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
               <Ionicons
                 name="home-outline"
                 size={20}
-                color={Colors.textPrimary}
+                color={colors.textPrimary}
               />
             </View>
             <Text style={styles.actionText}>back to feed</Text>
           </View>
-          <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
+          <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
         </AnimatedPressable>
 
         </ElevatedSurface>
+        </Reanimated.View>
 
         {/* Tips for selling — first-listing guidance */}
-        <View style={styles.tipsCard}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(320)} style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
-            <Ionicons name="bulb-outline" size={14} color={Colors.brand} />
+            <Ionicons name="bulb-outline" size={14} color={colors.brand} />
             <Text style={styles.tipsTitle}>Tips for selling faster</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="camera-outline" size={13} color={Colors.textMuted} />
+            <Ionicons name="camera-outline" size={13} color={colors.textMuted} />
             <Text style={styles.tipText}>Add clear, well-lit photos from multiple angles</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="pricetag-outline" size={13} color={Colors.textMuted} />
+            <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
             <Text style={styles.tipText}>Price competitively — check similar sold items</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="chatbubble-outline" size={13} color={Colors.textMuted} />
+            <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} />
             <Text style={styles.tipText}>Respond quickly to buyer questions and offers</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="share-outline" size={13} color={Colors.textMuted} />
+            <Ionicons name="share-outline" size={13} color={colors.textMuted} />
             <Text style={styles.tipText}>Share your listing on social media for more reach</Text>
           </View>
-        </View>
+        </Reanimated.View>
 
         {/* Support link */}
-        <AnimatedPressable
-          style={styles.supportLink}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('HelpSupport')}
-        >
-          <Ionicons
-            name="help-circle-outline"
-            size={14}
-            color={Colors.textMuted}
-          />
-          <Text style={styles.supportLinkText}>
-            Need help? Visit the Help Centre
-          </Text>
-        </AnimatedPressable>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(380)}>
+          <AnimatedPressable
+            style={styles.supportLink}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('HelpSupport')}
+          >
+            <Ionicons
+              name="help-circle-outline"
+              size={14}
+              color={colors.textMuted}
+            />
+            <Text style={styles.supportLinkText}>
+              Need help? Visit the Help Centre
+            </Text>
+          </AnimatedPressable>
+        </Reanimated.View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
 
   content: { paddingHorizontal: Space.lg, paddingTop: Space.xxl, paddingBottom: Space.xxl },
 
@@ -344,12 +386,12 @@ const styles = StyleSheet.create({
     marginBottom: Space.xl,
   },
   iconCircle: {
-    width: 104,
-    height: 104,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
@@ -358,21 +400,21 @@ const styles = StyleSheet.create({
     fontSize: FontSize.hero,
     lineHeight: FontSize.hero + 4,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -2.2,
     marginBottom: Space.xs,
   },
   heroSubText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
   },
   heroMicroCopy: {
     marginTop: Space.sm,
     fontSize: Type.body.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
     lineHeight: Type.body.lineHeight,
   },
@@ -388,9 +430,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: Colors.success + '14',
-    borderWidth: 1,
-    borderColor: Colors.success + '33',
+    backgroundColor: colors.success + '14',
+    borderWidth: Stroke.standard,
+    borderColor: colors.success + '33',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,
@@ -398,7 +440,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    color: Colors.success,
+    color: colors.success,
     textTransform: 'uppercase',
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
@@ -406,7 +448,7 @@ const styles = StyleSheet.create({
   idText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     flexShrink: 1,
     lineHeight: Type.meta.lineHeight,
     letterSpacing: Type.meta.letterSpacing,
@@ -421,12 +463,12 @@ const styles = StyleSheet.create({
     marginBottom: Space.xl,
   },
   summaryImageWrap: {
-    width: 72,
-    height: 90,
+    width: Space.xxl + Space.xxl,
+    height: Space.xxl + Space.xxl + Space.sm,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -436,14 +478,14 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   summaryImageFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   summaryBody: {
     flex: 1,
     justifyContent: 'center',
   },
   summaryLabel: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
@@ -452,14 +494,14 @@ const styles = StyleSheet.create({
   },
   summaryTitle: {
     marginTop: Space.xs,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
   },
   summaryMeta: {
     marginTop: Space.xs,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     lineHeight: Type.caption.lineHeight,
@@ -471,8 +513,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: Stroke.standard,
+    borderBottomColor: colors.border,
+    minHeight: Control.hit,
   },
   actionLeft: {
     flexDirection: 'row',
@@ -480,19 +523,19 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   actionIconBox: {
-    width: 48,
-    height: 48,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionText: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: Type.subtitle.lineHeight,
     letterSpacing: Type.subtitle.letterSpacing,
   },
@@ -501,34 +544,57 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    backgroundColor: `${Colors.brand}08`,
+    backgroundColor: `${colors.brand}08`,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}20`,
-    gap: 8,
+    borderWidth: Stroke.hairline,
+    borderColor: `${colors.brand}20`,
+    gap: Space.sm,
   },
   tipsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    gap: Space.xs + 2,
+    marginBottom: Space.xs,
   },
   tipsTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   tipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: Space.sm,
   },
   tipText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 17,
+    color: colors.textSecondary,
+    lineHeight: Type.caption.lineHeight + Space.xs / 2,
+  },
+
+  smartSellBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    marginBottom: Space.md,
+    padding: Space.md,
+  },
+  smartSellBannerBody: {
+    flex: 1,
+  },
+  smartSellBannerTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    marginBottom: Space.xs / 2,
+  },
+  smartSellBannerText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    lineHeight: Type.caption.lineHeight,
   },
 
   supportLink: {
@@ -542,8 +608,9 @@ const styles = StyleSheet.create({
   supportLinkText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
   },
-});
+  });
+}

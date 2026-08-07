@@ -1,0 +1,125 @@
+name: EAS Build
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/eas-build.yml"
+  push:
+    tags:
+      - "v*"
+    paths:
+      - "frontend/**"
+      - ".github/workflows/eas-build.yml"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "EAS build profile"
+        required: true
+        default: "preview"
+        type: choice
+        options:
+          - development
+          - development-simulator
+          - preview
+          - production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eas-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pre-build-gates:
+    name: Pre-build quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      profile: ${{ steps.resolve-profile.outputs.profile }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: TypeScript typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Design token lint
+        run: npm run lint:design-tokens
+        working-directory: frontend
+      - name: Animated scroll usage check
+        run: npm run check:animated-scroll
+        working-directory: frontend
+      - name: Resolve build profile
+        id: resolve-profile
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "profile=${{ inputs.profile }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "profile=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "profile=preview" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-ios:
+    name: EAS Build iOS
+    needs: pre-build-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build iOS
+        working-directory: frontend
+        run: eas build --platform ios --non-interactive --profile ${{ needs.pre-build-gates.outputs.profile }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  build-android:
+    name: EAS Build Android
+    needs: pre-build-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build Android
+        working-directory: frontend
+        run: eas build --platform android --non-interactive --profile ${{ needs.pre-build-gates.outputs.profile }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

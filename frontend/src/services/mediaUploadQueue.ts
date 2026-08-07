@@ -1,5 +1,5 @@
 import { MediaUploadAsset } from '../utils/mediaUploadAsset';
-import { presignUpload, uploadToPresignedUrl } from './mediaUpload';
+import { finalizeUpload, presignUpload, uploadToPresignedUrl } from './mediaUpload';
 
 export type UploadQueueItemState =
   | 'pending'
@@ -16,8 +16,11 @@ export interface UploadQueueItem {
   state: UploadQueueItemState;
   attemptCount: number;
   publicUrl: string | null;
+  finalizationId: string | null;
   error: string | null;
   retryable: boolean;
+  /** Internal flag: cancellation requested while in-flight. */
+  _cancelRequested?: boolean;
 }
 
 export interface UploadQueueState {
@@ -31,6 +34,7 @@ export interface UploadQueueState {
 export interface UploadQueueResult {
   state: UploadQueueItemState;
   publicUrl: string | null;
+  finalizationId: string | null;
   error: string | null;
 }
 
@@ -87,6 +91,7 @@ export class MediaUploadQueue {
         state: 'pending',
         attemptCount: 0,
         publicUrl: null,
+        finalizationId: null,
         error: null,
         retryable: true,
       };
@@ -139,7 +144,7 @@ export class MediaUploadQueue {
       return true;
     }
     // In-flight (preparing/uploading): mark with special state so processItem can handle it
-    (item as any)._cancelRequested = true;
+    item._cancelRequested = true;
     this.emit();
     return true;
   }
@@ -231,6 +236,7 @@ export class MediaUploadQueue {
       map.set(item.id, {
         state: item.state,
         publicUrl: item.publicUrl,
+        finalizationId: item.finalizationId,
         error: item.error,
       });
     }
@@ -332,11 +338,11 @@ export class MediaUploadQueue {
       );
 
       // If cancellation was requested while presigning, transition to cancelled and abort
-      if ((item as any)._cancelRequested) {
+      if (item._cancelRequested) {
         item.state = 'cancelled';
         item.error = null;
         item.retryable = false;
-        delete (item as any)._cancelRequested;
+        delete item._cancelRequested;
         this.emit();
         return;
       }
@@ -347,26 +353,39 @@ export class MediaUploadQueue {
       await uploadToPresignedUrl(presign.url, asset.uri, asset.mimeType, blob);
 
       // If cancellation was requested while uploading, transition to cancelled and ignore result
-      if ((item as any)._cancelRequested) {
+      if (item._cancelRequested) {
         item.state = 'cancelled';
         item.error = null;
         item.retryable = false;
-        delete (item as any)._cancelRequested;
+        delete item._cancelRequested;
         this.emit();
         return;
       }
 
+      const finalization = await finalizeUpload({
+        objectKey: presign.key,
+        bucket: presign.bucket,
+        fileName: asset.fileName,
+        contentType: presign.contentType,
+        sizeBytes: presign.sizeBytes,
+        publicUrl: presign.publicUrl,
+        folder: 'listings',
+        scope: 'listing_media',
+        verifyObject: true,
+      });
+
       item.state = 'uploaded';
-      item.publicUrl = presign.publicUrl;
+      item.publicUrl = finalization.publicUrl;
+      item.finalizationId = finalization.id;
       item.error = null;
       item.retryable = false;
     } catch (err: unknown) {
       // If cancellation was requested during upload, transition to cancelled, not failed
-      if ((item as any)._cancelRequested) {
+      if (item._cancelRequested) {
         item.state = 'cancelled';
         item.error = null;
         item.retryable = false;
-        delete (item as any)._cancelRequested;
+        delete item._cancelRequested;
         this.emit();
         return;
       }

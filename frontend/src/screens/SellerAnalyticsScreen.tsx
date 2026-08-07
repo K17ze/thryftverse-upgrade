@@ -1,20 +1,23 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { useStore } from '../store/useStore';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
+import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type TopPerformerListing } from '../services/commerceApi';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 interface AnalyticsMetric {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   value: string;
   sublabel?: string;
@@ -22,22 +25,34 @@ interface AnalyticsMetric {
 }
 
 export default function SellerAnalyticsScreen() {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
+  const reducedMotionEnabled = useReducedMotion();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
+  const [analytics, setAnalytics] = React.useState<SellerAnalytics | null>(null);
+  const [topPerformersData, setTopPerformersData] = React.useState<TopPerformerListing[]>([]);
+  const [period, setPeriod] = React.useState<'7d' | '30d' | '90d'>('30d');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const res = await fetchUserListingsFromApi(currentUser.id, { limit: 100 });
-      setListings(res.items);
+      const [listingsRes, analyticsData, topData] = await Promise.all([
+        fetchUserListingsFromApi(currentUser.id, { limit: 100 }),
+        fetchSellerAnalytics(currentUser.id, period).catch(() => null),
+        fetchTopPerformers(currentUser.id, 10).catch(() => [] as TopPerformerListing[]),
+      ]);
+      setListings(listingsRes.items);
+      if (analyticsData) setAnalytics(analyticsData);
+      setTopPerformersData(topData);
     } catch {
-      // silent
+      // silent — fall back to client-side derived metrics
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, period]);
 
   useEffect(() => {
     let mounted = true;
@@ -53,15 +68,31 @@ export default function SellerAnalyticsScreen() {
   };
 
   const metrics = useMemo<AnalyticsMetric[]>(() => {
+    // Use backend analytics when available, fall back to client-side derivation
+    if (analytics) {
+      const likeRate = analytics.totalViews > 0 ? (analytics.totalLikes / analytics.totalViews) * 100 : 0;
+      const conversionRate = analytics.totalViews > 0 ? (analytics.itemsSold / analytics.totalViews) * 100 : 0;
+      return [
+        { icon: 'eye-outline', label: 'Total views', value: String(analytics.totalViews), tone: 'default' },
+        { icon: 'heart-outline', label: 'Total likes', value: String(analytics.totalLikes), sublabel: `${likeRate.toFixed(1)}% like rate`, tone: 'brand' },
+        { icon: 'bookmark-outline', label: 'Total saves', value: String(analytics.totalSaves), tone: 'default' },
+        { icon: 'checkmark-done', label: 'Items sold', value: String(analytics.itemsSold), tone: 'success' },
+        { icon: 'trending-up-outline', label: 'Conversion rate', value: `${conversionRate.toFixed(1)}%`, sublabel: 'Views to sold', tone: 'default' },
+        { icon: 'cash-outline', label: 'Revenue', value: `£${(analytics.revenueGbpMinor / 100).toFixed(2)}`, tone: 'success' },
+        { icon: 'star-outline', label: 'Avg rating', value: analytics.avgRating ? analytics.avgRating.toFixed(1) : '—', sublabel: `${analytics.reviewCount} reviews`, tone: 'brand' },
+        { icon: 'pulse-outline', label: 'Response rate', value: analytics.responseRate != null ? `${(analytics.responseRate * 100).toFixed(0)}%` : '—', tone: 'default' },
+      ];
+    }
+    // Client-side fallback
     const active = listings.filter((l) => l.status === 'active');
     const sold = listings.filter((l) => l.status === 'sold');
     const totalActiveValue = active.reduce((sum, l) => sum + l.priceGbp, 0);
     const totalSoldValue = sold.reduce((sum, l) => sum + l.priceGbp, 0);
     const avgActivePrice = active.length > 0 ? totalActiveValue / active.length : 0;
     const avgSoldPrice = sold.length > 0 ? totalSoldValue / sold.length : 0;
-    const totalViews = listings.reduce((sum, l) => sum + ((l as any).views ?? 0), 0);
-    const totalLikes = listings.reduce((sum, l) => sum + ((l as any).likes ?? 0), 0);
-    const totalSaves = listings.reduce((sum, l) => sum + ((l as any).saves ?? 0), 0);
+    const totalViews = listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
+    const totalLikes = listings.reduce((sum, l) => sum + (l.engagement?.likes ?? 0), 0);
+    const totalSaves = listings.reduce((sum, l) => sum + (l.engagement?.saves ?? 0), 0);
     const conversionRate = totalViews > 0 ? (sold.length / totalViews) * 100 : 0;
     const likeRate = totalViews > 0 ? (totalLikes / totalViews) * 100 : 0;
 
@@ -75,108 +106,195 @@ export default function SellerAnalyticsScreen() {
       { icon: 'pricetag-outline', label: 'Avg active price', value: `£${avgActivePrice.toFixed(2)}`, tone: 'default' },
       { icon: 'pulse-outline', label: 'Avg sold price', value: `£${avgSoldPrice.toFixed(2)}`, tone: 'brand' },
     ];
-  }, [listings]);
+  }, [listings, analytics]);
 
   const topPerformers = useMemo(() => {
+    if (topPerformersData.length > 0) {
+      return topPerformersData.map((t) => ({
+        id: t.id,
+        title: t.title,
+        price: t.priceGbpMinor / 100,
+        views: t.viewsCount,
+        likes: t.likesCount,
+        status: t.status,
+      }));
+    }
     return [...listings]
-      .sort((a, b) => ((b as any).views ?? 0) - ((a as any).views ?? 0))
+      .sort((a, b) => (b.engagement?.views ?? 0) - (a.engagement?.views ?? 0))
       .slice(0, 5)
       .map((l) => ({
         id: l.id,
         title: l.title,
         price: l.priceGbp,
-        views: (l as any).views ?? 0,
-        likes: (l as any).likes ?? 0,
+        views: l.engagement?.views ?? 0,
+        likes: l.engagement?.likes ?? 0,
         status: l.status,
       }));
-  }, [listings]);
+  }, [listings, topPerformersData]);
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
-        <ScreenHeader title="Seller Analytics" onBack={() => navigation.goBack()} />
-        <View style={styles.loadingBody}>
-          <ActivityIndicator size="large" color={Colors.brand} />
-        </View>
-      </SafeAreaView>
+      <FlagshipScreen
+        header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+      >
+        <FlagshipState variant="loading" />
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} />
-      <ScreenHeader title="Seller Analytics" onBack={() => navigation.goBack()} />
-
+    <FlagshipScreen
+      header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
+        {/* Hero summary — analytics overview */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="bar-chart" size={18} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                  {metrics[0]?.value ?? '—'} {metrics[0]?.label.toLowerCase()}
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                  Last {period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
+
+        {/* Period selector */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.periodRow}>
+          {(['7d', '30d', '90d'] as const).map((p) => {
+            const isActive = period === p;
+            return (
+              <Pressable
+                key={p}
+                style={[styles.periodTab, isActive && { backgroundColor: colors.brand }]}
+                onPress={() => { setPeriod(p); setIsLoading(true); }}
+              >
+                <Text style={[styles.periodTabText, isActive && { color: colors.textInverse }]}>
+                  {p === '7d' ? '7 days' : p === '30d' ? '30 days' : '90 days'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </Reanimated.View>
+
         {/* Key metrics grid */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Key metrics</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Key metrics</Text>
         </View>
         <View style={styles.metricsGrid}>
           {metrics.map((metric) => {
-            const color = metric.tone === 'success' ? Colors.success : metric.tone === 'brand' ? Colors.brand : Colors.textPrimary;
+            const color = metric.tone === 'success' ? colors.success : metric.tone === 'brand' ? colors.brand : colors.textPrimary;
             return (
-              <View key={metric.label} style={styles.metricCard}>
+              <View key={metric.label} style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.metricHeader}>
-                  <Ionicons name={metric.icon as any} size={16} color={color} />
-                  <Text style={styles.metricLabel}>{metric.label}</Text>
+                  <Ionicons name={metric.icon} size={16} color={color} />
+                  <Text style={[styles.metricLabel, { color: colors.textMuted }]}>{metric.label}</Text>
                 </View>
                 <Text style={[styles.metricValue, { color }]}>{metric.value}</Text>
                 {metric.sublabel ? (
-                  <Text style={styles.metricSublabel}>{metric.sublabel}</Text>
+                  <Text style={[styles.metricSublabel, { color: colors.textMuted }]}>{metric.sublabel}</Text>
                 ) : null}
               </View>
             );
           })}
         </View>
+        </Reanimated.View>
 
         {/* Top performing listings */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Top performing listings</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Top performing listings</Text>
         </View>
         {topPerformers.length > 0 ? (
           <View style={styles.topList}>
             {topPerformers.map((item, index) => (
-              <View key={item.id} style={styles.topRow}>
-                <Text style={styles.rankText}>{index + 1}</Text>
+              <View key={item.id} style={[styles.topRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.rankText, { color: colors.textMuted }]}>{index + 1}</Text>
                 <View style={styles.topInfo}>
-                  <Text style={styles.topTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.topMeta}>{item.views} views · {item.likes} likes</Text>
+                  <Text style={[styles.topTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+                  <Text style={[styles.topMeta, { color: colors.textMuted }]}>{item.views} views · {item.likes} likes</Text>
                 </View>
-                <Text style={styles.topPrice}>£{item.price.toFixed(0)}</Text>
+                <Text style={[styles.topPrice, { color: colors.brand }]}>£{item.price.toFixed(0)}</Text>
               </View>
             ))}
           </View>
         ) : (
-          <View style={styles.emptyCard}>
-            <Ionicons name="bar-chart-outline" size={32} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>No performance data yet</Text>
-            <Text style={styles.emptySubtext}>Listings with views will appear here</Text>
-          </View>
+          <EmptyState
+            icon="bar-chart-outline"
+            title="No performance data yet"
+            subtitle="Listings with views will appear here"
+          />
         )}
+        </Reanimated.View>
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
   },
-  loadingBody: {
-    flex: 1,
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: Space.xxl,
+    height: Space.xxl,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.xs - 2,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
+  },
+  periodRow: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    marginVertical: Space.sm,
+  },
+  periodTab: {
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+  },
+  periodTabText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
   },
   sectionHeader: {
     marginTop: Space.md,
@@ -185,7 +303,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -198,29 +315,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    gap: 4,
+    gap: Space.xs,
   },
   metricHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   metricLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
   },
   metricValue: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
   },
   metricSublabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   topList: {
     gap: Space.xs,
@@ -232,48 +345,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   rankText: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
     minWidth: 20,
   },
   topInfo: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs - 2,
   },
   topTitle: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
   },
   topMeta: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
   },
   topPrice: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   emptyCard: {
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.xs,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   emptyText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   emptySubtext: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
+import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 
 export type RelatedItemMode = 'standard' | 'auction' | 'co_own';
 
@@ -37,11 +38,13 @@ export function CommerceRelatedRail({
   items,
   onPressItem,
 }: CommerceRelatedRailProps) {
+  const { colors } = useAppTheme();
+
   if (items.length === 0) return null;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -52,7 +55,7 @@ export function CommerceRelatedRail({
           return (
             <Pressable
               key={item.id}
-              style={styles.card}
+              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
               onPress={() => onPressItem(item.id)}
               accessibilityRole="button"
               accessibilityLabel={`${item.title}, ${item.priceText}${item.badgeText ? `, ${item.badgeText}` : ''}`}
@@ -65,57 +68,59 @@ export function CommerceRelatedRail({
                   contentFit="cover"
                 />
               ) : (
-                <View style={styles.cardImagePlaceholder}>
-                  <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
-                </View>
+                <ImageEmptyGraphic
+                  icon={(mode === 'auction' ? 'trophy-outline' : 'pricetag-outline') as keyof typeof Ionicons.glyphMap}
+                  style={[styles.cardImage, styles.cardImageContainer]}
+                />
               )}
-              {item.badgeText && (
-                <View style={[styles.badge, item.badgeColor && { backgroundColor: item.badgeColor }]}>
+
+              {item.badgeText ? (
+                <View style={[styles.badge, item.badgeColor ? { backgroundColor: item.badgeColor } : null]}>
                   <Text style={styles.badgeText}>{item.badgeText}</Text>
                 </View>
-              )}
+              ) : null}
+
               <View style={styles.cardBody}>
-                <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+
+                <Text style={[styles.cardPrice, { color: colors.textPrimary }]}>{item.priceText}</Text>
+
+                {item.izeText ? (
+                  <Text style={[styles.cardIze, { color: colors.textMuted }]}>{item.izeText}</Text>
+                ) : null}
+
                 {mode === 'auction' ? (
                   <>
-                    <Text style={styles.cardPrice}>{item.priceText}</Text>
-                    {item.izeText && (
-                      <Text style={styles.cardIze}>{item.izeText}</Text>
-                    )}
-                    {item.stateText && (
-                      <Text style={[styles.cardMeta, styles.cardStateText]}>{item.stateText}</Text>
-                    )}
-                    {item.countdownText && (
-                      <Text style={[styles.cardMeta, styles.cardCountdownText]}>{item.countdownText}</Text>
-                    )}
+                    {item.stateText ? (
+                      <Text style={[styles.cardMeta, styles.cardMetaStrong, { color: colors.textSecondary }]}>
+                        {item.stateText}
+                      </Text>
+                    ) : null}
+                    {item.countdownText ? (
+                      <Text style={[styles.cardMeta, { color: colors.danger }]}>{item.countdownText}</Text>
+                    ) : null}
                   </>
                 ) : mode === 'co_own' ? (
                   <>
-                    <Text style={styles.cardPrice}>{item.priceText}</Text>
-                    {item.izeText && (
-                      <Text style={styles.cardIze}>{item.izeText}</Text>
-                    )}
-                    {item.availableUnits != null && item.totalUnits != null && (
-                      <Text style={styles.cardMeta}>
+                    {item.availableUnits != null && item.totalUnits != null ? (
+                      <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
                         {item.availableUnits}/{item.totalUnits}u available
                       </Text>
-                    )}
-                    {item.marketMoveText && (
-                      <Text style={[styles.cardMeta, styles.cardMarketMove]}>{item.marketMoveText}</Text>
-                    )}
+                    ) : null}
+                    {item.marketMoveText ? (
+                      <Text style={[styles.cardMeta, styles.cardMetaStrong, { color: colors.textSecondary }]}>
+                        {item.marketMoveText}
+                      </Text>
+                    ) : null}
                   </>
                 ) : (
-                  <>
-                    <Text style={styles.cardPrice}>{item.priceText}</Text>
-                    {item.izeText && (
-                      <Text style={styles.cardIze}>{item.izeText}</Text>
-                    )}
-                    {(item.sizeText || item.conditionText) && (
-                      <Text style={styles.cardMeta}>
-                        {[item.sizeText, item.conditionText].filter(Boolean).join(' · ')}
-                      </Text>
-                    )}
-                  </>
+                  item.sizeText || item.conditionText ? (
+                    <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
+                      {[item.sizeText, item.conditionText].filter(Boolean).join(' · ')}
+                    </Text>
+                  ) : null
                 )}
               </View>
             </Pressable>
@@ -128,52 +133,52 @@ export function CommerceRelatedRail({
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: Space.lg,
+    marginTop: Space.xl,
   },
   label: {
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: -0.3,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    gap: 12,
   },
   card: {
-    width: 140,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    width: 148,
+  },
+  cardPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.985 }],
   },
   cardImage: {
     width: '100%',
-    height: 140,
+    height: 168,
   },
   cardImageContainer: {
     width: '100%',
-    height: 140,
+    height: 168,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
   },
   cardImagePlaceholder: {
     width: '100%',
-    height: 140,
-    backgroundColor: Colors.surfaceAlt,
+    height: 168,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badge: {
     position: 'absolute',
-    top: Space.xs,
-    left: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
+    top: Space.sm,
+    left: Space.sm,
+    maxWidth: 126,
+    backgroundColor: 'rgba(0,0,0,0.68)',
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.md,
   },
   badgeText: {
     fontSize: 10,
@@ -182,39 +187,31 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   cardBody: {
-    padding: Space.sm,
+    paddingTop: Space.sm,
   },
   cardTitle: {
-    fontSize: 12,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginBottom: 2,
+    minHeight: 36,
+    marginBottom: Space.xs,
+    fontSize: Type.captionElevated.size,
+    lineHeight: 18,
+    fontFamily: Typography.family.medium,
   },
   cardPrice: {
-    fontSize: 14,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: 20,
+    fontFamily: Typography.family.semibold,
   },
   cardIze: {
-    fontSize: 11,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
     marginTop: 1,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
   },
   cardMeta: {
+    marginTop: 2,
     fontSize: 10,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 2,
   },
-  cardStateText: {
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-  },
-  cardCountdownText: {
-    color: Colors.danger,
-  },
-  cardMarketMove: {
+  cardMetaStrong: {
     fontFamily: Typography.family.semibold,
   },
 });

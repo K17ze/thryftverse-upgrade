@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
-import { Typography, Space } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Typography, Space, Type } from '../../theme/designTokens';
+import type { ThemeColors } from '../../theme/ThemeContext';
 
 interface ListingIdentityBlockProps {
   brand?: string;
@@ -18,6 +19,8 @@ export function ListingIdentityBlock({
   originalPrice,
   hasDiscount,
 }: ListingIdentityBlockProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       {brand ? (
@@ -36,27 +39,28 @@ export function ListingIdentityBlock({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
   brand: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   title: {
     fontSize: 22,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 28,
     letterSpacing: -0.4,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   priceRow: {
     flexDirection: 'row',
@@ -64,15 +68,16 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   price: {
-    fontSize: 28,
+    fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.6,
   },
   originalPrice: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textDecorationLine: 'line-through',
   },
-});
+  });
+}

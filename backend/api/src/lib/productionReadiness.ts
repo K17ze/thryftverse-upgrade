@@ -13,6 +13,14 @@ const DEVELOPMENT_DEFAULTS: Readonly<Record<string, readonly string[]>> = {
     "local-security-admin-token",
     "replace_with_long_random_token",
   ],
+  API_INTERNAL_SERVICE_TOKEN: [
+    "local-internal-service-token",
+    "replace_with_long_random_token",
+  ],
+  DECISION_SERVICE_TOKEN: [
+    "local-decision-service-token",
+    "replace-with-a-long-random-service-secret",
+  ],
   KEY_SERVICE_CLIENT_TOKEN: [
     "local-key-client-token",
     "replace_with_long_random_token",
@@ -46,6 +54,8 @@ const REQUIRED_PRODUCTION_VALUES = [
   "AUTH_ACCESS_TOKEN_SECRET",
   "AUTH_REFRESH_TOKEN_SECRET",
   "API_SECURITY_ADMIN_TOKEN",
+  "API_INTERNAL_SERVICE_TOKEN",
+  "DECISION_SERVICE_TOKEN",
   "ONEZE_ATTESTATION_SIGNING_SECRET",
   "ONEZE_FX_PROVIDER_URL",
   "ONEZE_FX_PROVIDER_API_KEY",
@@ -58,6 +68,8 @@ const MINIMUM_SECRET_LENGTHS: Readonly<Record<string, number>> = {
   AUTH_ACCESS_TOKEN_SECRET: 32,
   AUTH_REFRESH_TOKEN_SECRET: 32,
   API_SECURITY_ADMIN_TOKEN: 32,
+  API_INTERNAL_SERVICE_TOKEN: 32,
+  DECISION_SERVICE_TOKEN: 32,
   KEY_SERVICE_CLIENT_TOKEN: 32,
   KEY_SERVICE_ADMIN_TOKEN: 32,
   ONEZE_ATTESTATION_SIGNING_SECRET: 32,
@@ -162,10 +174,14 @@ export function collectProductionReadinessErrors(
     );
   }
 
+  // Multi-vendor KYC fallback (P3.3): Stripe Identity is primary, Persona is
+  // the fallback for US/CA, and Onfido is the fallback for EU/UK. Each vendor
+  // has its own required configuration.
   const kycVendor = valueOf(environment, "KYC_DEFAULT_VENDOR").toLowerCase();
-  if (kycVendor && kycVendor !== "stripe_identity") {
+  const allowedKycVendors = ["stripe_identity", "persona", "onfido"];
+  if (kycVendor && !allowedKycVendors.includes(kycVendor)) {
     errors.push(
-      "KYC_DEFAULT_VENDOR must be stripe_identity until another signed provider adapter is installed",
+      `KYC_DEFAULT_VENDOR must be one of ${allowedKycVendors.join(", ")} (got "${kycVendor}")`,
     );
   }
   const kycReturnUrl = valueOf(environment, "KYC_RETURN_URL");
@@ -179,6 +195,25 @@ export function collectProductionReadinessErrors(
     errors.push(
       "STRIPE_SECRET_KEY is required when KYC_DEFAULT_VENDOR is stripe_identity",
     );
+  }
+  if (kycVendor === "persona") {
+    if (!valueOf(environment, "PERSONA_API_KEY")) {
+      errors.push("PERSONA_API_KEY is required when KYC_DEFAULT_VENDOR is persona");
+    }
+    if (!valueOf(environment, "PERSONA_TEMPLATE_ID")) {
+      errors.push("PERSONA_TEMPLATE_ID is required when KYC_DEFAULT_VENDOR is persona");
+    }
+    if (!valueOf(environment, "PERSONA_WEBHOOK_SECRET")) {
+      errors.push("PERSONA_WEBHOOK_SECRET is required when KYC_DEFAULT_VENDOR is persona");
+    }
+  }
+  if (kycVendor === "onfido") {
+    if (!valueOf(environment, "ONFIDO_API_KEY")) {
+      errors.push("ONFIDO_API_KEY is required when KYC_DEFAULT_VENDOR is onfido");
+    }
+    if (!valueOf(environment, "ONFIDO_WEBHOOK_TOKEN")) {
+      errors.push("ONFIDO_WEBHOOK_TOKEN is required when KYC_DEFAULT_VENDOR is onfido");
+    }
   }
 
   const rateLimitWindow =
@@ -216,6 +251,54 @@ export function collectProductionReadinessErrors(
     errors.push(
       "At least one complete payment provider credential set is required in production",
     );
+  }
+  if (valueOf(environment, "STRIPE_SECRET_KEY")) {
+    if (!valueOf(environment, "STRIPE_PUBLISHABLE_KEY")) {
+      errors.push(
+        "STRIPE_PUBLISHABLE_KEY is required when Stripe payment collection is configured",
+      );
+    }
+    if (!valueOf(environment, "PAYMENT_METADATA_HMAC_SECRET")) {
+      errors.push(
+        "PAYMENT_METADATA_HMAC_SECRET is required when Stripe payment collection is configured",
+      );
+    }
+  }
+
+  if (!isTruthy(valueOf(environment, "MEDIA_PROCESSING_ENABLED"))) {
+    errors.push(
+      "MEDIA_PROCESSING_ENABLED must be true in production",
+    );
+  }
+  if (!isTruthy(valueOf(environment, "MEDIA_PUBLICATION_GATE_ENABLED"))) {
+    errors.push(
+      "MEDIA_PUBLICATION_GATE_ENABLED must be true in production",
+    );
+  }
+
+  if (valueOf(environment, "OPENAI_API_KEY")) {
+    if (!valueOf(environment, "OPENAI_AGENT_DEFAULT_MODEL")) {
+      errors.push(
+        "OPENAI_AGENT_DEFAULT_MODEL is required when OPENAI_API_KEY is configured",
+      );
+    }
+    if (
+      !valueOf(environment, "AI_USAGE_PRICING_VERSION")
+      || valueOf(environment, "AI_USAGE_PRICING_VERSION") === "unconfigured"
+    ) {
+      errors.push(
+        "AI_USAGE_PRICING_VERSION is required when OPENAI_API_KEY is configured",
+      );
+    }
+    for (const key of [
+      "OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS",
+      "OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS",
+    ] as const) {
+      const value = Number(valueOf(environment, key));
+      if (!Number.isFinite(value) || value <= 0) {
+        errors.push(`${key} must be greater than zero when OPENAI_API_KEY is configured`);
+      }
+    }
   }
 
   const hasShippingProvider = [

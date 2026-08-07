@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { RecommendationLook } from '../../platform/product';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -12,16 +12,35 @@ import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 export interface SeenInLooksRailProps {
   items: RecommendationLook[];
   onPressItem: (item: RecommendationLook) => void;
+  /** Optional "See all" affordance — only render when a real destination exists. */
+  onSeeAll?: () => void;
 }
 
-export function SeenInLooksRail({ items, onPressItem }: SeenInLooksRailProps) {
+export function SeenInLooksRail({ items, onPressItem, onSeeAll }: SeenInLooksRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (items.length === 0) return null;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Ionicons name="sparkles" size={16} color={Colors.textMuted} />
-        <Text style={styles.title}>Seen in Looks</Text>
+        <View style={styles.headerLeft}>
+          <Ionicons name="sparkles" size={16} color={colors.textMuted} />
+          <Text style={styles.title}>Seen in Looks</Text>
+        </View>
+        {onSeeAll && items.length > 2 ? (
+          <Pressable
+            onPress={onSeeAll}
+            hitSlop={8}
+            accessibilityLabel="See all Looks"
+            accessibilityRole="button"
+          >
+            <View style={styles.seeAllRow}>
+              <Text style={styles.seeAll}>See all</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+            </View>
+          </Pressable>
+        ) : null}
       </View>
       <Text style={styles.subtitle}>Styled by the community</Text>
 
@@ -44,7 +63,7 @@ export function SeenInLooksRail({ items, onPressItem }: SeenInLooksRailProps) {
                 <CachedImage
                   uri={item.coverImage}
                   style={styles.lookImage}
-                  containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.md }}
+                  containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.lg }}
                   contentFit="cover"
                 />
               ) : (
@@ -67,25 +86,44 @@ export function SeenInLooksRail({ items, onPressItem }: SeenInLooksRailProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.lg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    justifyContent: 'space-between',
     paddingHorizontal: Space.md,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
   title: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
+  },
+  seeAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  seeAll: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
   },
@@ -98,9 +136,9 @@ const styles = StyleSheet.create({
   lookImageWrap: {
     width: 160,
     height: 200,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   lookImage: {
     width: '100%',
@@ -109,18 +147,21 @@ const styles = StyleSheet.create({
   lookImageFallback: {
     width: '100%',
     height: '100%',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   lookTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-    marginTop: 6,
+    color: colors.textPrimary,
+    marginTop: Space.xs,
   },
   lookCreator: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 1,
+    color: colors.textMuted,
+    marginTop: Space.xs,
   },
-});
+  });
+}

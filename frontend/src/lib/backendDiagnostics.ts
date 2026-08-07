@@ -81,7 +81,7 @@ export async function probeBackendReachability(): Promise<boolean> {
     const timeout = setTimeout(() => controller.abort(), 4000);
     const res = await fetch(`${baseUrl}/health`, {
       method: 'GET',
-      signal: controller as any,
+      signal: controller.signal,
     });
     clearTimeout(timeout);
     const reachable = res.ok || res.status < 500;

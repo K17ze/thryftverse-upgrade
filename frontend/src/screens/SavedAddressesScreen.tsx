@@ -9,15 +9,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
-import { Typography } from '../theme/designTokens';
+import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import {
   listUserAddresses,
@@ -27,7 +26,8 @@ import {
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
-type Props = StackScreenProps<RootStackParamList, 'SavedAddresses'>;
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'SavedAddresses'>;
 
 type LoadState = 'loading' | 'populated' | 'empty' | 'error';
 
@@ -48,12 +48,14 @@ function formatAddressDetail(address: CommerceAddress): string {
 }
 
 export default function SavedAddressesScreen({ navigation }: Props) {
+  const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const savedAddress = useStore((state) => state.savedAddress);
   const saveAddress = useStore((state) => state.saveAddress);
   const clearSavedAddress = useStore((state) => state.clearSavedAddress);
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const [addresses, setAddresses] = useState<CommerceAddress[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -199,14 +201,14 @@ export default function SavedAddressesScreen({ navigation }: Props) {
     const isDeleting = deletingId === address.id;
     const detail = formatAddressDetail(address);
     return (
-      <Reanimated.View key={address.id} entering={FadeIn.duration(250).delay(index * 40)}>
-        <View style={[styles.addressCard, { backgroundColor: Colors.surface, borderColor: Colors.border }, isDefault && { borderColor: Colors.brand, borderWidth: 1.5 }]}>
+      <Reanimated.View key={address.id} entering={FadeInDown.duration(250).delay(index * 40)}>
+        <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: Stroke.emphasis }]}>
           <View style={styles.addressCardHeader}>
             <View style={styles.addressCardHeaderLeft}>
               {isDefault ? (
-                <View style={[styles.defaultBadge, { backgroundColor: `${Colors.brand}15` }]}>
-                  <Ionicons name="star" size={11} color={Colors.brand} />
-                  <Text style={[styles.defaultBadgeText, { color: Colors.brand }]}>DEFAULT</Text>
+                <View style={[styles.defaultBadge, { backgroundColor: `${colors.brand}15` }]}>
+                  <Ionicons name="star" size={11} color={colors.brand} />
+                  <Text style={[styles.defaultBadgeText, { color: colors.brand }]}>DEFAULT</Text>
                 </View>
               ) : null}
             </View>
@@ -219,7 +221,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel={`Edit address for ${address.name}`}
               >
-                <Text style={[styles.editAction, { color: Colors.brand }]}>Edit</Text>
+                <Text style={[styles.editAction, { color: colors.brand }]}>Edit</Text>
               </AnimatedPressable>
               <AnimatedPressable
                 onPress={() => handleDelete(address)}
@@ -231,22 +233,22 @@ export default function SavedAddressesScreen({ navigation }: Props) {
                 accessibilityLabel={`Remove address for ${address.name}`}
               >
                 {isDeleting ? (
-                  <ActivityIndicator size="small" color={Colors.danger} />
+                  <ActivityIndicator size="small" color={colors.danger} />
                 ) : (
-                  <Ionicons name="trash-outline" size={18} color={Colors.danger} />
+                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
                 )}
               </AnimatedPressable>
             </View>
           </View>
           <View style={styles.addressCardBody}>
-            <Text style={[styles.addressName, { color: Colors.textPrimary }]} numberOfLines={1}>
+            <Text style={[styles.addressName, { color: colors.textPrimary }]} numberOfLines={1}>
               {address.name}
             </Text>
-            <Text style={[styles.addressLine, { color: Colors.textSecondary }]} numberOfLines={2}>
+            <Text style={[styles.addressLine, { color: colors.textSecondary }]} numberOfLines={2}>
               {formatAddressLine(address)}
             </Text>
             {detail ? (
-              <Text style={[styles.addressDetail, { color: Colors.textMuted }]} numberOfLines={1}>
+              <Text style={[styles.addressDetail, { color: colors.textMuted }]} numberOfLines={1}>
                 {detail}
               </Text>
             ) : null}
@@ -272,11 +274,11 @@ export default function SavedAddressesScreen({ navigation }: Props) {
               onPress={handleAdd}
               scaleValue={0.92}
               hapticFeedback="light"
-              style={[styles.addBtn, { backgroundColor: Colors.surfaceAlt, borderColor: Colors.border }]}
+              style={[styles.addBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
               accessibilityRole="button"
               accessibilityLabel="Add new address"
             >
-              <Ionicons name="add" size={22} color={Colors.textPrimary} />
+              <Ionicons name="add" size={22} color={colors.textPrimary} />
             </AnimatedPressable>
           }
         />
@@ -292,19 +294,19 @@ export default function SavedAddressesScreen({ navigation }: Props) {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={() => void fetchAddresses(true)}
-            tintColor={Colors.textMuted}
+            tintColor={colors.textMuted}
           />
         }
       >
         {loadState === 'loading' ? (
           <View style={styles.skeletonWrap}>
             {[0, 1].map((i) => (
-              <View key={i} style={[styles.skeletonCard, { backgroundColor: Colors.surface, borderColor: Colors.border }]}>
-                <View style={[styles.skeletonLine, { width: '30%', backgroundColor: Colors.surfaceAlt }]} />
+              <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.skeletonLine, { width: '30%', backgroundColor: colors.surfaceAlt }]} />
                 <View style={{ height: 8 }} />
-                <View style={[styles.skeletonLine, { width: '90%', backgroundColor: Colors.surfaceAlt }]} />
+                <View style={[styles.skeletonLine, { width: '90%', backgroundColor: colors.surfaceAlt }]} />
                 <View style={{ height: 6 }} />
-                <View style={[styles.skeletonLine, { width: '60%', backgroundColor: Colors.surfaceAlt }]} />
+                <View style={[styles.skeletonLine, { width: '60%', backgroundColor: colors.surfaceAlt }]} />
               </View>
             ))}
           </View>
@@ -327,8 +329,25 @@ export default function SavedAddressesScreen({ navigation }: Props) {
           />
         ) : (
           <View style={styles.listWrap}>
+            <Reanimated.View entering={FadeInDown.duration(300)}>
+              <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.heroRow}>
+                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                    <Ionicons name="location" size={18} color={colors.textInverse} />
+                  </View>
+                  <View style={styles.heroText}>
+                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                      {addresses.length} address{addresses.length === 1 ? '' : 'es'}
+                    </Text>
+                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                      {addresses.find((a) => a.isDefault) ? `${addresses.find((a) => a.isDefault)?.name} is default` : 'No default set'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </Reanimated.View>
             {addresses.map((address, index) => renderAddressCard(address, index))}
-            <Text style={[styles.listFootnote, { color: Colors.textMuted }]}>
+            <Text style={[styles.listFootnote, { color: colors.textMuted }]}>
               Addresses are used at checkout and for delivery. The default address is selected automatically.
             </Text>
           </View>
@@ -340,12 +359,40 @@ export default function SavedAddressesScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   addBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.xs / 2,
   },
   skeletonWrap: {
     paddingTop: Space.sm,
@@ -357,7 +404,7 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   skeletonLine: {
-    height: 16,
+    height: Space.md,
     borderRadius: Radius.sm,
   },
   listWrap: {
@@ -370,7 +417,7 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   addressCardBody: {
-    gap: 2,
+    gap: Space.xs / 2,
   },
   addressCardHeader: {
     flexDirection: 'row',
@@ -391,9 +438,9 @@ const styles = StyleSheet.create({
   defaultBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     paddingHorizontal: Space.sm - 2,
-    paddingVertical: 3,
+    paddingVertical: Space.xs - 1,
     borderRadius: Radius.full,
   },
   defaultBadgeText: {
@@ -411,7 +458,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
     lineHeight: Type.bodyEmphasis.lineHeight,
-    marginBottom: 2,
+    marginBottom: Space.xs / 2,
   },
   addressLine: {
     fontSize: Type.body.size,
@@ -424,7 +471,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   listFootnote: {
     fontSize: Type.caption.size,

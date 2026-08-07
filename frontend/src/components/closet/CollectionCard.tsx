@@ -1,15 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Type, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { Collection } from '../../store/useStore';
 import { Listing } from '../../data/mockData';
 import { useBackendData } from '../../context/BackendDataContext';
-import { Typography } from '../../theme/designTokens';
-
+import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_W = SCREEN_W - Space.md * 2;
 const COVER_SIZE = (CARD_W - 8) / 3; // 3-up collage with 4px gaps
@@ -20,6 +18,8 @@ interface Props {
 }
 
 export function CollectionCard({ collection, onPress }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { listings } = useBackendData();
   const count = collection.itemIds?.length ?? 0;
 
@@ -63,7 +63,7 @@ export function CollectionCard({ collection, onPress }: Props) {
                 )}
                 {covers.length === 2 && (
                   <View style={[styles.sideCover, styles.sideEmpty]}>
-                    <Ionicons name="folder-open-outline" size={20} color={Colors.textMuted} />
+                    <Ionicons name="folder-open-outline" size={20} color={colors.textMuted} />
                   </View>
                 )}
               </View>
@@ -71,7 +71,7 @@ export function CollectionCard({ collection, onPress }: Props) {
           </>
         ) : (
           <View style={styles.emptyCover}>
-            <Ionicons name="folder-open-outline" size={40} color={Colors.textMuted} />
+            <Ionicons name="folder-open-outline" size={40} color={colors.textMuted} />
             <Text style={styles.emptyCoverText}>Empty</Text>
           </View>
         )}
@@ -81,7 +81,7 @@ export function CollectionCard({ collection, onPress }: Props) {
       <View style={styles.info}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{collection.name}</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </View>
         <Text style={styles.meta}>{count} {count === 1 ? 'item' : 'items'}</Text>
       </View>
@@ -89,19 +89,19 @@ export function CollectionCard({ collection, onPress }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: Space.md,
     overflow: 'hidden',
   },
   collage: {
     flexDirection: 'row',
     gap: 4,
-    padding: 4,
+    padding: Space.xs,
     height: COVER_SIZE * 2 + 4,
   },
   mainCover: {
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   mainCoverSingle: {
     width: '100%',
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   sideEmpty: {
     alignItems: 'center',
@@ -139,15 +139,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   emptyCoverText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   info: {
     padding: Space.sm,
     paddingHorizontal: Space.md,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   nameRow: {
     flexDirection: 'row',
@@ -156,15 +156,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   name: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     flex: 1,
   },
   meta: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
 });

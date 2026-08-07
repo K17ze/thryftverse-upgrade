@@ -1,14 +1,16 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { Colors } from '../constants/colors';
-import { Space, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Space, Radius, Type, Typography, LetterSpacing } from '../theme/designTokens';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AudiencePreferenceGrid } from '../components/personalisation/AudiencePreferenceGrid';
 import { DiscoveryPreferenceRow } from '../components/personalisation/DiscoveryPreferenceRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -27,6 +29,8 @@ const DEFAULT_MEMBERS_PREF = 'Everyone';
 export default function PersonalisationScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const personalisationPreferences = useStore((state) => state.personalisationPreferences);
   const updatePersonalisationPreferences = useStore((state) => state.updatePersonalisationPreferences);
   const genderFilter = personalisationPreferences.genderFilter;
@@ -36,6 +40,7 @@ export default function PersonalisationScreen() {
   const [pickerMode, setPickerMode] = useState<PreferencePickerMode>(null);
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
   const handleSelectGender = useCallback(
     (gender: string) => {
@@ -139,7 +144,7 @@ export default function PersonalisationScreen() {
           onBack={() => navigation.goBack()}
           rightAction={
             <View style={styles.headerRight}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={14} color={colors.success} />
               <Text style={styles.headerSaved}>Saved</Text>
             </View>
           }
@@ -155,29 +160,41 @@ export default function PersonalisationScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* 2. Editorial introduction */}
-        <View style={styles.intro}>
-          <Text style={styles.introTitle}>Personalisation</Text>
-          <Text style={styles.introBody}>
-            Set the shopping preferences you want to keep.
-          </Text>
-          <Text style={styles.introBody}>
-            Your choices are saved automatically.
-          </Text>
-        </View>
+        {/* Hero summary — personalisation status */}
+        <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="sparkles" size={18} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                  {genderFilter.includes('All') ? 'All categories' : `${genderFilter.join(', ')} selected`}
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                  {brandsPref === 'Any' && membersPref === 'Everyone' ? 'Default discovery' : 'Custom discovery'}
+                </Text>
+              </View>
+              <View style={[styles.heroBadge, { backgroundColor: colors.success + '15' }]}>
+                <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                <Text style={[styles.heroBadgeText, { color: colors.success }]}>Saved</Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
 
-        {/* 3. Visual shopping-audience selection */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shop for</Text>
+        {/* Visual shopping-audience selection */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Shop for</Text>
           <AudiencePreferenceGrid
             selectedGenders={genderFilter}
             onSelect={handleSelectGender}
           />
-        </View>
+        </Reanimated.View>
 
-        {/* 4. Discovery preference rows */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Discovery preferences</Text>
+        {/* Discovery preference rows */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Discovery preferences</Text>
           <View style={styles.discoveryGroup}>
             <DiscoveryPreferenceRow
               icon="grid-outline"
@@ -202,19 +219,21 @@ export default function PersonalisationScreen() {
               isLast
             />
           </View>
-        </View>
+        </Reanimated.View>
 
-        {/* 6. Optional reset action */}
-        <Pressable
-          style={styles.resetBtn}
-          onPress={handleReset}
-          hitSlop={{ top: 8, bottom: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel="Reset preferences to defaults"
-        >
-          <Ionicons name="refresh-outline" size={16} color={Colors.textMuted} />
-          <Text style={styles.resetBtnText}>Reset preferences</Text>
-        </Pressable>
+        {/* Optional reset action */}
+        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+          <Pressable
+            style={styles.resetBtn}
+            onPress={handleReset}
+            hitSlop={{ top: 8, bottom: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Reset preferences to defaults"
+          >
+            <Ionicons name="refresh-outline" size={16} color={colors.textMuted} />
+            <Text style={[styles.resetBtnText, { color: colors.textMuted }]}>Reset preferences</Text>
+          </Pressable>
+        </Reanimated.View>
       </ScrollView>
 
       {/* 7. BottomSheetPicker */}
@@ -230,73 +249,98 @@ export default function PersonalisationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  headerSaved: {
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-    color: Colors.success,
-  },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    headerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    headerSaved: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      color: colors.success,
+    },
 
-  // Scroll
-  scrollContent: {
-    paddingHorizontal: Space.md,
-  },
+    // Scroll
+    scrollContent: {
+      paddingHorizontal: Space.md,
+    },
 
-  // Editorial introduction
-  intro: {
-    paddingTop: Space.lg,
-    paddingBottom: Space.lg,
-    gap: Space.xs,
-  },
-  introTitle: {
-    fontSize: 28,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  introBody: {
-    fontSize: 15,
-    fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 21,
-  },
+    // Hero summary card
+    heroCard: {
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      padding: Space.md,
+      marginTop: Space.sm,
+      marginBottom: Space.lg,
+    },
+    heroRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+    },
+    heroIcon: {
+      width: Space.xxl - Space.sm,
+      height: Space.xxl - Space.sm,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroText: { flex: 1 },
+    heroTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    heroSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      marginTop: Space.xs / 2,
+    },
+    heroBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full,
+    },
+    heroBadgeText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+    },
 
-  // Section
-  section: {
-    marginBottom: Space.lg,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: Space.sm,
-  },
+    // Section
+    section: {
+      marginBottom: Space.lg,
+    },
+    sectionTitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      textTransform: 'uppercase',
+      letterSpacing: LetterSpacing.caps,
+      marginBottom: Space.sm,
+    },
 
-  // Discovery group
-  discoveryGroup: {
-    paddingHorizontal: Space.xs,
-  },
+    // Discovery group
+    discoveryGroup: {
+      paddingHorizontal: Space.xs,
+    },
 
-  // Reset
-  resetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.md,
-    marginTop: Space.sm,
-    minHeight: 48,
-  },
-  resetBtnText: {
-    fontSize: 14,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-});
+    // Reset
+    resetBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.md,
+      marginTop: Space.sm,
+      minHeight: Space.xxl,
+    },
+    resetBtnText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.medium,
+    },
+  });
+}

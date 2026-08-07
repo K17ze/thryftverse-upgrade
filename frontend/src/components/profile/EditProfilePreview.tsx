@@ -9,8 +9,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '../../constants/colors';
-import { Typography, Space } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 const COVER_H = 120;
@@ -43,6 +43,8 @@ export function EditProfilePreview({
   isUploadingCover,
   isUploadingAvatar,
 }: EditProfilePreviewProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: SCREEN_W } = useWindowDimensions();
   const contextParts: string[] = [];
   if (location) contextParts.push(location);
@@ -62,7 +64,7 @@ export function EditProfilePreview({
         ) : (
           <View style={[styles.coverImage, styles.coverFallback, { width: SCREEN_W }]}>
             <View style={styles.coverFallbackInner}>
-              <Ionicons name="image-outline" size={20} color={Colors.textMuted} />
+              <Ionicons name="image-outline" size={20} color={colors.textMuted} />
               <Text style={styles.coverFallbackText}>Add a cover photo</Text>
             </View>
           </View>
@@ -87,7 +89,7 @@ export function EditProfilePreview({
           {isUploadingCover ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Ionicons name="camera" size={18} color={coverUri ? '#fff' : Colors.textSecondary} />
+            <Ionicons name="camera" size={18} color={coverUri ? '#fff' : colors.textSecondary} />
           )}
         </Pressable>
       </View>
@@ -104,7 +106,7 @@ export function EditProfilePreview({
             />
           ) : (
             <View style={[styles.avatarImage, styles.avatarFallback]}>
-              <Ionicons name="person" size={26} color={Colors.textMuted} />
+              <Ionicons name="person" size={26} color={colors.textMuted} />
             </View>
           )}
 
@@ -147,15 +149,16 @@ export function EditProfilePreview({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   coverWrap: {
     height: COVER_H,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   coverImage: {
     height: COVER_H,
@@ -170,9 +173,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   coverFallbackText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   coverGradient: {
     position: 'absolute',
@@ -187,7 +190,7 @@ const styles = StyleSheet.create({
     bottom: Space.md,
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -195,8 +198,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
   },
   editCoverBtnEmpty: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
   },
   avatarRow: {
     flexDirection: 'row',
@@ -208,8 +211,8 @@ const styles = StyleSheet.create({
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     borderWidth: 3,
-    borderColor: Colors.background,
-    backgroundColor: Colors.surface,
+    borderColor: colors.background,
+    backgroundColor: colors.surface,
     overflow: 'visible',
     position: 'relative',
   },
@@ -219,7 +222,7 @@ const styles = StyleSheet.create({
     borderRadius: (AVATAR_SIZE - 6) / 2,
   },
   avatarFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -229,12 +232,12 @@ const styles = StyleSheet.create({
     bottom: -2,
     width: 30,
     height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.brand,
+    borderRadius: Radius.xl,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
   identityCol: {
     paddingHorizontal: Space.md,
@@ -243,26 +246,27 @@ const styles = StyleSheet.create({
   displayName: {
     fontSize: 19,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
     marginBottom: 2,
   },
   username: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    marginBottom: 4,
+    color: colors.textSecondary,
+    marginBottom: Space.xs,
   },
   bio: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 20,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   contextText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

@@ -1,0 +1,205 @@
+# ThryftVerse Backend — Grafana Alerting Rules
+#
+# Prometheus-backed alert rules for the metrics exposed by api/src/lib/metrics.ts.
+# Import this file via Grafana → Alerting → Provisioning, or apply the equivalent
+# recording/alert rules directly to the Prometheus config.
+#
+# Metric prefix: thryftverse_ (e.g. thryftverse_http_requests_total)
+#
+# Severity legend:
+#   critical — page on-call immediately (user-facing degradation)
+#   warning  — investigate during business hours (approaching saturation)
+
+groups:
+  - name: thryftverse-api.rules
+    interval: 30s
+    rules:
+      # ── Recording rules ───────────────────────────────────────────────────
+      - record: thryftverse:http_request:rate5m
+        expr: |
+          sum(rate(thryftverse_http_requests_total[5m]))
+
+      - record: thryftverse:http_request:error_rate5m
+        expr: |
+          sum(rate(thryftverse_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(thryftverse_http_requests_total[5m])), 0.001)
+
+      - record: thryftverse:http_request:p95_latency5m
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(thryftverse_http_request_duration_seconds_bucket[5m])))
+
+      - record: thryftverse:payment:failure_rate10m
+        expr: |
+          sum(rate(thryftverse_payment_transitions_total{to=~"failed|cancelled|declined"}[10m]))
+          /
+          clamp_min(sum(rate(thryftverse_payment_transitions_total[10m])), 0.001)
+
+      - record: thryftverse:payment:transition_rate10m
+        expr: |
+          sum(rate(thryftverse_payment_transitions_total[10m]))
+
+      - record: thryftverse:auction:settlement_rate15m
+        expr: |
+          sum(rate(thryftverse_auction_settlements_total[15m]))
+
+      - record: thryftverse:background_job:queue_depth10m
+        expr: |
+          sum(rate(thryftverse_background_jobs_total{result="completed"}[10m]))
+          -
+          sum(rate(thryftverse_background_jobs_total[10m]))
+
+      - record: thryftverse:db_pool:active_ratio5m
+        expr: |
+          avg by (pool) (
+            thryftverse_database_pool_connections{state="total"} > 0
+          )
+          # active = total - idle; ratio computed in alert below
+
+      # ── Alert rules ───────────────────────────────────────────────────────
+
+      # 1. HighErrorRate — 5xx responses exceed 5% of total traffic for 5m
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(thryftverse_http_requests_total{status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(thryftverse_http_requests_total[5m])), 0.001)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "High HTTP error rate ({{ $value | humanizePercentage }})"
+          description: >
+            5xx error rate has exceeded 5% of all HTTP requests for the last
+            5 minutes on the ThryftVerse API. Investigate recent deployments,
+            upstream dependencies, and error logs.
+
+      # 2. HighLatency — p95 request latency exceeds 500ms for 5m
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(thryftverse_http_request_duration_seconds_bucket[5m]))) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High p95 latency ({{ $value | humanizeDuration }})"
+          description: >
+            p95 HTTP request latency is above 500ms for the last 5 minutes.
+            Check slow queries, DB pool saturation, and downstream service latency.
+
+      # 3. PaymentFailureSpike — payment failure transitions exceed 10% for 10m
+      - alert: PaymentFailureSpike
+        expr: |
+          (
+            sum(rate(thryftverse_payment_transitions_total{to=~"failed|cancelled|declined"}[10m]))
+            /
+            clamp_min(sum(rate(thryftverse_payment_transitions_total[10m])), 0.001)
+          ) > 0.10
+        for: 10m
+        labels:
+          severity: critical
+          team: payments
+        annotations:
+          summary: "Payment failure rate spike ({{ $value | humanizePercentage }})"
+          description: >
+            Payment transitions ending in failed/cancelled/declined states
+            exceed 10% of all payment transitions for the last 10 minutes.
+            Inspect gateway health, webhook delivery, and fraud rules.
+
+      # 4. AuctionSettlementDelay — settlement rate below expected floor for 15m
+      - alert: AuctionSettlementDelay
+        expr: |
+          (
+            sum(rate(thryftverse_auction_settlements_total[15m]))
+            <
+            bool 0.01
+          ) and (
+            sum(rate(thryftverse_auction_settlements_total[15m])) > 0
+          )
+        for: 15m
+        labels:
+          severity: warning
+          team: auctions
+        annotations:
+          summary: "Auction settlement throughput below expected"
+          description: >
+            Auction settlement rate has dropped below the expected floor
+            (0.01/s) for 15 minutes while traffic is present. Verify the
+            settlement scheduler and auction end-time worker are running.
+
+      # 5. BackgroundJobBacklog — queue depth (in - completed) exceeds 1000 for 10m
+      - alert: BackgroundJobBacklog
+        expr: |
+          (
+            sum(rate(thryftverse_background_jobs_total[10m]))
+            -
+            sum(rate(thryftverse_background_jobs_total{result="completed"}[10m]))
+          ) * 600 > 1000
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Background job backlog growing ({{ $value | humanize }} jobs)"
+          description: >
+            Estimated background job backlog exceeds 1000 jobs for 10 minutes.
+            Scale workers or inspect stuck/failed jobs blocking the queue.
+
+      # 6. DatabasePoolExhaustion — active connections > 80% of total for 5m
+      - alert: DatabasePoolExhaustion
+        expr: |
+          (
+            (thryftverse_database_pool_connections{state="total"}
+             - thryftverse_database_pool_connections{state="idle"})
+            /
+            clamp_min(thryftverse_database_pool_connections{state="total"}, 1)
+          ) > 0.80
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Database pool near exhaustion ({{ $value | humanizePercentage }} active)"
+          description: >
+            Active Postgres pool connections exceed 80% of the configured
+            maximum for 5 minutes. Investigate long-running queries, missing
+            indexes, and connection leaks before the pool is exhausted.
+
+      # 7. RedisConnectionLost — redis_connection_state == 0 for 1m
+      - alert: RedisConnectionLost
+        expr: |
+          thryftverse_redis_connection_state{state="connected"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Redis connection lost"
+          description: >
+            The backend has reported redis_connection_state == 0 (disconnected)
+            for at least 1 minute. Cache, sessions, and pub/sub may be degraded.
+
+      # 8. HighMemoryUsage — resident memory > 80% of configured limit for 5m
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            thryftverse_process_resident_memory_bytes
+            /
+            clamp_min(thryftverse_process_resident_memory_bytes * 0 + 1073741824, 1)
+          ) > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High memory usage ({{ $value | humanizePercentage }} of 1GiB limit)"
+          description: >
+            Process resident memory exceeds 80% of the assumed 1GiB container
+            limit for 5 minutes. Tune MEMORY_LIMIT_BYTES or investigate leaks.
+            Note: replace the 1073741824 constant with your real container limit.

@@ -9,12 +9,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
-import { Space, Typography, DockConstants } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
+import { Space, Typography, DockConstants, Type, Radius, Control, Stroke } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
 import { haptics } from '../utils/haptics';
 import { ImageViewer } from '../components/ImageViewer';
@@ -24,7 +27,7 @@ import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
 import { calculateListingQuality } from '../utils/listingQuality';
 import { CachedImage } from '../components/CachedImage';
 
-type Props = StackScreenProps<RootStackParamList, 'ListingPreview'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ListingPreview'>;
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const HERO_HEIGHT = SCREEN_H * 0.65;
@@ -34,6 +37,9 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
+  const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const photos = preview?.photos ?? [];
   const title = preview?.title?.trim() || 'Untitled listing';
@@ -92,7 +98,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
             />
           ) : (
             <View style={[styles.heroWrap, styles.heroEmpty]}>
-              <Ionicons name="image-outline" size={48} color={Colors.textMuted} />
+              <Ionicons name="image-outline" size={48} color={colors.textMuted} />
               <Text style={styles.heroEmptyText}>No photos added</Text>
             </View>
           )}
@@ -101,7 +107,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
           <View style={styles.topScrim} />
           <View style={[styles.floatingHeader, { paddingTop: Math.max(insets.top, 20) }]}>
             <Pressable
-              style={styles.controlBtn}
+              style={({ pressed }) => [styles.controlBtn, pressed && { opacity: 0.6 }]}
               onPress={handleBack}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
@@ -110,7 +116,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </Pressable>
             <Pressable
-              style={styles.controlBtn}
+              style={({ pressed }) => [styles.controlBtn, pressed && { opacity: 0.6 }]}
               onPress={handleBack}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
@@ -127,49 +133,55 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         </View>
 
         {/* Listing quality meter — seller guidance */}
-        <ListingQualityMeter
-          result={useMemo(() => calculateListingQuality({
-            photos: preview?.photos ?? [],
-            title: preview?.title ?? '',
-            brand: preview?.brand ?? '',
-            category: preview?.category ?? '',
-            size: preview?.size ?? '',
-            condition: preview?.condition ?? '',
-            description: preview?.description ?? '',
-            price: preview?.price != null ? String(preview.price) : '',
-            originalPrice: preview?.originalPrice != null ? String(preview.originalPrice) : '',
-            tags: [],
-            shippingMethod: preview?.shippingMethod === 'standard' ? 'standard' : preview?.shippingMethod === 'express' ? 'express' : null,
-            shippingPayer: preview?.shippingPayer === 'buyer' ? 'buyer' : preview?.shippingPayer === 'seller' ? 'seller' : null,
-            listingMode: preview?.listingMode ?? 'sell_now',
-          }), [preview])}
-          compact
-        />
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+          <ListingQualityMeter
+            result={useMemo(() => calculateListingQuality({
+              photos: preview?.photos ?? [],
+              title: preview?.title ?? '',
+              brand: preview?.brand ?? '',
+              category: preview?.category ?? '',
+              size: preview?.size ?? '',
+              condition: preview?.condition ?? '',
+              description: preview?.description ?? '',
+              price: preview?.price != null ? String(preview.price) : '',
+              originalPrice: preview?.originalPrice != null ? String(preview.originalPrice) : '',
+              tags: [],
+              shippingMethod: preview?.shippingMethod === 'standard' ? 'standard' : preview?.shippingMethod === 'express' ? 'express' : null,
+              shippingPayer: preview?.shippingPayer === 'buyer' ? 'buyer' : preview?.shippingPayer === 'seller' ? 'seller' : null,
+              listingMode: preview?.listingMode ?? 'sell_now',
+            }), [preview])}
+            compact
+          />
+        </Reanimated.View>
 
         {/* ── 2. PRODUCT IDENTITY ── */}
-        <ListingIdentityBlock
-          brand={preview?.brand}
-          title={title}
-          price={priceText ?? '—'}
-          originalPrice={hasDiscount ? originalPriceText : null}
-          hasDiscount={hasDiscount}
-        />
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+          <ListingIdentityBlock
+            brand={preview?.brand}
+            title={title}
+            price={priceText ?? '—'}
+            originalPrice={hasDiscount ? originalPriceText : null}
+            hasDiscount={hasDiscount}
+          />
 
         {!hasRealTitle && (
           <Text style={styles.authoringHint}>Untitled listing — add a title before publishing.</Text>
         )}
+        </Reanimated.View>
 
         {/* ── 3. PURCHASE CONTEXT ── */}
-        <View style={styles.contextRow}>
-          <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
-          <Text style={styles.contextText}>
-            Payment and delivery options are confirmed at checkout.
-          </Text>
-        </View>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+          <View style={styles.contextRow}>
+            <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+            <Text style={styles.contextText}>
+              Payment and delivery options are confirmed at checkout.
+            </Text>
+          </View>
+        </Reanimated.View>
 
         {/* ── 4. SPECIFICATIONS ── */}
         {specs.length > 0 && (
-          <View style={styles.sectionGroup}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={styles.sectionGroup}>
             <Text style={styles.sectionHeading}>Specifications</Text>
             <View style={styles.specGrid}>
               {specs.map((spec, i) => (
@@ -185,11 +197,11 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
                 </View>
               ))}
             </View>
-          </View>
+          </Reanimated.View>
         )}
 
         {/* ── 5. DESCRIPTION ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)} style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Description</Text>
           {description ? (
             <Text style={styles.descriptionText}>{description}</Text>
@@ -198,22 +210,22 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               No description added yet.
             </Text>
           )}
-        </View>
+        </Reanimated.View>
 
         {/* ── 6. SELLER PREVIEW ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Seller</Text>
           <View style={styles.sellerRow}>
             {sellerAvatar ? (
               <CachedImage
                 uri={sellerAvatar}
                 style={styles.sellerAvatar}
-                containerStyle={{ width: 40, height: 40, borderRadius: 20 }}
+                containerStyle={{ width: Space.xl + Space.xs, height: Space.xl + Space.xs, borderRadius: Radius.xxl }}
                 contentFit="cover"
               />
             ) : (
               <View style={[styles.sellerAvatar, styles.sellerAvatarFallback]}>
-                <Ionicons name="person" size={18} color={Colors.textMuted} />
+                <Ionicons name="person" size={18} color={colors.textMuted} />
               </View>
             )}
             <View style={styles.sellerInfo}>
@@ -221,10 +233,10 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Text style={styles.sellerSubtext}>Seller preview</Text>
             </View>
           </View>
-        </View>
+        </Reanimated.View>
 
         {/* ── 7. SHIPPING & PAYMENT ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(280)} style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Shipping & Payment</Text>
           <View style={styles.specGrid}>
             <View style={[styles.specRow, styles.specRowBorder]}>
@@ -250,7 +262,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Text style={styles.specValue}>Through ThryftVerse checkout</Text>
             </View>
           </View>
-        </View>
+        </Reanimated.View>
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </ScrollView>
@@ -265,10 +277,11 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     paddingBottom: 0,
@@ -276,7 +289,7 @@ const styles = StyleSheet.create({
   heroWrap: {
     width: SCREEN_W,
     height: HERO_HEIGHT,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   heroEmpty: {
@@ -285,16 +298,16 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   heroEmptyText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 120,
+    height: Space.xxl + Space.xxl + Space.xxl + Space.xs,
     backgroundColor: 'rgba(0,0,0,0.12)',
   },
   floatingHeader: {
@@ -304,41 +317,41 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: Space.md,
     zIndex: 10,
   },
   controlBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   editText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   previewBadge: {
     position: 'absolute',
-    bottom: 16,
-    left: 16,
+    bottom: Space.md,
+    left: Space.md,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.md,
   },
   previewBadgeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.textInverse,
     letterSpacing: 0.8,
   },
   authoringHint: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontStyle: 'italic',
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
@@ -346,68 +359,68 @@ const styles = StyleSheet.create({
   contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
   contextText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   sectionGroup: {
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
   },
   sectionHeading: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: Space.sm,
   },
   specGrid: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    borderRadius: 8,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   specRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    minHeight: 44,
+    paddingVertical: Space.sm + Space.xs,
+    paddingHorizontal: Space.sm + Space.xs,
+    minHeight: Control.hit,
   },
   specRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
   },
   specLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   specValue: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'right',
     flexShrink: 1,
   },
   descriptionText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    lineHeight: 22,
+    color: colors.textPrimary,
+    lineHeight: Type.body.lineHeight + Space.xs,
   },
   descriptionPlaceholder: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontStyle: 'italic',
   },
   sellerRow: {
@@ -417,12 +430,12 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   sellerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
+    borderRadius: Radius.xxl,
   },
   sellerAvatarFallback: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -430,14 +443,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sellerName: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   sellerSubtext: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 2,
+    color: colors.textMuted,
+    marginTop: Space.xs / 2,
   },
-});
+  });
+}

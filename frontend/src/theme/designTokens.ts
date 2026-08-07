@@ -100,6 +100,9 @@ export const Type: Record<string, TypeStyle> = {
   /** 15/21/600 - Strong body, picker values, emphasized descriptions */
   bodyEmphasis: { size: 15, lineHeight: 21, weight: '600', letterSpacing: 0 },
 
+  /** 16/22/700 - Card price hero, emphasized numeric values */
+  bodyLarge: { size: 16, lineHeight: 22, weight: '700', letterSpacing: -0.2 },
+
   /** 14/20/600 - Button text, emphasized content, prices (LEGACY — prefer priceList for actual prices) */
   price: { size: 14, lineHeight: 20, weight: '600', letterSpacing: -0.2 },
 
@@ -362,11 +365,17 @@ export const DockConstants = {
   /** Base dock content height (minHeight from dock styles) */
   baseHeight: 72,
   /** Single-action dock (one full-width button) — typical total */
-  singleActionHeight: 96,
+  singleActionHeight: 104,
   /** Two-action dock (cancel + confirm side by side) — typical total */
-  dualActionHeight: 132,
+  dualActionHeight: 140,
   /** Stacked compact dock (buttons stacked vertically) — typical total */
-  stackedActionHeight: 180,
+  stackedActionHeight: 188,
+  /** Primary button height per Design.md button-primary spec (52px) */
+  primaryButtonHeight: 52,
+  /** Secondary/quiet button height per Design.md button-quiet spec (44px) */
+  secondaryButtonHeight: 44,
+  /** Dock top padding — breathing room above action buttons */
+  dockTopPadding: 10,
 } as const;
 
 // ============================================================================
@@ -448,4 +457,25 @@ export const Stroke = {
   standard: 1,
   /** Selection/focus only; never routine card decoration. */
   emphasis: 2,
+} as const;
+
+// ============================================================================
+// ASPECT RATIOS (width / height)
+// 2026 standard: portrait 3:4 imagery (Poshmark March 2026 redesign).
+// Use these tokens instead of inline numeric ratios so media geometry stays
+// consistent across discovery, detail, and creator surfaces.
+// ============================================================================
+export const AspectRatio = {
+  /** 1:1 — legacy/default square */
+  square: 1,
+  /** 3:4 — Poshmark 2026 portrait standard */
+  portrait: 3 / 4,
+  /** 9:16 — story / tall portrait format */
+  portraitTall: 9 / 16,
+  /** 4:3 — landscape */
+  landscape: 4 / 3,
+  /** 16:9 — wide */
+  wide: 16 / 9,
+  /** 4:5 — marketplace standard (Depop, Instagram) */
+  marketplace: 4 / 5,
 } as const;

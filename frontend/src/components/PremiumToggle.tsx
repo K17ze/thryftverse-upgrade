@@ -3,12 +3,14 @@ import { View, StyleSheet, Pressable } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
   interpolateColor,
 } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
+import { Radius } from '../theme/designTokens';
 interface PremiumToggleProps {
   value: boolean;
   onValueChange: (v: boolean) => void;
@@ -19,21 +21,19 @@ const ReanimatedPressable = Reanimated.createAnimatedComponent(Pressable);
 
 export function PremiumToggle({ value, onValueChange, disabled = false }: PremiumToggleProps) {
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const progress = useSharedValue(value ? 1 : 0);
 
   React.useEffect(() => {
-    progress.value = withSpring(value ? 1 : 0, {
-      stiffness: 500,
-      damping: 30,
-      mass: 1,
-    });
-  }, [value]);
+    progress.value = withTiming(value ? 1 : 0, { duration: reducedMotion ? 0 : 180 });
+  }, [value, reducedMotion]);
 
   const trackStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
       progress.value,
       [0, 1],
-      [Colors.surfaceAlt, `${Colors.brand}40`]
+      [colors.surfaceAlt, `${colors.brand}40`]
     ),
   }));
 
@@ -42,7 +42,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
     backgroundColor: interpolateColor(
       progress.value,
       [0, 1],
-      [Colors.textMuted, Colors.brand]
+      [colors.textMuted, colors.brand]
     ),
   }));
 
@@ -69,14 +69,14 @@ const styles = StyleSheet.create({
   track: {
     width: 52,
     height: 30,
-    borderRadius: 15,
+    borderRadius: Radius.xl,
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
   knob: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: Radius.xl,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { EvidenceGroup } from '../../platform/commerce/categoryEvidence';
 
 export interface CategoryEvidenceProps {
@@ -10,6 +10,8 @@ export interface CategoryEvidenceProps {
 }
 
 export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
   if (groups.length === 0) return null;
@@ -56,7 +58,7 @@ export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
               <Ionicons
                 name={isExpanded ? 'chevron-up' : 'chevron-down'}
                 size={14}
-                color={Colors.textMuted}
+                color={colors.textMuted}
               />
             </Pressable>
             {isExpanded && (
@@ -76,7 +78,7 @@ export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -85,9 +87,9 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
   },
   primarySummary: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 20,
     marginBottom: Space.xs,
   },
@@ -101,15 +103,15 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   factLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     flexShrink: 0,
   },
   factValue: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'right',
     flex: 1,
     marginLeft: Space.sm,
@@ -121,8 +123,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   expandableTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 });

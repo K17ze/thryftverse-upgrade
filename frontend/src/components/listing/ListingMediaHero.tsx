@@ -7,13 +7,15 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { ImageViewer } from '../ImageViewer';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -50,9 +52,13 @@ export function ListingMediaHero({
   bigHeartScale,
   scrollY,
 }: ListingMediaHeroProps) {
+  const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const heroStyle = useAnimatedStyle(() => {
+    if (reducedMotion) return {};
     const overscroll = Math.min(scrollY.value, 0);
     const pullDownTranslate = interpolate(overscroll, [-120, 0], [-56, 0], Extrapolation.CLAMP);
     const parallaxTranslate = interpolate(scrollY.value, [0, 360], [0, 90], Extrapolation.CLAMP);
@@ -139,7 +145,7 @@ export function ListingMediaHero({
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? Colors.brand : '#fff'}
+              color={isSaved ? colors.brand : '#fff'}
             />
           </AnimatedPressable>
 
@@ -148,7 +154,7 @@ export function ListingMediaHero({
               isActive={isFav}
               onToggle={onToggleFav}
               size={24}
-              activeColor={Colors.danger}
+              activeColor={colors.danger}
               inactiveColor="#fff"
             />
           </View>
@@ -158,11 +164,12 @@ export function ListingMediaHero({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   heroContainer: {
     width: SCREEN_W,
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   topScrim: {
@@ -188,14 +195,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 32,
     left: 20,
-    backgroundColor: Colors.success,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: colors.success,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
   },
   soldText: {
-    color: Colors.background,
-    fontSize: 16,
+    color: colors.background,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
   },
@@ -206,11 +213,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   indexText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   videoBadge: {
@@ -223,11 +230,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   videoBadgeText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   floatingHeader: {
@@ -247,9 +254,10 @@ const styles = StyleSheet.create({
   controlBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  });
+}

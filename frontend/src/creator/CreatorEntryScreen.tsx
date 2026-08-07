@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   FlatList,
+  ScrollView,
   Image,
   ActivityIndicator,
   useWindowDimensions,
@@ -14,10 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Typography } from '../theme/designTokens';
+import { BlurView } from 'expo-blur';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { createStableId } from '../utils/createStableId';
 import type { CreatorLayer } from './composition';
 import CreatorCamera from './CreatorCamera';
+import { useHaptic } from '../hooks/useHaptic';
 
 // ── Creator Entry Screen ───────────────────────────────────────────
 // Camera-first entry for the creator. Modeled on VisualSearchScreen:
@@ -30,7 +33,7 @@ import CreatorCamera from './CreatorCamera';
 // VisualSearchCamera), not inline code. This keeps the entry screen
 // thin and the camera component reusable.
 
-const GRID_COLUMNS = 3;
+const GRID_COLUMNS = 4;
 
 interface MediaAsset {
   id: string;
@@ -57,6 +60,7 @@ export function CreatorEntryScreen({
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isPoster = documentType === 'poster';
+  const haptic = useHaptic();
 
   // ── View state: 'camera' (default) or 'gallery' ──
   const [view, setView] = useState<'camera' | 'gallery'>('camera');
@@ -141,31 +145,60 @@ export function CreatorEntryScreen({
 
   // ── Camera capture → create media layer → enter editor ──
   const handleCapture = useCallback((uri: string) => {
-    const layer: CreatorLayer = {
-      id: createStableId('media'),
-      type: 'media',
-      x: 0.5,
-      y: 0.5,
-      width: 1,
-      height: 1,
-      scale: 1,
-      rotation: 0,
-      zIndex: 0,
-      locked: false,
-      hidden: false,
-      opacity: 1,
-      payload: {
-        mediaUri: uri,
-        mediaType: 'image',
-        contentFit: 'cover',
+    // Get image dimensions to preserve aspect ratio
+    Image.getSize(uri, (imgW, imgH) => {
+      const imgRatio = imgW / imgH;
+      // Fit within canvas while preserving aspect ratio
+      const layer: CreatorLayer = {
+        id: createStableId('media'),
+        type: 'media',
+        x: 0.5,
+        y: 0.5,
+        width: 1,
+        height: 1 / imgRatio,
+        scale: 1,
+        rotation: 0,
+        zIndex: 0,
+        locked: false,
+        hidden: false,
         opacity: 1,
-      },
-    } as any;
-    onMediaSelected([layer]);
+        payload: {
+          mediaUri: uri,
+          mediaType: 'image',
+          contentFit: 'cover',
+          opacity: 1,
+        },
+      };
+      onMediaSelected([layer]);
+    }, () => {
+      // Fallback: full-bleed if we can't get dimensions
+      const layer: CreatorLayer = {
+        id: createStableId('media'),
+        type: 'media',
+        x: 0.5,
+        y: 0.5,
+        width: 1,
+        height: 1,
+        scale: 1,
+        rotation: 0,
+        zIndex: 0,
+        locked: false,
+        hidden: false,
+        opacity: 1,
+        payload: {
+          mediaUri: uri,
+          mediaType: 'image',
+          contentFit: 'cover',
+          opacity: 1,
+        },
+      };
+      onMediaSelected([layer]);
+    });
   }, [onMediaSelected]);
 
   // ── Gallery selection → create media layers → enter editor ──
   const toggleSelect = useCallback((asset: MediaAsset) => {
+    haptic.selection();
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(asset.id)) {
@@ -202,7 +235,8 @@ export function CreatorEntryScreen({
         videoDurationMs: asset.duration,
         opacity: 1,
       },
-    } as any));
+    }));
+    haptic.light();
     onMediaSelected(layers);
   }, [selectedIds, assets, onMediaSelected]);
 
@@ -221,6 +255,17 @@ export function CreatorEntryScreen({
           onGallery={() => setView('gallery')}
           onClose={onClose}
         />
+        {/* "Aa" text-mode button — Instagram "Create" pattern, top-right */}
+        <Pressable
+          style={[styles.textModeBtn, { top: insets.top + 8, right: 12 }]}
+          hitSlop={8}
+          onPress={() => { haptic.light(); onBlankStart(); }}
+          accessibilityLabel="Create text poster"
+          accessibilityHint="Starts a blank text poster"
+          accessibilityRole="button"
+        >
+          <Text style={styles.textModeBtnLabel}>Aa</Text>
+        </Pressable>
       </View>
     );
   }
@@ -232,15 +277,16 @@ export function CreatorEntryScreen({
     <View style={styles.container}>
       {/* Top bar with back to camera */}
       <LinearGradient
-        colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0)']}
+        colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
         style={[styles.galleryTopBar, { paddingTop: insets.top + 8 }]}
       >
         <Pressable
-          style={styles.topIconBtn}
-          onPress={() => setView('camera')}
+          style={styles.galleryBackBtn}
+          hitSlop={12}
+          onPress={() => { haptic.selection(); setView('camera'); }}
           accessibilityLabel="Back to camera"
         >
-          <Ionicons name="camera" size={24} color="#fff" />
+          <Ionicons name="camera" size={22} color="#fff" />
         </Pressable>
         <Text style={styles.galleryTitle}>
           {selectedCount > 0
@@ -251,15 +297,16 @@ export function CreatorEntryScreen({
           {selectedCount > 0 && (
             <Pressable
               style={styles.addBtn}
+              hitSlop={12}
               onPress={handleAddSelected}
               accessibilityLabel={isPoster ? 'Create story' : 'Create collage'}
             >
               <Text style={styles.addBtnText}>
-                {isPoster ? 'Create Story' : 'Create Collage'}
+                {isPoster ? 'Create Story' : 'Create Look'}
               </Text>
             </Pressable>
           )}
-          <Pressable style={styles.topIconBtn} onPress={onClose} accessibilityLabel="Close">
+          <Pressable style={styles.topIconBtn} hitSlop={12} onPress={() => { haptic.light(); onClose(); }} accessibilityLabel="Close">
             <Ionicons name="close" size={26} color="#fff" />
           </Pressable>
         </View>
@@ -277,7 +324,7 @@ export function CreatorEntryScreen({
           <Text style={styles.permissionText}>
             Select photos from your library for your {isPoster ? 'story' : 'collage'}.
           </Text>
-          <Pressable style={styles.permissionBtn} onPress={() => requestMediaPerm()}>
+          <Pressable style={styles.permissionBtn} hitSlop={12} onPress={() => { haptic.light(); requestMediaPerm(); }}>
             <Text style={styles.permissionBtnText}>Allow access</Text>
           </Pressable>
         </View>
@@ -285,7 +332,7 @@ export function CreatorEntryScreen({
         <View style={styles.centerState}>
           <Ionicons name="images-outline" size={48} color="rgba(255,255,255,0.3)" />
           <Text style={styles.permissionText}>No photos found</Text>
-          <Pressable style={styles.blankBtn} onPress={() => setView('camera')}>
+          <Pressable style={styles.blankBtn} hitSlop={12} onPress={() => { haptic.selection(); setView('camera'); }}>
             <Text style={styles.blankBtnText}>Use camera instead</Text>
           </Pressable>
         </View>
@@ -298,16 +345,15 @@ export function CreatorEntryScreen({
           onEndReachedThreshold={0.5}
           ListFooterComponent={loadingMore ? <ActivityIndicator color="rgba(255,255,255,0.4)" /> : null}
           contentContainerStyle={styles.grid}
+          columnWrapperStyle={styles.gridRow}
           renderItem={({ item }) => {
             const isSelected = selectedIds.has(item.id);
-            const selectionOrder = isSelected
-              ? Array.from(selectedIds).indexOf(item.id) + 1
-              : 0;
             return (
               <Pressable
                 style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
+                hitSlop={12}
                 onPress={() => toggleSelect(item)}
-                accessibilityLabel={`Select ${item.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
+                accessibilityLabel={`Select ${item.mediaType}${isSelected ? ', selected' : ''}`}
               >
                 <Image source={{ uri: item.uri }} style={styles.thumbImage} resizeMode="cover" />
                 {item.mediaType === 'video' && (
@@ -323,7 +369,7 @@ export function CreatorEntryScreen({
                 {isSelected && (
                   <View style={styles.thumbOverlay}>
                     <View style={styles.selectionBadge}>
-                      <Text style={styles.selectionBadgeText}>{selectionOrder}</Text>
+                      <Ionicons name="checkmark" size={16} color="#1a1a1a" />
                     </View>
                   </View>
                 )}
@@ -333,17 +379,39 @@ export function CreatorEntryScreen({
         />
       )}
 
-      {/* Bottom bar — blank canvas option */}
-      {selectedCount === 0 && (
-        <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
-          style={[styles.bottomBarGradient, { paddingBottom: insets.bottom + 8 }]}
+      {/* Bottom bar — selected preview (premium floating bar with blur) */}
+      {selectedCount > 0 && (
+        <BlurView
+          intensity={25}
+          tint="dark"
+          style={[styles.selectedBottomBar, { paddingBottom: insets.bottom + Space.sm }]}
         >
-          <Pressable style={styles.blankBtn} onPress={onBlankStart}>
-            <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.6)" />
-            <Text style={styles.blankBtnText}>Blank canvas</Text>
+          <View style={styles.selectedPreviewBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectedPreviewScroll}>
+              {assets.filter(a => selectedIds.has(a.id)).map((asset) => (
+                <View key={asset.id} style={styles.selectedThumbWrap}>
+                  <Image source={{ uri: asset.uri }} style={styles.selectedThumb} resizeMode="cover" />
+                  <Pressable
+                    style={styles.selectedThumbRemove}
+                    onPress={() => { haptic.selection(); toggleSelect(asset); }}
+                    accessibilityLabel="Remove from selection"
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close" size={12} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+            <Text style={styles.selectedCountText}>
+              {selectedCount} of {isPoster ? 10 : 6} selected
+            </Text>
+          </View>
+          <Pressable style={styles.addBtn} hitSlop={12} onPress={handleAddSelected} accessibilityLabel={isPoster ? 'Create story' : 'Create collage'}>
+            <Text style={styles.addBtnText}>
+              {isPoster ? 'Create Story' : 'Create Look'}
+            </Text>
           </Pressable>
-        </LinearGradient>
+        </BlurView>
       )}
     </View>
   );
@@ -366,12 +434,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingBottom: Space.sm,
     zIndex: 10,
   },
+  galleryBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   galleryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: Type.bodyLarge.size,
+    fontFamily: Typography.family.semibold,
     color: '#fff',
   },
   topRightRow: {
@@ -380,10 +456,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   topIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    width: 44,
+    height: 44,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -396,48 +471,68 @@ const styles = StyleSheet.create({
   },
   permissionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: Typography.family.semibold,
     color: '#fff',
     marginTop: 12,
   },
   permissionText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
     lineHeight: 20,
   },
   permissionBtn: {
     backgroundColor: '#fff',
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     marginTop: 12,
   },
   permissionBtnText: {
     color: '#000',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
   },
   blankBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
   },
   blankBtnText: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
   },
-  // Gallery grid
+  // Camera view — "Aa" text-mode button (Instagram "Create" pattern)
+  textModeBtn: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  textModeBtnLabel: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: Typography.family.bold,
+  },
+  // Gallery grid — edge-to-edge, 2px gap
   grid: {
     paddingHorizontal: 0,
     paddingTop: 60,
   },
+  gridRow: {
+    gap: 2,
+  },
   thumb: {
     position: 'relative',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
   },
   thumbImage: {
     width: '100%',
@@ -449,20 +544,20 @@ const styles = StyleSheet.create({
     left: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
   },
   videoDuration: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: '500',
+    fontFamily: Typography.family.medium,
   },
   thumbOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   selectionBadge: {
     position: 'absolute',
@@ -470,35 +565,82 @@ const styles = StyleSheet.create({
     right: 8,
     width: 24,
     height: 24,
-    borderRadius: 12,
-    backgroundColor: '#fff',
+    borderRadius: Radius.full,
+    backgroundColor: '#C9A46A',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  selectionBadgeText: {
-    color: '#000',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  // Gallery add button
+  // Gallery add button — premium pill
   addBtn: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: '#C9A46A',
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.full,
+    shadowColor: '#C9A46A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   addBtnText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#1a1a1a',
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.3,
   },
-  // Bottom bar gradient
-  bottomBarGradient: {
+  // Selected bottom bar — premium floating bar with blur
+  selectedBottomBar: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     alignItems: 'center',
-    paddingTop: 16,
+    paddingTop: Space.md,
+    paddingHorizontal: 12,
+    overflow: 'hidden',
+  },
+  // Selected preview bar
+  selectedPreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    paddingHorizontal: 12,
+  },
+  selectedPreviewScroll: {
+    gap: 6,
+    alignItems: 'center',
+  },
+  selectedThumbWrap: {
+    position: 'relative',
+    width: 48,
+    height: 48,
+  },
+  selectedThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+  },
+  selectedThumbRemove: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: Radius.lg,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedCountText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    marginLeft: 'auto',
   },
 });

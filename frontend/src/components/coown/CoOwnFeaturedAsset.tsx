@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   statusDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   statusText: {
     fontSize: Type.meta.size,
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     minHeight: 40,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
-    marginTop: 4,
+    marginTop: Space.xs,
     alignSelf: 'flex-start',
     paddingHorizontal: Space.md + 2,
     backgroundColor: 'rgba(255,255,255,0.16)',

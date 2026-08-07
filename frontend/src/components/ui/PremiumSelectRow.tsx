@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface PremiumSelectRowProps {
@@ -27,12 +27,14 @@ export function PremiumSelectRow({
   disabled = false,
   onPress,
 }: PremiumSelectRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasError = Boolean(errorText);
   const isEmpty = !value || value.length === 0;
 
   const borderColor = hasError
-    ? Colors.danger
-    : Colors.border;
+    ? colors.danger
+    : colors.border;
 
   return (
     <View style={styles.container}>
@@ -55,7 +57,7 @@ export function PremiumSelectRow({
           <Ionicons
             name={icon}
             size={18}
-            color={hasError ? Colors.danger : Colors.textMuted}
+            color={hasError ? colors.danger : colors.textMuted}
             style={styles.icon}
           />
         ) : null}
@@ -73,7 +75,7 @@ export function PremiumSelectRow({
         <Ionicons
           name="chevron-forward"
           size={16}
-          color={disabled ? Colors.border : Colors.textMuted}
+          color={disabled ? colors.border : colors.textMuted}
         />
       </AnimatedPressable>
 
@@ -86,26 +88,26 @@ export function PremiumSelectRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginBottom: Space.md,
   },
   label: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.sm,
     letterSpacing: 0.2,
   },
   labelError: {
-    color: Colors.danger,
+    color: colors.danger,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: Radius.lg,
     borderWidth: 1,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.md,
     minHeight: 52,
     gap: Space.sm,
@@ -118,25 +120,25 @@ const styles = StyleSheet.create({
   },
   valueText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   placeholderText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   helperText: {
     marginTop: Space.sm,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 17,
   },
   errorText: {
     marginTop: Space.sm,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
     lineHeight: 17,
   },
 });

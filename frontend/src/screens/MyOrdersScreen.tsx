@@ -3,19 +3,21 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
-  FlatList,
   Pressable,
   ActivityIndicator,
   RefreshControl,
   TextInput,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { ActiveTheme, Colors } from '../constants/colors';
-import { Space, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { haptics } from '../utils/haptics';
 import { useStore } from '../store/useStore';
 import {
   CommerceUserOrder,
@@ -26,6 +28,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { OrdersTabRail, OrdersTab } from '../components/orders/OrdersTabRail';
 import { OrderLedgerRow, OrderViewModel } from '../components/orders/OrderLedgerRow';
+import { OrderRowSkeleton } from '../components/skeletons/OrderRowSkeleton';
 import {
   OrdersFilterSheet,
   FilterClassification,
@@ -77,7 +80,10 @@ function groupOrdersByDate(orders: OrderViewModel[]): DateGroup[] {
 export default function MyOrdersScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
+  const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
 
@@ -363,15 +369,12 @@ export default function MyOrdersScreen() {
   }, [viewerId, debouncedQuery, hasActiveFilter, activeTab, navigation, handleClearSearch]);
 
   const renderLoading = useCallback(() => (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color={Colors.textSecondary} />
-      <Text style={styles.loadingText}>Loading orders…</Text>
-    </View>
+    <OrderRowSkeleton count={6} />
   ), []);
 
   const renderError = useCallback(() => (
     <View style={styles.errorContainer}>
-      <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
+      <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
       <Text style={styles.errorTitle}>Orders could not be loaded</Text>
       <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
       <Pressable
@@ -394,7 +397,7 @@ export default function MyOrdersScreen() {
     if (isLoadingMore) {
       return (
         <View style={styles.footerLoading}>
-          <ActivityIndicator size="small" color={Colors.textSecondary} />
+          <ActivityIndicator size="small" color={colors.textSecondary} />
           <Text style={styles.footerLoadingText}>Loading more…</Text>
         </View>
       );
@@ -420,7 +423,7 @@ export default function MyOrdersScreen() {
     if (!nextCursor && orders.length > 0) {
       return (
         <View style={styles.footerEnd}>
-          <Text style={styles.footerEndText}>No more orders</Text>
+          <Text style={styles.footerEndText}>All orders loaded</Text>
         </View>
       );
     }
@@ -445,8 +448,6 @@ export default function MyOrdersScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable
           style={styles.headerBack}
@@ -455,7 +456,7 @@ export default function MyOrdersScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Orders</Text>
         <Pressable
@@ -468,7 +469,7 @@ export default function MyOrdersScreen() {
           <Ionicons
             name={hasActiveFilter ? 'filter' : 'filter-outline'}
             size={22}
-            color={hasActiveFilter ? Colors.brand : Colors.textPrimary}
+            color={hasActiveFilter ? colors.brand : colors.textPrimary}
           />
         </Pressable>
       </View>
@@ -477,31 +478,33 @@ export default function MyOrdersScreen() {
         activeTab={activeTab}
         buyingCount={0}
         sellingCount={0}
-        onChange={setActiveTab}
+        onChange={(tab) => { haptics.selection(); setActiveTab(tab); }}
       />
 
       {needsActionCount > 0 && !debouncedQuery.trim() && filter.classification === 'all' && (
-        <Pressable
-          style={styles.needsActionBanner}
-          onPress={() => setFilter({ classification: 'needs_action', year: null })}
-          accessibilityRole="button"
-          accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
-        >
-          <Ionicons name="alert-circle-outline" size={16} color={Colors.brand} />
-          <Text style={styles.needsActionText}>
-            {needsActionCount} {needsActionCount === 1 ? 'order' : 'orders'} need{needsActionCount === 1 ? 's' : ''} your attention
-          </Text>
-          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
-        </Pressable>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <Pressable
+            style={[styles.needsActionBanner, { backgroundColor: colors.brand + '12' }]}
+            onPress={() => setFilter({ classification: 'needs_action', year: null })}
+            accessibilityRole="button"
+            accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
+          >
+            <Ionicons name="alert-circle-outline" size={16} color={colors.brand} />
+            <Text style={[styles.needsActionText, { color: colors.brand }]}>
+              {needsActionCount} {needsActionCount === 1 ? 'order' : 'orders'} need{needsActionCount === 1 ? 's' : ''} your attention
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+          </Pressable>
+        </Reanimated.View>
       )}
 
       <View style={styles.searchRow}>
         <ElevatedSurface variant="surface" style={styles.searchInputWrap}>
-          <Ionicons name="search-outline" size={16} color={Colors.textMuted} style={styles.searchIcon} />
+          <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by item, order number, member, or tracking"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCorrect={false}
@@ -516,7 +519,7 @@ export default function MyOrdersScreen() {
               accessibilityRole="button"
               accessibilityLabel="Clear search"
             >
-              <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
             </Pressable>
           )}
         </ElevatedSurface>
@@ -536,13 +539,13 @@ export default function MyOrdersScreen() {
         </View>
       ) : null}
 
-      <FlatList
+      <FlashList
         data={groupedOrders}
         keyExtractor={(group) => group.key}
         renderItem={({ item: group }) => (
           <View>
             {renderGroupHeader(group.label)}
-            <FlatList
+            <FlashList
               data={group.data}
               keyExtractor={keyExtractor}
               renderItem={renderItem}
@@ -567,10 +570,12 @@ export default function MyOrdersScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.textSecondary}
-            colors={[Colors.textSecondary]}
+            tintColor={colors.textSecondary}
+            colors={[colors.textSecondary]}
           />
         }
+        // Performance: order history can be long; FlashList v2 handles
+        // recycling automatically.
       />
 
       <OrdersFilterSheet
@@ -584,10 +589,11 @@ export default function MyOrdersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -596,38 +602,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   headerBack: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   headerFilterBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   needsActionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
   },
   needsActionText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.brand,
+    color: colors.brand,
   },
   searchRow: {
     paddingHorizontal: Space.md,
@@ -636,18 +642,18 @@ const styles = StyleSheet.create({
   searchInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
-    height: 40,
+    height: Control.chrome + Space.xs,
   },
   searchIcon: {
     marginLeft: 0,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   filterSummaryRow: {
     flexDirection: 'row',
@@ -657,14 +663,14 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   filterSummaryText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   clearFilterText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   groupHeader: {
     paddingHorizontal: Space.md,
@@ -672,30 +678,19 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   groupHeaderText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
   },
   listContent: {
     paddingBottom: Space.xl,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.borderLight,
-    marginLeft: 104,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xl * 2,
-    gap: Space.md,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    backgroundColor: colors.borderSubtle,
+    marginLeft: Space.xxl * 2 + Space.sm,
   },
   errorContainer: {
     alignItems: 'center',
@@ -704,66 +699,67 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   errorTitle: {
-    fontSize: 18,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   errorSubtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   retryBtn: {
-    paddingVertical: 14,
+    paddingVertical: Space.md - 2,
     paddingHorizontal: Space.xl,
-    borderRadius: 10,
-    backgroundColor: Colors.brand,
-    minHeight: 48,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.brand,
+    minHeight: Space.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   footerLoading: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingVertical: Space.md,
   },
   footerLoadingText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   footerError: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingVertical: Space.md,
   },
   footerErrorText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   retryLink: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   footerEnd: {
     alignItems: 'center',
     paddingVertical: Space.md,
   },
   footerEndText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

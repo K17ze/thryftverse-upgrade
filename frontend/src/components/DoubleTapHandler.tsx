@@ -4,7 +4,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withSequence,
   withDelay,
   withTiming,
@@ -12,6 +11,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface DoubleTapHandlerProps {
   children: React.ReactNode;
@@ -21,21 +21,23 @@ interface DoubleTapHandlerProps {
 export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProps) {
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
 
   const triggerAnimation = useCallback(() => {
+    if (reducedMotion) return;
     scale.value = 0;
     opacity.value = 1;
 
     // Pop up fast, stay a bit, then quickly dissolve and shrink
     scale.value = withSequence(
-      withSpring(1, { damping: 10, stiffness: 400 }),
+      withTiming(1, { duration: 140 }),
       withDelay(400, withTiming(0.8, { duration: 150 }))
     );
     opacity.value = withSequence(
       withTiming(1, { duration: 100 }),
       withDelay(400, withTiming(0, { duration: 150 }))
     );
-  }, [scale, opacity]);
+  }, [scale, opacity, reducedMotion]);
 
   const onDoubleTapJS = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

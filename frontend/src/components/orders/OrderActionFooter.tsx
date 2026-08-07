@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 export interface OrderActionConfig {
   label: string;
@@ -23,6 +23,9 @@ export function OrderActionFooter({
   secondaryAction,
   bottomInset,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   if (!primaryAction && !secondaryAction) {
     return null;
   }
@@ -53,7 +56,7 @@ export function OrderActionFooter({
             }}
           >
             {secondaryAction.loading ? (
-              <ActivityIndicator size="small" color={Colors.danger} />
+              <ActivityIndicator size="small" color={colors.danger} />
             ) : null}
             <Text
               style={[
@@ -83,7 +86,7 @@ export function OrderActionFooter({
             }}
           >
             {primaryAction.loading ? (
-              <ActivityIndicator size="small" color={Colors.textInverse} />
+              <ActivityIndicator size="small" color={colors.textInverse} />
             ) : null}
             <Text style={[styles.btnText, styles.btnTextPrimary]}>
               {primaryAction.label}
@@ -95,15 +98,15 @@ export function OrderActionFooter({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
   },
@@ -118,34 +121,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.sm,
     minHeight: 48,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
   },
   btnPrimary: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   btnSecondary: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   btnDestructive: {
-    borderColor: Colors.danger,
+    borderColor: colors.danger,
   },
   btnDisabled: {
     opacity: 0.5,
   },
   btnText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
   btnTextPrimary: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   btnTextSecondary: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   btnTextDestructive: {
-    color: Colors.danger,
+    color: colors.danger,
   },
 });

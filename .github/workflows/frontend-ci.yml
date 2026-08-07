@@ -1,0 +1,146 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  push:
+    branches:
+      - main
+      - "creator/**"
+      - "codex/**"
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: TypeScript typecheck
+        run: npm run typecheck
+        working-directory: frontend
+
+  unit-tests:
+    name: Vitest unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Run unit tests
+        run: npm test
+        working-directory: frontend
+
+  design-tokens:
+    name: Design token + animated scroll lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Design token lint
+        run: npm run lint:design-tokens
+        working-directory: frontend
+      - name: Animated scroll usage check
+        run: npm run check:animated-scroll
+        working-directory: frontend
+
+  phase-verification:
+    name: Phase verification suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Run phase verification
+        run: npm run verify:phase
+        working-directory: frontend
+
+  expo-doctor:
+    name: Expo doctor health check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Run expo doctor
+        run: npm run doctor
+        working-directory: frontend
+
+  maestro-flow-validation:
+    name: Maestro flow YAML validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Maestro flow YAML syntax
+        run: |
+          # P0-5: Validate every Maestro flow parses as YAML before it
+          # reaches the screenshot workflow. This catches indentation and
+          # key-name typos early without booting a simulator. Maestro
+          # flows use multi-document YAML (config doc + flow doc
+          # separated by `---`), so we use safe_load_all.
+          pip install pyyaml
+          python -c "
+          import yaml, glob, sys
+          errors = []
+          for path in glob.glob('frontend/.maestro/flows/*.yaml'):
+              try:
+                  with open(path) as f:
+                      list(yaml.safe_load_all(f))
+              except Exception as e:
+                  errors.append(f'{path}: {e}')
+          if errors:
+              for e in errors:
+                  print(e)
+              sys.exit(1)
+          print('All Maestro flows are valid YAML.')
+          "

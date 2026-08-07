@@ -1,8 +1,8 @@
 import React from 'react';
 import { TextInput, TextInputProps, StyleSheet, View, Text } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
-import { Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 
 export interface ControlledAppInputProps {
   name: string;
@@ -21,6 +21,9 @@ export function ControlledAppInput({
   rules,
   inputProps,
 }: ControlledAppInputProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -34,7 +37,7 @@ export function ControlledAppInput({
             onChangeText={onChange}
             onBlur={onBlur}
             value={value ?? ''}
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             {...inputProps}
           />
         )}
@@ -44,33 +47,35 @@ export function ControlledAppInput({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginBottom: 12,
   },
   label: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
+    borderColor: colors.border,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.textPrimary,
+    fontSize: Type.bodyEmphasis.size,
+    color: colors.textPrimary,
     fontFamily: Typography.family.regular,
   },
   inputError: {
-    borderColor: Colors.danger,
+    borderColor: colors.danger,
   },
   errorText: {
-    fontSize: 12,
-    color: Colors.danger,
-    marginTop: 4,
+    fontSize: Type.caption.size,
+    color: colors.danger,
+    marginTop: Space.xs,
     fontFamily: Typography.family.regular,
   },
-});
+  });
+}

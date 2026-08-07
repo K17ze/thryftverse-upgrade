@@ -44,7 +44,7 @@ export interface CoOwnConciergeCTAProps {
   onContactConcierge?: () => void;
 }
 
-const REASON_CONFIG: Record<ConciergeReason, { title: string; message: string; icon: string }> = {
+const REASON_CONFIG: Record<ConciergeReason, { title: string; message: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
   no_opposite_side: {
     title: 'No sellers right now',
     message: 'There are no open sell orders for this asset. Request a quote and the market maker will seek a counterparty.',
@@ -53,7 +53,7 @@ const REASON_CONFIG: Record<ConciergeReason, { title: string; message: string; i
   wide_spread: {
     title: 'Wide spread',
     message: 'The bid-ask spread is wide, indicating thin liquidity. A quote request may get you a better price than a market order.',
-    icon: 'arrows-horizontal-outline',
+    icon: 'swap-horizontal-outline',
   },
   no_recent_trades: {
     title: 'No recent trades',
@@ -105,7 +105,7 @@ export function CoOwnConciergeCTA({
       {/* Header */}
       <View style={styles.headerRow}>
         <View style={[styles.iconWrap, { backgroundColor: colors.brand + '12' }]}>
-          <Ionicons name={config.icon as any} size={20} color={colors.brand} />
+          <Ionicons name={config.icon} size={20} color={colors.brand} />
         </View>
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

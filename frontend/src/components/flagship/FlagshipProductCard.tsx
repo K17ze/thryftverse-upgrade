@@ -2,10 +2,11 @@ import React from 'react';
 import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { isVideoUri } from '../../utils/media';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const GAP = Space.sm;
@@ -38,7 +39,10 @@ export function FlagshipProductCard({
   condition,
   style,
 }: FlagshipProductCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasVideo = isVideoUri(imageUri);
+  const reducedMotion = useReducedMotion();
 
   return (
     <Pressable onPress={onPress} style={[styles.root, { width: CARD_W }, style]}>
@@ -64,7 +68,7 @@ export function FlagshipProductCard({
             <Ionicons
               name={isSaved || isWishlisted ? 'heart' : 'heart-outline'}
               size={20}
-              color={isSaved || isWishlisted ? Colors.danger : '#fff'}
+              color={isSaved || isWishlisted ? colors.danger : '#fff'}
             />
           </Pressable>
         )}
@@ -80,7 +84,7 @@ export function FlagshipProductCard({
         <View style={styles.bottomOverlay}>
           <View style={styles.textRow}>
             <Reanimated.Text
-              entering={FadeIn}
+              entering={reducedMotion ? undefined : FadeIn}
               numberOfLines={1}
               style={styles.priceText}
             >
@@ -92,20 +96,20 @@ export function FlagshipProductCard({
 
       {/* Title below image */}
       <View style={styles.metaRow}>
-        <Reanimated.Text entering={FadeIn} numberOfLines={2} style={styles.titleText}>
+        <Reanimated.Text entering={reducedMotion ? undefined : FadeIn} numberOfLines={2} style={styles.titleText}>
           {title}
         </Reanimated.Text>
       </View>
 
       {sellerName && (
-        <Reanimated.Text entering={FadeIn} numberOfLines={1} style={styles.sellerText}>
+        <Reanimated.Text entering={reducedMotion ? undefined : FadeIn} numberOfLines={1} style={styles.sellerText}>
           {sellerName}
         </Reanimated.Text>
       )}
 
       {condition && (
         <View style={styles.conditionPill}>
-          <Reanimated.Text entering={FadeIn} style={styles.conditionText}>
+          <Reanimated.Text entering={reducedMotion ? undefined : FadeIn} style={styles.conditionText}>
             {condition}
           </Reanimated.Text>
         </View>
@@ -114,14 +118,14 @@ export function FlagshipProductCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root: {
     marginBottom: Space.md,
   },
   imageWrap: {
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   saveBtn: {
     position: 'absolute',
@@ -142,8 +146,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
   },
   bottomOverlay: {
@@ -177,29 +181,29 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: Type.body.size,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 18,
   },
   sellerText: {
     fontSize: Type.meta.size,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
     paddingHorizontal: 2,
   },
   conditionPill: {
     alignSelf: 'flex-start',
-    marginTop: 4,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 8,
+    marginTop: Space.xs,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   conditionText: {
     fontSize: Type.meta.size,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 });

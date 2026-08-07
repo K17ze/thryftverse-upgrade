@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 
 export interface AudienceOption {
   key: string;
@@ -27,6 +27,9 @@ export function AudiencePreferenceGrid({
   selectedGenders,
   onSelect,
 }: AudiencePreferenceGridProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.grid}>
       {AUDIENCE_OPTIONS.map((option) => {
@@ -51,10 +54,10 @@ export function AudiencePreferenceGrid({
               <Ionicons
                 name={option.icon}
                 size={20}
-                color={isSelected ? Colors.textPrimary : Colors.textSecondary}
+                color={isSelected ? colors.textPrimary : colors.textSecondary}
               />
               {isSelected && (
-                <Ionicons name="checkmark" size={16} color={Colors.textPrimary} />
+                <Ionicons name="checkmark" size={16} color={colors.textPrimary} />
               )}
             </View>
             <Text
@@ -75,7 +78,7 @@ export function AudiencePreferenceGrid({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -85,15 +88,15 @@ const styles = StyleSheet.create({
     width: '48%',
     flexGrow: 1,
     padding: Space.md,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     minHeight: 48,
   },
   tileSelected: {
-    borderColor: Colors.textPrimary,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.textPrimary,
+    backgroundColor: colors.surfaceAlt,
   },
   tileHeader: {
     flexDirection: 'row',
@@ -102,18 +105,18 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   tileLabel: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 2,
   },
   tileLabelSelected: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   tileSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 17,
   },
 });

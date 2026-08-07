@@ -67,12 +67,10 @@ function notifyThemePreferenceChange(preference: ThemePreference): void {
 }
 
 export function applyThemePreference(preference: ThemePreference): void {
-  (globalThis as any)[THEME_OVERRIDE_GLOBAL_KEY] = preference === 'system' ? null : preference;
+  (globalThis as Record<string, unknown>)[THEME_OVERRIDE_GLOBAL_KEY] = preference === 'system' ? null : preference;
 
   const nextScheme = preference === 'system' ? null : preference;
-  const setColorScheme = (Appearance as any).setColorScheme as
-    | ((scheme: 'light' | 'dark' | null) => void)
-    | undefined;
+  const setColorScheme = (Appearance as { setColorScheme?: (scheme: 'light' | 'dark' | null) => void }).setColorScheme;
 
   // RN 0.85+ native AppearanceModule.setColorScheme has a non-nullable Kotlin
   // parameter, so passing null crashes with NullPointerException. Only call

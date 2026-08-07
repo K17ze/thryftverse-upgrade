@@ -41,6 +41,25 @@ export function trackCreatorEvent(event: CreatorAnalyticsEvent, payload: Creator
       // silently fail — analytics must not crash the editor
     }
   }
+  // Forward publish events to the backend analytics endpoint.
+  // We import lazily to avoid a circular dependency at module load time
+  // and to keep the editor decoupled from the network layer.
+  if (event === 'creator_publish_success' && payload.publishedId && payload.documentType) {
+    const publishedId = payload.publishedId;
+    const documentType = payload.documentType;
+    import('../services/creatorAnalyticsApi')
+      .then(({ logCreatorEvent }) =>
+        logCreatorEvent({
+          contentType: documentType === 'look' ? 'look' : 'poster',
+          contentId: publishedId,
+          eventType: 'profile_visit', // reuse as a "publish" signal
+          metadata: { event },
+        }),
+      )
+      .catch(() => {
+        // analytics must not crash the editor
+      });
+  }
 }
 
 export const CreatorAnalytics = {

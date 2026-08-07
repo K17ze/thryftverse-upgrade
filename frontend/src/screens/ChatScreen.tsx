@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AnimatedPressable } from "../components/AnimatedPressable";
 
@@ -6,10 +6,14 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   Alert,
   Pressable,
+  ActivityIndicator,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from "react-native";
+
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -21,13 +25,11 @@ import {
   SafeAreaView,
 } from "react-native-safe-area-context";
 
-import { StackScreenProps } from "@react-navigation/stack";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { RootStackParamList } from "../navigation/types";
 
-import { Colors } from "../constants/colors";
-
-import { TypeStyles } from "../theme/designTokens";
+import { useAppTheme } from "../theme/ThemeContext";
 
 import { useFormattedPrice } from "../hooks/useFormattedPrice";
 
@@ -41,8 +43,12 @@ import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
+  fetchComposerStateFromApi,
+  upsertComposerStateOnApi,
+  clearComposerStateOnApi,
 } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
+import { acceptListingOfferOnApi, declineListingOfferOnApi } from "../services/listingOffersApi";
 
 import { useToast } from "../context/ToastContext";
 
@@ -51,6 +57,8 @@ import { useHaptic } from "../hooks/useHaptic";
 import { KeyboardStickyView } from "../platform/keyboard/KeyboardProvider";
 
 import { ChatComposerBar } from "../components/chat/ChatComposerBar";
+
+import { TypingIndicator } from "../components/chat/TypingIndicator";
 
 import { MessageBubble } from "../components/chat/MessageBubble";
 
@@ -66,8 +74,6 @@ import {
 } from "../components/chat/ChatActionSheet";
 
 import { AttachmentReviewSheet } from "../components/chat/AttachmentReviewSheet";
-
-import { Space, Radius, Type } from "../theme/designTokens";
 
 import { MessageContextMenu } from "../components/chat/MessageContextMenu";
 
@@ -85,6 +91,22 @@ import { PaymentWarningCard } from "../components/chat/PaymentWarningCard";
 
 import { SkeletonChatLoader } from "../components/chat/SkeletonChatLoader";
 
+import { RetryState } from "../components/RetryState";
+import { EmptyState } from "../components/EmptyState";
+
+import { ChatAgentPicker } from "../components/chat/ChatAgentPicker";
+import { SuggestedRepliesBar } from "../components/chat/SuggestedRepliesBar";
+import { OfflineBanner } from "../components/OfflineBanner";
+import {
+  deployAgent as deployChatAgent,
+  removeAgent as removeChatAgent,
+  getDeployedAgents as getDeployedChatAgents,
+  getAgentSuggestions as getChatAgentSuggestions,
+  getAgentResponse as getChatAgentResponse,
+  type ChatAgent,
+  type SuggestedReply,
+} from "../services/chatAgentsApi";
+
 import * as Clipboard from "expo-clipboard";
 
 import * as ImagePicker from "expo-image-picker";
@@ -97,16 +119,26 @@ import {
 } from "../utils/messageGrouping";
 
 import { detectChatSafetyWarning, detectComposerSafetyWarning, containsOffPlatformPaymentPattern } from "../utils/chatSafetyWarnings";
+import {
+  resolveComposerStack,
+  isSlotVisible,
+  type ComposerStackSlotState,
+} from "../utils/chatComposerStack";
 
 import {
   isTrustedSystemMessage,
   resolveSystemMessageProvenance,
 } from "../utils/systemMessageProvenance";
 
-type Props = StackScreenProps<RootStackParamList, "Chat">;
+import { t } from "../i18n";
+
+import { requestPushPermissionOnce } from "../lib/pushPermission";
+
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
 type MsgType =
-  "text" | "offer" | "offer_declined" | "purchase_status" | "media" | "system" | "commerce_state";
+  "text" | "offer" | "offer_declined" | "purchase_status" | "media" | "system" | "commerce_state" | "voice";
 
 interface Message {
   id: string;
@@ -126,6 +158,7 @@ interface Message {
   systemTitle?: string;
 
   offer?: {
+    offerId?: string;
     price: number;
     originalPrice: number;
     status?: "pending" | "declined" | "countered" | "accepted" | "expired";
@@ -145,6 +178,12 @@ interface Message {
 
   mediaType?: "image" | "video";
 
+  voiceUri?: string;
+
+  voiceDurationMs?: number;
+
+  voiceWaveform?: number[];
+
   commerceState?: {
     stateType: "order_placed" | "payment_confirmed" | "order_shipped" | "order_in_transit" | "order_delivered" | "order_cancelled" | "order_refunded";
     orderId: string;
@@ -158,6 +197,14 @@ interface Message {
   uploadStatus?: "uploading" | "failed" | "sent";
 
   status?: "sending" | "sent" | "failed";
+
+  readStatus?: "sending" | "sent" | "delivered" | "read";
+
+  /** True when this message was generated by a deployed AI agent (demo). */
+  isAgent?: boolean;
+
+  /** Ionicon name for the agent avatar glyph (only set for agent messages). */
+  agentAvatar?: string;
 }
 
 const INITIAL_MESSAGES: Message[] = [];
@@ -220,6 +267,216 @@ function formatMessageTime(dateStr?: string): string | undefined {
 }
 
 export default function ChatScreen({ navigation, route }: Props) {
+  const { colors, isDark } = useAppTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+    screenRoot: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+
+    selectionToolbar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      backgroundColor: colors.surfaceAlt,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+
+    emptyStateWrap: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: Space.xl,
+      paddingBottom: Space.xl,
+    },
+
+    messageList: {
+      paddingTop: Space.sm,
+      paddingBottom: Space.md,
+    },
+
+    dateWrap: {
+      alignItems: "center",
+      marginVertical: Space.sm,
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.sm,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+      alignSelf: "center",
+    },
+
+    dateText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: Type.meta.letterSpacing,
+    },
+
+    statusWrap: {
+      marginVertical: Space.xs,
+      paddingHorizontal: Space.md,
+      alignItems: "center",
+    },
+
+    msgRow: {
+      flexDirection: "column",
+      width: "100%",
+      gap: Space.xs,
+      paddingHorizontal: 0,
+    },
+
+    msgRowRight: {
+      alignItems: "stretch",
+    },
+
+    linkPreviewWrap: {
+      maxWidth: "78%",
+      alignSelf: "flex-start",
+      marginTop: Space.xs,
+    },
+
+    linkPreviewWrapRight: {
+      alignSelf: "flex-end",
+    },
+
+    selectionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Space.sm,
+    },
+
+    selectionRowRight: {
+      flexDirection: "row-reverse",
+    },
+
+    checkbox: {
+      width: Control.icon,
+      height: Control.icon,
+      borderRadius: Radius.sm,
+      borderWidth: Stroke.emphasis,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: "center",
+      justifyContent: "center",
+      marginHorizontal: Space.sm,
+    },
+
+    checkboxActive: {
+      backgroundColor: colors.brand,
+      borderColor: colors.brand,
+    },
+
+    composerWrap: {
+      paddingHorizontal: 0,
+      paddingBottom: 0,
+      paddingTop: 0,
+      backgroundColor: colors.surface,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+
+    undoBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.surfaceAlt,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      marginHorizontal: -Space.md,
+      marginTop: -Space.xs,
+      marginBottom: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+
+    undoBannerText: {
+      color: colors.textSecondary,
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+    },
+
+    undoBannerAction: {
+      color: colors.brand,
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+    },
+
+    agentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Space.sm + Space.xs,
+      paddingVertical: Space.xs,
+      gap: Space.sm,
+      flexWrap: 'wrap',
+    },
+
+    agentChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.md,
+      backgroundColor: `${colors.brand}14`,
+    },
+
+    agentChipPressed: {
+      backgroundColor: colors.surfaceAlt,
+    },
+
+    agentChipText: {
+      fontSize: Type.meta.size,
+      color: colors.brand,
+      fontFamily: Typography.family.semibold,
+    },
+
+    agentHintText: {
+      fontSize: Type.meta.size,
+      color: colors.textSecondary,
+      fontFamily: Typography.family.medium,
+    },
+
+    addAgentBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
+    },
+
+    addAgentBtnPressed: {
+      backgroundColor: colors.surfaceAlt,
+    },
+
+    addAgentBtnText: {
+      fontSize: Type.meta.size,
+      color: colors.textSecondary,
+      fontFamily: Typography.family.medium,
+    },
+
+    typingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+      gap: Space.xs,
+    },
+
+    typingText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+    },
+  }), [colors]);
+
   const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
 
   const currentUser = useStore((state) => state.currentUser);
@@ -308,7 +565,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       const senderLabel =
         botLookup.get(resolvedSenderId) ??
         userLookup.get(resolvedSenderId) ??
-        (resolvedSenderId === "system" ? "System" : "Thryft user");
+        (resolvedSenderId === "system" ? "System" : t('chat.fallbackUserName'));
 
       if (entry.offerPrice !== undefined && entry.originalPrice !== undefined) {
         return {
@@ -381,6 +638,19 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [dangerWarningDismissed, setDangerWarningDismissed] = useState(false);
   const [cautionWarningDismissed, setCautionWarningDismissed] = useState(false);
 
+  // AI chat agents (demo-mode service) — deployable assistants that surface
+  // suggested replies and an optional agent response after the user sends.
+  const [chatAgentPickerVisible, setChatAgentPickerVisible] = useState(false);
+  const [deployedChatAgents, setDeployedChatAgents] = useState<ChatAgent[]>([]);
+  const [chatAgentSuggestions, setChatAgentSuggestions] = useState<SuggestedReply[]>([]);
+
+  // Per App Store / Google Play 2026 guidelines, push permission is requested
+  // only after a meaningful user action — here, after the user sends their
+  // first chat message. The ref guards against re-prompting within the same
+  // session; requestPushPermissionOnce also persists an AsyncStorage flag so
+  // the user is never re-prompted across sessions for the same trigger.
+  const pushPermissionAskedRef = useRef(false);
+
   // Real-time composer safety detection — re-evaluates as the user types
   const composerSafetyWarning = React.useMemo(() => {
     if (dangerWarningDismissed && cautionWarningDismissed) return null;
@@ -433,6 +703,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const [attachmentPickerVisible, setAttachmentPickerVisible] = useState(false);
 
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+
   const [pendingAttachment, setPendingAttachment] = useState<{
     uri: string;
     mediaType: "image" | "video";
@@ -441,6 +713,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
 
   const undoTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scrollTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const deleteApiStatusRef = useRef<"pending" | "success" | "error">("pending");
 
@@ -459,8 +733,12 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [isOffline, setIsOffline] = useState(false);
 
   const [composerSending, setComposerSending] = useState(false);
+  // Ref guard prevents double-tap send before state update propagates (§13).
+  const composerSendingRef = useRef(false);
 
-  const listRef = React.useRef<FlatList>(null);
+  const [isTyping, setIsTyping] = useState(false);
+
+  const listRef = React.useRef<FlashListRef<Message>>(null);
 
   const { formatFromFiat } = useFormattedPrice();
 
@@ -528,12 +806,16 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (conversationId) markConversationRead(conversationId);
   }, [conversationId, markConversationRead]);
 
+  useEffect(() => {
+    setIsTyping(false);
+  }, [conversationId]);
+
   // Auto-send offer message when arriving from MakeOfferScreen with an offerPayload
   const offerPayloadRef = useRef(routeOfferPayload);
   offerPayloadRef.current = routeOfferPayload;
   useEffect(() => {
     if (!routeOfferPayload || !conversationId) return;
-    const { price, originalPrice, expiresAt, counterRound } = routeOfferPayload;
+    const { offerId, price, originalPrice, expiresAt, counterRound } = routeOfferPayload;
     const localId = `offer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const offerMsg: Message = {
       id: localId,
@@ -544,6 +826,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         ? `Counter-offer: ${formatFromFiat(price, "GBP")}`
         : `Offer: ${formatFromFiat(price, "GBP")}`,
       offer: {
+        offerId,
         price,
         originalPrice,
         status: "pending",
@@ -554,15 +837,106 @@ export default function ChatScreen({ navigation, route }: Props) {
     };
     pushMessage(offerMsg);
     appendToConversationStore(offerMsg, currentUser?.id ?? "me");
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    scheduleScrollToEnd();
     // Clear the payload from route params so it doesn't re-send on re-render
-    navigation.setParams({ offerPayload: undefined } as any);
+    navigation.setParams({ offerPayload: undefined });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeOfferPayload, conversationId]);
 
   useEffect(() => {
     if (conversationId) setConversationDraft(conversationId, input);
   }, [input, conversationId, setConversationDraft]);
+
+  // P0-7: Cross-device composer state hydration. On conversation open, fetch
+  // the persisted composer state from the backend and restore draft text,
+  // reply context and pending attachments so a draft started on another
+  // device continues here. Only restore when the local draft is empty — we
+  // never overwrite in-progress local input.
+  const hydratedComposerRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!conversationId) return;
+    hydratedComposerRef.current = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        const state = await fetchComposerStateFromApi(conversationId);
+        if (cancelled) return;
+        hydratedComposerRef.current = conversationId;
+        if (state.draftText && !input) {
+          setInput(state.draftText);
+        }
+        if (state.replyToMessageId) {
+          const replied = messages.find((m) => m.id === state.replyToMessageId);
+          if (replied) setReplyTo(replied);
+        }
+      } catch {
+        // Hydration is best-effort — a failed fetch must not block the
+        // composer. The local draft store still works offline.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
+  // P0-7: Debounced cross-device composer state persistence. Push the
+  // current draft + reply context to the backend so it restores on other
+  // devices. Debounced to 1.5s so we do not PUT on every keystroke.
+  const composerPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!conversationId) return;
+    if (composerPersistTimerRef.current) {
+      clearTimeout(composerPersistTimerRef.current);
+    }
+    composerPersistTimerRef.current = setTimeout(() => {
+      // Best-effort — never block UI on persistence failures.
+      upsertComposerStateOnApi(conversationId, {
+        draftText: input,
+        replyToMessageId: replyTo?.id ?? null,
+      }).catch(() => undefined);
+    }, 1500);
+    return () => {
+      if (composerPersistTimerRef.current) {
+        clearTimeout(composerPersistTimerRef.current);
+      }
+    };
+  }, [input, replyTo, conversationId]);
+
+  // P0-7: On unmount, flush the latest composer state synchronously-ish so
+  // backgrounding the app does not lose the draft.
+  useEffect(() => {
+    return () => {
+      if (composerPersistTimerRef.current) {
+        clearTimeout(composerPersistTimerRef.current);
+      }
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+      }
+      if (undoTimerRef.current) {
+        clearTimeout(undoTimerRef.current);
+      }
+      if (conversationId && input) {
+        upsertComposerStateOnApi(conversationId, {
+          draftText: input,
+          replyToMessageId: replyTo?.id ?? null,
+        }).catch(() => undefined);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Helper: scroll to end with cleanup safety. Clears any pending scroll
+  // timer before setting a new one so we never leak timers on unmount.
+  const scheduleScrollToEnd = useCallback(() => {
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+    }
+    scrollTimerRef.current = setTimeout(() => {
+      scrollTimerRef.current = null;
+      listRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+  }, []);
 
   const resolvedPartnerId = useMemo(() => {
     if (isGroup) return null;
@@ -628,13 +1002,52 @@ export default function ChatScreen({ navigation, route }: Props) {
     [connectedAgents],
   );
 
+  // Sync demo AI chat agents from the chatAgentsApi service for this conversation.
+  useEffect(() => {
+    if (!conversationId) return;
+    setDeployedChatAgents(getDeployedChatAgents(conversationId));
+  }, [conversationId]);
+
+  const handleDeployChatAgent = useCallback(
+    (agent: ChatAgent) => {
+      if (!conversationId) return;
+      haptic.success();
+      deployChatAgent(conversationId, agent.type);
+      setDeployedChatAgents(getDeployedChatAgents(conversationId));
+      setChatAgentPickerVisible(false);
+      show(`${agent.name} connected`, "success");
+      setChatAgentSuggestions(getChatAgentSuggestions(conversationId, ""));
+    },
+    [conversationId, haptic, show],
+  );
+
+  const handleRemoveChatAgent = useCallback(
+    (agentId: string) => {
+      if (!conversationId) return;
+      haptic.medium();
+      removeChatAgent(conversationId, agentId);
+      setDeployedChatAgents(getDeployedChatAgents(conversationId));
+      setChatAgentSuggestions([]);
+      show("Agent removed", "info");
+    },
+    [conversationId, haptic, show],
+  );
+
+  const handleSelectChatAgentSuggestion = useCallback(
+    (reply: SuggestedReply) => {
+      haptic.selection();
+      setInput(reply.text);
+    },
+    [haptic],
+  );
+
   const partnerSummary = resolvedPartnerId
     ? conversation?.participantProfiles?.find((participant) => participant.id === resolvedPartnerId)
     : undefined;
 
   const sellerHandle = resolvedPartnerId
-    ? (partnerProfile?.displayName || partnerProfile?.username || partnerSummary?.displayName || partnerSummary?.username || userLookup.get(resolvedPartnerId) || "Thryft user")
-    : "Thryft user";
+    ? (partnerProfile?.displayName || partnerProfile?.username || partnerSummary?.displayName || partnerSummary?.username || userLookup.get(resolvedPartnerId) || t('chat.fallbackUserName'))
+    : t('chat.fallbackUserName');
 
   const searchMatches = useMemo(() => {
     const q = String(searchQuery ?? "")
@@ -667,7 +1080,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           viewPosition: 0.5,
         });
       } catch {
-        // FlatList may not have rendered the item yet
+        // FlashList may not have rendered the item yet
       }
     }
   }, [searchMatchIndex, searchMatches]);
@@ -722,6 +1135,11 @@ export default function ChatScreen({ navigation, route }: Props) {
     const trimmed = input.trim();
 
     if (!trimmed || !conversationId) return;
+    // Ref guard: prevents double-tap before setComposerSending propagates (§13).
+    if (composerSendingRef.current) return;
+    composerSendingRef.current = true;
+
+    haptic.light();
 
     // Send-time safety nudge — if the message contains off-platform payment
     // patterns, show a warning toast (but still allow sending).
@@ -759,7 +1177,17 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     appendToConversationStore(outgoing, currentUser?.id ?? "me");
 
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    scheduleScrollToEnd();
+
+    // Contextual push permission prompt — ask once after the user sends their
+    // first chat message. Best-effort; never blocks the send path.
+    if (!pushPermissionAskedRef.current) {
+      pushPermissionAskedRef.current = true;
+      requestPushPermissionOnce('chat').catch(() => undefined);
+    }
+
+    // Performance mark: chat message send initiated.
+    performance.mark("chat:send");
 
     sendConversationMessageOnApi(conversationId, trimmed)
       .then((serverMsg) => {
@@ -770,6 +1198,8 @@ export default function ChatScreen({ navigation, route }: Props) {
               : m,
           ),
         );
+        // Performance mark: chat message delivered (server confirmed).
+        performance.mark("chat:delivered");
       })
 
       .catch(() => {
@@ -782,16 +1212,60 @@ export default function ChatScreen({ navigation, route }: Props) {
         show("Message failed to send. Tap to retry.", "error");
       })
 
-      .finally(() => setComposerSending(false));
+      .finally(() => {
+        composerSendingRef.current = false;
+        setComposerSending(false);
+      });
 
     setInput("");
 
     setReplyTo(null);
+
+    // P0-7: Clear the persisted cross-device composer state now that the
+    // draft has been sent. Best-effort — a failed clear does not block the
+    // send path; the next open will re-fetch and find an empty draft.
+    clearComposerStateOnApi(conversationId).catch(() => undefined);
+
+    // AI chat agent response (demo) — when an agent is deployed, surface a
+    // mock agent reply after the user's message. The agent message is marked
+    // as a system-style assistant message so it renders on the opposing side.
+    if (deployedChatAgents.length > 0 && conversationId) {
+      setTimeout(() => {
+        const agentResponse = getChatAgentResponse(conversationId, trimmed);
+        if (!agentResponse.content) return;
+        const agentMsg: Message = {
+          id: agentResponse.id,
+          type: "text",
+          sender: "them",
+          senderId: agentResponse.agentId,
+          senderLabel: `${deployedChatAgents[0]?.name ?? "AI Agent"} · AI`,
+          text: agentResponse.content,
+          status: "sent",
+          isAgent: true,
+          agentAvatar: deployedChatAgents[0]?.avatar,
+        };
+        pushMessage(agentMsg);
+        appendToConversationStore(agentMsg, agentResponse.agentId);
+        setChatAgentSuggestions(getChatAgentSuggestions(conversationId, agentResponse.content));
+        scheduleScrollToEnd();
+      }, 500);
+    } else if (conversationId) {
+      setChatAgentSuggestions(getChatAgentSuggestions(conversationId, trimmed));
+    }
   };
 
-  const handleAcceptOffer = (msgId: string) => {
+  const handleAcceptOffer = async (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    const offerId = msg?.offer?.offerId;
+    if (!offerId) {
+      show("Cannot accept this offer — missing offer reference.", "error");
+      return;
+    }
+
     haptic.medium();
 
+    // Optimistic update — revert on API failure so UI tells the truth (§11).
+    const prevStatus = msg?.offer?.status;
     setMessages((prev) =>
       prev.map((m) =>
         m.id === msgId && m.offer
@@ -800,18 +1274,39 @@ export default function ChatScreen({ navigation, route }: Props) {
       ),
     );
 
-    const linkedItemId = routeItemId || conversation?.itemId;
-
-    if (linkedItemId) {
-      navigation.navigate("Checkout", { itemId: linkedItemId });
-    } else {
-      show("Offer accepted. Checkout requires a linked listing.", "info");
+    try {
+      await acceptListingOfferOnApi(offerId);
+      const linkedItemId = routeItemId || conversation?.itemId;
+      if (linkedItemId) {
+        navigation.navigate("Checkout", { itemId: linkedItemId });
+      } else {
+        show("Offer accepted. Checkout requires a linked listing.", "info");
+      }
+    } catch {
+      // Revert optimistic state — the offer was NOT accepted server-side.
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId && m.offer
+            ? { ...m, offer: { ...m.offer, status: prevStatus ?? "pending" } }
+            : m,
+        ),
+      );
+      show("Could not accept offer. Please try again.", "error");
     }
   };
 
-  const handleDeclineOffer = (msgId: string) => {
+  const handleDeclineOffer = async (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    const offerId = msg?.offer?.offerId;
+    if (!offerId) {
+      show("Cannot decline this offer — missing offer reference.", "error");
+      return;
+    }
+
     haptic.light();
 
+    // Optimistic update — revert on API failure so UI tells the truth (§11).
+    const prevStatus = msg?.offer?.status;
     setMessages((prev) =>
       prev.map((m) =>
         m.id === msgId && m.offer
@@ -819,6 +1314,20 @@ export default function ChatScreen({ navigation, route }: Props) {
           : m,
       ),
     );
+
+    try {
+      await declineListingOfferOnApi(offerId);
+    } catch {
+      // Revert optimistic state — the offer was NOT declined server-side.
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId && m.offer
+            ? { ...m, offer: { ...m.offer, status: prevStatus ?? "pending" } }
+            : m,
+        ),
+      );
+      show("Could not decline offer. Please try again.", "error");
+    }
   };
 
   const handleCounterOffer = (msgId: string, offerPrice?: number, originalPrice?: number) => {
@@ -839,6 +1348,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       counterOffer: true,
       previousOffer: offerPrice ?? 0,
       counterRound: currentRound + 1,
+      parentOfferId: currentMsg?.offer?.offerId,
     });
   };
 
@@ -923,7 +1433,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     setRecentlyDeleted([]);
 
-    show("Messages restored", "success");
+    show(t('chat.messagesRestored'), "success");
   };
 
   const handleBulkDelete = () => {
@@ -1065,6 +1575,13 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         show("Upload failed. Tap media to retry.", "error");
       });
+
+    // Contextual push permission prompt — ask once after the user sends their
+    // first media message. Best-effort; never blocks the send path.
+    if (!pushPermissionAskedRef.current) {
+      pushPermissionAskedRef.current = true;
+      requestPushPermissionOnce('chat').catch(() => undefined);
+    }
   };
 
   const handleRetryUpload = (msgId: string) => {
@@ -1218,7 +1735,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     pushMessage(outgoing);
     appendToConversationStore(outgoing, currentUser?.id ?? "me");
     haptic.success();
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+    scheduleScrollToEnd();
     sendMediaMessage(outgoing.id, uri, mediaType);
     setPendingAttachment(null);
   };
@@ -1259,7 +1776,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           viewPosition: 0.5,
         });
       } catch {
-        // FlatList may not have rendered the item yet
+        // FlashList may not have rendered the item yet
       }
     }
   };
@@ -1285,14 +1802,14 @@ export default function ChatScreen({ navigation, route }: Props) {
     const isFirstInCluster = clusterFirst;
     const isLastInCluster = clusterLast;
 
-    // Spacing tiers (8px base grid)
+    // Spacing tiers — tight within clusters, normal between clusters
     let spacingTop: number = Space.sm;
     if (!prevMsg) spacingTop = Space.md;
-    else if (prevMsg.sender === msg.sender) spacingTop = 2;
+    else if (prevMsg.sender === msg.sender) spacingTop = Space.xs;
     else spacingTop = Space.md;
 
     // Cluster rhythm: tight bottom inside cluster, normal at cluster end
-    let marginBottom: number = 2;
+    let marginBottom: number = Space.xs;
     if (isLastInCluster) marginBottom = Space.sm;
 
     const showDateSeparator = dateSeparatorIndices.has(index);
@@ -1365,23 +1882,23 @@ export default function ChatScreen({ navigation, route }: Props) {
       msg.senderId &&
       isTrustedSystemMessage({
         id: msg.id,
-        senderId: msg.senderId,
+        senderId: msg.senderId ?? "",
         isSystem: msg.isSystem,
         type: msg.type === "system" ? "system" : undefined,
         systemTitle: msg.systemTitle,
         text: msg.text,
         timestamp: msg.date ?? "",
-      } as any)
+      })
     ) {
       const provenance = resolveSystemMessageProvenance({
         id: msg.id,
-        senderId: msg.senderId,
+        senderId: msg.senderId ?? "",
         isSystem: msg.isSystem,
         type: msg.type === "system" ? "system" : undefined,
         systemTitle: msg.systemTitle,
         text: msg.text,
         timestamp: msg.date ?? "",
-      } as any);
+      });
       const content = (
         <View key={msg.id} style={styles.statusWrap}>
           <MarketplaceChatCard
@@ -1413,6 +1930,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             isMe && styles.msgRowRight,
             { marginTop: spacingTop, marginBottom },
           ]}
+          accessibilityLiveRegion="polite"
         >
           <MarketplaceChatCard
             type="offer"
@@ -1446,7 +1964,8 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     const isMe = msg.sender === "me";
     const isMedia = msg.type === "media" && msg.mediaUri;
-    if (!msg.text && !isMedia) return null;
+    const isVoice = msg.type === "voice" && msg.voiceUri;
+    if (!msg.text && !isMedia && !isVoice) return null;
 
     const bubble = (
       <View style={[styles.selectionRow, isMe && styles.selectionRowRight]}>
@@ -1459,9 +1978,17 @@ export default function ChatScreen({ navigation, route }: Props) {
             onPress={() => toggleMessageSelection(msg.id)}
             activeOpacity={0.7}
             hapticFeedback="light"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={
+              selectedMessageIds.has(msg.id)
+                ? "Deselect message"
+                : "Select message"
+            }
+            accessibilityState={{ selected: selectedMessageIds.has(msg.id) }}
           >
             {selectedMessageIds.has(msg.id) ? (
-              <Ionicons name="checkmark" size={14} color={Colors.textInverse} />
+              <Ionicons name="checkmark" size={14} color={colors.textInverse} />
             ) : null}
           </AnimatedPressable>
         ) : null}
@@ -1479,6 +2006,8 @@ export default function ChatScreen({ navigation, route }: Props) {
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             timestamp={isLastInCluster ? formatMessageTime(msg.date) : undefined}
             isTranslated={translatedMessageIds.has(msg.id)}
+            isAgent={msg.isAgent}
+            agentAvatar={msg.agentAvatar}
             status={
               isMe
                 ? msg.status === "sending"
@@ -1492,6 +2021,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                         : "sent"
                 : undefined
             }
+            readStatus={isMe ? msg.readStatus : undefined}
             onLongPress={() => handleMessageLongPress(msg)}
             onReactionPress={() => setReactingToMessage(msg)}
             onMediaPress={
@@ -1516,7 +2046,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     );
                     return parent
                       ? {
-                          senderName: parent.senderLabel ?? "Thryft user",
+                          senderName: parent.senderLabel ?? t('chat.fallbackUserName'),
                           text: parent.text ?? "",
                         }
                       : null;
@@ -1532,6 +2062,8 @@ export default function ChatScreen({ navigation, route }: Props) {
             mediaUri={msg.mediaUri}
             mediaType={msg.mediaType}
             uploadStatus={msg.uploadStatus}
+            voiceDurationMs={msg.voiceDurationMs}
+            voiceWaveform={msg.voiceWaveform}
             onRetry={
               msg.uploadStatus === "failed"
                 ? () => handleRetryUpload(msg.id)
@@ -1543,7 +2075,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             isLastInCluster={isLastInCluster}
             showAvatar={!isMe && isFirstInCluster}
           />
-          {!isMedia &&
+          {!isMedia && !isVoice &&
             (() => {
               const url = extractFirstUrl(msg.text ?? "");
               return url ? (
@@ -1558,7 +2090,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               ) : null;
             })()}
           {/* Off-platform payment warning — non-blocking inline card below the message */}
-          {!isMedia && containsOffPlatformPaymentPattern(msg.text ?? "") && (
+          {!isMedia && !isVoice && containsOffPlatformPaymentPattern(msg.text ?? "") && (
             <View style={[isMe && styles.linkPreviewWrapRight]}>
               <PaymentWarningCard
                 dismissed={dismissedWarningIds.has(msg.id)}
@@ -1605,11 +2137,11 @@ export default function ChatScreen({ navigation, route }: Props) {
       null
     : null;
   const topBarTitle = isGroup
-    ? (conversation?.title ?? "Group chat")
+    ? (conversation?.title ?? t('chat.groupChatLabel'))
     : sellerHandle;
   const topBarSubtitle = isGroup
     ? `${conversation?.participantIds?.length ?? 0} members`
-    : "Marketplace chat";
+    : t('chat.marketplaceChatLabel');
   const topBarInitials = isGroup
     ? (conversation?.title
         ?.split(" ")
@@ -1624,6 +2156,19 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (!itemId) return null;
     return listings.find((l) => l.id === itemId) ?? null;
   }, [routeItemId, conversation?.itemId, listings]);
+
+  // Memoized FlashList callbacks — stable references avoid re-rendering the
+  // whole message list when parent state that doesn't affect messages changes.
+  const messageKeyExtractor = useCallback((item: Message) => item.id, []);
+  const handleMessageListScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      const isNearBottom =
+        contentSize.height - contentOffset.y - layoutMeasurement.height < 150;
+      setShowScrollToBottom(!isNearBottom);
+    },
+    [],
+  );
 
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screenRoot}>
@@ -1754,14 +2299,21 @@ export default function ChatScreen({ navigation, route }: Props) {
               activeOpacity={0.7}
               scaleValue={0.92}
               hapticFeedback="light"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Exit selection mode"
+              accessibilityHint="Closes the message selection toolbar"
             >
               <Ionicons
                 name="close-outline"
                 size={24}
-                color={Colors.textPrimary}
+                color={colors.textPrimary}
               />
             </AnimatedPressable>
-            <Caption color={Colors.textMuted}>
+            <Caption
+              color={colors.textMuted}
+              accessibilityLiveRegion="polite"
+            >
               {selectedMessageIds.size} selected
             </Caption>
             <AnimatedPressable
@@ -1769,9 +2321,12 @@ export default function ChatScreen({ navigation, route }: Props) {
               activeOpacity={0.7}
               scaleValue={0.92}
               hapticFeedback="medium"
-              accessibilityLabel="Delete selected"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Delete selected messages"
+              accessibilityRole="button"
+              accessibilityHint="Permanently removes the selected messages from this conversation"
             >
-              <Ionicons name="trash-outline" size={22} color={Colors.danger} />
+              <Ionicons name="trash-outline" size={Control.icon} color={colors.danger} />
             </AnimatedPressable>
           </View>
         ) : null}
@@ -1779,127 +2334,189 @@ export default function ChatScreen({ navigation, route }: Props) {
         {isSyncing ? (
           <SkeletonChatLoader count={6} />
         ) : syncError && !messages.length ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyGlyph}>
-              <Ionicons
-                name="cloud-offline-outline"
-                size={40}
-                color={Colors.textMuted}
-              />
-            </View>
-            <Text style={styles.emptyTitle}>Couldn't load messages</Text>
-            <Text style={styles.emptyBody}>
-              Check your connection and try again.
-            </Text>
-            <Pressable
-              onPress={() => void syncMessagesFromApi()}
-              style={styles.retryBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Retry loading messages"
-            >
-              <Ionicons name="refresh" size={16} color={Colors.textInverse} />
-              <Text style={styles.retryBtnText}>Retry</Text>
-            </Pressable>
-          </View>
+          <RetryState
+            message="Couldn't load messages. Check your connection and try again."
+            onRetry={() => void syncMessagesFromApi()}
+          />
         ) : messages.length ? (
-          <FlatList
+          <FlashList
             ref={listRef}
             data={messages}
             renderItem={({ item, index }) => renderMessage(item, index)}
-            keyExtractor={(item) => item.id}
+            keyExtractor={messageKeyExtractor}
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="always"
-            onScroll={(e) => {
-              const { contentOffset, contentSize, layoutMeasurement } =
-                e.nativeEvent;
-              const isNearBottom =
-                contentSize.height -
-                  contentOffset.y -
-                  layoutMeasurement.height <
-                150;
-              setShowScrollToBottom(!isNearBottom);
-            }}
+            accessibilityLiveRegion="polite"
+            onScroll={handleMessageListScroll}
             scrollEventThrottle={200}
           />
         ) : (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyGlyph}>
-              <Ionicons
-                name="chatbubbles-outline"
-                size={26}
-                color={Colors.textMuted}
-              />
-            </View>
-            <Text style={styles.emptyTitle}>Start the conversation</Text>
-            <Text style={styles.emptyBody}>
-              Send a message, photo, or make an offer to get started.
-            </Text>
+          <View style={styles.emptyStateWrap}>
+            <EmptyState
+              density="compact"
+              icon="chatbubble-outline"
+              title="Start the conversation"
+              subtitle="Send a message below to get started."
+            />
           </View>
         )}
 
-        <KeyboardStickyView offset={{ closed: Math.max(insets.bottom, Space.sm) + 8, opened: 8 }}>
+        <KeyboardStickyView offset={{ closed: Math.max(insets.bottom, Space.sm) + Space.sm, opened: Space.sm }}>
         <View
           style={[
             styles.composerWrap,
-            { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 },
+            { paddingBottom: Math.max(insets.bottom, Space.sm) + Space.sm },
           ]}
         >
-          {replyTo ? (
-            <ReplyQuote
-              senderName={replyTo.senderLabel ?? "Thryft user"}
-              text={replyTo.text ?? ""}
-              onClose={() => setReplyTo(null)}
-            />
-          ) : null}
-
-          {reactingToMessage ? (
-            <EmojiReactionsBar
-              reactions={reactingToMessage.reactions ?? []}
-              onReact={(emoji) => {
-                if (reactingToMessage && conversationId) {
-                  addMessageReaction(
-                    conversationId,
-                    reactingToMessage.id,
-                    emoji,
-                  );
-                }
-                setReactingToMessage(null);
-              }}
-            />
-          ) : null}
-
-          {isOffline && (
-            <View style={styles.offlineBanner}>
-              <Ionicons
-                name="cloud-offline-outline"
-                size={16}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.offlineBannerText}>
-                You are offline. Messages will be sent when you reconnect.
-              </Text>
+          {isTyping ? (
+            <View style={styles.typingRow}>
+              <TypingIndicator />
+              <Text style={styles.typingText}>typing...</Text>
             </View>
+          ) : null}
+          {/* P0-8: Composer-stack height enforcement. Multiple contextual
+              banners can stack above the input bar (reply, reactions,
+              offline, undo). On small devices the stack can push the input
+              off-screen. The resolver keeps only the highest-priority slots
+              that fit the budget so the input bar always remains usable. */}
+          {(() => {
+            const stackSlots: ComposerStackSlotState[] = [
+              { slot: 'replyQuote', visible: !!replyTo, estimatedHeight: 56 },
+              { slot: 'undoBanner', visible: recentlyDeleted.length > 0, estimatedHeight: 44 },
+              { slot: 'offlineBanner', visible: isOffline, estimatedHeight: 36 },
+              { slot: 'reactionPicker', visible: !!reactingToMessage, estimatedHeight: 48 },
+            ];
+            const resolution = resolveComposerStack(stackSlots);
+            return (
+              <>
+                {isSlotVisible(resolution, 'replyQuote') && replyTo ? (
+                  <ReplyQuote
+                    senderName={replyTo.senderLabel ?? t('chat.fallbackUserName')}
+                    text={replyTo.text ?? ""}
+                    onClose={() => setReplyTo(null)}
+                  />
+                ) : null}
+
+                {isSlotVisible(resolution, 'reactionPicker') && reactingToMessage ? (
+                  <EmojiReactionsBar
+                    reactions={reactingToMessage.reactions ?? []}
+                    onReact={(emoji) => {
+                      if (reactingToMessage && conversationId) {
+                        addMessageReaction(
+                          conversationId,
+                          reactingToMessage.id,
+                          emoji,
+                        );
+                      }
+                      setReactingToMessage(null);
+                    }}
+                  />
+                ) : null}
+
+                {isSlotVisible(resolution, 'offlineBanner') && isOffline && (
+                  <OfflineBanner message="You are offline. Messages will be sent when you reconnect." />
+                )}
+
+                {isSlotVisible(resolution, 'undoBanner') && recentlyDeleted.length > 0 && (
+                  <View style={styles.undoBanner}>
+                    <Text
+                      style={styles.undoBannerText}
+                      accessibilityLiveRegion="polite"
+                    >
+                      {recentlyDeleted.length} message
+                      {recentlyDeleted.length === 1 ? "" : "s"} deleted
+                    </Text>
+                    <AnimatedPressable
+                      onPress={handleUndoDelete}
+                      activeOpacity={0.7}
+                      scaleValue={0.95}
+                      hapticFeedback="light"
+                      accessibilityRole="button"
+                      accessibilityLabel="Undo message deletion"
+                    >
+                      <Text style={styles.undoBannerAction}>Undo</Text>
+                    </AnimatedPressable>
+                  </View>
+                )}
+              </>
+            );
+          })()}
+
+          {/* AI agent suggested replies — shown above the composer when an
+              agent is deployed, suggestions are available, and the user has
+              not started typing (so the bar never competes with in-progress
+              input). */}
+          {deployedChatAgents.length > 0 &&
+            chatAgentSuggestions.length > 0 &&
+            input.trim().length === 0 && (
+            <SuggestedRepliesBar
+              suggestions={chatAgentSuggestions}
+              onSelect={handleSelectChatAgentSuggestion}
+            />
           )}
 
-          {recentlyDeleted.length > 0 && (
-            <View style={styles.undoBanner}>
-              <Text style={styles.undoBannerText}>
-                {recentlyDeleted.length} message
-                {recentlyDeleted.length === 1 ? "" : "s"} deleted
-              </Text>
-              <AnimatedPressable
-                onPress={handleUndoDelete}
-                activeOpacity={0.7}
-                scaleValue={0.95}
-                hapticFeedback="light"
-                accessibilityLabel="Undo message deletion"
+          {/* AI agent deployment row — quick access to deploy/remove agents.
+              Shows deployed agent chips (each with the agent's avatar icon) or
+              a subtle hint + "Add AI assistant" button when none are deployed. */}
+          <View style={styles.agentRow}>
+            {deployedChatAgents.map((agent) => (
+              <Pressable
+                key={agent.id}
+                onPress={() => handleRemoveChatAgent(agent.id)}
+                style={({ pressed }) => [
+                  styles.agentChip,
+                  pressed && styles.agentChipPressed,
+                ]}
+                accessibilityLabel={`Remove ${agent.name}`}
+                accessibilityRole="button"
+                accessibilityHint={`Remove ${agent.name} from this conversation`}
               >
-                <Text style={styles.undoBannerAction}>Undo</Text>
-              </AnimatedPressable>
-            </View>
-          )}
+                <Ionicons
+                  name={(agent.avatar as keyof typeof Ionicons.glyphMap) || 'sparkles'}
+                  size={Type.meta.size}
+                  color={colors.brand}
+                />
+                <Text style={styles.agentChipText}>
+                  {agent.name}
+                </Text>
+                <Ionicons
+                  name="close-circle"
+                  size={Type.meta.size}
+                  color={colors.brand}
+                />
+              </Pressable>
+            ))}
+
+            {deployedChatAgents.length === 0 && (
+              <Text style={styles.agentHintText}>
+                AI assistants can help with search, styling, offers, and safety
+              </Text>
+            )}
+
+            <Pressable
+              onPress={() => setChatAgentPickerVisible(true)}
+              style={({ pressed }) => [
+                styles.addAgentBtn,
+                pressed && styles.addAgentBtnPressed,
+              ]}
+              accessibilityLabel="Add AI assistant"
+              accessibilityRole="button"
+              accessibilityHint="Browse and deploy AI assistants into this conversation"
+            >
+              <Ionicons
+                name="sparkles"
+                size={Type.meta.size}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.addAgentBtnText}>
+                {deployedChatAgents.length > 0
+                  ? 'Add another assistant'
+                  : 'Add AI assistant'}
+              </Text>
+            </Pressable>
+          </View>
 
           <ChatComposerBar
             value={input}
@@ -1991,6 +2608,16 @@ export default function ChatScreen({ navigation, route }: Props) {
           />
         )}
 
+        {/* AI Chat Agent Picker — deploy AI assistants into the conversation.
+            Demo mode per AGENTS.md §11 — agents use keyword-based suggestions,
+            not real LLM inference. */}
+        <ChatAgentPicker
+          visible={chatAgentPickerVisible}
+          onClose={() => setChatAgentPickerVisible(false)}
+          onDeploy={handleDeployChatAgent}
+          deployedAgentIds={deployedChatAgents.map((a) => a.id)}
+        />
+
         <ScrollToBottomFAB
           visible={showScrollToBottom}
           onPress={scrollToBottom}
@@ -2055,207 +2682,3 @@ export default function ChatScreen({ navigation, route }: Props) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  screenRoot: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-
-  selectionToolbar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.xl,
-    paddingBottom: Space.xl,
-  },
-
-  emptyGlyph: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Space.sm,
-    width: 56,
-    height: 56,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-  },
-
-  emptyTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
-    textAlign: "center",
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-
-  emptyBody: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textSecondary,
-    textAlign: "center",
-    lineHeight: Type.caption.lineHeight,
-    marginTop: Space.xs,
-  },
-
-  messageList: {
-    paddingTop: Space.sm,
-    paddingBottom: Space.md,
-  },
-
-  dateWrap: {
-    alignItems: "center",
-    marginVertical: Space.sm + 2,
-    paddingVertical: 3,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-    alignSelf: "center",
-  },
-
-  dateText: {
-    fontSize: Type.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  statusWrap: {
-    marginVertical: Space.xs,
-    paddingHorizontal: Space.md,
-    alignItems: "center",
-  },
-
-  msgRow: {
-    flexDirection: "column",
-    width: "100%",
-    gap: Space.xs,
-    paddingHorizontal: 0,
-  },
-
-  msgRowRight: {
-    alignItems: "stretch",
-  },
-
-  linkPreviewWrap: {
-    maxWidth: "78%",
-    alignSelf: "flex-start",
-    marginTop: Space.xs,
-  },
-
-  linkPreviewWrapRight: {
-    alignSelf: "flex-end",
-  },
-
-  selectionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Space.sm,
-  },
-
-  selectionRowRight: {
-    flexDirection: "row-reverse",
-  },
-
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: Radius.sm,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: Space.sm,
-  },
-
-  checkboxActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
-
-  composerWrap: {
-    paddingHorizontal: 0,
-    paddingBottom: 0,
-    paddingTop: 0,
-    backgroundColor: Colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-
-  undoBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: Colors.surfaceAlt,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    marginHorizontal: -Space.md,
-    marginTop: -Space.xs,
-    marginBottom: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-
-  undoBannerText: {
-    color: Colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-
-  undoBannerAction: {
-    color: Colors.brand,
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-
-  offlineBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Space.xs,
-    backgroundColor: `${Colors.textMuted}10`,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    marginHorizontal: -Space.md,
-    marginTop: -Space.xs,
-    marginBottom: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-  },
-
-  offlineBannerText: {
-    color: Colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-
-  retryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Space.xs,
-    backgroundColor: Colors.brand,
-    paddingHorizontal: Space.md + 4,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.lg,
-    marginTop: Space.sm,
-  },
-
-  retryBtnText: {
-    color: Colors.textInverse,
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-});

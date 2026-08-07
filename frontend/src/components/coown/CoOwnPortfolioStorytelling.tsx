@@ -115,14 +115,14 @@ export function CoOwnPortfolioStorytelling({
           styles.premiumBadge,
           {
             backgroundColor: isPositivePremium
-              ? colors.success + '12'
+              ? colors.coownUp + '12'
               : isNegativePremium
-                ? colors.danger + '12'
+                ? colors.coownDown + '12'
                 : colors.surfaceAlt,
             borderColor: isPositivePremium
-              ? colors.success + '40'
+              ? colors.coownUp + '40'
               : isNegativePremium
-                ? colors.danger + '40'
+                ? colors.coownDown + '40'
                 : colors.border,
           },
         ]}>
@@ -136,16 +136,16 @@ export function CoOwnPortfolioStorytelling({
             styles.premiumValue,
             {
               color: isPositivePremium
-                ? colors.success
+                ? colors.coownUp
                 : isNegativePremium
-                  ? colors.danger
+                  ? colors.coownDown
                   : colors.textSecondary,
             },
           ]}>
             {isPositivePremium ? '+' : ''}{premiumPct!.toFixed(1)}%
           </Text>
           <Text style={[styles.premiumGlyph, {
-            color: isPositivePremium ? colors.success : isNegativePremium ? colors.danger : colors.textSecondary,
+            color: isPositivePremium ? colors.coownUp : isNegativePremium ? colors.coownDown : colors.textSecondary,
           }]}>
             {isPositivePremium ? '▲' : isNegativePremium ? '▼' : '−'}
           </Text>

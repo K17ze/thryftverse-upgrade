@@ -7,18 +7,60 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "jsEngine": "hermes",
     "ios": {
       "bundleIdentifier": "com.thryftverse.app",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "associatedDomains": [
+        "applinks:thryftverse.com",
+        "applinks:www.thryftverse.com"
+      ],
+      "infoPlist": {
+        "NSCameraUsageDescription": "ThryftVerse needs camera access to capture photos and videos for listings, posters, and looks.",
+        "NSPhotoLibraryUsageDescription": "ThryftVerse needs photo library access to select images for listings, posters, and looks.",
+        "NSPhotoLibraryAddUsageDescription": "ThryftVerse needs photo library access to save captured photos.",
+        "NSUserTrackingUsageDescription": "ThryftVerse does not track you across other companies' apps or websites.",
+        "NSFaceIDUsageDescription": "ThryftVerse uses Face ID to protect your wallet, payments, and account settings."
+      }
     },
     "android": {
       "package": "com.thryftverse.app",
+      "targetSdkVersion": 36,
+      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": {
+            "scheme": "https",
+            "domain": "thryftverse.com"
+          },
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": {
+            "scheme": "https",
+            "domain": "www.thryftverse.com"
+          },
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": {
+            "scheme": "thryftverse"
+          },
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
@@ -31,6 +73,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withPrivacyManifest",
       "expo-font",
       "expo-asset",
       "expo-web-browser",
@@ -72,10 +115,13 @@
     "owner": "kha1ze",
     "updates": {
       "url": "https://u.expo.dev/e94afae8-2794-4230-a184-785eb8d7ad36",
-      "checkAutomatically": "ON_LOAD"
+      "checkAutomatically": "ON_LOAD",
+      "enableBsdiffPatchSupport": true,
+      "codeSigningCertificate": "certs/update-certificate.pem",
+      "codeSigningMetadata": { "keyid": "main", "alg": "rsa-v1_5-sha256" }
     },
     "runtimeVersion": {
-      "policy": "sdkVersion"
+      "policy": "fingerprint"
     }
   }
 }

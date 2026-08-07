@@ -1,23 +1,25 @@
 import React, { useMemo } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { Caption } from '../components/ui/Text';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
+import { Control, Radius, Space, Type, TypeStyles } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'GroupChatInfo'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params;
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
@@ -42,7 +44,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         scrollEnabled={false}
       >
         <View style={styles.center}>
-          <Caption color={Colors.textMuted}>Group not found</Caption>
+          <Caption color={colors.textMuted}>Group not found</Caption>
         </View>
       </FlagshipScreen>
     );
@@ -55,7 +57,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     .join('')
     .slice(0, 2)
     .toUpperCase();
-  const description = (conversation as typeof conversation & { description?: string }).description;
+  const description = conversation?.description;
 
   const leaveGroup = () => {
     Alert.alert(
@@ -126,7 +128,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Edit group"
             >
-              <Ionicons name="create-outline" size={21} color={Colors.textPrimary} />
+              <Ionicons name="create-outline" size={21} color={colors.textPrimary} />
             </AnimatedPressable>
           }
         />
@@ -220,6 +222,8 @@ function QuickAction({
   label: string;
   onPress: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <AnimatedPressable
       style={styles.quickAction}
@@ -230,13 +234,14 @@ function QuickAction({
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={21} color={Colors.textPrimary} />
+      <Ionicons name={icon} size={21} color={colors.textPrimary} />
       <Text style={styles.quickActionLabel}>{label}</Text>
     </AnimatedPressable>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
     gap: Space.lg,
@@ -247,8 +252,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -258,23 +263,23 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   avatar: {
-    width: 76,
-    height: 76,
+    width: Space.xxl + Space.xl - Space.xs,
+    height: Space.xxl + Space.xl - Space.xs,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     marginBottom: Space.sm,
   },
   avatarText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: TypeStyles.title.fontFamily,
-    fontSize: 25,
+    fontSize: Type.title.size + 1,
     letterSpacing: -0.5,
   },
   groupName: {
     maxWidth: '88%',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: TypeStyles.title.fontFamily,
     fontSize: Type.title.size,
     lineHeight: Type.title.lineHeight,
@@ -282,36 +287,37 @@ const styles = StyleSheet.create({
   },
   description: {
     maxWidth: '84%',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: TypeStyles.body.fontFamily,
     fontSize: Type.captionElevated.size,
-    lineHeight: 19,
+    lineHeight: Type.captionElevated.size + 6,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   identityMeta: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: TypeStyles.body.fontFamily,
     fontSize: Type.caption.size,
-    marginTop: 5,
+    marginTop: Space.xs / 2 + 1,
   },
   quickActions: {
-    minHeight: 72,
+    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   quickAction: {
     flex: 1,
-    minHeight: 72,
+    minHeight: Space.xxl + Space.xxl + Space.xxl - 24,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: Space.xs / 2 + 1,
   },
   quickActionLabel: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     fontSize: Type.caption.size,
   },
-});
+  });
+}

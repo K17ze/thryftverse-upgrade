@@ -2,7 +2,7 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import { fetchFollowing, type FollowListUser } from '../services/profileApi';
 import { fetchUserListingsFromApi } from '../services/listingsApi';
-import { mapBackendListingToListing } from '../services/listingMapper';
+import { mapBackendListings } from '../services/listingMapper';
 import type { Listing } from '../data/mockData';
 
 interface FollowingFeedState {
@@ -86,9 +86,7 @@ export function useFollowingFeed(): FollowingFeedState {
 
           for (const result of results) {
             if (result.status === 'fulfilled' && result.value.items) {
-              const mapped = result.value.items.map((row) =>
-                mapBackendListingToListing(row)
-              );
+              const mapped = mapBackendListings(result.value.items);
               allListings.push(...mapped);
             }
           }

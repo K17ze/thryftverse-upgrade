@@ -1,5 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
+import { HapticPatterns } from '../utils/hapticPatterns';
 
 const isSupported = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -25,6 +26,11 @@ const haptic = {
   selection: () => {
     if (isSupported) Haptics.selectionAsync().catch(() => {});
   },
+  // Compound "haptics-as-language" gesture patterns. Each entry composes
+  // the primitives above into a timed sequence that communicates a
+  // specific UI event (like, purchase, bid, outbid, save, etc.).
+  // See utils/hapticPatterns.ts for the full vocabulary.
+  patterns: HapticPatterns,
 };
 
 export function useHaptic() {

@@ -7,6 +7,7 @@ import {
   RefreshControl,
   ScrollView,
   Share,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
@@ -19,9 +20,8 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { ActiveTheme, Colors } from '../constants/colors';
-import { Type, Space, Radius, DockConstants } from '../theme/designTokens';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -35,18 +35,58 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
-import { Typography } from '../theme/designTokens';
 import { MoodboardCollectionGrid } from '../components/profile/MoodboardCollectionGrid';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
+import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
-type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS';
+import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout } from '../theme/designTokens';
+type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const SORT_OPTIONS: SortOption[] = ['Default', 'Recently saved', 'Price: Low to High', 'Price: High to Low', 'Newest'];
 
 export default function ClosetScreen() {
+  const { colors, isDark } = useAppTheme();
+
+  const t = StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    headerBorder: { backgroundColor: colors.background, borderBottomColor: colors.border },
+    backBtn: { borderColor: colors.border, backgroundColor: 'transparent' },
+    shareBtn: { borderColor: colors.border, backgroundColor: 'transparent' },
+    headerTitle: { color: colors.textPrimary },
+    tabBar: { borderBottomColor: colors.border },
+    tabLabel: { color: colors.textSecondary },
+    tabLabelActive: { color: colors.textPrimary },
+    tabIndicator: { backgroundColor: colors.textPrimary },
+    countPill: { backgroundColor: 'transparent', borderColor: colors.border },
+    countBadge: { color: colors.textMuted },
+    resultCount: { color: colors.textSecondary },
+    sortBtn: { backgroundColor: 'transparent', borderColor: colors.border },
+    sortLabel: { color: colors.textSecondary },
+    sortMenu: { backgroundColor: 'transparent', borderColor: 'transparent' },
+    sortOption: { borderBottomColor: colors.border },
+    sortOptionActive: { backgroundColor: 'transparent' },
+    sortOptionText: { color: colors.textPrimary },
+    sortOptionTextActive: { color: colors.brand },
+    filterChip: { backgroundColor: 'transparent', borderColor: colors.border },
+    filterChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+    filterChipText: { color: colors.brand },
+    filterChipTextActive: { color: colors.background },
+    statsCard: { backgroundColor: 'transparent', borderColor: 'transparent' },
+    statDivider: { backgroundColor: colors.border },
+    statValue: { color: colors.textPrimary },
+    statLabel: { color: colors.textMuted },
+    savingsRow: { borderTopColor: colors.border },
+    savingsText: { color: colors.success },
+    brandChip: { backgroundColor: 'transparent', borderColor: colors.border },
+    brandChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+    brandChipText: { color: colors.textSecondary },
+    brandChipTextActive: { color: colors.background },
+  });
+
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
@@ -59,20 +99,29 @@ export default function ClosetScreen() {
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
   const [collectionsSyncError, setCollectionsSyncError] = useState(false);
   const scrollY = useSharedValue(0);
+  const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const wishlistIds = useStore((state) => state.wishlist);
   const savedProductIds = useStore((state) => state.savedProducts);
   const collections = useStore((state) => state.collections);
+  const outfits = useStore((state) => state.outfits);
+  const removeOutfit = useStore((state) => state.removeOutfit);
   const loadCollectionsFromApi = useStore((state) => state.loadCollectionsFromApi);
   const currentUser = useStore((state) => state.currentUser);
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
     let mounted = true;
     void loadCollectionsFromApi()
       .then(() => { if (mounted) setCollectionsSyncError(false); })
       .catch(() => { if (mounted) setCollectionsSyncError(true); });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
   }, [loadCollectionsFromApi]);
 
   const handleRefresh = async () => {
@@ -83,7 +132,11 @@ export default function ClosetScreen() {
     } catch {
       setCollectionsSyncError(true);
     } finally {
-      setTimeout(() => setRefreshing(false), 350);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        setRefreshing(false);
+      }, 350);
     }
   };
 
@@ -172,6 +225,14 @@ export default function ClosetScreen() {
     [collections, searchQuery]
   );
 
+  const filteredOutfits = useMemo(
+    () => outfits.filter((o) =>
+      !searchQuery ||
+      o.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [outfits, searchQuery]
+  );
+
   const priceDropCount = useMemo(
     () => wishlistItems.filter((l) => l.originalPrice != null && l.originalPrice > l.price).length,
     [wishlistItems]
@@ -220,14 +281,16 @@ export default function ClosetScreen() {
       case 'SAVED': return filteredSaved.length;
       case 'WISHLIST': return filteredWishlist.length;
       case 'COLLECTIONS': return filteredCollections.length;
+      case 'OUTFITS': return filteredOutfits.length;
     }
-  }, [activeTab, filteredSaved, filteredWishlist, filteredCollections]);
+  }, [activeTab, filteredSaved, filteredWishlist, filteredCollections, filteredOutfits]);
 
   const searchPlaceholder = useMemo(() => {
     switch (activeTab) {
       case 'SAVED': return 'Search saved items';
       case 'WISHLIST': return 'Search wishlist';
       case 'COLLECTIONS': return 'Search collections';
+      case 'OUTFITS': return 'Search outfits';
     }
   }, [activeTab]);
 
@@ -239,6 +302,11 @@ export default function ClosetScreen() {
   const handleCreateCollection = useCallback(() => {
     haptic.medium();
     navigation.navigate('CreateCollection');
+  }, [haptic, navigation]);
+
+  const handleCreateOutfit = useCallback(() => {
+    haptic.medium();
+    navigation.navigate('OutfitBuilder');
   }, [haptic, navigation]);
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -256,6 +324,7 @@ export default function ClosetScreen() {
     SAVED: 'bookmark-outline' as const,
     WISHLIST: 'heart-outline' as const,
     COLLECTIONS: 'folder-open-outline' as const,
+    OUTFITS: 'shirt-outline' as const,
   };
 
   const renderBrandChips = () => {
@@ -268,19 +337,19 @@ export default function ClosetScreen() {
         contentContainerStyle={styles.brandChipContent}
       >
         <AnimatedPressable
-          style={[styles.brandChip, !activeBrand && styles.brandChipActive]}
+          style={[styles.brandChip, t.brandChip, !activeBrand && styles.brandChipActive, !activeBrand && t.brandChipActive]}
           onPress={() => { haptic.light(); setActiveBrand(null); }}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityState={{ selected: !activeBrand }}
           accessibilityLabel="All brands"
         >
-          <Text style={[styles.brandChipText, !activeBrand && styles.brandChipTextActive]}>All</Text>
+          <Text style={[styles.brandChipText, t.brandChipText, !activeBrand && styles.brandChipTextActive, !activeBrand && t.brandChipTextActive]}>All</Text>
         </AnimatedPressable>
         {availableBrands.map((brand) => (
           <AnimatedPressable
             key={brand}
-            style={[styles.brandChip, activeBrand === brand && styles.brandChipActive]}
+            style={[styles.brandChip, t.brandChip, activeBrand === brand && styles.brandChipActive, activeBrand === brand && t.brandChipActive]}
             onPress={() => {
               haptic.light();
               setActiveBrand((prev) => (prev === brand ? null : brand));
@@ -290,7 +359,7 @@ export default function ClosetScreen() {
             accessibilityState={{ selected: activeBrand === brand }}
             accessibilityLabel={`Filter by brand ${brand}`}
           >
-            <Text style={[styles.brandChipText, activeBrand === brand && styles.brandChipTextActive]}>{brand}</Text>
+            <Text style={[styles.brandChipText, t.brandChipText, activeBrand === brand && styles.brandChipTextActive, activeBrand === brand && t.brandChipTextActive]}>{brand}</Text>
           </AnimatedPressable>
         ))}
       </ScrollView>
@@ -299,14 +368,14 @@ export default function ClosetScreen() {
 
   const renderSortBar = () => (
     <View style={styles.sortBar}>
-      <Text style={styles.resultCount}>{tabCount} {tabCount === 1 ? 'item' : 'items'}</Text>
+      <Text style={[styles.resultCount, t.resultCount]}>{tabCount} {tabCount === 1 ? 'item' : 'items'}</Text>
       <AnimatedPressable
-        style={styles.sortBtn}
+        style={[styles.sortBtn, t.sortBtn]}
         onPress={() => setShowSortMenu((v) => !v)}
         activeOpacity={0.85}
       >
-        <Text style={styles.sortLabel}>{sortBy}</Text>
-        <Ionicons name={showSortMenu ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.textMuted} />
+        <Text style={[styles.sortLabel, t.sortLabel]}>{sortBy}</Text>
+        <Ionicons name={showSortMenu ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
       </AnimatedPressable>
     </View>
   );
@@ -314,11 +383,11 @@ export default function ClosetScreen() {
   const renderSortMenu = () => {
     if (!showSortMenu || activeTab === 'COLLECTIONS') return null;
     return (
-      <View style={styles.sortMenu}>
+      <View style={[styles.sortMenu, t.sortMenu]}>
         {SORT_OPTIONS.map((opt) => (
           <AnimatedPressable
             key={opt}
-            style={[styles.sortOption, sortBy === opt && styles.sortOptionActive]}
+            style={[styles.sortOption, t.sortOption, sortBy === opt && styles.sortOptionActive, sortBy === opt && t.sortOptionActive]}
             onPress={() => {
               haptic.light();
               setSortBy(opt);
@@ -326,8 +395,8 @@ export default function ClosetScreen() {
             }}
             activeOpacity={0.85}
           >
-            <Text style={[styles.sortOptionText, sortBy === opt && styles.sortOptionTextActive]}>{opt}</Text>
-            {sortBy === opt && <Ionicons name="checkmark" size={16} color={Colors.brand} />}
+            <Text style={[styles.sortOptionText, t.sortOptionText, sortBy === opt && styles.sortOptionTextActive, sortBy === opt && t.sortOptionTextActive]}>{opt}</Text>
+            {sortBy === opt && <Ionicons name="checkmark" size={16} color={colors.brand} />}
           </AnimatedPressable>
         ))}
       </View>
@@ -361,7 +430,7 @@ export default function ClosetScreen() {
       );
     }
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
         {renderSortBar()}
         {renderSortMenu()}
         {/* Brand filter chips */}
@@ -390,7 +459,7 @@ export default function ClosetScreen() {
       );
     }
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
         {renderSortBar()}
         {renderSortMenu()}
         {/* Brand filter chips */}
@@ -399,7 +468,7 @@ export default function ClosetScreen() {
         {priceDropCount > 0 ? (
           <View style={styles.filterChipRow}>
             <AnimatedPressable
-              style={[styles.filterChip, showPriceDropsOnly && styles.filterChipActive]}
+              style={[styles.filterChip, t.filterChip, showPriceDropsOnly && styles.filterChipActive, showPriceDropsOnly && t.filterChipActive]}
               onPress={() => {
                 haptic.light();
                 setShowPriceDropsOnly((v) => !v);
@@ -409,8 +478,8 @@ export default function ClosetScreen() {
               accessibilityState={{ selected: showPriceDropsOnly }}
               accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
             >
-              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? Colors.background : Colors.brand} />
-              <Text style={[styles.filterChipText, showPriceDropsOnly && styles.filterChipTextActive]}>
+              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
+              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
                 Price drops ({priceDropCount})
               </Text>
             </AnimatedPressable>
@@ -454,7 +523,7 @@ export default function ClosetScreen() {
     });
 
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(50)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
         {renderSortBar()}
         <MoodboardCollectionGrid
           boards={boardData}
@@ -463,8 +532,84 @@ export default function ClosetScreen() {
         {/* FAB-style create button on Collections tab */}
         <AppButton
           title="Create Collection"
-          icon={<Ionicons name="add" size={16} color={Colors.background} />}
+          icon={<Ionicons name="add" size={16} color={colors.background} />}
           onPress={handleCreateCollection}
+          style={styles.createCollectionBtn}
+        />
+      </Reanimated.View>
+    );
+  };
+
+  const renderOutfitsContent = () => {
+    if (filteredOutfits.length === 0) {
+      if (outfits.length === 0) {
+        return (
+          <EmptyState
+            graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
+            title="No outfits yet"
+            subtitle="Combine items from your closet into styled outfits."
+            ctaLabel="Create Outfit"
+            onCtaPress={handleCreateOutfit}
+          />
+        );
+      }
+      return (
+        <EmptyState
+          icon="search-outline"
+          title="No outfits found"
+          subtitle={`No outfits matching "${searchQuery}".`}
+        />
+      );
+    }
+
+    const outfitBoardData = filteredOutfits.map((outfit) => {
+      const thumbs = outfit.itemIds
+        .slice(0, 4)
+        .map((id) => listings.find((l) => l.id === id))
+        .filter((l): l is NonNullable<typeof listings[0]> => !!l && Array.isArray(l.images) && l.images.length > 0)
+        .map((l) => l.images[0]);
+      return {
+        ...outfit,
+        thumbs,
+      };
+    });
+
+    return (
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+        <View style={styles.outfitsGrid}>
+          {outfitBoardData.map((outfit) => (
+            <OutfitCard
+              key={outfit.id}
+              name={outfit.name}
+              itemIds={outfit.itemIds}
+              thumbnailUris={outfit.thumbs}
+              backgroundColor={outfit.backgroundColor}
+              onPress={() => navigation.navigate('OutfitBuilder')}
+              onLongPress={() => {
+                Alert.alert(
+                  'Delete Outfit?',
+                  `"${outfit.name}" will be removed from your outfits.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => {
+                        haptic.medium();
+                        removeOutfit(outfit.id);
+                      },
+                    },
+                  ]
+                );
+              }}
+              style={styles.outfitCard}
+            />
+          ))}
+        </View>
+        <AppButton
+          title="Create Outfit"
+          icon={<Ionicons name="add" size={16} color={colors.background} />}
+          onPress={handleCreateOutfit}
           style={styles.createCollectionBtn}
         />
       </Reanimated.View>
@@ -473,32 +618,32 @@ export default function ClosetScreen() {
 
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+    <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       {/* Animated Header Border */}
-      <Reanimated.View style={[styles.headerBorder, headerBgStyle]} pointerEvents="none" />
+      <Reanimated.View style={[styles.headerBorder, t.headerBorder, headerBgStyle]} pointerEvents="none" />
 
       {/* Header */}
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+        <AnimatedPressable style={[styles.backBtn, t.backBtn]} onPress={handleGoBack} activeOpacity={0.85}>
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Closet</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]}>Closet</Text>
         </View>
         <AnimatedPressable
-          style={styles.shareBtn}
+          style={[styles.shareBtn, t.shareBtn]}
           onPress={handleShareCloset}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Share closet"
         >
-          <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
+          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
         </AnimatedPressable>
-        <View style={styles.countPill}>
-          <Ionicons name={TAB_ICONS[activeTab]} size={12} color={Colors.textMuted} />
-          <Text style={styles.countBadge}>{tabCount}</Text>
+        <View style={[styles.countPill, t.countPill]}>
+          <Ionicons name={TAB_ICONS[activeTab]} size={12} color={colors.textMuted} />
+          <Text style={[styles.countBadge, t.countBadge]}>{tabCount}</Text>
         </View>
       </View>
 
@@ -525,11 +670,11 @@ export default function ClosetScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={searchPlaceholder}
-            prefix={<Ionicons name="search" size={18} color={Colors.textMuted} />}
+            prefix={<Ionicons name="search" size={18} color={colors.textMuted} />}
             suffix={
               searchQuery.length > 0 ? (
                 <AnimatedPressable onPress={() => setSearchQuery('')} accessibilityLabel="Clear search">
-                  <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                 </AnimatedPressable>
               ) : null
             }
@@ -551,27 +696,27 @@ export default function ClosetScreen() {
 
         {/* Closet stats summary — total items, value, savings */}
         {closetStats.totalItems > 0 ? (
-          <View style={styles.statsCard}>
+          <View style={[styles.statsCard, t.statsCard]}>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{closetStats.totalItems}</Text>
-                <Text style={styles.statLabel}>Items</Text>
+                <Text style={[styles.statValue, t.statValue]}>{closetStats.totalItems}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Items</Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, t.statDivider]} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
-                <Text style={styles.statLabel}>Total value</Text>
+                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, t.statDivider]} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{closetStats.collectionsCount}</Text>
-                <Text style={styles.statLabel}>Collections</Text>
+                <Text style={[styles.statValue, t.statValue]}>{closetStats.collectionsCount}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Collections</Text>
               </View>
             </View>
             {closetStats.totalSavings > 0 ? (
-              <View style={styles.savingsRow}>
-                <Ionicons name="trending-down" size={12} color={Colors.success} />
-                <Text style={styles.savingsText}>
+              <View style={[styles.savingsRow, t.savingsRow]}>
+                <Ionicons name="trending-down" size={12} color={colors.success} />
+                <Text style={[styles.savingsText, t.savingsText]}>
                   {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
                 </Text>
               </View>
@@ -581,14 +726,16 @@ export default function ClosetScreen() {
 
         {/* Tabs */}
         <View style={styles.tabsWrap}>
-          <View style={styles.tabBar}>
-            {(['SAVED', 'WISHLIST', 'COLLECTIONS'] as TabKey[]).map((tab) => {
+          <View style={[styles.tabBar, t.tabBar]}>
+            {(['SAVED', 'WISHLIST', 'COLLECTIONS', 'OUTFITS'] as TabKey[]).map((tab) => {
               const isActive = activeTab === tab;
               const tabCounts = {
                 SAVED: savedItems.length,
                 WISHLIST: wishlistItems.length,
                 COLLECTIONS: collections.length,
+                OUTFITS: outfits.length,
               };
+              const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : tab === 'COLLECTIONS' ? 'Collections' : 'Outfits';
               return (
                 <AnimatedPressable
                   key={tab}
@@ -597,12 +744,12 @@ export default function ClosetScreen() {
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
-                  accessibilityLabel={`${tab.toLowerCase()} tab, ${tabCounts[tab]} items`}
+                  accessibilityLabel={`${tabLabel.toLowerCase()} tab, ${tabCounts[tab]} items`}
                 >
-                  <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                    {tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : 'Collections'}
+                  <Text style={[styles.tabLabel, t.tabLabel, isActive && styles.tabLabelActive, isActive && t.tabLabelActive]}>
+                    {tabLabel}
                   </Text>
-                  {isActive && <View style={styles.tabIndicator} />}
+                  {isActive && <View style={[styles.tabIndicator, t.tabIndicator]} />}
                 </AnimatedPressable>
               );
             })}
@@ -613,6 +760,7 @@ export default function ClosetScreen() {
         {activeTab === 'SAVED' && renderSavedContent()}
         {activeTab === 'WISHLIST' && renderWishlistContent()}
         {activeTab === 'COLLECTIONS' && renderCollectionsContent()}
+        {activeTab === 'OUTFITS' && renderOutfitsContent()}
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
@@ -623,16 +771,13 @@ export default function ClosetScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   headerBorder: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 90,
-    backgroundColor: Colors.background,
-    borderBottomColor: Colors.border,
+    height: Space.xxl + Space.xl + Space.sm + 2,
     zIndex: 1,
   },
   header: {
@@ -645,74 +790,63 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
   shareBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    letterSpacing: Type.title.letterSpacing,
   },
   tabBar: {
     flexDirection: 'row',
     gap: Space.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: Stroke.hairline,
   },
   tabItem: {
     paddingVertical: Space.sm,
     position: 'relative',
   },
   tabLabel: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
   },
   tabLabelActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 2,
-    backgroundColor: Colors.textPrimary,
-    borderTopLeftRadius: 1,
-    borderTopRightRadius: 1,
+    height: Stroke.emphasis,
+    borderTopLeftRadius: Radius.none + 1,
+    borderTopRightRadius: Radius.none + 1,
   },
   countPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    gap: Space.xs,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0,
   },
   countBadge: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textMuted,
   },
   searchWrap: {
     paddingHorizontal: Space.md,
@@ -733,85 +867,69 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   resultCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   sortBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    gap: Space.xs,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: Stroke.hairline,
   },
   sortLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   sortMenu: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
+    borderRadius: Radius.none,
+    borderWidth: 0,
+    overflow: 'visible',
   },
   sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingVertical: Space.sm + 4,
+    borderBottomWidth: Stroke.hairline,
   },
   sortOptionActive: {
-    backgroundColor: Colors.surfaceAlt,
   },
   sortOptionText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
   },
   sortOptionTextActive: {
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
   },
   filterChipRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
-    gap: 8,
+    gap: Space.sm,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 32,
+    borderWidth: Stroke.hairline,
+    minHeight: Space.xl + Space.xs,
   },
   filterChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   filterChipText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
   },
   filterChipTextActive: {
-    color: Colors.background,
   },
   collectionsList: {
     paddingHorizontal: Space.md,
@@ -819,6 +937,16 @@ const styles = StyleSheet.create({
   createCollectionBtn: {
     marginTop: Space.lg,
     marginBottom: Space.md,
+  },
+  outfitsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+    paddingTop: Space.sm,
+  },
+  outfitCard: {
+    width: (Layout.screenWidth - Space.md * 2 - Space.sm) / 2,
   },
   skeletonWrap: {
     paddingHorizontal: Space.md,
@@ -833,11 +961,11 @@ const styles = StyleSheet.create({
   statsCard: {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderRadius: Radius.none,
+    borderWidth: 0,
     padding: Space.md,
+    borderTopWidth: Stroke.hairline,
+    borderBottomWidth: Stroke.hairline,
   },
   statsRow: {
     flexDirection: 'row',
@@ -846,67 +974,56 @@ const styles = StyleSheet.create({
   statItem: {
     flex: 1,
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   statDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: Colors.border,
+    width: Stroke.standard,
+    height: Space.lg + 4,
   },
   statValue: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
+    letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: LetterSpacing.caps + LetterSpacing.tight,
   },
   savingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs / 2 + 1,
     marginTop: Space.sm,
     paddingTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopWidth: Stroke.hairline,
   },
   savingsText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.success,
   },
   brandChipScroll: {
     marginBottom: Space.sm,
   },
   brandChipContent: {
     paddingHorizontal: Space.md,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   brandChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 32,
+    borderWidth: Stroke.hairline,
+    minHeight: Space.xl + Space.xs,
     justifyContent: 'center',
   },
   brandChipActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
   },
   brandChipText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   brandChipTextActive: {
-    color: Colors.background,
   },
 });

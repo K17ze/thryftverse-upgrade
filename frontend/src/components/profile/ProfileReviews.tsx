@@ -2,17 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
 import type { SellerReviewItem, SellerReviewSummary } from '../../services/sellerReviewsApi';
-
-const BG = Colors.background;
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const SECONDARY = Colors.textSecondary;
-const SURFACE_ALT = Colors.surfaceAlt;
-const BRAND = Colors.brand;
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -31,6 +23,8 @@ interface ReviewSummaryBlockProps {
  * Bars represent actual review proportions.
  */
 export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const avg = summary.ratingAverage ?? 0;
   const total = summary.reviewCount;
   const distMap = new Map<number, number>();
@@ -43,7 +37,7 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
           <Text style={styles.reviewSummaryAvgValue}>{avg.toFixed(1)}</Text>
           <View style={styles.reviewSummaryStars}>
             {[1, 2, 3, 4, 5].map((s) => (
-              <Ionicons key={s} name={s <= Math.round(avg) ? 'star' : 'star-outline'} size={13} color={BRAND} />
+              <Ionicons key={s} name={s <= Math.round(avg) ? 'star' : 'star-outline'} size={13} color={colors.brand} />
             ))}
           </View>
           <Text style={styles.reviewSummaryCount}>{total} review{total !== 1 ? 's' : ''}</Text>
@@ -55,7 +49,7 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
             return (
               <View key={star} style={styles.distRow}>
                 <Text style={styles.distStar}>{star}</Text>
-                <Ionicons name="star" size={9} color={MUTED} />
+                <Ionicons name="star" size={9} color={colors.textMuted} />
                 <View style={styles.distTrack}>
                   <View style={[styles.distFill, { width: `${Math.round(pct * 100)}%` }]} />
                 </View>
@@ -96,6 +90,8 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   onOpenPhoto,
   onRespond,
 }: ProfileReviewRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const reviewerName = item.reviewer.displayName || item.reviewer.username || 'Anonymous';
   const dateText = item.createdAt
     ? new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -123,7 +119,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           <CachedImage
             uri={item.reviewer.avatar}
             style={styles.reviewAvatar}
-            containerStyle={{ width: 36, height: 36, borderRadius: 18 }}
+            containerStyle={{ width: 36, height: 36, borderRadius: Radius.xxl }}
             contentFit="cover"
           />
         ) : (
@@ -135,7 +131,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           <View style={styles.reviewNameRow}>
             <Text style={styles.reviewName} numberOfLines={1}>{reviewerName}</Text>
             <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={10} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={10} color={colors.success} />
               <Text style={styles.verifiedBadgeText}>Verified buyer</Text>
             </View>
           </View>
@@ -145,7 +141,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
                 key={s}
                 name={s <= item.rating ? 'star' : 'star-outline'}
                 size={11}
-                color={s <= item.rating ? BRAND : MUTED}
+                color={s <= item.rating ? colors.brand : colors.textMuted}
               />
             ))}
             <Text style={styles.reviewDate}>{dateText}</Text>
@@ -187,7 +183,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
       {sellerResponse && (
         <View style={styles.sellerResponseBox}>
           <View style={styles.sellerResponseHeader}>
-            <Ionicons name="storefront-outline" size={12} color={SECONDARY} />
+            <Ionicons name="storefront-outline" size={12} color={colors.textSecondary} />
             <Text style={styles.sellerResponseLabel}>Seller's response</Text>
             {responseDate ? <Text style={styles.sellerResponseDate}>{responseDate}</Text> : null}
           </View>
@@ -203,7 +199,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
           accessibilityRole="button"
           accessibilityLabel="Respond to this review"
         >
-          <Ionicons name="chatbubble-ellipses-outline" size={14} color={BRAND} />
+          <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.brand} />
           <Text style={styles.respondBtnText}>Respond</Text>
         </Pressable>
       )}
@@ -221,7 +217,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
             <CachedImage
               uri={item.listing.imageUrl}
               style={styles.reviewListingThumb}
-              containerStyle={{ width: 28, height: 28, borderRadius: 4 }}
+              containerStyle={{ width: 28, height: 28, borderRadius: Radius.sm }}
               contentFit="cover"
             />
           ) : null}
@@ -232,47 +228,48 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   );
 });
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   reviewSummary: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    backgroundColor: BG,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
+    borderBottomColor: colors.border,
   },
   reviewSummaryTop: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   reviewSummaryAvg: { alignItems: 'center' },
-  reviewSummaryAvgValue: { fontSize: 34, fontFamily: Typography.family.bold, color: TEXT, letterSpacing: -0.8 },
-  reviewSummaryStars: { flexDirection: 'row', gap: 1, marginTop: 2 },
-  reviewSummaryCount: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED, marginTop: 2 },
-  reviewSummaryDist: { flex: 1, gap: 3 },
-  distRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  distStar: { fontSize: 11, fontFamily: Typography.family.medium, color: SECONDARY, width: 8 },
-  distTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: SURFACE_ALT, overflow: 'hidden' },
-  distFill: { height: '100%', backgroundColor: BRAND, borderRadius: 2 },
-  distCount: { fontSize: 11, fontFamily: Typography.family.regular, color: MUTED, width: 24, textAlign: 'right' },
-  reviewSummaryContext: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED, marginTop: Space.sm },
+  reviewSummaryAvgValue: { fontSize: Type.display.size + 2, fontFamily: Typography.family.bold, color: colors.textPrimary, letterSpacing: Type.display.letterSpacing },
+  reviewSummaryStars: { flexDirection: 'row', gap: Space.xs / 4, marginTop: Space.xs / 2 },
+  reviewSummaryCount: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.xs / 2 },
+  reviewSummaryDist: { flex: 1, gap: Space.xs / 2 + 1 },
+  distRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2 },
+  distStar: { fontSize: Type.meta.size, fontFamily: Typography.family.medium, color: colors.textSecondary, width: Space.sm },
+  distTrack: { flex: 1, height: Stroke.standard * 2, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
+  distFill: { height: '100%', backgroundColor: colors.brand, borderRadius: Radius.sm },
+  distCount: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted, width: Space.xl, textAlign: 'right' },
+  reviewSummaryContext: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginTop: Space.sm },
   reviewRow: {
     paddingHorizontal: Space.md,
-    paddingVertical: 14,
+    paddingVertical: Space.md + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
+    borderBottomColor: colors.border,
   },
   // Full reviewer identity region — tappable as one unit
-  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-  reviewAvatar: { width: 36, height: 36, borderRadius: 18 },
-  reviewAvatarFallback: { backgroundColor: SURFACE_ALT, alignItems: 'center', justifyContent: 'center' },
-  reviewAvatarInitials: { fontSize: 13, fontFamily: Typography.family.bold, color: SECONDARY },
-  reviewIdentityCol: { flex: 1, gap: 2 },
-  reviewNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  reviewName: { fontSize: 14, fontFamily: Typography.family.semibold, color: TEXT, flexShrink: 1 },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 0 },
-  verifiedBadgeText: { fontSize: 10, fontFamily: Typography.family.medium, color: Colors.success, letterSpacing: 0.2 },
-  reviewMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  reviewDate: { fontSize: 12, fontFamily: Typography.family.regular, color: MUTED, marginLeft: 6 },
-  reviewComment: { fontSize: 14, fontFamily: Typography.family.regular, color: TEXT, lineHeight: 20, marginTop: 4 },
-  photoRow: { flexDirection: 'row', gap: 6, marginTop: 8 },
-  reviewPhoto: { width: 72, height: 72, borderRadius: Radius.md },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm + 2, marginBottom: Space.xs + 2 },
+  reviewAvatar: { width: Space.xl + Space.xs, height: Space.xl + Space.xs, borderRadius: Radius.xxl },
+  reviewAvatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  reviewAvatarInitials: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
+  reviewIdentityCol: { flex: 1, gap: Space.xs / 2 },
+  reviewNameRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2 },
+  reviewName: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, flexShrink: 1 },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 + 1, flexShrink: 0 },
+  verifiedBadgeText: { fontSize: Type.meta.size - 2, fontFamily: Typography.family.medium, color: colors.success, letterSpacing: 0.2 },
+  reviewMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 },
+  reviewDate: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, marginLeft: Space.xs + 2 },
+  reviewComment: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textPrimary, lineHeight: Type.body.lineHeight, marginTop: Space.xs },
+  photoRow: { flexDirection: 'row', gap: Space.xs + 2, marginTop: Space.sm },
+  reviewPhoto: { width: Space.xxl + Space.xxl, height: Space.xxl + Space.xxl, borderRadius: Radius.md },
   photoOverflowOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
@@ -281,32 +278,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoOverflowText: { fontSize: 16, fontFamily: Typography.family.bold, color: '#fff' },
+  photoOverflowText: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, color: '#fff' },
   sellerResponseBox: {
-    backgroundColor: SURFACE_ALT,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     padding: Space.sm + 2,
-    marginTop: 8,
-    gap: 4,
+    marginTop: Space.sm,
+    gap: Space.xs,
   },
-  sellerResponseHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  sellerResponseLabel: { fontSize: 11, fontFamily: Typography.family.semibold, color: SECONDARY, flex: 1 },
-  sellerResponseDate: { fontSize: 11, fontFamily: Typography.family.regular, color: MUTED },
-  sellerResponseText: { fontSize: 13, fontFamily: Typography.family.regular, color: TEXT, lineHeight: 18 },
+  sellerResponseHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 1 },
+  sellerResponseLabel: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: colors.textSecondary, flex: 1 },
+  sellerResponseDate: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textMuted },
+  sellerResponseText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textPrimary, lineHeight: Type.caption.lineHeight },
   respondBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 8,
-    paddingVertical: 6,
+    gap: Space.xs + 1,
+    marginTop: Space.sm,
+    paddingVertical: Space.xs + 2,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: `${BRAND}10`,
+    backgroundColor: `${colors.brand}10`,
     alignSelf: 'flex-start',
   },
-  respondBtnText: { fontSize: 13, fontFamily: Typography.family.semibold, color: BRAND },
-  reviewListingContext: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingVertical: 4 },
+  respondBtnText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold, color: colors.brand },
+  reviewListingContext: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.sm, paddingVertical: Space.xs },
   reviewListingPressed: { opacity: 0.6 },
-  reviewListingThumb: { width: 28, height: 28, borderRadius: 4 },
-  reviewListingTitle: { flex: 1, fontSize: 12, fontFamily: Typography.family.regular, color: SECONDARY },
-});
+  reviewListingThumb: { width: 28, height: 28, borderRadius: Radius.sm },
+  reviewListingTitle: { flex: 1, fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  });
+}

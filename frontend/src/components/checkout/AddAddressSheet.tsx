@@ -1,18 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, Platform } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TextInput, ScrollView, Platform, Pressable } from 'react-native';
 import { BottomSheet } from '../BottomSheet';
-import { AnimatedPressable } from '../AnimatedPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { createUserAddress } from '../../services/commerceApi';
 import * as Haptics from 'expo-haptics';
-
-const PANEL_BG = Colors.background;
-const PANEL_SOFT_BG = Colors.surface;
-const PANEL_BORDER = Colors.border;
 
 interface Props {
   visible: boolean;
@@ -41,6 +36,7 @@ const COMMON_COUNTRIES = [
 ];
 
 export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
+  const { colors } = useAppTheme();
   const [name, setName] = useState('');
   const [streetAddress, setStreetAddress] = useState('');
   const [apartment, setApartment] = useState('');
@@ -54,6 +50,8 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const saveAddress = useStore((state) => state.saveAddress);
   const { show } = useToast();
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
     if (!visible) {
@@ -130,79 +128,89 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
 
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.88}>
-      <Text style={styles.sheetTitle}>Delivery Address</Text>
+      <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+        Delivery address
+      </Text>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.heroCopy}>Where should we send your items?</Text>
+        <Text style={[styles.heroCopy, { color: colors.textPrimary }]}>
+          Where should we send your items?
+        </Text>
 
-        {/* Country Selector */}
+        {/* Country Selector — flat with hairline border */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Country</Text>
-          <AnimatedPressable
-            style={styles.countrySelector}
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Country</Text>
+          <Pressable
+            style={[styles.countrySelector, { borderColor: colors.border, backgroundColor: colors.surface }]}
             onPress={() => setShowCountryPicker(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Select country"
           >
-            <Text style={styles.countryText}>{selectedCountry.name}</Text>
-            <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
-          </AnimatedPressable>
+            <Text style={[styles.countryText, { color: colors.textPrimary }]}>
+              {selectedCountry.name}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+          </Pressable>
         </View>
 
         {/* Full Name */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Full Name</Text>
-          <View style={styles.inputWrapper}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Full name</Text>
+          <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.input }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               placeholder="Jane Doe"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={name}
               onChangeText={setName}
-              selectionColor={Colors.brand}
+              selectionColor={colors.brand}
             />
           </View>
         </View>
 
         {/* Street Address Line 1 */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Street Address</Text>
-          <View style={styles.inputWrapper}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Street address</Text>
+          <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.input }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               placeholder="123 Example Street"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={streetAddress}
               onChangeText={setStreetAddress}
-              selectionColor={Colors.brand}
+              selectionColor={colors.brand}
             />
           </View>
         </View>
 
         {/* Apartment/Unit (optional) */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Apartment, Suite, Unit (optional)</Text>
-          <View style={styles.inputWrapper}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            Apartment, suite, unit (optional)
+          </Text>
+          <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.input }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               placeholder="Apt 4B, Floor 3, etc."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={apartment}
               onChangeText={setApartment}
-              selectionColor={Colors.brand}
+              selectionColor={colors.brand}
             />
           </View>
         </View>
 
         {/* City */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>City</Text>
-          <View style={styles.inputWrapper}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>City</Text>
+          <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.input }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               placeholder="London"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={city}
               onChangeText={setCity}
-              selectionColor={Colors.brand}
+              selectionColor={colors.brand}
             />
           </View>
         </View>
@@ -210,20 +218,20 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
         {/* Region/State (conditional) */}
         {needsRegion && (
           <View style={styles.formGroup}>
-            <Text style={styles.label}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>
               {countryCode === 'US' ? 'State' :
                countryCode === 'CA' ? 'Province' :
                countryCode === 'JP' ? 'Prefecture' :
                countryCode === 'IN' ? 'State' : 'Region'}
             </Text>
-            <View style={styles.inputWrapper}>
+            <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.input }]}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.textPrimary }]}
                 placeholder={countryCode === 'US' ? 'California' : 'Enter region'}
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 value={region}
                 onChangeText={setRegion}
-                selectionColor={Colors.brand}
+                selectionColor={colors.brand}
               />
             </View>
           </View>
@@ -231,151 +239,182 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
 
         {/* Postal Code */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>{selectedCountry.postalLabel}</Text>
-          <View style={styles.inputWrapper}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            {selectedCountry.postalLabel}
+          </Text>
+          <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.input }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.textPrimary }]}
               placeholder={countryCode === 'US' ? '10001' : 'SW1A 1AA'}
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={postalCode}
               onChangeText={setPostalCode}
+              selectionColor={colors.brand}
               autoCapitalize="characters"
-              selectionColor={Colors.brand}
             />
           </View>
         </View>
 
-        <AnimatedPressable
-          style={[styles.defaultToggleRow, isDefaultAddress && styles.defaultToggleRowActive]}
-          activeOpacity={0.9}
-          onPress={() => setIsDefaultAddress((current) => !current)}
+        {/* Default address toggle — flat row with hairline separator */}
+        <Pressable
+          style={[
+            styles.defaultToggleRow,
+            {
+              borderColor: isDefaultAddress ? colors.brand : colors.borderSubtle,
+              backgroundColor: isDefaultAddress ? colors.surface : 'transparent',
+            },
+          ]}
+          onPress={() => {
+            setIsDefaultAddress(!isDefaultAddress);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: isDefaultAddress }}
+          accessibilityLabel="Set as default delivery address"
         >
           <Ionicons
-            name={isDefaultAddress ? 'checkmark-circle' : 'ellipse-outline'}
+            name={isDefaultAddress ? "checkmark-circle" : "ellipse-outline"}
             size={24}
-            color={isDefaultAddress ? Colors.brand : Colors.textSecondary}
+            color={isDefaultAddress ? colors.brand : colors.textSecondary}
           />
-          <Text style={[styles.defaultToggleText, !isDefaultAddress && styles.defaultToggleTextMuted]}>
+          <Text style={[
+            styles.defaultToggleText,
+            { color: isDefaultAddress ? colors.textPrimary : colors.textSecondary },
+          ]}>
             Set as default delivery address
           </Text>
-        </AnimatedPressable>
+        </Pressable>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: Space.xl }} />
       </ScrollView>
 
       <View style={styles.footer}>
-        <AnimatedPressable
-          style={[styles.saveBtn, (!isFormValid || isSaving) && styles.saveBtnDisabled]}
+        <Pressable
+          style={[
+            styles.saveBtn,
+            {
+              backgroundColor: (!isFormValid || isSaving) ? colors.surfaceAlt : colors.brand,
+              borderColor: colors.borderSubtle,
+            },
+          ]}
           onPress={handleSave}
           disabled={!isFormValid || isSaving}
-          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel="Save address"
+          accessibilityState={{ disabled: !isFormValid || isSaving }}
         >
-          <Text style={[styles.saveBtnText, (!isFormValid || isSaving) && styles.saveBtnTextDisabled]}>
-            {isSaving ? 'Processing...' : 'Save Address'}
+          <Text style={[
+            styles.saveBtnText,
+            {
+              color: (!isFormValid || isSaving) ? colors.textMuted : colors.textInverse,
+            },
+          ]}>
+            {isSaving ? 'Processing…' : 'Save address'}
           </Text>
-        </AnimatedPressable>
+        </Pressable>
       </View>
     </BottomSheet>
   );
 }
 
-const styles = StyleSheet.create({
-  countrySelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: PANEL_SOFT_BG,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-  },
-  countryText: {
-    fontSize: 16,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-  },
-  sheetTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 20 },
-  content: { paddingTop: 10, paddingBottom: 40 },
-  heroCopy: {
-    fontSize: 28,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -1,
-    lineHeight: 34,
-    marginBottom: 40,
-    maxWidth: '80%',
-  },
-  formGroup: { marginBottom: 24 },
-  label: {
-    fontSize: 13,
-    fontFamily: Typography.family.bold,
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 10,
-    marginLeft: 4,
-  },
-  inputWrapper: {
-    backgroundColor: PANEL_BG,
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    height: 60,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-  },
-  input: {
-    fontSize: 16,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-  },
-  row: { flexDirection: 'row', gap: 16 },
-  defaultToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: PANEL_BG,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-    padding: 20,
-    borderRadius: 20,
-    marginTop: 16,
-    gap: 12,
-  },
-  defaultToggleRowActive: {
-    borderColor: Colors.brand,
-    backgroundColor: PANEL_SOFT_BG,
-  },
-  defaultToggleText: {
-    fontSize: 15,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  defaultToggleTextMuted: {
-    color: Colors.textSecondary,
-  },
-  footer: { paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 0 : 20 },
-  saveBtn: {
-    backgroundColor: Colors.brand,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-  },
-  saveBtnDisabled: {
-    backgroundColor: PANEL_SOFT_BG,
-    borderWidth: 1,
-    borderColor: PANEL_BORDER,
-  },
-  saveBtnText: {
-    color: Colors.background,
-    fontSize: 16,
-    fontFamily: Typography.family.bold,
-  },
-  saveBtnTextDisabled: {
-    color: Colors.textMuted,
-  },
-});
+// ── Styles — factory for theme support ──────────────────────────────────────
+
+function createStyles(colors: any) {
+  return StyleSheet.create({
+    sheetTitle: {
+      fontSize: Type.subtitle.size,
+      lineHeight: Type.subtitle.lineHeight,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.subtitle.letterSpacing,
+      marginBottom: Space.lg,
+    },
+    content: {
+      paddingTop: Space.sm,
+      paddingBottom: Space.xxl + Space.md,
+    },
+    heroCopy: {
+      fontSize: Type.priceLarge.size,
+      lineHeight: Type.priceLarge.lineHeight,
+      fontFamily: Typography.family.bold,
+      letterSpacing: Type.priceLarge.letterSpacing,
+      marginBottom: Space.xxl,
+      maxWidth: '80%',
+    },
+    formGroup: {
+      marginBottom: Space.lg,
+    },
+    label: {
+      fontSize: Type.metaElevated.size,
+      lineHeight: Type.metaElevated.lineHeight,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.metaElevated.letterSpacing,
+      textTransform: 'uppercase',
+      marginBottom: Space.sm,
+      marginLeft: Space.xs,
+    },
+    // ── Input fields — per Design.md form-field: input background,
+    // 52px height, Radius.xl. ──
+    inputWrapper: {
+      borderRadius: Radius.xl,
+      paddingHorizontal: Space.lg,
+      height: 52,
+      justifyContent: 'center',
+      borderWidth: 1,
+    },
+    input: {
+      fontSize: Type.bodyEmphasis.size,
+      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontFamily: Typography.family.medium,
+    },
+    // ── Country selector ──
+    countrySelector: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md + 2,
+      borderRadius: Radius.xl,
+      borderWidth: 1,
+      minHeight: 52,
+    },
+    countryText: {
+      fontSize: Type.bodyEmphasis.size,
+      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontFamily: Typography.family.medium,
+    },
+    // ── Default toggle — flat row ──
+    defaultToggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      padding: Space.md,
+      borderRadius: Radius.xl,
+      marginTop: Space.md,
+      gap: Space.md,
+      minHeight: 52,
+    },
+    defaultToggleText: {
+      flex: 1,
+      fontSize: Type.bodyEmphasis.size,
+      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontFamily: Typography.family.semibold,
+    },
+    // ── Footer ──
+    footer: {
+      paddingTop: Space.sm,
+      paddingBottom: Platform.OS === 'ios' ? 0 : Space.md,
+    },
+    saveBtn: {
+      height: 52,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+    },
+    saveBtnText: {
+      fontSize: Type.bodyEmphasis.size,
+      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontFamily: Typography.family.bold,
+    },
+  });
+}

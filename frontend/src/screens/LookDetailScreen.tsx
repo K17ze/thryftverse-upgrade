@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,34 +6,37 @@ import {
   ScrollView,
   Dimensions,
   Pressable,
-  ActivityIndicator,
   Share,
+  Alert,
+  Modal,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { Colors } from '../constants/colors';
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
+import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
+import { LookDetailSkeleton } from '../components/skeletons/LookDetailSkeleton';
 import { LookSocialActions } from '../components/look/LookSocialActions';
 import { LookCommentsSheet } from '../components/look/LookCommentsSheet';
-import { fetchLookByIdFromApi, type LookApiItem } from '../services/looksApi';
+import { fetchLookByIdFromApi, deleteLookOnApi, type LookApiItem } from '../services/looksApi';
 import { Video, ResizeMode } from '../components/compat/Video';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'LookDetail'>;
 
 export default function LookDetailScreen() {
@@ -44,6 +47,8 @@ export default function LookDetailScreen() {
   const { listings } = useBackendData();
   const reducedMotion = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { lookId } = route.params;
 
@@ -53,6 +58,9 @@ export default function LookDetailScreen() {
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [commentsVisible, setCommentsVisible] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
+  const [overflowVisible, setOverflowVisible] = useState(false);
+
+  const isOwner = look?.creatorId === currentUser?.id;
 
   const loadLook = useCallback(async () => {
     setIsLoading(true);
@@ -90,6 +98,41 @@ export default function LookDetailScreen() {
     }
   }, [haptic, look]);
 
+  const handleEdit = useCallback(() => {
+    if (!look || !isOwner) return;
+    setOverflowVisible(false);
+    haptic.light();
+    navigation.navigate('CreatorStudio', {
+      type: 'look',
+      sourceDocumentId: look.id,
+    });
+  }, [look, isOwner, navigation, haptic]);
+
+  const handleDelete = useCallback(() => {
+    if (!look || !isOwner) return;
+    setOverflowVisible(false);
+    Alert.alert(
+      'Delete look',
+      'This look will be permanently removed. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteLookOnApi(look.id);
+              show('Look deleted', 'success');
+              navigation.goBack();
+            } catch {
+              show('Unable to delete look', 'error');
+            }
+          },
+        },
+      ]
+    );
+  }, [look, isOwner, show, navigation]);
+
   const resolveListing = useCallback(
     (listingId: string | null) => {
       if (!listingId) return undefined;
@@ -123,13 +166,16 @@ export default function LookDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
-          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={Colors.brand} />
-        </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <LookDetailSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -138,8 +184,8 @@ export default function LookDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.headerRow}>
-          <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <AnimatedPressable style={styles.backBtnSolid} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
         <EmptyState
@@ -155,10 +201,12 @@ export default function LookDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Floating Header */}
+      {/* Floating Header — transparent hit targets with text-shadow scrim.
+          Per AGENTS.md: ordinary Back/Share controls default to transparent
+          44pt targets. No circular chrome; glyph legibility from shadow. */}
       <View style={styles.headerRow}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color="#fff" style={styles.headerGlyph} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
@@ -168,8 +216,33 @@ export default function LookDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Share look"
           >
-            <Ionicons name="share-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="share-outline" size={20} color="#fff" style={styles.headerGlyph} />
           </AnimatedPressable>
+          {isOwner && (
+            <AnimatedPressable
+              style={styles.headerBtn}
+              onPress={handleEdit}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Edit look"
+            >
+              <Ionicons name="create-outline" size={20} color="#fff" style={styles.headerGlyph} />
+            </AnimatedPressable>
+          )}
+          {isOwner && (
+            <AnimatedPressable
+              style={styles.headerBtn}
+              onPress={() => {
+                haptic.light();
+                setOverflowVisible(true);
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="More look options"
+            >
+              <Ionicons name="ellipsis-horizontal" size={20} color="#fff" style={styles.headerGlyph} />
+            </AnimatedPressable>
+          )}
         </View>
       </View>
 
@@ -197,7 +270,7 @@ export default function LookDetailScreen() {
               />
             )}
 
-            {/* Hotspots */}
+            {/* Hotspots — editorial pin with halo for legibility on any media */}
             {look.tags.map((tag) => {
               const isActive = activeTagId === tag.id;
               const listing = resolveListing(tag.listingId);
@@ -213,11 +286,12 @@ export default function LookDetailScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={tag.label || 'Tagged item'}
                 >
+                  <View style={styles.hotspotHalo} />
                   <View style={[styles.hotspotDot, isActive && styles.hotspotDotActive]} />
                   {isActive && listing && (
                     <Reanimated.View entering={FadeInDown.duration(180)} style={styles.tagTooltip}>
                       {listing.images?.[0] && (
-                        <CachedImage uri={listing.images[0]} style={styles.tagTooltipImg} containerStyle={{ borderRadius: 4 }} contentFit="cover" />
+                        <CachedImage uri={listing.images[0]} style={styles.tagTooltipImg} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
                       )}
                       <View style={{ flex: 1 }}>
                         <Text style={styles.tagTooltipTitle} numberOfLines={1}>{listing.title}</Text>
@@ -234,12 +308,17 @@ export default function LookDetailScreen() {
               );
             })}
 
-            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.45)']} style={styles.heroGradient} />
+            <LinearGradient
+              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.42)']}
+              locations={[0, 0.4, 1]}
+              style={styles.heroGradient}
+            />
           </View>
         </Reanimated.View>
 
-        {/* Info */}
+        {/* Info — editorial chapter: eyebrow, caption, creator attribution */}
         <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(80)} style={styles.infoSection}>
+          <Text style={styles.eyebrow}>Look</Text>
           {look.caption ? (
             <Text style={styles.caption}>{look.caption}</Text>
           ) : look.title ? (
@@ -250,7 +329,7 @@ export default function LookDetailScreen() {
               {look.creator.avatar ? (
                 <CachedImage uri={look.creator.avatar} style={styles.creatorAvatarImg} contentFit="cover" />
               ) : (
-                <Ionicons name="person-circle" size={32} color={Colors.textMuted} />
+                <Ionicons name="person-circle" size={36} color={colors.textMuted} />
               )}
             </View>
             <View style={styles.creatorInfo}>
@@ -279,10 +358,13 @@ export default function LookDetailScreen() {
           />
         </Reanimated.View>
 
-        {/* Tagged Products Tray */}
+        {/* Tagged Products Tray — editorial shop-the-look rail */}
         {look.tags.length > 0 && (
           <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(160)} style={styles.traySection}>
-            <Text style={styles.trayTitle}>Outfit Pieces</Text>
+            <View style={styles.trayHeader}>
+              <Text style={styles.trayTitle}>Shop the look</Text>
+              <Text style={styles.trayCount}>{look.tags.length} pieces</Text>
+            </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trayScroll}>
               {look.tags.map((tag) => {
                 const listing = resolveListing(tag.listingId);
@@ -300,9 +382,10 @@ export default function LookDetailScreen() {
                         <CachedImage uri={listing.images[0]} style={styles.trayImg} contentFit="cover" />
                       ) : (
                         <View style={styles.trayImgEmpty}>
-                          <Ionicons name="pricetag" size={20} color={Colors.textMuted} />
+                          <Ionicons name="pricetag" size={20} color={colors.textMuted} />
                         </View>
                       )}
+                      {listing?.isSold && <View style={styles.traySoldScrim} />}
                     </View>
                     <Text style={styles.trayCardTitle} numberOfLines={1}>{listing?.title ?? tag.label ?? 'Untitled'}</Text>
                     {listing && (
@@ -317,7 +400,7 @@ export default function LookDetailScreen() {
           </Reanimated.View>
         )}
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: Space.xl + Space.sm }} />
       </ScrollView>
 
       {/* Comments Sheet */}
@@ -333,13 +416,49 @@ export default function LookDetailScreen() {
           navigation.navigate('Login');
         }}
       />
+
+      {/* Owner Overflow Menu */}
+      <Modal
+        visible={overflowVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOverflowVisible(false)}
+      >
+        <Pressable style={styles.overflowBackdrop} onPress={() => setOverflowVisible(false)}>
+          <Pressable
+            style={styles.overflowSheet}
+            onPress={(e) => e.stopPropagation()}
+            accessibilityRole="menu"
+          >
+            <Pressable
+              style={styles.overflowItem}
+              onPress={handleEdit}
+              accessibilityRole="menuitem"
+              accessibilityLabel="Edit look"
+            >
+              <Ionicons name="create-outline" size={20} color={colors.textPrimary} />
+              <Text style={styles.overflowItemText}>Edit look</Text>
+            </Pressable>
+            <View style={styles.overflowDivider} />
+            <Pressable
+              style={styles.overflowItem}
+              onPress={handleDelete}
+              accessibilityRole="menuitem"
+              accessibilityLabel="Delete look"
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              <Text style={[styles.overflowItemText, { color: colors.danger }]}>Delete look</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   headerRow: {
     position: 'absolute',
     top: 0,
@@ -348,144 +467,184 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingHorizontal: Space.sm,
+    paddingTop: Space.sm,
     zIndex: 10,
   },
+  // Transparent 44pt hit targets — no circular chrome.
+  // Glyph legibility comes from the text-shadow scrim below.
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActions: { flexDirection: 'row', gap: Space.xs },
   headerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollContent: { paddingBottom: 24 },
+  // Solid back button for loading/error states (no media behind)
+  backBtnSolid: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Text-shadow scrim for glyph legibility on media
+  headerGlyph: {
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  scrollContent: { paddingBottom: Space.lg },
   heroWrap: {
     width: SCREEN_W,
     height: SCREEN_W * 1.15,
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   heroImage: { width: '100%', height: '100%' },
+  // Extended gradient — 180px with 3-stop falloff for smooth editorial fade
   heroGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 120,
+    height: Space.xxl * 3 + Space.xl + Space.xs,
   },
   hotspotWrap: {
     position: 'absolute',
-    width: 44,
-    height: 44,
-    marginLeft: -22,
-    marginTop: -22,
+    width: Control.hit,
+    height: Control.hit,
+    marginLeft: -(Space.lg - 2),
+    marginTop: -(Space.lg - 2),
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 3,
   },
+  hotspotHalo: {
+    position: 'absolute',
+    width: Space.xl - Space.xs,
+    height: Space.xl - Space.xs,
+    borderRadius: Radius.xl,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
   hotspotDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.25)',
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: Stroke.emphasis,
+    borderColor: 'rgba(0,0,0,0.18)',
   },
   hotspotDotActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderColor: '#fff',
   },
   tagTooltip: {
     position: 'absolute',
-    top: 24,
-    left: -80,
-    width: 180,
+    top: Space.lg + 4,
+    left: -Space.xxl - Space.xxl - Space.xl - 8,
+    width: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl + 4,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     backgroundColor: 'rgba(0,0,0,0.88)',
-    borderRadius: 12,
-    padding: 8,
+    borderRadius: Radius.lg,
+    padding: Space.sm,
   },
-  tagTooltipImg: { width: 36, height: 36, borderRadius: 6, backgroundColor: Colors.surfaceAlt },
-  tagTooltipTitle: { fontSize: 11, fontFamily: Typography.family.semibold, color: '#fff' },
-  tagTooltipPrice: { fontSize: 10, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },
-  tagTooltipSold: { fontSize: 10, fontFamily: Typography.family.semibold, color: Colors.danger },
+  tagTooltipImg: { width: Space.xl + 4, height: Space.xl + 4, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt },
+  tagTooltipTitle: { fontSize: Type.meta.size, fontFamily: Typography.family.semibold, color: '#fff' },
+  tagTooltipPrice: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.medium, color: 'rgba(255,255,255,0.7)' },
+  tagTooltipSold: { fontSize: Type.meta.size - 1, fontFamily: Typography.family.semibold, color: colors.danger },
 
   infoSection: {
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
     gap: Space.sm,
   },
+  eyebrow: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textMuted,
+    letterSpacing: LetterSpacing.caps,
+    textTransform: 'uppercase',
+    marginBottom: -(Space.xs - 2),
+  },
   caption: {
     fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.title.letterSpacing,
-    lineHeight: 24,
+    lineHeight: Type.title.size + 6,
   },
   creatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    marginTop: Space.xs / 2,
   },
   creatorAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceAlt,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.xxl,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  creatorAvatarImg: { width: 36, height: 36, borderRadius: 18 },
-  creatorInfo: { gap: 2 },
+  creatorAvatarImg: { width: Space.xl + Space.sm, height: Space.xl + Space.sm, borderRadius: Radius.xxl },
+  creatorInfo: { gap: Space.xs - 2 },
   creatorName: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   creatorMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 
   traySection: {
-    marginTop: Space.lg,
+    marginTop: Space.xl,
     paddingHorizontal: Space.md,
+  },
+  trayHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: Space.sm,
   },
   trayTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginBottom: Space.sm,
+    color: colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  trayCount: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
   },
   trayScroll: {
     gap: Space.sm,
+    paddingRight: Space.md,
   },
   trayCard: {
-    width: 140,
-    gap: 4,
+    width: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 12,
+    gap: Space.xs + 2,
   },
   trayImgWrap: {
-    width: 140,
-    height: 170,
-    borderRadius: Radius.md,
+    width: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 12,
+    height: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 8,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     position: 'relative',
   },
   trayImg: { width: '100%', height: '100%' },
@@ -494,22 +653,58 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
+  },
+  traySoldScrim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
   trayCardTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginTop: 4,
+    color: colors.textPrimary,
+    marginTop: Space.xs / 2,
   },
   trayCardPrice: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   trayCardSold: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
-    color: Colors.danger,
+    color: colors.danger,
   },
-});
+
+  // Owner overflow menu
+  overflowBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  overflowSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingBottom: Space.lg,
+    paddingTop: Space.sm,
+  },
+  overflowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+  },
+  overflowItemText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textPrimary,
+  },
+  overflowDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: Space.xs,
+  },
+  });
+}

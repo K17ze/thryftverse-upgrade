@@ -1,11 +1,13 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, Alert } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { getAllLayersSorted } from './composition';
 import { SheetContainer, PressScale } from './CreatorAnimations';
+import { useHaptic } from '../hooks/useHaptic';
 import type { CreatorLayer } from './composition';
 
 export interface CreatorLayersSheetProps {
@@ -13,14 +15,26 @@ export interface CreatorLayersSheetProps {
   onClose: () => void;
 }
 
-const LAYER_ICONS: Record<CreatorLayer['type'], string> = {
+const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ionicons>['name']> = {
   media: 'images-outline',
   text: 'text-outline',
   product: 'pricetag-outline',
   mention: 'at-outline',
   look: 'shirt-outline',
   vote: 'stats-chart-outline',
+  quiz: 'help-circle-outline',
+  question: 'chatbubble-outline',
+  emojiSlider: 'happy-outline',
+  countdown: 'time-outline',
   decorative: 'happy-outline',
+  draw: 'brush-outline',
+  gif: 'image-outline',
+  music: 'musical-notes-outline',
+  link: 'link-outline',
+  location: 'location-outline',
+  hashtag: 'pricetag-outline',
+  time: 'time-outline',
+  weather: 'partly-sunny-outline',
 };
 
 const TOUCH = 44;
@@ -29,16 +43,55 @@ const THUMB = 40;
 export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps) {
   const { document, activePageIndex, selectedLayerId, selectLayer, removeLayer, duplicateLayer, reorderLayer, toggleLayerLock, toggleLayerVisibility } = useCreator();
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const [reorderMode, setReorderMode] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const page = document.pages[activePageIndex];
   const layers = getAllLayersSorted(page).reverse();
 
+  const handleExitReorder = useCallback(() => {
+    setDraggingId(null);
+    setReorderMode(false);
+  }, []);
+
+  const handleLongPressRow = useCallback((id: string) => {
+    haptic.medium();
+    setReorderMode(true);
+    setDraggingId(id);
+  }, [haptic]);
+
   const handleClose = useCallback(() => {
+    haptic.selection();
+    setReorderMode(false);
+    setDraggingId(null);
     onClose();
-  }, [onClose]);
+  }, [haptic, onClose]);
+
+  const handleSelect = useCallback((id: string) => {
+    haptic.selection();
+    selectLayer(id);
+  }, [haptic, selectLayer]);
+
+  const handleReorder = useCallback((id: string, dir: 'forward' | 'backward') => {
+    haptic.selection();
+    setDraggingId(id);
+    reorderLayer(id, dir);
+  }, [haptic, reorderLayer]);
+
+  const handleVisibility = useCallback((id: string) => {
+    haptic.light();
+    toggleLayerVisibility(id);
+  }, [haptic, toggleLayerVisibility]);
+
+  const handleLock = useCallback((id: string) => {
+    haptic.light();
+    toggleLayerLock(id);
+  }, [haptic, toggleLayerLock]);
 
   const openOverflow = useCallback(
     (layer: CreatorLayer) => {
+      haptic.selection();
       const name = getLayerDisplayName(layer);
       Alert.alert(
         name,
@@ -46,35 +99,41 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
         [
           {
             text: 'Bring to front',
-            onPress: () => reorderLayer(layer.id, 'front'),
+            onPress: () => { haptic.selection(); reorderLayer(layer.id, 'front'); },
           },
           {
             text: 'Send to back',
-            onPress: () => reorderLayer(layer.id, 'back'),
+            onPress: () => { haptic.selection(); reorderLayer(layer.id, 'back'); },
           },
           {
             text: 'Duplicate',
-            onPress: () => duplicateLayer(layer.id),
+            onPress: () => { haptic.selection(); duplicateLayer(layer.id); },
           },
           {
             text: 'Delete',
             style: 'destructive',
-            onPress: () => removeLayer(layer.id),
+            onPress: () => { haptic.medium(); removeLayer(layer.id); },
           },
           { text: 'Cancel', style: 'cancel' },
         ],
       );
     },
-    [reorderLayer, duplicateLayer, removeLayer],
+    [haptic, reorderLayer, duplicateLayer, removeLayer],
   );
 
   return (
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.7}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Layers</Text>
-        <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityRole="button">
-          <Ionicons name="close" size={22} color={colors.textSecondary} />
-        </PressScale>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{reorderMode ? 'Reorder Layers' : 'Layers'}</Text>
+        {reorderMode ? (
+          <PressScale onPress={handleExitReorder} style={styles.doneBtn} accessibilityLabel="Done reordering" accessibilityRole="button">
+            <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
+          </PressScale>
+        ) : (
+          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityRole="button">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </PressScale>
+        )}
       </View>
 
       <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
@@ -85,30 +144,60 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
             <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>Add content from the dock below</Text>
           </View>
         ) : (
-          layers.map((layer) => {
+          <>
+            {reorderMode && (
+              <Text style={[styles.reorderHint, { color: colors.textMuted }]}>
+                Long-press a layer to drag, or use the arrows to reorder
+              </Text>
+            )}
+            {layers.map((layer) => {
             const isSelected = layer.id === selectedLayerId;
             const thumbSource = getLayerThumbnailSource(layer);
+            const isDragging = draggingId === layer.id;
             return (
               <View
                 key={layer.id}
                 style={[
                   styles.layerRow,
-                  { backgroundColor: colors.surfaceAlt },
-                  isSelected ? { backgroundColor: `${colors.brand}15`, borderWidth: 1, borderColor: `${colors.brand}40` } : {},
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: isSelected && !reorderMode ? colors.brand : colors.borderSubtle,
+                  },
+                  isDragging && styles.layerRowDragging,
                 ]}
               >
+                {isSelected && !reorderMode && <View style={[styles.selectionAccent, { backgroundColor: colors.brand }]} />}
+
+                {/* Drag handle */}
                 <PressScale
-                  onPress={() => selectLayer(layer.id)}
+                  onLongPress={() => handleLongPressRow(layer.id)}
+                  style={styles.dragHandle}
+                  accessibilityLabel="Drag handle, long press to reorder"
+                  accessibilityHint="Long press then use arrows to move this layer"
+                  accessibilityRole="button"
+                  hitSlop={4}
+                >
+                  <Ionicons
+                    name="menu-outline"
+                    size={22}
+                    color={reorderMode ? colors.brand : colors.textMuted}
+                  />
+                </PressScale>
+
+                <PressScale
+                  onPress={() => { if (!reorderMode) handleSelect(layer.id); }}
+                  onLongPress={() => handleLongPressRow(layer.id)}
                   style={styles.rowMain}
                   accessibilityLabel={`Layer ${getLayerDisplayName(layer)}${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
-                  accessibilityHint="Double tap to select layer"
+                  accessibilityHint={reorderMode ? 'Use arrows to reorder this layer' : 'Double tap to select, long press to reorder'}
                   accessibilityRole="button"
+                  hitSlop={8}
                 >
-                  <View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type)}20` }, layer.hidden && styles.thumbnailHidden]}>
+                  <View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` }, layer.hidden && styles.thumbnailHidden]}>
                     {thumbSource ? (
-                      <Image source={thumbSource} style={styles.thumbnailImage} resizeMode="cover" />
+                      <ExpoImage source={thumbSource} style={styles.thumbnailImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={thumbSource.uri} enforceEarlyResizing />
                     ) : (
-                      <Ionicons name={LAYER_ICONS[layer.type] as any} size={20} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type)} />
+                      <Ionicons name={LAYER_ICONS[layer.type]} size={20} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type, colors)} />
                     )}
                     {layer.type === 'media' && layer.payload.mediaType === 'video' && (
                       <View style={styles.videoBadge}>
@@ -130,55 +219,86 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                 </PressScale>
 
                 <View style={styles.rowActions}>
-                  <PressScale
-                    onPress={() => reorderLayer(layer.id, 'forward')}
-                    style={styles.actionBtn}
-                    accessibilityLabel="Move layer up"
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="chevron-up" size={22} color={colors.textSecondary} />
-                  </PressScale>
-                  <PressScale
-                    onPress={() => reorderLayer(layer.id, 'backward')}
-                    style={styles.actionBtn}
-                    accessibilityLabel="Move layer down"
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="chevron-down" size={22} color={colors.textSecondary} />
-                  </PressScale>
-                  <PressScale
-                    onPress={() => toggleLayerVisibility(layer.id)}
-                    style={styles.actionBtn}
-                    accessibilityLabel={layer.hidden ? 'Show layer' : 'Hide layer'}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textSecondary} />
-                  </PressScale>
-                  <PressScale
-                    onPress={() => toggleLayerLock(layer.id)}
-                    style={styles.actionBtn}
-                    accessibilityLabel={layer.locked ? 'Unlock layer' : 'Lock layer'}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons
-                      name={layer.locked ? 'lock-closed' : 'lock-open-outline'}
-                      size={22}
-                      color={layer.locked ? colors.warning : colors.textSecondary}
-                    />
-                  </PressScale>
-                  <PressScale
-                    onPress={() => openOverflow(layer)}
-                    style={styles.actionBtn}
-                    accessibilityLabel="More layer actions"
-                    accessibilityHint="Opens duplicate, delete and reorder options"
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
-                  </PressScale>
+                  {reorderMode ? (
+                    <>
+                      <PressScale
+                        onPress={() => handleReorder(layer.id, 'forward')}
+                        style={styles.actionBtnLarge}
+                        accessibilityLabel="Move layer up"
+                        accessibilityRole="button"
+                        hitSlop={8}
+                      >
+                        <Ionicons name="chevron-up" size={26} color={colors.brand} />
+                      </PressScale>
+                      <PressScale
+                        onPress={() => handleReorder(layer.id, 'backward')}
+                        style={styles.actionBtnLarge}
+                        accessibilityLabel="Move layer down"
+                        accessibilityRole="button"
+                        hitSlop={8}
+                      >
+                        <Ionicons name="chevron-down" size={26} color={colors.brand} />
+                      </PressScale>
+                    </>
+                  ) : (
+                    <>
+                      <PressScale
+                        onPress={() => handleReorder(layer.id, 'forward')}
+                        style={styles.actionBtn}
+                        accessibilityLabel="Move layer up"
+                        accessibilityRole="button"
+                        hitSlop={8}
+                      >
+                        <Ionicons name="chevron-up" size={22} color={colors.textSecondary} />
+                      </PressScale>
+                      <PressScale
+                        onPress={() => handleReorder(layer.id, 'backward')}
+                        style={styles.actionBtn}
+                        accessibilityLabel="Move layer down"
+                        accessibilityRole="button"
+                        hitSlop={8}
+                      >
+                        <Ionicons name="chevron-down" size={22} color={colors.textSecondary} />
+                      </PressScale>
+                      <PressScale
+                        onPress={() => handleVisibility(layer.id)}
+                        style={styles.actionBtn}
+                        accessibilityLabel={layer.hidden ? 'Show layer' : 'Hide layer'}
+                        accessibilityRole="button"
+                        hitSlop={8}
+                      >
+                        <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textSecondary} />
+                      </PressScale>
+                      <PressScale
+                        onPress={() => handleLock(layer.id)}
+                        style={styles.actionBtn}
+                        accessibilityLabel={layer.locked ? 'Unlock layer' : 'Lock layer'}
+                        accessibilityRole="button"
+                        hitSlop={8}
+                      >
+                        <Ionicons
+                          name={layer.locked ? 'lock-closed' : 'lock-open-outline'}
+                          size={22}
+                          color={layer.locked ? colors.warning : colors.textSecondary}
+                        />
+                      </PressScale>
+                      <PressScale
+                        onPress={() => openOverflow(layer)}
+                        style={styles.actionBtn}
+                        accessibilityLabel="More layer actions"
+                        accessibilityHint="Opens duplicate, delete and reorder options"
+                        accessibilityRole="button"
+                        hitSlop={8}
+                      >
+                        <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
+                      </PressScale>
+                    </>
+                  )}
                 </View>
               </View>
             );
-          })
+          })}
+          </>
         )}
       </ScrollView>
     </SheetContainer>
@@ -199,8 +319,32 @@ function getLayerDisplayName(layer: CreatorLayer): string {
       return layer.payload.snapshotCaption?.slice(0, 30) || 'Look';
     case 'vote':
       return layer.payload.question.slice(0, 30) || 'Vote';
+    case 'quiz':
+      return layer.payload.question.slice(0, 30) || 'Quiz';
+    case 'question':
+      return layer.payload.prompt.slice(0, 30) || 'Question';
+    case 'emojiSlider':
+      return layer.payload.question.slice(0, 30) || 'Slider';
+    case 'countdown':
+      return layer.payload.label.slice(0, 30) || 'Countdown';
     case 'decorative':
       return layer.payload.shape;
+    case 'draw':
+      return `Drawing (${layer.payload.strokes.length})`;
+    case 'gif':
+      return layer.payload.altText || 'GIF';
+    case 'music':
+      return `${layer.payload.trackName}${layer.payload.artistName ? ' — ' + layer.payload.artistName : ''}`;
+    case 'link':
+      return layer.payload.ctaText || 'Link';
+    case 'location':
+      return layer.payload.placeName || 'Location';
+    case 'hashtag':
+      return `#${layer.payload.tag}`;
+    case 'time':
+      return 'Time';
+    case 'weather':
+      return `${layer.payload.emoji} ${layer.payload.condition}`;
     default:
       return 'Layer';
   }
@@ -225,16 +369,28 @@ function getLayerThumbnailSource(layer: CreatorLayer): { uri: string } | null {
   }
 }
 
-function getLayerColor(type: CreatorLayer['type']): string {
+function getLayerColor(type: CreatorLayer['type'], colors: ThemeColors): string {
   switch (type) {
-    case 'media': return '#5ac8fa';
-    case 'text': return '#ffcc00';
-    case 'product': return '#ff9500';
-    case 'mention': return '#ff2d55';
-    case 'look': return '#5856d6';
-    case 'vote': return '#34c759';
-    case 'decorative': return '#4cd964';
-    default: return '#aaa';
+    case 'media': return colors.commerceTrust;
+    case 'text': return colors.antiqueGold;
+    case 'product': return colors.bronze;
+    case 'mention': return colors.social;
+    case 'look': return colors.discovery;
+    case 'vote': return colors.success;
+    case 'quiz': return colors.brand;
+    case 'question': return colors.social;
+    case 'emojiSlider': return colors.antiqueGold;
+    case 'countdown': return colors.bronze;
+    case 'decorative': return colors.coownUp;
+    case 'draw': return colors.brand;
+    case 'gif': return colors.social;
+    case 'music': return colors.antiqueGold;
+    case 'link': return colors.brand;
+    case 'location': return colors.discovery;
+    case 'hashtag': return colors.social;
+    case 'time': return colors.bronze;
+    case 'weather': return colors.discovery;
+    default: return colors.textMuted;
   }
 }
 
@@ -256,6 +412,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
+  },
+  doneBtn: {
+    height: TOUCH,
+    paddingHorizontal: Space.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
+  },
+  doneBtnText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+  },
+  reorderHint: {
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+    textAlign: 'center',
+    paddingVertical: Space.xs,
   },
   scrollBody: {
     paddingHorizontal: Space.md,
@@ -281,10 +454,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.md,
+    paddingVertical: Space.sm,
+    paddingHorizontal: 12,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
     minHeight: 56,
+  },
+  layerRowDragging: {
+    opacity: 0.7,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  dragHandle: {
+    width: TOUCH,
+    height: TOUCH,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
+  },
+  selectionAccent: {
+    position: 'absolute',
+    left: 0,
+    top: Space.xs,
+    bottom: Space.xs,
+    width: 3,
+    borderRadius: Radius.sm,
   },
   rowMain: {
     flex: 1,
@@ -314,7 +511,7 @@ const styles = StyleSheet.create({
     right: 2,
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -344,5 +541,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
+  },
+  actionBtnLarge: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.md,
   },
 });

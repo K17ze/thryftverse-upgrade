@@ -1,28 +1,35 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, Platform } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import {
+  AddressCollectionMode,
+  CollectionMode,
+  initPaymentSheet,
+  PaymentSheetError,
+  presentPaymentSheet,
+} from '@stripe/stripe-react-native';
 import { BottomSheet } from '../BottomSheet';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
-import { buildCardPaymentMethod } from '../../utils/checkoutFlow';
-import { formatCountryPolicyScope, isPaymentMethodAllowed } from '../../utils/capabilityPolicy';
-import { createUserPaymentMethod } from '../../services/commerceApi';
-import { getUserCountryCapabilities, UserCountryCapabilities } from '../../services/capabilitiesApi';
+import { createStripeSetupSheet } from '../../services/commerceApi';
+import {
+  getUserCountryCapabilities,
+  type UserCountryCapabilities,
+} from '../../services/capabilitiesApi';
+import {
+  formatCountryPolicyScope,
+  isPaymentMethodAllowed,
+} from '../../utils/capabilityPolicy';
 import { parseApiError } from '../../lib/apiClient';
-import * as Haptics from 'expo-haptics';
-import { Typography } from '../../theme/designTokens';
-
-const BG = Colors.background;
-const CARD = Colors.background;
-const BORDER = Colors.border;
-const DIVIDER = Colors.borderLight;
-const BRAND = Colors.brand;
-const CARD_PREVIEW_BG = Colors.surface;
-const CARD_PREVIEW_BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
+import { createStableId } from '../../utils/createStableId';
+import {
+  configureStripeMobile,
+  getStripeReturnUrl,
+} from '../../platform/payments/stripeMobile';
+import { Radius, Space, Typography, Type } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 interface Props {
   visible: boolean;
@@ -31,291 +38,326 @@ interface Props {
 }
 
 export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [name, setName] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
+  const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
-  const savePaymentMethod = useStore((state) => state.savePaymentMethod);
+  const [isOpeningProvider, setIsOpeningProvider] = useState(false);
+  const [countryCapabilities, setCountryCapabilities] =
+    useState<UserCountryCapabilities | null>(null);
+  const setupIdempotencyKeyRef = useRef(createStableId('setup_method'));
   const { show } = useToast();
-
-  useEffect(() => {
-    if (!visible) {
-      // Reset state if closed
-      setCardNumber('');
-      setExpiry('');
-      setCvv('');
-      setName('');
-    }
-  }, [visible]);
+  const themed = {
+    textPrimary: colors.textPrimary,
+    textSecondary: colors.textSecondary,
+    textMuted: colors.textMuted,
+    brand: colors.brand,
+    border: colors.border,
+    surface: colors.surface,
+    surfaceAlt: colors.surfaceAlt,
+    success: colors.success,
+    textInverse: colors.textInverse,
+  };
+  const styles = useMemo(() => createStyles(themed), [themed]);
 
   useEffect(() => {
     let cancelled = false;
+    if (!visible || !currentUser?.id) return () => undefined;
 
-    const hydrateCapabilities = async () => {
-      if (!visible || !currentUser?.id) {
-        if (!cancelled) {
-          setCountryCapabilities(null);
-        }
-        return;
-      }
-
-      try {
-        const capabilities = await getUserCountryCapabilities(currentUser.id);
-        if (!cancelled) {
-          setCountryCapabilities(capabilities);
-        }
-      } catch {
-        if (!cancelled) {
-          setCountryCapabilities(null);
-        }
-      }
-    };
-
-    void hydrateCapabilities();
+    void getUserCountryCapabilities(currentUser.id)
+      .then((capabilities) => {
+        if (!cancelled) setCountryCapabilities(capabilities);
+      })
+      .catch(() => {
+        if (!cancelled) setCountryCapabilities(null);
+      });
 
     return () => {
       cancelled = true;
     };
   }, [currentUser?.id, visible]);
 
-  const formatCardNumber = (val: string) =>
-    val.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+  useEffect(() => {
+    if (!visible) {
+      setupIdempotencyKeyRef.current = createStableId('setup_method');
+    }
+  }, [visible]);
 
-  const formatExpiry = (val: string) => {
-    const clean = val.replace(/\D/g, '').slice(0, 4);
-    return clean.length >= 2 ? clean.slice(0, 2) + '/' + clean.slice(2) : clean;
-  };
-
-  const expiryIsValid = (() => {
-    if (!/^\d{2}\/\d{2}$/.test(expiry)) return false;
-    const month = Number(expiry.slice(0, 2));
-    return month >= 1 && month <= 12;
-  })();
-
-  const isComplete =
-    cardNumber.replace(/\s/g, '').length === 16 &&
-    expiryIsValid &&
-    cvv.length >= 3 &&
-    name.trim().length >= 2;
-
+  const policyLabel = useMemo(
+    () =>
+      countryCapabilities
+        ? formatCountryPolicyScope(countryCapabilities)
+        : null,
+    [countryCapabilities]
+  );
   const cardAllowed = isPaymentMethodAllowed(countryCapabilities, 'card');
 
-  const policyLabel = useMemo(() => {
-    if (!countryCapabilities) {
-      return null;
+  const handleOpenStripe = async () => {
+    if (isOpeningProvider) return;
+    if (!currentUser?.id) {
+      show('Sign in to add a payment method.', 'error');
+      return;
     }
-
-    return formatCountryPolicyScope(countryCapabilities);
-  }, [countryCapabilities]);
-
-  const handleSaveCard = async () => {
     if (!cardAllowed) {
       show('Card payments are unavailable for your country policy.', 'error');
       return;
     }
 
-    if (!isComplete || isSaving) return;
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    const last4 = cardNumber.replace(/\s/g, '').slice(-4);
-    const localPaymentMethod = buildCardPaymentMethod(last4, expiry, 'Visa');
-
-    const userId = currentUser?.id;
-    if (!userId) {
-      show('You must be signed in to save a payment method.', 'error');
-      setIsSaving(false);
-      return;
-    }
-
-    setIsSaving(true);
-    let shouldDismiss = true;
+    setIsOpeningProvider(true);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      const saved = await createUserPaymentMethod(userId, {
-        type: 'card',
-        label: localPaymentMethod.label,
-        details: localPaymentMethod.details,
-        isDefault: true,
-      });
+      const configuration = await createStripeSetupSheet(
+        setupIdempotencyKeyRef.current
+      );
+      await configureStripeMobile(configuration.publishableKey);
 
-      savePaymentMethod({
-        id: saved.id,
-        type: saved.type,
-        label: saved.label,
-        details: saved.details ?? undefined,
-        isDefault: saved.isDefault,
+      const { error: initializationError } = await initPaymentSheet({
+        merchantDisplayName: configuration.merchantDisplayName,
+        customerId: configuration.customerId,
+        customerSessionClientSecret:
+          configuration.customerSessionClientSecret,
+        setupIntentClientSecret: configuration.setupIntentClientSecret,
+        returnURL: getStripeReturnUrl(),
+        allowsDelayedPaymentMethods: false,
+        billingDetailsCollectionConfiguration: {
+          address: AddressCollectionMode.AUTOMATIC,
+          name: CollectionMode.AUTOMATIC,
+        },
       });
-      show('Card saved to wallet', 'success');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to save card right now.');
-      shouldDismiss = false;
-      show(parsed.message, 'error');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } finally {
-      setIsSaving(false);
-      if (shouldDismiss) {
-        onDismiss();
-        if (onSuccess) onSuccess();
+      if (initializationError) {
+        throw new Error(initializationError.message);
       }
+
+      const { error: presentationError } = await presentPaymentSheet();
+      if (presentationError?.code === PaymentSheetError.Canceled) {
+        return;
+      }
+      if (presentationError) {
+        throw new Error(presentationError.message);
+      }
+
+      await Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success
+      );
+      show('Payment method added', 'success');
+      setupIdempotencyKeyRef.current = createStableId('setup_method');
+      onDismiss();
+      onSuccess?.();
+    } catch (error) {
+      const parsed = parseApiError(
+        error,
+        'Unable to open card entry right now. Please try again.'
+      );
+      await Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Error
+      );
+      show(parsed.message, 'error');
+    } finally {
+      setIsOpeningProvider(false);
     }
   };
 
   return (
-    <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.88}>
-      <Text style={styles.sheetTitle}>Add card</Text>
-      {policyLabel ? <Text style={styles.policyLabel}>Policy scope: {policyLabel}</Text> : null}
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {!cardAllowed ? (
-          <View style={styles.blockedCard}>
-            <Text style={styles.blockedTitle}>Cards unavailable in your region</Text>
-            <Text style={styles.blockedText}>Switch country policy to enable card rails.</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.cardPreview}>
-          <Text style={styles.cardPreviewNumber}>
-            {cardNumber || '**** **** **** ****'}
-          </Text>
-          <View style={styles.cardPreviewBottom}>
-            <View>
-              <Text style={styles.cardPreviewLabel}>CARDHOLDER</Text>
-              <Text style={styles.cardPreviewValue}>{name || 'YOUR NAME'}</Text>
-            </View>
-            <View>
-              <Text style={styles.cardPreviewLabel}>EXPIRES</Text>
-              <Text style={styles.cardPreviewValue}>{expiry || 'MM/YY'}</Text>
-            </View>
-          </View>
+    <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.58}>
+      <View style={styles.header}>
+        <View style={styles.providerMark} accessibilityElementsHidden>
+          <Ionicons name="card-outline" size={24} color={themed.brand} />
         </View>
-
-        <Text style={styles.sectionLabel}>CARD DETAILS</Text>
-        <View style={styles.card}>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Card number</Text>
-            <TextInput
-              style={styles.fieldInput}
-              value={cardNumber}
-              onChangeText={v => setCardNumber(formatCardNumber(v))}
-              placeholder="0000 0000 0000 0000"
-              placeholderTextColor={MUTED}
-              keyboardType="number-pad"
-              selectionColor={BRAND}
-              maxLength={19}
-            />
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.fieldRowHalf}>
-            <View style={styles.halfField}>
-              <Text style={styles.fieldLabel}>Expiry date</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={expiry}
-                onChangeText={v => setExpiry(formatExpiry(v))}
-                placeholder="MM/YY"
-                placeholderTextColor={MUTED}
-                keyboardType="number-pad"
-                selectionColor={BRAND}
-                maxLength={5}
-              />
-            </View>
-            <View style={styles.halfDivider} />
-            <View style={styles.halfField}>
-              <Text style={styles.fieldLabel}>CVV</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={cvv}
-                onChangeText={v => setCvv(v.replace(/\D/g, '').slice(0, 4))}
-                placeholder="***"
-                placeholderTextColor={MUTED}
-                keyboardType="number-pad"
-                selectionColor={BRAND}
-                secureTextEntry
-                maxLength={4}
-              />
-            </View>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Name on card</Text>
-            <TextInput
-              style={styles.fieldInput}
-              value={name}
-              onChangeText={setName}
-              placeholder="As it appears on card"
-              placeholderTextColor={MUTED}
-              autoCapitalize="words"
-              selectionColor={BRAND}
-            />
-          </View>
-        </View>
-
-        <View style={styles.secureRow}>
-          <Ionicons name="lock-closed-outline" size={14} color={MUTED} />
-          <Text style={styles.secureText}>Your card details are encrypted and secure</Text>
-        </View>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <AnimatedPressable
-          style={[styles.saveBtn, (!isComplete || isSaving || !cardAllowed) && { opacity: 0.4 }]}
-          disabled={!isComplete || isSaving || !cardAllowed}
-          onPress={handleSaveCard}
-        >
-          <Text style={styles.saveBtnText}>{isSaving ? 'Processing...' : 'Save securely'}</Text>
-        </AnimatedPressable>
+        <Text style={styles.title}>Add a payment method</Text>
+        <Text style={styles.subtitle}>
+          Card details are collected securely. ThryftVerse receives a
+          reusable payment-method reference, not your card number or
+          security code.
+        </Text>
       </View>
+
+      <View style={styles.boundary}>
+        <View style={styles.boundaryRow}>
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={19}
+            color={themed.success}
+          />
+          <View style={styles.boundaryCopy}>
+            <Text style={styles.boundaryTitle}>Secure card entry</Text>
+            <Text style={styles.boundaryText}>
+              Card details are collected through our encrypted payment
+              provider with bank-grade security.
+            </Text>
+          </View>
+        </View>
+        <View style={styles.separator} />
+        <View style={styles.boundaryRow}>
+          <Ionicons
+            name="eye-off-outline"
+            size={19}
+            color={themed.textSecondary}
+          />
+          <View style={styles.boundaryCopy}>
+            <Text style={styles.boundaryTitle}>Limited card details</Text>
+            <Text style={styles.boundaryText}>
+              We display only the provider-returned brand, last four digits,
+              and expiry.
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {!cardAllowed ? (
+        <View style={styles.blocked} accessibilityRole="alert">
+          <Text style={styles.blockedTitle}>
+            Cards unavailable in this region
+          </Text>
+          <Text style={styles.blockedText}>
+            This payment corridor is not enabled for your current country
+            policy.
+          </Text>
+        </View>
+      ) : null}
+
+      {policyLabel ? (
+        <Text style={styles.policy}>Payment policy: {policyLabel}</Text>
+      ) : null}
+
+      <AnimatedPressable
+        style={[
+          styles.primaryAction,
+          (!cardAllowed || isOpeningProvider) && styles.primaryActionDisabled,
+        ]}
+        disabled={!cardAllowed || isOpeningProvider}
+        onPress={() => void handleOpenStripe()}
+        accessibilityRole="button"
+        accessibilityLabel="Add a card"
+        accessibilityState={{
+          disabled: !cardAllowed || isOpeningProvider,
+          busy: isOpeningProvider,
+        }}
+      >
+        {isOpeningProvider ? (
+          <ActivityIndicator size="small" color={themed.textInverse} />
+        ) : (
+          <Ionicons
+            name="open-outline"
+            size={18}
+            color={themed.textInverse}
+          />
+        )}
+        <Text style={styles.primaryActionText}>
+          {isOpeningProvider ? 'Opening secure card entry…' : 'Add card'}
+        </Text>
+      </AnimatedPressable>
     </BottomSheet>
   );
 }
 
-const styles = StyleSheet.create({
-  sheetTitle: { fontSize: 20, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 20 },
-  policyLabel: { fontSize: 12, color: MUTED, textAlign: 'center', marginTop: -8, marginBottom: 12 },
-  content: { paddingBottom: 40 },
-  blockedCard: {
-    backgroundColor: BG,
-    borderColor: BORDER,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16,
+const createStyles = (themed: {
+  textPrimary: string; textSecondary: string; textMuted: string;
+  brand: string; border: string; surface: string; surfaceAlt: string;
+  success: string; textInverse: string;
+}) => StyleSheet.create({
+  header: {
+    alignItems: 'center',
+    paddingHorizontal: Space.sm,
+    marginBottom: Space.lg,
   },
-  blockedTitle: { fontSize: 13, fontWeight: '700', color: TEXT, marginBottom: 4 },
-  blockedText: { fontSize: 12, color: MUTED, lineHeight: 18 },
-  cardPreview: {
-    backgroundColor: CARD_PREVIEW_BG,
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: CARD_PREVIEW_BORDER,
-    height: 180,
-    justifyContent: 'space-between',
+  providerMark: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.xxl,
+    backgroundColor: themed.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space.md,
   },
-  cardPreviewNumber: { fontSize: 22, fontWeight: '700', color: TEXT, letterSpacing: 2 },
-  cardPreviewBottom: { flexDirection: 'row', justifyContent: 'space-between' },
-  cardPreviewLabel: { fontSize: 10, color: MUTED, letterSpacing: 1.5, marginBottom: 4 },
-  cardPreviewValue: { fontSize: 14, fontWeight: '600', color: TEXT },
-  sectionLabel: { fontSize: 11, color: MUTED, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 },
-  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
-  fieldRow: { paddingHorizontal: 18, paddingVertical: 14 },
-  fieldRowHalf: { flexDirection: 'row' },
-  halfField: { flex: 1, paddingHorizontal: 18, paddingVertical: 14 },
-  halfDivider: { width: 1, backgroundColor: DIVIDER },
-  fieldLabel: { fontSize: 11, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
-  fieldInput: { fontSize: 16, color: TEXT, fontWeight: '500' },
-  divider: { height: 1, backgroundColor: DIVIDER },
-  secureRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
-  secureText: { fontSize: 12, color: MUTED },
-  footer: { paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 0 : 20 },
-  saveBtn: { backgroundColor: Colors.brand, borderRadius: 30, paddingVertical: 16, alignItems: 'center' },
-  saveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textInverse },
+  title: {
+    color: themed.textPrimary,
+    fontFamily: Typography.family.bold,
+    fontSize: 22,
+    letterSpacing: -0.35,
+    marginBottom: Space.sm,
+    textAlign: 'center',
+  },
+  subtitle: {
+    color: themed.textSecondary,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.body.size,
+    lineHeight: 21,
+    textAlign: 'center',
+  },
+  boundary: {
+    borderColor: themed.border,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Space.md,
+    overflow: 'hidden',
+  },
+  boundaryRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: Space.md,
+    minHeight: 68,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  boundaryCopy: {
+    flex: 1,
+  },
+  boundaryTitle: {
+    color: themed.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    marginBottom: 2,
+  },
+  boundaryText: {
+    color: themed.textSecondary,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+    lineHeight: 17,
+  },
+  separator: {
+    backgroundColor: themed.border,
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 54,
+  },
+  blocked: {
+    backgroundColor: themed.surfaceAlt,
+    borderRadius: Radius.md,
+    marginBottom: Space.md,
+    padding: Space.md,
+  },
+  blockedTitle: {
+    color: themed.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    marginBottom: 3,
+  },
+  blockedText: {
+    color: themed.textSecondary,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+    lineHeight: 18,
+  },
+  policy: {
+    color: themed.textMuted,
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    marginBottom: Space.md,
+    textAlign: 'center',
+  },
+  primaryAction: {
+    alignItems: 'center',
+    backgroundColor: themed.brand,
+    borderRadius: Radius.lg,
+    flexDirection: 'row',
+    gap: Space.sm,
+    justifyContent: 'center',
+    minHeight: 54,
+    paddingHorizontal: Space.lg,
+  },
+  primaryActionDisabled: {
+    opacity: 0.45,
+  },
+  primaryActionText: {
+    color: themed.textInverse,
+    fontFamily: Typography.family.bold,
+    fontSize: Type.bodyLarge.size,
+  },
 });

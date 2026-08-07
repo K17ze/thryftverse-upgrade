@@ -9,6 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type * as MediaLibrary from 'expo-media-library/legacy';
 
+import { Radius, Space } from '../../theme/designTokens';
 interface BottomControlBarProps {
   onGalleryPress: () => void;
   onFlipCamera: () => void;
@@ -80,8 +81,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: 24,
-    paddingHorizontal: 16,
+    paddingBottom: Space.lg,
+    paddingHorizontal: Space.md,
     gap: 12,
   },
   bottomRow: {
@@ -89,12 +90,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    marginBottom: 8,
+    marginBottom: Space.sm,
   },
   galleryThumb: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -108,7 +109,7 @@ const styles = StyleSheet.create({
     right: 2,
     width: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -116,20 +117,20 @@ const styles = StyleSheet.create({
   flipBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   photoStrip: {
     gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 4,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xs,
   },
   photoThumb: {
     width: 56,
     height: 56,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: 'rgba(0,0,0,0.3)',
   },

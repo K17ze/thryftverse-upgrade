@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     height: 8,
   },
   dotCircle: {
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   dotDiamond: {
     transform: [{ rotate: '45deg' }],

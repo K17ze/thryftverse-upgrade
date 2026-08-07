@@ -1,8 +1,8 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -29,8 +29,9 @@ export interface BundleUpsellRowProps {
  * message. Only renders when there are 2+ items from the same seller, making the
  * shipping savings claim truthful (combining shipments from one seller).
  *
- * Visual language matches ProductCommerceSummary — surface card, semibold
- * section title, Ionicons, rounded thumbnails with press feedback.
+ * Per AGENTS.md §4 (surface budget): flat canvas with hairline separator —
+ * no card surface, no background fill, no border radius. Spacing and a
+ * hairline top border delineate this section from the one above.
  */
 function BundleUpsellRowComponent({
   items,
@@ -41,6 +42,8 @@ function BundleUpsellRowComponent({
   sellerName,
   onOpenBundleBag,
 }: BundleUpsellRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat, displayMode } = useFormattedPrice();
 
   const bundleItems = items
@@ -57,7 +60,7 @@ function BundleUpsellRowComponent({
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Ionicons name="cube" size={16} color={Colors.brand} />
+          <Ionicons name="cube" size={16} color={colors.brand} />
           <Text style={styles.sectionTitle}>Bundle and save</Text>
         </View>
         <View style={styles.bundleCountBadge}>
@@ -95,7 +98,7 @@ function BundleUpsellRowComponent({
                 />
                 {!bundleItem.images?.[0] ? (
                   <View style={styles.thumbFallback}>
-                    <Ionicons name="shirt-outline" size={20} color={Colors.textMuted} />
+                    <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
                   </View>
                 ) : null}
               </View>
@@ -119,9 +122,9 @@ function BundleUpsellRowComponent({
           accessibilityRole="button"
           accessibilityLabel="Open bundle bag to select items and checkout"
         >
-          <Ionicons name="bag-add-outline" size={16} color={Colors.brand} />
+          <Ionicons name="bag-add-outline" size={16} color={colors.brand} />
           <Text style={styles.createBundleBtnText}>Create bundle</Text>
-          <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+          <Ionicons name="chevron-forward" size={14} color={colors.brand} />
         </Pressable>
       )}
     </View>
@@ -130,47 +133,48 @@ function BundleUpsellRowComponent({
 
 export const BundleUpsellRow = memo(BundleUpsellRowComponent);
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 0.2,
   },
   bundleCountBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}12`,
+    backgroundColor: `${colors.brand}12`,
   },
   bundleCountText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 16,
     marginBottom: Space.sm,
   },
@@ -189,7 +193,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     marginBottom: 6,
     overflow: 'hidden',
   },
@@ -203,9 +207,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   thumbPrice: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   totalRow: {
@@ -215,36 +219,37 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   totalLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   totalValue: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   createBundleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: `${Colors.brand}40`,
-    backgroundColor: `${Colors.brand}08`,
+    borderColor: `${colors.brand}40`,
+    backgroundColor: `${colors.brand}08`,
   },
   createBundleBtnPressed: {
     opacity: 0.7,
   },
   createBundleBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
-});
+  });
+}

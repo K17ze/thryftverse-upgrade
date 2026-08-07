@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
@@ -72,8 +72,8 @@ function resolveSideIcon(side: OrderSide): keyof typeof Ionicons.glyphMap {
   return side === 'buy' ? 'wallet-outline' : 'cash-outline';
 }
 
-function resolveSideColor(side: OrderSide): string {
-  return side === 'buy' ? Colors.brand : Colors.textSecondary;
+function resolveSideColor(side: OrderSide, colors: ThemeColors): string {
+  return side === 'buy' ? colors.brand : colors.textSecondary;
 }
 
 function resolveStatusTone(status: string) {
@@ -120,6 +120,9 @@ export function OrderHistoryRow({
   onPressIssuer,
   onMessageIssuer,
 }: OrderHistoryRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <AnimatedPressable
       style={styles.container}
@@ -133,13 +136,13 @@ export function OrderHistoryRow({
       <View
         style={[
           styles.iconWrap,
-          { borderColor: resolveSideColor(side) + '40', backgroundColor: resolveSideColor(side) + '12' },
+          { borderColor: resolveSideColor(side, colors) + '40', backgroundColor: resolveSideColor(side, colors) + '12' },
         ]}
       >
         <Ionicons
           name={resolveSideIcon(side)}
           size={16}
-          color={resolveSideColor(side)}
+          color={resolveSideColor(side, colors)}
         />
       </View>
 
@@ -153,7 +156,7 @@ export function OrderHistoryRow({
 
         <View style={styles.metaRow}>
           <Meta style={styles.metaLabel} numberOfLines={1}>
-            {side.toUpperCase()}  {type}  {status === 'partial' && filledQuantity != null
+            {side.toUpperCase()}  {type}  {status === 'partially_filled' && filledQuantity != null
               ? `${filledQuantity} of ${quantity} filled`
               : `${quantity} units`}
           </Meta>
@@ -173,7 +176,7 @@ export function OrderHistoryRow({
             accessibilityRole="button"
             accessibilityLabel={`Cancel ${side} order for ${assetTitle}`}
           >
-            <Ionicons name="close-circle-outline" size={15} color={Colors.textSecondary} />
+            <Ionicons name="close-circle-outline" size={15} color={colors.textSecondary} />
             <Meta style={styles.cancelText}>{isCancelling ? 'Cancelling…' : 'Cancel remaining'}</Meta>
           </AnimatedPressable>
         ) : null}
@@ -192,7 +195,7 @@ export function OrderHistoryRow({
                 <CachedImage uri={issuerAvatar} style={styles.issuerAvatar} containerStyle={styles.issuerAvatarWrap} contentFit="cover" />
               ) : (
                 <View style={styles.issuerAvatarPlaceholder}>
-                  <Ionicons name="person-outline" size={12} color={Colors.textMuted} />
+                  <Ionicons name="person-outline" size={12} color={colors.textMuted} />
                 </View>
               )}
               <Meta style={styles.issuerText} numberOfLines={1}>@{issuerHandle}</Meta>
@@ -207,7 +210,7 @@ export function OrderHistoryRow({
                 accessibilityLabel={canMessageIssuer ? `Message @${issuerHandle}` : 'Issuer is you'}
                 accessibilityHint={canMessageIssuer ? 'Opens chat with issuer' : 'Messaging yourself is disabled'}
               >
-                <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={Colors.textPrimary} />
+                <Ionicons name={canMessageIssuer ? 'chatbubble-ellipses-outline' : 'checkmark'} size={12} color={colors.textPrimary} />
               </AnimatedPressable>
             )}
           </View>
@@ -217,21 +220,21 @@ export function OrderHistoryRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 4,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   iconWrap: {
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Space.sm,
@@ -257,7 +260,7 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: Space.xs,
     gap: Space.sm,
   },
   metaLabel: {
@@ -275,7 +278,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   price: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     flexShrink: 1,
     minWidth: 0,
   },
@@ -288,12 +291,12 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs + 1,
     marginTop: Space.xs,
     paddingRight: Space.sm,
   },
   cancelText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   issuerRow: {
     flexDirection: 'row',
@@ -302,12 +305,12 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   issuerChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   issuerAvatarWrap: {
     width: 20,
@@ -324,18 +327,18 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   issuerText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   messageBtn: {
     width: 28,
     height: 28,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },

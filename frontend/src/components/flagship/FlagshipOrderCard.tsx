@@ -4,10 +4,11 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { PremiumStatusPill } from '../ui/PremiumStatusPill';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface FlagshipOrderCardProps {
   imageUri?: string | null;
@@ -32,6 +33,9 @@ export function FlagshipOrderCard({
   onPress,
   index = 0,
 }: FlagshipOrderCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const reducedMotion = useReducedMotion();
   const tone =
     status === 'delivered'
       ? 'delivered'
@@ -44,7 +48,7 @@ export function FlagshipOrderCard({
   const actorLabel = buyerName ? `To ${buyerName}` : sellerName ? `From ${sellerName}` : '';
 
   return (
-    <Reanimated.View entering={FadeInDown.delay(index * 40).duration(350)}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(index * 40).duration(350)}>
       <AnimatedPressable onPress={onPress} style={styles.root} {...PressPresets.listRow}>
         {/* Product Image */}
         <View style={styles.imageWrap}>
@@ -57,7 +61,7 @@ export function FlagshipOrderCard({
             />
           ) : (
             <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="cube-outline" size={28} color={Colors.textMuted} />
+              <Ionicons name="cube-outline" size={28} color={colors.textMuted} />
             </View>
           )}
         </View>
@@ -82,7 +86,7 @@ export function FlagshipOrderCard({
         </View>
 
         {/* Chevron */}
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} style={styles.chevron} />
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={styles.chevron} />
       </AnimatedPressable>
     </Reanimated.View>
   );
@@ -90,24 +94,24 @@ export function FlagshipOrderCard({
 
 const IMAGE_SIZE = 72;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.sm,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   imageWrap: {
     width: IMAGE_SIZE,
     height: IMAGE_SIZE,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   image: {
     width: IMAGE_SIZE,
@@ -133,13 +137,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 20,
   },
   price: {
     fontSize: Type.price.size,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   middleRow: {
@@ -151,12 +155,12 @@ const styles = StyleSheet.create({
   actor: {
     fontSize: Type.caption.size,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   date: {
     fontSize: Type.meta.size,
     fontWeight: '400',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   chevron: {

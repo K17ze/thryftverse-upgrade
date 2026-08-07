@@ -1,22 +1,24 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { EmptyState } from '../components/EmptyState';
 import { useHaptic } from '../hooks/useHaptic';
 
-type Props = StackScreenProps<RootStackParamList, 'ManageQuickReplies'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ManageQuickReplies'>;
 
 export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
   const { role } = route.params;
   const { show } = useToast();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
 
   const replies = useStore((s) => role === 'seller' ? s.sellerQuickReplies : s.buyerQuickReplies);
   const addReply = useStore((s) => role === 'seller' ? s.addSellerQuickReply : s.addBuyerQuickReply);
@@ -26,6 +28,8 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingText, setEditingText] = useState('');
   const [newText, setNewText] = useState('');
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleSaveEdit = () => {
     if (editingIndex === null) return;
@@ -84,11 +88,13 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Your replies</Text>
         {replies.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="chatbubble-ellipses-outline" size={32} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>No quick replies yet</Text>
-            <Text style={styles.emptySubtext}>Add one below to speed up your conversations</Text>
-          </View>
+          <EmptyState
+            icon="chatbubble-ellipses-outline"
+            title="No quick replies"
+            subtitle="Add one below to speed up your conversations"
+            ctaLabel="Add your first reply"
+            onCtaPress={handleAdd}
+          />
         ) : (
           <View style={styles.list}>
             {replies.map((reply, index) => (
@@ -112,7 +118,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                         accessibilityLabel="Save edit"
                         accessibilityRole="button"
                       >
-                        <Ionicons name="checkmark-circle" size={28} color={Colors.brand} />
+                        <Ionicons name="checkmark-circle" size={28} color={colors.brand} />
                       </AnimatedPressable>
                       <AnimatedPressable
                         onPress={() => { setEditingIndex(null); setEditingText(''); }}
@@ -121,7 +127,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                         accessibilityLabel="Cancel edit"
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={28} color={Colors.textMuted} />
+                        <Ionicons name="close-circle" size={28} color={colors.textMuted} />
                       </AnimatedPressable>
                     </View>
                   ) : (
@@ -134,7 +140,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                         accessibilityLabel={`Edit reply ${index + 1}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
+                        <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
                       </AnimatedPressable>
                       <AnimatedPressable
                         onPress={() => handleDelete(index)}
@@ -143,7 +149,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                         accessibilityLabel={`Delete reply ${index + 1}`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+                        <Ionicons name="trash-outline" size={20} color={colors.danger} />
                       </AnimatedPressable>
                     </>
                   )}
@@ -163,7 +169,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
             value={newText}
             onChangeText={setNewText}
             placeholder="Type a quick reply..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={200}
             accessibilityLabel="New quick reply text"
@@ -176,7 +182,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
             accessibilityLabel="Add quick reply"
             accessibilityRole="button"
           >
-            <Ionicons name="add" size={22} color={Colors.textInverse} />
+            <Ionicons name="add" size={22} color={colors.textInverse} />
           </AnimatedPressable>
         </View>
       </View>
@@ -184,100 +190,86 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  section: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.lg,
-  },
-  sectionTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-    textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
-  list: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  replyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    minHeight: 52,
-    gap: Space.sm,
-  },
-  replyText: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    lineHeight: Type.body.lineHeight,
-  },
-  editRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  editInput: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs + 2,
-    minHeight: 40,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginLeft: Space.md,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: Space.xl,
-    gap: Space.xs,
-  },
-  emptyText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  emptySubtext: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
-  },
-  addRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Space.sm,
-  },
-  addInput: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 100,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: Space.sm + 4,
-    paddingVertical: Space.sm,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-  },
-  addBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.textPrimary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    section: {
+      marginHorizontal: Space.md,
+      marginBottom: Space.lg,
+    },
+    sectionTitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textSecondary,
+      letterSpacing: Type.caption.letterSpacing,
+      textTransform: 'uppercase',
+      marginBottom: Space.sm,
+    },
+    list: {
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      overflow: 'hidden',
+    },
+    replyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: Space.sm + 2,
+      paddingHorizontal: Space.md,
+      minHeight: Space.xxl + Space.xs,
+      gap: Space.sm,
+    },
+    replyText: {
+      flex: 1,
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textPrimary,
+      lineHeight: Type.body.lineHeight,
+    },
+    editRow: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    editInput: {
+      flex: 1,
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textPrimary,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.sm,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs + 2,
+      minHeight: Space.xl + Space.sm,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginLeft: Space.md,
+    },
+    addRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: Space.sm,
+    },
+    addInput: {
+      flex: 1,
+      minHeight: Control.hit,
+      maxHeight: Space.xxl * 2 + Space.xs,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: Space.sm + 4,
+      paddingVertical: Space.sm,
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textPrimary,
+    },
+    addBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      borderRadius: Radius.xxl,
+      backgroundColor: colors.textPrimary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+  });
+}

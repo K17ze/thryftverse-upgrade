@@ -51,6 +51,7 @@ export type OrderStatus =
   | 'accepted'
   | 'open'
   | 'partial'
+  | 'partially_filled'
   | 'filled'
   | 'cancel_pending'
   | 'cancelled'
@@ -260,6 +261,10 @@ export interface CoOwn1ZeBalance {
   // Trust
   safeguarded: boolean;
   safeguardingPartner?: string;
+  /** WS4: URL to the safeguarding evidence document. */
+  safeguardingEvidenceUrl?: string | null;
+  /** WS4: URL to the safeguarding terms. */
+  safeguardingTermsUrl?: string | null;
 
   // Sequencing
   snapshotSequence: number;

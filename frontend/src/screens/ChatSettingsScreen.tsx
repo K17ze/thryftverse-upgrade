@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { View } from 'react-native';
-import { StackScreenProps } from '@react-navigation/stack';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -8,11 +10,18 @@ import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
+import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import type { ThemeColors } from '../theme/ThemeContext';
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'ChatSettings'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ChatSettings'>;
 
 export default function ChatSettingsScreen({ navigation }: Props) {
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const mutedIds = useStore((s) => s.mutedConversationIds);
   const archivedIds = useStore((s) => s.archivedConversationIds);
   const readReceipts = useStore((s) => s.readReceiptsEnabled);
@@ -42,12 +51,45 @@ export default function ChatSettingsScreen({ navigation }: Props) {
 
   const handleAllowSelect = (value: string) => {
     const key = value === 'Everyone' ? 'everyone' : value === 'People I follow' ? 'following' : 'nobody';
-    setAllowFrom(key as any);
+    setAllowFrom(key);
     setShowAllowSheet(false);
   };
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Chat settings" onBack={() => navigation.goBack()} />}>
+      {/* Hero summary */}
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.heroRow}>
+            <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+              <Ionicons name="chatbubble-ellipses" size={20} color={colors.textInverse} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Messaging</Text>
+              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                {allowLabel[allowFrom]} can message you
+              </Text>
+            </View>
+          </View>
+          <View style={styles.heroStats}>
+            <View style={styles.heroStat}>
+              <Text style={[styles.heroStatValue, { color: colors.textPrimary }]}>{mutedCount}</Text>
+              <Text style={[styles.heroStatLabel, { color: colors.textMuted }]}>Muted</Text>
+            </View>
+            <View style={[styles.heroStatDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.heroStat}>
+              <Text style={[styles.heroStatValue, { color: colors.textPrimary }]}>{archivedCount}</Text>
+              <Text style={[styles.heroStatLabel, { color: colors.textMuted }]}>Archived</Text>
+            </View>
+            <View style={[styles.heroStatDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.heroStat}>
+              <Text style={[styles.heroStatValue, { color: colors.textPrimary }]}>{blockedCount}</Text>
+              <Text style={[styles.heroStatLabel, { color: colors.textMuted }]}>Blocked</Text>
+            </View>
+          </View>
+        </View>
+      </Reanimated.View>
+
       <SettingsSection title="Who can reach you" noCard>
         <SettingsRow
           title="Who can message me"
@@ -167,4 +209,58 @@ export default function ChatSettingsScreen({ navigation }: Props) {
       />
     </FlagshipScreen>
   );
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    heroCard: {
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      padding: Space.md,
+      marginBottom: Space.md,
+      gap: Space.md,
+    },
+    heroRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+    },
+    heroIcon: {
+      width: Space.xl + Space.sm,
+      height: Space.xl + Space.sm,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroText: { flex: 1 },
+    heroTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    heroSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      marginTop: Space.xs / 2,
+    },
+    heroStats: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    heroStat: { flex: 1, alignItems: 'center' },
+    heroStatValue: {
+      fontSize: Type.priceList.size,
+      fontFamily: Typography.family.bold,
+      fontVariant: ['tabular-nums'],
+    },
+    heroStatLabel: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      marginTop: Space.xs / 2,
+    },
+    heroStatDivider: {
+      width: Stroke.standard,
+      height: Space.lg + Space.xs,
+    },
+  });
 }

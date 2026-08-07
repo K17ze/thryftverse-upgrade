@@ -97,7 +97,8 @@ export function useProfileMediaUpload(
     updateState({ status: 'uploading', error: null });
 
     try {
-      const publicUrl = await uploadMedia(asset, type === 'avatar' ? 'avatars' : 'covers');
+      const uploaded = await uploadMedia(asset, type === 'avatar' ? 'avatars' : 'covers');
+      const publicUrl = uploaded.publicUrl;
       await updateMyProfile(type === 'avatar' ? { avatar: publicUrl } : { coverPhoto: publicUrl });
 
       // Guard against stale operation — avatar and cover are independent

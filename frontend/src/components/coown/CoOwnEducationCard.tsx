@@ -60,7 +60,7 @@ export function CoOwnEducationCard({
             style={[styles.topicRow, i < topics.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
           >
             <View style={[styles.topicIcon, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name={topic.icon as any} size={18} color={colors.textPrimary} />
+              <Ionicons name={topic.icon} size={18} color={colors.textPrimary} />
             </View>
             <View style={styles.topicContent}>
               <Text style={[styles.topicTitle, { color: colors.textPrimary }]}>{topic.title}</Text>

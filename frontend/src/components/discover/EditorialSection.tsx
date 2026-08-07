@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 
 interface Props {
   kicker?: string;
@@ -14,6 +14,8 @@ interface Props {
 }
 
 export function EditorialSection({ kicker, title, onSearchPress, children, style }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={[styles.container, style]}>
       {/* Header row */}
@@ -32,7 +34,7 @@ export function EditorialSection({ kicker, title, onSearchPress, children, style
             accessibilityLabel={`Search ${title}`}
             accessibilityHint={`Find more ${title}`}
           >
-            <Ionicons name="search" size={18} color={Colors.textPrimary} />
+            <Ionicons name="search" size={18} color={colors.textPrimary} />
           </AnimatedPressable>
         )}
       </View>
@@ -43,7 +45,7 @@ export function EditorialSection({ kicker, title, onSearchPress, children, style
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     marginBottom: 28,
   },
@@ -51,7 +53,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     marginBottom: 12,
     gap: 8,
   },
@@ -61,25 +63,25 @@ const styles = StyleSheet.create({
   },
   kicker: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
     marginBottom: 2,
     letterSpacing: 0.1,
   },
   title: {
     fontFamily: Typography.family.bold,
     fontSize: 22,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.4,
   },
   searchBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.xxl,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: Space.sm,
     flexShrink: 0,
   },
 });

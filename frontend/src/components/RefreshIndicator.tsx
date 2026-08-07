@@ -11,7 +11,7 @@ import Reanimated, {
   SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 
 interface Props {
   scrollY: SharedValue<number>;
@@ -20,6 +20,8 @@ interface Props {
 }
 
 export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const rotation = useSharedValue(0);
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
     <View style={[styles.container, { top: topInset }]}>
       <Reanimated.View style={animStyle}>
         <View style={styles.circle}>
-          <Text style={{ fontFamily: Typography.family.bold, color: '#111', fontSize: 16, marginTop: -2 }}>T</Text>
+          <Text style={{ fontFamily: Typography.family.bold, color: '#111', fontSize: Type.bodyLarge.size, marginTop: -2 }}>T</Text>
         </View>
       </Reanimated.View>
     </View>
@@ -60,9 +62,9 @@ export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props
 }
 
 import { Text } from 'react-native';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Type } from '../theme/designTokens';
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
     position: 'absolute',
     left: 0,
@@ -73,11 +75,11 @@ const styles = StyleSheet.create({
   circle: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.brand,
+    borderRadius: Radius.xl,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.brand,
+    shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 10,

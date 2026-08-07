@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 
 interface SellerInfo {
@@ -28,6 +28,8 @@ export function CheckoutItemSummary({
   onPressSeller,
   onPressMessage,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const sellerName = seller.username ?? seller.id.slice(0, 8);
 
   return (
@@ -58,7 +60,7 @@ export function CheckoutItemSummary({
               accessibilityRole="button"
               accessibilityLabel="Message seller"
             >
-              <Ionicons name="chatbubble-ellipses-outline" size={16} color={Colors.textMuted} />
+              <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.textMuted} />
             </Pressable>
           ) : null}
         </View>
@@ -69,7 +71,7 @@ export function CheckoutItemSummary({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     gap: Space.md,
@@ -78,8 +80,8 @@ const styles = StyleSheet.create({
   image: {
     width: 96,
     height: 120,
-    borderRadius: 8,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
   },
   info: {
     flex: 1,
@@ -87,9 +89,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 21,
   },
   sellerRow: {
@@ -98,14 +100,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   sellerName: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   price: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 2,
   },
 });

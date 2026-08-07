@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,21 @@ import {
   StatusBar,
   TextInput,
   RefreshControl,
+  Animated as RNAnimated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
+import { EmptyState } from '../components/EmptyState';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
@@ -31,12 +34,14 @@ import { Listing } from '../data/mockData';
 import { visualSearch } from '../services/listingsApi';
 import VisualSearchCamera from '../components/VisualSearchCamera';
 
-type Props = StackScreenProps<RootStackParamList, 'VisualSearch'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'VisualSearch'>;
 
 type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error';
 
 export default function VisualSearchScreen({ navigation, route }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const initialImageUri = route.params?.initialImageUri;
   const { show } = useToast();
   const { listings } = useBackendData();
@@ -55,6 +60,53 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   const [visualMatching, setVisualMatching] = useState(false);
   const [resultNote, setResultNote] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── Instagram-style scanning animation ──────────────────────────────
+  // When a photo is captured/selected, an animated scanline sweeps across
+  // the thumbnail to communicate AI analysis is in progress.
+  const scanLineAnim = useRef(new RNAnimated.Value(0)).current;
+  const scanOpacityAnim = useRef(new RNAnimated.Value(0)).current;
+
+  // Guard against async state updates after the component unmounts.
+  // runSearch awaits a network call and then calls setState; without
+  // this guard those calls would fire on an unmounted component.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (status === 'loading') {
+      scanOpacityAnim.setValue(1);
+      const loop = RNAnimated.loop(
+        RNAnimated.sequence([
+          RNAnimated.timing(scanLineAnim, {
+            toValue: 1,
+            duration: 1200,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+          RNAnimated.timing(scanLineAnim, {
+            toValue: 0,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+        ]),
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      const fadeOut = RNAnimated.timing(scanOpacityAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: false,
+      });
+      fadeOut.start();
+      return () => fadeOut.stop();
+    }
+  }, [status, scanLineAnim, scanOpacityAnim]);
 
   // Derive available categories from listings for refinement chips.
   const availableCategories = useMemo(() => {
@@ -179,7 +231,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     const payload = buildFilterPayload();
 
     const apiResult = await visualSearch(payload);
-    let items = apiResult.listings;
+    if (!isMountedRef.current) return;
+    let items: Listing[] = apiResult.listings;
     let usedFallback = apiResult.source === 'fallback';
 
     if (apiResult.source === 'fallback' || items.length === 0) {
@@ -218,7 +271,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     if (!imageUri) return;
     setRefreshing(true);
     await runSearch();
-    setTimeout(() => setRefreshing(false), 400);
+    setTimeout(() => { if (isMountedRef.current) setRefreshing(false); }, 400);
   }, [imageUri, runSearch]);
 
   const handleClearFilters = useCallback(() => {
@@ -298,7 +351,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       <View style={styles.queryThumbWrap}>
         {previewFailed ? (
           <View style={styles.queryThumb}>
-            <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+            <Ionicons name="image-outline" size={24} color={colors.textMuted} />
           </View>
         ) : (
           <Image
@@ -306,8 +359,36 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             style={styles.queryThumb}
             resizeMode="cover"
             onError={() => setPreviewFailed(true)}
+            accessibilityLabel="Your selected image for visual search"
+            accessibilityRole="image"
           />
         )}
+        {/* Instagram-style scanning overlay — animated scanline + corner brackets */}
+        <RNAnimated.View
+          style={[
+            styles.scanOverlay,
+            { opacity: scanOpacityAnim },
+          ]}
+          pointerEvents="none"
+        >
+          <RNAnimated.View
+            style={[
+              styles.scanLine,
+              {
+                transform: [{
+                  translateY: scanLineAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 64],
+                  }),
+                }],
+              },
+            ]}
+          />
+          <View style={styles.scanBracketTL} />
+          <View style={styles.scanBracketTR} />
+          <View style={styles.scanBracketBL} />
+          <View style={styles.scanBracketBR} />
+        </RNAnimated.View>
         <AnimatedPressable
           style={styles.queryThumbRemove}
           onPress={handleRemoveImage}
@@ -328,7 +409,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Retake photo with camera"
         >
-          <Ionicons name="camera-outline" size={18} color={Colors.textPrimary} />
+          <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
           <Text style={styles.queryActionText}>Retake</Text>
         </AnimatedPressable>
         <AnimatedPressable
@@ -338,7 +419,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Replace photo from gallery"
         >
-          <Ionicons name="swap-horizontal-outline" size={18} color={Colors.textPrimary} />
+          <Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />
           <Text style={styles.queryActionText}>Replace</Text>
         </AnimatedPressable>
       </View>
@@ -350,21 +431,21 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     <View style={styles.refinementWrap}>
       <Text style={styles.refinementLabel}>Describe your photo</Text>
       <View style={styles.textInputWrap}>
-        <Ionicons name="search-outline" size={18} color={Colors.textMuted} style={styles.textInputIcon} />
+        <Ionicons name="search-outline" size={18} color={colors.textMuted} style={styles.textInputIcon} />
         <TextInput
           style={styles.textInput}
           value={description}
           onChangeText={setDescription}
           placeholder="e.g. black leather jacket"
-          placeholderTextColor={Colors.textMuted}
-          selectionColor={Colors.brand}
+          placeholderTextColor={colors.textMuted}
+          selectionColor={colors.brand}
           returnKeyType="search"
           onSubmitEditing={handleApplyFilters}
           accessibilityLabel="Describe the item in your photo"
         />
         {description.length > 0 && (
           <AnimatedPressable onPress={() => setDescription('')} hitSlop={8} accessibilityLabel="Clear description">
-            <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
           </AnimatedPressable>
         )}
       </View>
@@ -413,8 +494,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             value={brand}
             onChangeText={setBrand}
             placeholder="Any brand"
-            placeholderTextColor={Colors.textMuted}
-            selectionColor={Colors.brand}
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.brand}
             returnKeyType="done"
             accessibilityLabel="Filter by brand"
           />
@@ -426,9 +507,9 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             value={minPrice}
             onChangeText={setMinPrice}
             placeholder="0"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             keyboardType="numeric"
-            selectionColor={Colors.brand}
+            selectionColor={colors.brand}
             returnKeyType="done"
             accessibilityLabel="Minimum price in pounds"
           />
@@ -440,9 +521,9 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             value={maxPrice}
             onChangeText={setMaxPrice}
             placeholder="Any"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             keyboardType="numeric"
-            selectionColor={Colors.brand}
+            selectionColor={colors.brand}
             returnKeyType="done"
             accessibilityLabel="Maximum price in pounds"
           />
@@ -495,7 +576,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     if (!resultNote) return null;
     return (
       <View style={styles.honestNote}>
-        <Ionicons name="information-circle-outline" size={16} color={Colors.textSecondary} />
+        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
         <Text style={styles.honestNoteText}>{resultNote}</Text>
       </View>
     );
@@ -520,47 +601,29 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
 
   // ── Empty / filtered-empty recovery ───────────────────────────────────
   const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconWrap}>
-        <Ionicons name="search-outline" size={36} color={Colors.textMuted} />
-      </View>
-      <Text style={styles.emptyTitle}>No items match your photo filters</Text>
-      <Text style={styles.emptyText}>
-        Try clearing filters, broadening your description, or browse a category instead.
-      </Text>
-      {hasActiveFilters && (
-        <AppButton
-          title="Clear filters"
-          variant="secondary"
-          size="md"
-          onPress={handleClearFilters}
-          style={styles.emptyAction}
-        />
-      )}
-      {availableCategories.length > 0 && (
-        <View style={styles.emptyCategoryRow}>
-          {availableCategories.slice(0, 4).map(({ category }) => (
-            <AnimatedPressable
-              key={category}
-              style={styles.emptyCategoryChip}
-              onPress={() => handleBrowseCategory(category, category)}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={`Browse ${category} instead`}
-            >
-              <Text style={styles.emptyCategoryText}>{category}</Text>
-            </AnimatedPressable>
-          ))}
-        </View>
-      )}
-    </View>
+    <EmptyState
+      icon="eye-outline"
+      title="No matches found"
+      subtitle="Try clearing filters, broadening your description, or browse a category instead."
+      {...(hasActiveFilters
+        ? { ctaLabel: 'Clear filters', onCtaPress: handleClearFilters }
+        : {})}
+      {...(availableCategories.length > 0
+        ? {
+            suggestedActions: availableCategories.slice(0, 4).map(({ category }) => ({
+              label: category,
+              onPress: () => handleBrowseCategory(category, category),
+            })),
+          }
+        : {})}
+    />
   );
 
   // ── Error state with retry ────────────────────────────────────────────
   const renderErrorState = () => (
     <View style={styles.emptyState}>
       <View style={styles.emptyIconWrap}>
-        <Ionicons name="cloud-offline-outline" size={36} color={Colors.textMuted} />
+        <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
       </View>
       <Text style={styles.emptyTitle}>Couldn't load results</Text>
       <Text style={styles.emptyText}>Check your connection and try again.</Text>
@@ -579,7 +642,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     if (status === 'loading') {
       return (
         <View style={styles.resultsSection}>
-          <DiscoverySectionHeader title="Results" kicker="Searching" />
+          <DiscoverySectionHeader title="Results" kicker="Analyzing image…" />
           {renderSkeletonGrid()}
         </View>
       );
@@ -640,7 +703,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <ScreenHeader title="Visual Search" onBack={() => navigation.goBack()} />
 
       <ScrollView
@@ -650,13 +713,13 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
           />
         }
         keyboardShouldPersistTaps="handled"
       >
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           {renderVisualQueryHeader()}
           {renderRefinementBar()}
           {renderResults()}
@@ -666,8 +729,9 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   scroll: { paddingHorizontal: Space.md, paddingBottom: Space.xxl },
 
   // ── Visual-query header ───────────────────────────────────────────────
@@ -678,22 +742,80 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
   },
   queryThumbWrap: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     position: 'relative',
   },
   queryThumb: { width: '100%', height: '100%' },
+  // ── Scanning animation overlay ────────────────────────────────────────
+  scanOverlay: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  scanLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: Space.xs / 2,
+    backgroundColor: colors.brand,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  scanBracketTL: {
+    position: 'absolute',
+    top: Space.xs + 2,
+    left: Space.xs + 2,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderTopWidth: Stroke.emphasis,
+    borderLeftWidth: Stroke.emphasis,
+    borderColor: colors.brand,
+  },
+  scanBracketTR: {
+    position: 'absolute',
+    top: Space.xs + 2,
+    right: Space.xs + 2,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderTopWidth: Stroke.emphasis,
+    borderRightWidth: Stroke.emphasis,
+    borderColor: colors.brand,
+  },
+  scanBracketBL: {
+    position: 'absolute',
+    bottom: Space.xs + 2,
+    left: Space.xs + 2,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderBottomWidth: Stroke.emphasis,
+    borderLeftWidth: Stroke.emphasis,
+    borderColor: colors.brand,
+  },
+  scanBracketBR: {
+    position: 'absolute',
+    bottom: Space.xs + 2,
+    right: Space.xs + 2,
+    width: Space.sm + Space.xs,
+    height: Space.sm + Space.xs,
+    borderBottomWidth: Stroke.emphasis,
+    borderRightWidth: Stroke.emphasis,
+    borderColor: colors.brand,
+  },
   queryThumbRemove: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: Space.xs,
+    right: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 11,
-    width: 22,
-    height: 22,
+    borderRadius: Radius.lg,
+    width: Control.icon,
+    height: Control.icon,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -701,18 +823,18 @@ const styles = StyleSheet.create({
   queryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   queryActionText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 
   // ── Refinement bar ────────────────────────────────────────────────────
@@ -720,134 +842,134 @@ const styles = StyleSheet.create({
     marginTop: Space.lg,
     padding: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     gap: Space.sm,
   },
   refinementLabel: {
     fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: Type.metaElevated.letterSpacing,
     textTransform: 'uppercase',
   },
   textInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    gap: Space.sm,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.md,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   textInputIcon: { marginRight: 2 },
   textInput: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     padding: 0,
   },
 
   // ── Category rail ─────────────────────────────────────────────────────
-  categoryRail: { marginHorizontal: -4 },
-  categoryRailContent: { paddingHorizontal: 4, gap: 8 },
+  categoryRail: { marginHorizontal: -Space.xs },
+  categoryRailContent: { paddingHorizontal: Space.xs, gap: Space.sm },
   categoryPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm,
     borderRadius: Radius.full,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   categoryPillActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   categoryPillText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   categoryPillTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
 
   // ── Filter row ────────────────────────────────────────────────────────
-  filterRow: { flexDirection: 'row', gap: 8 },
-  filterInputWrap: { flex: 1, gap: 4 },
+  filterRow: { flexDirection: 'row', gap: Space.sm },
+  filterInputWrap: { flex: 1, gap: Space.xs },
   filterInputLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    letterSpacing: 0.3,
+    color: colors.textMuted,
+    letterSpacing: LetterSpacing.wide + 0.18,
   },
   filterInput: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    fontSize: 13,
+    borderColor: colors.border,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 
   // ── Brand suggestions ─────────────────────────────────────────────────
-  suggestionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  suggestionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Space.xs + 2 },
   suggestionLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   suggestionChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   suggestionText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 
   // ── Refinement actions ────────────────────────────────────────────────
-  refinementActions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: 4 },
+  refinementActions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.xs },
   applyBtn: { flex: 1 },
   clearBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   clearBtnText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 
   // ── Honest note ───────────────────────────────────────────────────────
   honestNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: Space.sm,
-    paddingVertical: 10,
+    paddingVertical: Space.xs + 2,
     marginBottom: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
   },
   honestNoteText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 17,
+    color: colors.textSecondary,
+    lineHeight: Type.caption.size + 3,
   },
 
   // ── Results ───────────────────────────────────────────────────────────
@@ -865,10 +987,10 @@ const styles = StyleSheet.create({
   // ── Empty / error ─────────────────────────────────────────────────────
   emptyState: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.xl, paddingHorizontal: Space.md },
   emptyIconWrap: {
-    width: 72,
-    height: 72,
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.xs,
@@ -876,63 +998,44 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   emptyText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: Type.caption.size + 4,
   },
   emptyAction: { marginTop: Space.xs },
-  emptyCategoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-    marginTop: Space.sm,
-  },
-  emptyCategoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  emptyCategoryText: {
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-  },
 
   // ── Category chips (capture surface) ──────────────────────────────────
   categoryChipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: Space.sm,
   },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
+    borderRadius: Radius.xxl,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   categoryChipText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   categoryChipCount: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

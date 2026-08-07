@@ -2,8 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Type } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -38,6 +38,8 @@ export function LookSocialActions({
   onSharePress,
   onSignInRequired,
 }: LookSocialActionsProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
 
@@ -140,7 +142,7 @@ export function LookSocialActions({
         <Ionicons
           name={liked ? 'heart' : 'heart-outline'}
           size={22}
-          color={liked ? Colors.danger : Colors.textPrimary}
+          color={liked ? colors.danger : colors.textPrimary}
         />
         <Text style={styles.actionText}>{likeCount}</Text>
       </AnimatedPressable>
@@ -152,7 +154,7 @@ export function LookSocialActions({
         accessibilityRole="button"
         accessibilityLabel={isAuthenticated ? 'View comments' : 'Sign in to comment'}
       >
-        <Ionicons name="chatbubble-outline" size={22} color={Colors.textPrimary} />
+        <Ionicons name="chatbubble-outline" size={22} color={colors.textPrimary} />
         <Text style={styles.actionText}>{commentCount}</Text>
       </AnimatedPressable>
 
@@ -166,7 +168,7 @@ export function LookSocialActions({
         <Ionicons
           name={saved ? 'bookmark' : 'bookmark-outline'}
           size={22}
-          color={saved ? Colors.brand : Colors.textPrimary}
+          color={saved ? colors.brand : colors.textPrimary}
         />
         <Text style={styles.actionText}>{saveCount}</Text>
       </AnimatedPressable>
@@ -178,25 +180,25 @@ export function LookSocialActions({
         accessibilityRole="button"
         accessibilityLabel="Share"
       >
-        <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
+        <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
         <Text style={styles.actionText}>Share</Text>
       </AnimatedPressable>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  // Flat bar with hairline separator — per AGENTS.md: no card-on-card.
+  // The social actions are a utility bar, not a contained surface.
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     marginHorizontal: Space.md,
-    marginTop: Space.md,
-    padding: Space.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    marginTop: Space.lg,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   actionBtn: {
     flex: 1,
@@ -204,12 +206,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
+    paddingVertical: Space.xs,
   },
   actionText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 });

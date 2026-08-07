@@ -15,32 +15,40 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import type { ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { EmptyState } from '../EmptyState';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 function LookCard({
   look,
   onPress,
   index,
+  colors,
+  styles,
+  reducedMotion,
 }: {
   look: LookApiItem;
   onPress: () => void;
   index: number;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  reducedMotion: boolean;
 }) {
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 80).springify()}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 80).springify()}>
       <AnimatedPressable style={styles.card} onPress={onPress} activeOpacity={0.92} accessibilityRole="button" accessibilityLabel={`Look by ${look.creator.username ?? 'unknown'}`}>
         <View style={styles.imageWrap}>
           <SharedTransitionView style={styles.imageShared} sharedTransitionTag={`look-${look.id}`}>
@@ -70,7 +78,7 @@ function LookCard({
               >
                 <View style={styles.tagDot} />
                 {isActive && (
-                  <Reanimated.View entering={FadeInDown.duration(180)} style={styles.tagPill}>
+                  <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(180)} style={styles.tagPill}>
                     <Text style={styles.tagPillText} numberOfLines={1}>{tag.label || 'Untitled'}</Text>
                   </Reanimated.View>
                 )}
@@ -80,7 +88,7 @@ function LookCard({
 
           {look.tags.length > 0 && (
             <View style={styles.tagBadge}>
-              <Ionicons name="pricetag" size={10} color={Colors.brand} />
+              <Ionicons name="pricetag" size={10} color={colors.brand} />
               <Text style={styles.tagBadgeText}>{look.tags.length}</Text>
             </View>
           )}
@@ -99,7 +107,7 @@ function LookCard({
 
           <View style={styles.overlayStats}>
             <View style={styles.overlayStatBtn}>
-              <Ionicons name={look.likedByViewer ? 'heart' : 'heart-outline'} size={14} color={look.likedByViewer ? Colors.danger : '#fff'} />
+              <Ionicons name={look.likedByViewer ? 'heart' : 'heart-outline'} size={14} color={look.likedByViewer ? colors.danger : '#fff'} />
               <Text style={styles.overlayStatCount}>{look.likeCount}</Text>
             </View>
             <View style={styles.overlayStatBtn}>
@@ -107,7 +115,7 @@ function LookCard({
               <Text style={styles.overlayStatCount}>{look.commentCount}</Text>
             </View>
             <View style={styles.overlayStatBtn}>
-              <Ionicons name={look.savedByViewer ? 'bookmark' : 'bookmark-outline'} size={13} color={look.savedByViewer ? Colors.brand : 'rgba(255,255,255,0.9)'} />
+              <Ionicons name={look.savedByViewer ? 'bookmark' : 'bookmark-outline'} size={13} color={look.savedByViewer ? colors.brand : 'rgba(255,255,255,0.9)'} />
             </View>
           </View>
         </View>
@@ -117,11 +125,14 @@ function LookCard({
 }
 
 export default function LooksTab() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const reducedMotion = useReducedMotion();
 
   const loadLooks = useCallback(async (isRefresh: boolean = false) => {
     if (isRefresh) {
@@ -158,15 +169,15 @@ export default function LooksTab() {
   if (isLoading) {
     return (
       <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
 
   if (loadError && looks.length === 0) {
     return (
-      <Reanimated.View entering={FadeInDown.duration(400)} style={styles.errorWrap}>
-        <Ionicons name="cloud-offline-outline" size={40} color={Colors.textMuted} />
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)} style={styles.errorWrap}>
+        <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
         <Text style={styles.errorTitle}>Looks could not be loaded</Text>
         <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
         <AnimatedPressable
@@ -187,7 +198,7 @@ export default function LooksTab() {
 
   if (looks.length === 0 && !loadError) {
     return (
-      <Reanimated.View entering={FadeInDown.duration(400)}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)}>
         <EmptyState
           icon="camera-outline"
           title="No looks yet"
@@ -196,7 +207,7 @@ export default function LooksTab() {
           onCtaPress={handleCreateLook}
           graphic={
             <View style={{ alignItems: 'center', marginBottom: Space.md }}>
-              <Ionicons name="images-outline" size={48} color={Colors.brand} />
+              <Ionicons name="images-outline" size={48} color={colors.brand} />
             </View>
           }
         />
@@ -209,7 +220,7 @@ export default function LooksTab() {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.scrollContent}
       refreshControl={
-        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.brand} />
+        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
       }
       ListHeaderComponent={
         <View>
@@ -230,18 +241,28 @@ export default function LooksTab() {
       }
       data={looks}
       keyExtractor={(item) => item.id}
+      // Performance: looks feeds can grow long; clip off-screen cards and
+      // cap the render batch to keep scroll at 58+ fps.
+      removeClippedSubviews
+      windowSize={7}
+      maxToRenderPerBatch={4}
+      initialNumToRender={6}
       renderItem={({ item, index }) => (
         <LookCard
           look={item}
           onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
           index={index}
+          colors={colors}
+          styles={styles}
+          reducedMotion={reducedMotion}
         />
       )}
     />
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   loadingWrap: {
     flex: 1,
     alignItems: 'center',
@@ -262,23 +283,23 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   errorSubtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   retryBtn: {
     marginTop: Space.sm,
-    paddingHorizontal: 24,
+    paddingHorizontal: Space.lg,
     paddingVertical: 10,
-    backgroundColor: Colors.brand,
-    borderRadius: 20,
+    backgroundColor: colors.brand,
+    borderRadius: Radius.xxl,
   },
   retryBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: '#fff',
   },
@@ -286,8 +307,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: 8,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: 10,
     marginBottom: Space.md,
@@ -295,17 +316,17 @@ const styles = StyleSheet.create({
   },
   refreshErrorText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   retryLink: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.sm,
     marginBottom: Space.lg,
     overflow: 'hidden',
@@ -346,9 +367,9 @@ const styles = StyleSheet.create({
   },
   overlayCreator: {
     fontFamily: Typography.family.medium,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
+    marginTop: Space.xs,
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -372,7 +393,7 @@ const styles = StyleSheet.create({
   },
   overlayStatCount: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
   tagWrap: {
@@ -382,7 +403,7 @@ const styles = StyleSheet.create({
   tagDot: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 2,
     borderColor: 'rgba(0,0,0,0.25)',
@@ -392,7 +413,7 @@ const styles = StyleSheet.create({
     left: 20,
     top: -6,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 10,
     paddingVertical: 5,
     flexDirection: 'row',
@@ -400,7 +421,7 @@ const styles = StyleSheet.create({
   },
   tagPillText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     marginLeft: 6,
   },
@@ -411,15 +432,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     gap: 4,
     zIndex: 2,
   },
   tagBadgeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+  });
+}

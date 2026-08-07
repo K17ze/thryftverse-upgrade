@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -31,6 +31,8 @@ export function CuratedCollectionsRail({
   onOpenCollection,
   onSeeAll,
 }: CuratedCollectionsRailProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(320, Math.max(272, width - Space.md * 3));
 
@@ -50,7 +52,7 @@ export function CuratedCollectionsRail({
             accessibilityLabel="See all curated collections"
           >
             <Text style={styles.seeAllText}>See all</Text>
-            <Ionicons name="arrow-forward" size={16} color={Colors.textPrimary} />
+            <Ionicons name="arrow-forward" size={16} color={colors.textPrimary} />
           </AnimatedPressable>
         )}
       </View>
@@ -76,6 +78,8 @@ export function CuratedCollectionsRail({
             key={collection.id}
             collection={collection}
             width={cardWidth}
+            colors={colors}
+            styles={styles}
             onPress={() => onOpenCollection(collection.id)}
           />
         ))}
@@ -89,13 +93,17 @@ export function CuratedCollectionsRail({
 function CollectionCard({
   collection,
   width,
+  colors,
+  styles,
   onPress,
 }: {
   collection: CuratedCollection;
   width: number;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
   onPress: () => void;
 }) {
-  const accent = collection.accentColor ?? Colors.brand;
+  const accent = collection.accentColor ?? colors.brand;
 
   return (
     <AnimatedPressable
@@ -143,7 +151,7 @@ function CollectionCard({
           <Text style={styles.cardSubtitle} numberOfLines={2}>{collection.subtitle}</Text>
         </View>
         <View style={styles.cardOpenIcon}>
-          <Ionicons name="arrow-forward" size={17} color={Colors.textPrimary} />
+          <Ionicons name="arrow-forward" size={17} color={colors.textPrimary} />
         </View>
       </View>
     </AnimatedPressable>
@@ -152,7 +160,8 @@ function CollectionCard({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginTop: Space.lg,
     marginBottom: Space.lg,
@@ -167,7 +176,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
@@ -176,29 +185,30 @@ const styles = StyleSheet.create({
     paddingLeft: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   seeAllText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   titleRow: {
     paddingHorizontal: Space.md,
     marginBottom: Space.md,
-    gap: 3,
+    gap: Space.xs,
   },
   title: {
-    fontSize: 25,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.6,
-    lineHeight: 30,
+    color: colors.textPrimary,
+    letterSpacing: Type.title.letterSpacing,
+    lineHeight: Type.title.lineHeight,
   },
   subtitle: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textMuted,
   },
   rail: {
     paddingHorizontal: Space.md,
@@ -211,16 +221,16 @@ const styles = StyleSheet.create({
     minHeight: 148,
     borderRadius: Radius.xl,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   cardMedia: {
     width: 116,
     minHeight: 148,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   cardImageContainer: {
     width: '100%',
@@ -235,7 +245,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: Space.md,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   fallbackMonogram: {
     width: 42,
@@ -243,14 +253,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   fallbackMonogramText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: 0.4,
   },
   cardMediaTint: {
@@ -258,15 +268,16 @@ const styles = StyleSheet.create({
   },
   cardItemCountBadge: {
     position: 'absolute',
-    left: 10,
-    bottom: 10,
-    paddingHorizontal: 8,
+    left: Space.sm,
+    bottom: Space.sm,
+    paddingHorizontal: Space.xs,
     paddingVertical: 3,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.68)',
   },
   cardItemCountBadgeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
     color: '#ffffff',
   },
@@ -281,27 +292,27 @@ const styles = StyleSheet.create({
   cardCopy: {
     flex: 1,
     minWidth: 0,
-    gap: 4,
+    gap: Space.xs,
   },
   cardKicker: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   cardTitle: {
     fontSize: 19,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
     lineHeight: 23,
   },
   cardSubtitle: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 17,
+    color: colors.textMuted,
   },
   cardOpenIcon: {
     width: 36,
@@ -309,8 +320,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-});
+  });
+}

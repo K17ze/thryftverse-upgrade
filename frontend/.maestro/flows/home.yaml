@@ -1,0 +1,49 @@
+# Maestro config — shared across all flows.
+# The APP_ID is passed via --env or the screenshots workflow.
+
+appId: ${APP_ID}
+---
+tags:
+  - flagship
+  - home
+---
+# Launch the app fresh so each flow starts from a known state.
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+
+# Wait for the Home screen brand title to appear — this is the
+# canonical "we are on Home" signal.
+- extendedWaitUntil:
+    visible:
+      id: "home-brand-title"
+      optional: true
+    timeout: 20000
+
+# Give the feed a moment to settle past the skeleton state.
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Capture the first-viewport Home state.
+- takeScreenshot: home_explore_first_viewport
+
+# Scroll the feed to trigger FlashList virtualization + pagination.
+- scroll:
+    direction: DOWN
+    distance: 600
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: home_explore_scrolled
+
+# Switch to the Following tab to capture that state.
+- tapOn:
+    text: "Following"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+- takeScreenshot: home_following_tab

@@ -12,8 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { CachedImage } from '../CachedImage';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 
@@ -42,6 +42,8 @@ export function LookMediaComposer({
   onTagsChange,
   editable,
 }: LookMediaComposerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
   const [isPicking, setIsPicking] = useState(false);
@@ -143,10 +145,10 @@ export function LookMediaComposer({
           accessibilityLabel="Choose photo from gallery"
         >
           {isPicking ? (
-            <ActivityIndicator size="large" color={Colors.brand} />
+            <ActivityIndicator size="large" color={colors.brand} />
           ) : (
             <>
-              <Ionicons name="camera-outline" size={40} color={Colors.textMuted} />
+              <Ionicons name="camera-outline" size={40} color={colors.textMuted} />
               <Text style={styles.placeholderTitle}>Add your outfit photo</Text>
               <Text style={styles.placeholderSubtitle}>Tap to choose from gallery or camera</Text>
             </>
@@ -159,7 +161,7 @@ export function LookMediaComposer({
             accessibilityRole="button"
             accessibilityLabel="Pick from gallery"
           >
-            <Ionicons name="images-outline" size={20} color={Colors.textSecondary} />
+            <Ionicons name="images-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.sourceBtnText}>Gallery</Text>
           </Pressable>
           <Pressable
@@ -168,7 +170,7 @@ export function LookMediaComposer({
             accessibilityRole="button"
             accessibilityLabel="Take a photo"
           >
-            <Ionicons name="camera-outline" size={20} color={Colors.textSecondary} />
+            <Ionicons name="camera-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.sourceBtnText}>Camera</Text>
           </Pressable>
         </View>
@@ -218,7 +220,7 @@ export function LookMediaComposer({
                   accessibilityRole="button"
                   accessibilityLabel="Remove tag"
                 >
-                  <Ionicons name="close-circle" size={20} color={Colors.danger} />
+                  <Ionicons name="close-circle" size={20} color={colors.danger} />
                 </Pressable>
               </View>
             )}
@@ -254,11 +256,11 @@ export function LookMediaComposer({
 
 const IMAGE_HEIGHT = SCREEN_W * 1.25;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   placeholderWrap: {
     width: SCREEN_W,
     height: IMAGE_HEIGHT,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.md,
@@ -272,12 +274,12 @@ const styles = StyleSheet.create({
   placeholderTitle: {
     fontSize: 18,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   placeholderSubtitle: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   sourceRow: {
     flexDirection: 'row',
@@ -289,21 +291,21 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   sourceBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   imageWrap: {
     width: SCREEN_W,
     height: IMAGE_HEIGHT,
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   image: {
@@ -323,37 +325,37 @@ const styles = StyleSheet.create({
   tagDot: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 2,
     borderColor: 'rgba(0,0,0,0.25)',
   },
   tagDotActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderColor: '#fff',
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.lg,
   },
   tagPill: {
     position: 'absolute',
     top: 24,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     maxWidth: 120,
   },
   tagPillText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
   },
   tagEditor: {
     position: 'absolute',
     top: 26,
     backgroundColor: 'rgba(0,0,0,0.88)',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 2,
@@ -361,7 +363,7 @@ const styles = StyleSheet.create({
   },
   tagEditorLabel: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   tagEditorHint: {
@@ -388,7 +390,7 @@ const styles = StyleSheet.create({
   },
   changePhotoText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   tapHint: {
@@ -402,7 +404,7 @@ const styles = StyleSheet.create({
   },
   tapHintText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
 });

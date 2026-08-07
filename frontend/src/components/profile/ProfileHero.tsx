@@ -13,23 +13,15 @@ import Reanimated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-
 import type { SharedValue } from 'react-native-reanimated';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
-import { Space, Typography, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { FlagshipProfileMedia } from '../flagship';
 import { isVideoUri } from '../../utils/media';
 import type { PublicProfileStats, PublicProfileViewer } from '../../services/profileApi';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
 import { ProfileTrustSignals } from './ProfileTrustSignals';
-
-const BG = Colors.background;
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const SECONDARY = Colors.textSecondary;
-const SURFACE_ALT = Colors.surfaceAlt;
-const BRAND = Colors.brand;
-const TEXT_INVERSE = Colors.textInverse;
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const COVER_HEIGHT = 160;
 const AVATAR_SIZE = 88; // design contract: 88-96pt seam avatar
@@ -111,8 +103,11 @@ export function ProfileHero({
   onTabSelect,
   onShopSegmentSelect,
 }: ProfileHeroProps) {
+  const { colors } = useAppTheme();
+  const reducedMotionHook = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const coverParallaxStyle = useAnimatedStyle(() => {
-    if (reducedMotion) return {};
+    if (reducedMotion || reducedMotionHook) return {};
     const overscroll = Math.min(scrollY.value, 0);
     const scale = interpolate(overscroll, [-120, 0], [1.2, 1], Extrapolation.CLAMP);
     return { transform: [{ scale }] };
@@ -224,7 +219,7 @@ export function ProfileHero({
               <Ionicons
                 name={VERIFICATION_TIERS[verificationTier].icon as keyof typeof Ionicons.glyphMap}
                 size={18}
-                color={VERIFICATION_TIERS[verificationTier].color === 'brand' ? Colors.brand : Colors.success}
+                color={VERIFICATION_TIERS[verificationTier].color === 'brand' ? colors.brand : colors.success}
                 style={styles.verifiedBadge}
                 accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
               />
@@ -308,7 +303,7 @@ export function ProfileHero({
               accessibilityState={{ disabled: followPending || isBlocked }}
             >
               {followPending ? (
-                <ActivityIndicator size="small" color={viewer.isFollowing ? TEXT : TEXT_INVERSE} />
+                <ActivityIndicator size="small" color={viewer.isFollowing ? colors.textPrimary : colors.textInverse} />
               ) : (
                 <Text style={[styles.followBtnText, viewer.isFollowing ? styles.followingBtnText : styles.followActiveBtnText]}>
                   {viewer.isFollowing ? 'Following' : 'Follow'}
@@ -324,7 +319,7 @@ export function ProfileHero({
               accessibilityLabel={viewer.canMessage ? 'Send message to seller' : 'Messaging unavailable'}
               accessibilityState={{ disabled: !viewer.canMessage }}
             >
-              <Ionicons name="chatbubble-outline" size={15} color={TEXT} />
+              <Ionicons name="chatbubble-outline" size={15} color={colors.textPrimary} />
               <Text style={styles.messageBtnText}>Message</Text>
             </AnimatedPressable>
             <AnimatedPressable
@@ -334,7 +329,7 @@ export function ProfileHero({
               accessibilityRole="button"
               accessibilityLabel="More options"
             >
-              <Ionicons name="ellipsis-horizontal" size={18} color={TEXT} />
+              <Ionicons name="ellipsis-horizontal" size={18} color={colors.textPrimary} />
             </AnimatedPressable>
           </View>
         ) : null}
@@ -348,7 +343,7 @@ export function ProfileHero({
               accessibilityRole="button"
               accessibilityLabel="Edit profile"
             >
-              <Ionicons name="create-outline" size={15} color={TEXT} />
+              <Ionicons name="create-outline" size={15} color={colors.textPrimary} />
               <Text style={styles.editProfileBtnText}>Edit profile</Text>
             </AnimatedPressable>
             <AnimatedPressable
@@ -358,7 +353,7 @@ export function ProfileHero({
               accessibilityRole="button"
               accessibilityLabel="Share profile"
             >
-              <Ionicons name="share-outline" size={18} color={TEXT} />
+              <Ionicons name="share-outline" size={18} color={colors.textPrimary} />
             </AnimatedPressable>
           </View>
         ) : null}
@@ -373,13 +368,14 @@ function openWebsite(url: string) {
   Linking.openURL(normalized).catch(() => {});
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   // Cover
   coverContainer: {
     width: '100%',
     height: COVER_HEIGHT,
     overflow: 'hidden',
-    backgroundColor: SURFACE_ALT,
+    backgroundColor: colors.surfaceAlt,
   },
   coverTopFade: {
     position: 'absolute',
@@ -399,7 +395,7 @@ const styles = StyleSheet.create({
   // Hero root
   heroRoot: {
     position: 'relative',
-    backgroundColor: BG,
+    backgroundColor: colors.background,
   },
 
   // Avatar — absolutely positioned at the exact cover/canvas seam
@@ -414,17 +410,17 @@ const styles = StyleSheet.create({
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     borderWidth: 3,
-    borderColor: BG,
+    borderColor: colors.background,
   },
   avatarMonogram: {
-    backgroundColor: SURFACE_ALT,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   monogramText: {
-    fontSize: 28,
+    fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
-    color: SECONDARY,
+    color: colors.textSecondary,
     letterSpacing: -0.5,
   },
 
@@ -456,15 +452,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   seamStatValue: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: TEXT,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
   },
   seamStatLabel: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: MUTED,
+    color: colors.textMuted,
     marginTop: 1,
   },
 
@@ -475,9 +471,9 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   displayName: {
-    fontSize: 20,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
-    color: TEXT,
+    color: colors.textPrimary,
     letterSpacing: -0.4,
     marginBottom: 2,
     flexShrink: 1,
@@ -487,26 +483,26 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   username: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: SECONDARY,
+    color: colors.textSecondary,
     marginBottom: Space.xs,
   },
 
   // Biography
   bio: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: TEXT,
+    color: colors.textPrimary,
     lineHeight: 20,
     marginBottom: Space.xs,
   },
 
   // Context line — no icons
   contextLine: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: MUTED,
+    color: colors.textMuted,
     marginBottom: Space.xs,
   },
 
@@ -516,9 +512,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   websiteText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: SECONDARY,
+    color: colors.textSecondary,
     textDecorationLine: 'underline',
   },
 
@@ -531,29 +527,29 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   trustLink: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: TEXT,
+    color: colors.textPrimary,
   },
   trustStatic: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: MUTED,
+    color: colors.textMuted,
   },
   trustDot: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: MUTED,
+    color: colors.textMuted,
   },
 
   // Actions — flat 11pt radius, restrained
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: BG,
+    backgroundColor: colors.background,
   },
   followBtn: {
     flex: 1,
@@ -562,35 +558,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  followBtnActive: { backgroundColor: BRAND },
+  followBtnActive: { backgroundColor: colors.brand },
   followingBtn: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-    backgroundColor: BG,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
-  followBtnText: { fontSize: 15, fontFamily: Typography.family.semibold },
-  followActiveBtnText: { color: TEXT_INVERSE },
-  followingBtnText: { color: TEXT },
+  followBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
+  followActiveBtnText: { color: colors.textInverse },
+  followingBtnText: { color: colors.textPrimary },
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: Space.xs + 3,
     height: ACTION_HEIGHT,
     borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-    backgroundColor: BG,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
-  messageBtnText: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
+  messageBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   moreBtn: {
     width: ACTION_HEIGHT,
     height: ACTION_HEIGHT,
     borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-    backgroundColor: BG,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -599,13 +595,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: Space.xs + 3,
     height: ACTION_HEIGHT,
     borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-    backgroundColor: BG,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
-  editProfileBtnText: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
+  editProfileBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   btnDisabled: { opacity: 0.5 },
-});
+  });
+}

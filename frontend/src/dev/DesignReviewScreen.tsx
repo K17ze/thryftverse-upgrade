@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ScrollView, StyleSheet, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
@@ -23,6 +23,9 @@ import {
 const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function DesignReviewScreen() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Design QA" onBack={() => {}} />
@@ -178,10 +181,10 @@ export default function DesignReviewScreen() {
         </View>
 
         <SectionTitle>Surfaces</SectionTitle>
-        <View style={[styles.surface, { backgroundColor: Colors.surface }]}>
+        <View style={[styles.surface, { backgroundColor: colors.surface }]}>
           <Meta>Surface</Meta>
         </View>
-        <View style={[styles.surface, { backgroundColor: Colors.surfaceAlt }]}>
+        <View style={[styles.surface, { backgroundColor: colors.surfaceAlt }]}>
           <Meta>Surface Alt</Meta>
         </View>
       </ScrollView>
@@ -190,43 +193,47 @@ export default function DesignReviewScreen() {
 }
 
 function SectionTitle({ children }: { children: string }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <Headline style={styles.sectionTitle}>{children}</Headline>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: Space.md, paddingBottom: Space.xxl },
-  sectionTitle: { marginTop: Space.lg, marginBottom: Space.sm },
-  row: { flexDirection: 'row', gap: Space.sm, marginBottom: Space.sm },
-  rowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, marginBottom: Space.sm },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Space.md,
-    marginBottom: Space.sm,
-    gap: Space.sm,
-  },
-  surface: {
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    marginBottom: Space.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  productRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  emptyRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.md,
-    justifyContent: 'center',
-    marginBottom: Space.sm,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    content: { padding: Space.md, paddingBottom: Space.xxl },
+    sectionTitle: { marginTop: Space.lg, marginBottom: Space.sm },
+    row: { flexDirection: 'row', gap: Space.sm, marginBottom: Space.sm },
+    rowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, marginBottom: Space.sm },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: Space.md,
+      marginBottom: Space.sm,
+      gap: Space.sm,
+    },
+    surface: {
+      borderRadius: Radius.lg,
+      padding: Space.md,
+      marginBottom: Space.sm,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    productRow: {
+      flexDirection: 'row',
+      gap: Space.sm,
+      marginBottom: Space.sm,
+    },
+    emptyRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Space.md,
+      justifyContent: 'center',
+      marginBottom: Space.sm,
+    },
+  });
+}

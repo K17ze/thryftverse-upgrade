@@ -1,25 +1,27 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Typography } from '../theme/designTokens';
-
-type Props = StackScreenProps<RootStackParamList, 'HelpSupport'>;
+import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+type Props = NativeStackScreenProps<RootStackParamList, 'HelpSupport'>;
 
 export default function HelpSupportScreen({ navigation }: Props) {
   const { show } = useToast();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
+  const reducedMotionEnabled = useReducedMotion();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [faqSearch, setFaqSearch] = useState('');
 
@@ -67,8 +69,25 @@ export default function HelpSupportScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Help & Support" subtitle="Get answers and contact us" onBack={() => navigation.goBack()} />} keyboardAvoiding>
+        {/* Hero summary */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="help-circle" size={20} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>We're here to help</Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                  Average response time ~2 hours
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
+
         {/* Contact options */}
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <SettingsSection title="Contact us">
             <SettingsRow
               icon="mail-outline"
@@ -76,12 +95,6 @@ export default function HelpSupportScreen({ navigation }: Props) {
               subtitle="support@thryftverse.com"
               onPress={() => void handleOpenExternal('mailto:support@thryftverse.com?subject=Thryftverse%20Support')}
               isFirst
-            />
-            <SettingsRow
-              icon="chatbubble-outline"
-              title="Live chat"
-              subtitle="Not available yet — email us for a fast response"
-              disabled
             />
             <SettingsRow
               icon="flag-outline"
@@ -105,7 +118,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* FAQ Banner */}
-        <Reanimated.View entering={FadeIn.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <SettingsInfoBanner
             text="Search our FAQs below for quick answers to common questions."
             icon="help-circle-outline"
@@ -114,26 +127,26 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* FAQ Search */}
-        <Reanimated.View entering={FadeIn.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
+            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
             <TextInput
               style={styles.searchInput}
               value={faqSearch}
               onChangeText={setFaqSearch}
               placeholder="Search FAQs..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             {faqSearch ? (
               <AnimatedPressable onPress={() => setFaqSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </AnimatedPressable>
             ) : null}
           </View>
         </Reanimated.View>
 
         {/* FAQ Accordion */}
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <SettingsSection title="Frequently asked">
             {filteredFaqs.length === 0 ? (
               <View style={styles.emptyFaqs}>
@@ -154,7 +167,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
                       <Ionicons
                         name={expanded === faq.q ? 'chevron-up' : 'chevron-down'}
                         size={18}
-                        color={Colors.textMuted}
+                        color={colors.textMuted}
                       />
                     </View>
                     {expanded === faq.q && (
@@ -168,7 +181,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* External links */}
-        <Reanimated.View entering={FadeIn.duration(300)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <SettingsSection title="Legal">
             <SettingsRow
               icon="document-text-outline"
@@ -196,23 +209,53 @@ export default function HelpSupportScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  heroIcon: {
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  heroSubtitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.xs - 2,
+  },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
   searchInput: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
     paddingVertical: 0,
   },
@@ -223,7 +266,7 @@ const styles = StyleSheet.create({
   emptyFaqsText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: Type.body.letterSpacing,
   },
   faqRow: {
@@ -235,13 +278,13 @@ const styles = StyleSheet.create({
   },
   border: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   faqQ: {
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: Type.body.lineHeight,
     letterSpacing: Type.body.letterSpacing,
     paddingRight: Space.sm,
@@ -249,7 +292,7 @@ const styles = StyleSheet.create({
   faqA: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
     paddingHorizontal: Space.md,
@@ -258,10 +301,11 @@ const styles = StyleSheet.create({
   version: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: Space.lg,
     marginBottom: Space.md,
     letterSpacing: Type.meta.letterSpacing,
   },
-});
+  });
+}

@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { AppInput } from '../ui/AppInput';
@@ -35,6 +35,9 @@ export function BidComposer({
   onCancel,
   onSubmit,
 }: BidComposerProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   if (!visible) {
     return null;
   }
@@ -127,7 +130,7 @@ export function BidComposer({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 300,
@@ -138,14 +141,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
     paddingBottom: Space.xl,
     borderTopWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   title: {
     marginBottom: Space.md,
@@ -161,14 +164,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bidInfoLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     marginBottom: 2,
   },
   bidInfoValue: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
   },
   bidInfoMin: {
-    color: Colors.brand,
+    color: colors.brand,
   },
   input: {
     marginBottom: Space.sm,

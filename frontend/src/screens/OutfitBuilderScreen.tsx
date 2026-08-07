@@ -13,19 +13,22 @@ import {
   Dimensions,
   Alert,
   Platform,
+  Share,
 } from 'react-native';
 import Reanimated, {
   FadeInDown,
   FadeInUp,
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { Colors, ActiveTheme } from '../constants/colors';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -34,9 +37,8 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { haptics } from '../utils/haptics';
 import { AppButton } from '../components/ui/AppButton';
-import { Typography, DockConstants } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing } from '../theme/designTokens';
 import {
   OutfitSlot,
   StyleItem,
@@ -48,11 +50,13 @@ import {
   getSlotIcon,
 } from '../services/styleGraph';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
 const SLOT_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * 4) / 5;
 
 const SLOTS: OutfitSlot[] = ['top', 'bottom', 'shoes', 'outerwear', 'accessory'];
+
+const BG_COLORS = ['#F5F5F0', '#E8E4DF', '#D4C9BE', '#C9D9E8', '#D9D0E1', '#E8D4D4', '#D4E8D6', '#1A1A1A'];
 
 // ── Helper Components ──
 
@@ -67,6 +71,8 @@ function SlotCircle({
   isActive: boolean;
   onPress: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const slotStyles = useMemo(() => createSlotStyles(colors), [colors]);
   return (
     <AnimatedPressable
       style={[slotStyles.circle, isActive && slotStyles.circleActive]}
@@ -87,7 +93,7 @@ function SlotCircle({
         />
       ) : (
         <View style={slotStyles.empty}>
-          <Ionicons name={getSlotIcon(slot) as any} size={20} color={isActive ? Colors.brand : Colors.textMuted} />
+          <Ionicons name={getSlotIcon(slot)} size={20} color={isActive ? colors.brand : colors.textMuted} />
         </View>
       )}
       {isActive && <View style={slotStyles.activeRing} />}
@@ -95,21 +101,22 @@ function SlotCircle({
   );
 }
 
-const slotStyles = StyleSheet.create({
+function createSlotStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   circle: {
     width: SLOT_SIZE,
     height: SLOT_SIZE,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
   },
   circleActive: {
-    borderColor: Colors.brand,
-    borderWidth: 2,
+    borderColor: colors.brand,
+    borderWidth: Stroke.emphasis,
   },
   image: {
     width: '100%',
@@ -122,13 +129,14 @@ const slotStyles = StyleSheet.create({
   },
   activeRing: {
     position: 'absolute',
-    bottom: 4,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.brand,
+    bottom: Space.xs,
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.brand,
   },
-});
+  });
+}
 
 function ItemThumb({
   item,
@@ -139,6 +147,8 @@ function ItemThumb({
   onPress: () => void;
   isSelected: boolean;
 }) {
+  const { colors } = useAppTheme();
+  const thumbStyles = useMemo(() => createThumbStyles(colors), [colors]);
   return (
     <AnimatedPressable
       style={[thumbStyles.card, isSelected && thumbStyles.cardSelected]}
@@ -154,48 +164,49 @@ function ItemThumb({
         <CachedImage uri={item.imageUri} style={thumbStyles.image} priority="low" />
       ) : (
         <View style={[thumbStyles.image, thumbStyles.placeholder]}>
-          <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+          <Ionicons name="image-outline" size={24} color={colors.textMuted} />
         </View>
       )}
       <View style={thumbStyles.meta}>
         <T.Caption
-          color={Colors.textPrimary}
+          color={colors.textPrimary}
           numberOfLines={1}
           style={{ fontFamily: Typography.family.semibold }}
         >
           {item.title}
         </T.Caption>
-        <T.Meta color={Colors.textMuted} numberOfLines={1}>
+        <T.Meta color={colors.textMuted} numberOfLines={1}>
           {item.brand ?? item.category}
         </T.Meta>
       </View>
       {isSelected && (
         <View style={thumbStyles.check}>
-          <Ionicons name="checkmark-circle" size={20} color={Colors.brand} />
+          <Ionicons name="checkmark-circle" size={20} color={colors.brand} />
         </View>
       )}
     </AnimatedPressable>
   );
 }
 
-const thumbStyles = StyleSheet.create({
+function createThumbStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     overflow: 'hidden',
     marginBottom: Space.sm,
   },
   cardSelected: {
-    borderColor: Colors.brand,
-    borderWidth: 2,
+    borderColor: colors.brand,
+    borderWidth: Stroke.emphasis,
   },
   image: {
     width: '100%',
-    height: 140,
-    backgroundColor: Colors.surfaceAlt,
+    height: Space.xxl * 3 - Space.xs,
+    backgroundColor: colors.surfaceAlt,
   },
   placeholder: {
     justifyContent: 'center',
@@ -208,17 +219,20 @@ const thumbStyles = StyleSheet.create({
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderRadius: Radius.full,
   },
-});
+  });
+}
 
 function ScoreBadge({ score }: { score: number }) {
+  const { colors } = useAppTheme();
+  const scoreStyles = useMemo(() => createScoreStyles(colors), [colors]);
   const scale = useSharedValue(1);
   React.useEffect(() => {
-    scale.value = withSpring(1.15, { damping: 12 });
+    scale.value = withTiming(1.12, { duration: 150, easing: Easing.out(Easing.quad) });
     const t = setTimeout(() => {
-      scale.value = withSpring(1, { damping: 12 });
+      scale.value = withTiming(1, { duration: 150, easing: Easing.inOut(Easing.quad) });
     }, 200);
     return () => clearTimeout(t);
   }, [score]);
@@ -227,28 +241,30 @@ function ScoreBadge({ score }: { score: number }) {
     transform: [{ scale: scale.value }],
   }));
 
-  const color = score >= 80 ? Colors.success : score >= 50 ? Colors.brand : Colors.danger;
+  const scoreColor = score >= 80 ? colors.success : score >= 50 ? colors.brand : colors.danger;
 
   return (
-    <Reanimated.View style={[scoreStyles.badge, { borderColor: color }, animStyle]}>
-      <T.Caption color={color} style={{ fontFamily: Typography.family.bold }}>
+    <Reanimated.View style={[scoreStyles.badge, { borderColor: scoreColor }, animStyle]}>
+      <T.Caption color={scoreColor} style={{ fontFamily: Typography.family.bold }}>
         {score}
       </T.Caption>
     </Reanimated.View>
   );
 }
 
-const scoreStyles = StyleSheet.create({
+function createScoreStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   badge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.xxl,
+    borderWidth: Stroke.emphasis,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
   },
-});
+  });
+}
 
 // ── Main Screen ──
 
@@ -258,6 +274,10 @@ export default function OutfitBuilderScreen() {
   const collections = useStore((s) => s.collections);
   const createCollectionFn = useStore((s) => s.createCollection);
   const addToCollection = useStore((s) => s.addToCollection);
+  const addOutfitToStore = useStore((s) => s.addOutfit);
+  const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [activeSlot, setActiveSlot] = useState<OutfitSlot>('top');
   const [outfitItems, setOutfitItems] = useState<Record<OutfitSlot, StyleItem | undefined>>({
@@ -267,6 +287,7 @@ export default function OutfitBuilderScreen() {
     outerwear: undefined,
     accessory: undefined,
   });
+  const [backgroundColor, setBackgroundColor] = useState<string | undefined>(undefined);
 
   // Convert listings to StyleItems
   const availableItems = useMemo<StyleItem[]>(() => {
@@ -318,16 +339,42 @@ export default function OutfitBuilderScreen() {
     const collectionName = outfit.name;
     const collectionId = createCollectionFn(collectionName, `Outfit with ${filledCount} items — score ${outfit.score}`);
 
-    // Add each item to the new collection
     SLOTS.forEach((slot) => {
       const item = outfitItems[slot];
       if (item) addToCollection(collectionId, item.id);
     });
 
+    const itemIds = SLOTS.map((slot) => outfitItems[slot]?.id).filter(Boolean) as string[];
+    addOutfitToStore({
+      id: outfit.id,
+      name: outfit.name,
+      itemIds,
+      backgroundColor,
+      createdAt: outfit.createdAt,
+      updatedAt: outfit.createdAt,
+    });
+
     haptics.success();
-    Alert.alert('Outfit Saved', `"${collectionName}" added to your collections.`, [
+    Alert.alert('Outfit Saved', `"${collectionName}" added to your outfits.`, [
       { text: 'OK', onPress: () => navigation.goBack() },
     ]);
+  };
+
+  const handleShare = async () => {
+    if (filledCount < 1) {
+      Alert.alert('No items', 'Add at least one item to share your outfit.');
+      return;
+    }
+    const outfit = createOutfit(outfitItems);
+    const itemNames = SLOTS.map((slot) => outfitItems[slot])
+      .filter(Boolean)
+      .map((it) => it!.title)
+      .join(', ');
+    try {
+      await Share.share({
+        message: `Check out my outfit "${outfit.name}" on Thryftverse — ${itemNames}`,
+      });
+    } catch { /* user cancelled */ }
   };
 
   const handleClear = () => {
@@ -338,6 +385,7 @@ export default function OutfitBuilderScreen() {
         style: 'destructive',
         onPress: () => {
           setOutfitItems({ top: undefined, bottom: undefined, shoes: undefined, outerwear: undefined, accessory: undefined });
+          setBackgroundColor(undefined);
           haptics.error();
         },
       },
@@ -353,7 +401,7 @@ export default function OutfitBuilderScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -365,7 +413,7 @@ export default function OutfitBuilderScreen() {
           accessibilityLabel="Close outfit builder"
           hapticFeedback="light"
         >
-          <Ionicons name="close" size={28} color={Colors.textPrimary} />
+          <Ionicons name="close" size={28} color={colors.textPrimary} />
         </AnimatedPressable>
         <T.Headline style={styles.headerTitle}>Outfit Builder</T.Headline>
         <AnimatedPressable
@@ -376,13 +424,13 @@ export default function OutfitBuilderScreen() {
           accessibilityLabel="Clear outfit"
           hapticFeedback="light"
         >
-          <Ionicons name="trash-outline" size={22} color={Colors.danger} />
+          <Ionicons name="trash-outline" size={22} color={colors.danger} />
         </AnimatedPressable>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Outfit Preview */}
-        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.previewWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={[styles.previewWrap, backgroundColor ? { backgroundColor } : undefined]}>
           <View style={styles.slotRow}>
             {SLOTS.map((slot) => (
               <View key={slot} style={styles.slotWrap}>
@@ -392,7 +440,7 @@ export default function OutfitBuilderScreen() {
                   isActive={activeSlot === slot}
                   onPress={() => setActiveSlot(slot)}
                 />
-                <T.Meta color={activeSlot === slot ? Colors.brand : Colors.textMuted} style={styles.slotLabel}>
+                <T.Meta color={activeSlot === slot ? colors.brand : colors.textMuted} style={styles.slotLabel}>
                   {getSlotLabel(slot)}
                 </T.Meta>
               </View>
@@ -404,39 +452,69 @@ export default function OutfitBuilderScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm }}>
               <ScoreBadge score={compatibility.score} />
               <View>
-                <T.Caption color={Colors.textPrimary} style={{ fontFamily: Typography.family.bold }}>
+                <T.Caption color={colors.textPrimary} style={{ fontFamily: Typography.family.bold }}>
                   Compatibility
                 </T.Caption>
-                <T.Meta color={Colors.textMuted}>
+                <T.Meta color={colors.textMuted}>
                   {compatibility.reasons.join(' · ') || 'Select items to score'}
                 </T.Meta>
               </View>
             </View>
             <View style={{ flexDirection: 'row', gap: Space.xs }}>
-              <T.Meta color={Colors.textMuted}>{filledCount}/{SLOTS.length}</T.Meta>
+              <T.Meta color={colors.textMuted}>{filledCount}/{SLOTS.length}</T.Meta>
             </View>
+          </View>
+
+          {/* Background color picker */}
+          <View style={styles.bgRow}>
+            <T.Meta color={colors.textMuted}>Background</T.Meta>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bgSwatches}>
+              <AnimatedPressable
+                style={[styles.swatch, !backgroundColor && styles.swatchActive]}
+                onPress={() => { haptics.tap(); setBackgroundColor(undefined); }}
+                accessibilityRole="button"
+                accessibilityLabel="Default background"
+                accessibilityState={{ selected: !backgroundColor }}
+              >
+                <Ionicons name="close" size={14} color={colors.textMuted} />
+              </AnimatedPressable>
+              {BG_COLORS.map((c) => (
+                <AnimatedPressable
+                  key={c}
+                  style={[
+                    styles.swatch,
+                    { backgroundColor: c },
+                    backgroundColor === c && styles.swatchActive,
+                  ]}
+                  onPress={() => { haptics.tap(); setBackgroundColor(c); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Background color ${c}`}
+                  accessibilityState={{ selected: backgroundColor === c }}
+                />
+              ))}
+            </ScrollView>
           </View>
         </Reanimated.View>
 
         {/* AI Suggestion */}
         {aiSuggestion && (
-          <Reanimated.View entering={FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
             <View style={styles.aiCard}>
               <View style={styles.aiRow}>
-                <Ionicons name="sparkles" size={18} color={Colors.brand} />
-                <T.Caption color={Colors.brand} style={{ fontFamily: Typography.family.bold }}>
+                <Ionicons name="sparkles" size={18} color={colors.brand} />
+                <T.Caption color={colors.brand} style={{ fontFamily: Typography.family.bold }}>
                   AI Suggestion
                 </T.Caption>
               </View>
-              <T.Body color={Colors.textSecondary} style={{ marginBottom: Space.sm }}>
-                Add a <Text style={{ fontFamily: Typography.family.bold, color: Colors.textPrimary }}>{getSlotLabel(aiSuggestion.slot)}</Text> to improve your outfit score by +{aiSuggestion.scoreImprovement}.
+              <T.Body color={colors.textSecondary} style={{ marginBottom: Space.sm }}>
+                Add a <Text style={{ fontFamily: Typography.family.bold, color: colors.textPrimary }}>{getSlotLabel(aiSuggestion.slot)}</Text> to improve your outfit score by +{aiSuggestion.scoreImprovement}.
               </T.Body>
               <AppButton
                 title={`Add ${aiSuggestion.item.brand ?? ''} ${aiSuggestion.item.title}`.trim()}
                 variant="secondary"
                 size="sm"
                 onPress={handleAiSuggest}
-                icon={<Ionicons name="add-circle-outline" size={16} color={Colors.brand} />}
+                icon={<Ionicons name="add-circle-outline" size={16} color={colors.brand} />}
               />
             </View>
           </Reanimated.View>
@@ -444,8 +522,8 @@ export default function OutfitBuilderScreen() {
 
         {/* Section Header */}
         <View style={styles.sectionHeader}>
-          <T.Title2 color={Colors.textPrimary}>{getSlotLabel(activeSlot)}s</T.Title2>
-          <T.Meta color={Colors.textMuted}>{slotItems.length} items</T.Meta>
+          <T.Title2 color={colors.textPrimary}>{getSlotLabel(activeSlot)}s</T.Title2>
+          <T.Meta color={colors.textMuted}>{slotItems.length} items</T.Meta>
         </View>
 
         {/* Item Grid */}
@@ -460,7 +538,7 @@ export default function OutfitBuilderScreen() {
             {slotItems.map((item, idx) => (
               <Reanimated.View
                 key={item.id}
-                entering={FadeInDown.delay(idx * 40).duration(250)}
+                entering={reducedMotionEnabled ? undefined : FadeInDown.delay(idx * 40).duration(250)}
               >
                 <ItemThumb
                   item={item}
@@ -477,24 +555,39 @@ export default function OutfitBuilderScreen() {
 
       {/* Footer CTA */}
       <View style={styles.footer}>
-        <AppButton
-          title={filledCount >= 2 ? 'Save Outfit' : `Select ${2 - filledCount} more item${filledCount === 1 ? '' : 's'}`}
-          variant={filledCount >= 2 ? 'primary' : 'secondary'}
-          size="lg"
-          onPress={handleSave}
-          disabled={filledCount < 2}
-          icon={<Ionicons name="bookmark-outline" size={18} color={filledCount >= 2 ? Colors.background : Colors.textPrimary} />}
-          trailingIcon={<Ionicons name="arrow-forward" size={18} color={filledCount >= 2 ? Colors.background : Colors.textMuted} />}
-        />
+        <View style={styles.footerRow}>
+          <AnimatedPressable
+            style={styles.shareBtn}
+            onPress={handleShare}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Share outfit"
+            hapticFeedback="light"
+          >
+            <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <View style={{ flex: 1 }}>
+            <AppButton
+              title={filledCount >= 2 ? 'Save Outfit' : `Select ${2 - filledCount} more item${filledCount === 1 ? '' : 's'}`}
+              variant={filledCount >= 2 ? 'primary' : 'secondary'}
+              size="lg"
+              onPress={handleSave}
+              disabled={filledCount < 2}
+              icon={<Ionicons name="bookmark-outline" size={18} color={filledCount >= 2 ? colors.background : colors.textPrimary} />}
+              trailingIcon={<Ionicons name="arrow-forward" size={18} color={filledCount >= 2 ? colors.background : colors.textMuted} />}
+            />
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -504,18 +597,18 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: LetterSpacing.caps,
     fontSize: Type.subtitle.size,
   },
   scrollContent: {
@@ -526,9 +619,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
     padding: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
   slotRow: {
     flexDirection: 'row',
@@ -547,16 +640,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopWidth: Stroke.standard,
+    borderTopColor: colors.border,
     paddingTop: Space.md,
+  },
+  bgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: Stroke.hairline,
+    borderTopColor: colors.border,
+    paddingTop: Space.md,
+    marginTop: Space.md,
+  },
+  bgSwatches: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    alignItems: 'center',
+  },
+  swatch: {
+    width: Space.lg + Space.xs,
+    height: Space.lg + Space.xs,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  swatchActive: {
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.brand,
   },
   aiCard: {
     padding: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
   aiRow: {
     flexDirection: 'row',
@@ -585,8 +705,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Platform.OS === 'ios' ? Space.md : Space.sm,
-    backgroundColor: Colors.background,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    backgroundColor: colors.background,
+    borderTopWidth: Stroke.standard,
+    borderTopColor: colors.border,
   },
-});
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  shareBtn: {
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  });
+}

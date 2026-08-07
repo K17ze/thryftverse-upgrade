@@ -8,15 +8,16 @@ import {
   Dimensions,
   AppState,
   Image,
-  ActivityIndicator,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { Colors } from '../constants/colors';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import {
   fetchPosterStories,
@@ -27,32 +28,74 @@ import {
   createPosterReply,
   deletePosterStory,
   archivePosterStory,
+  fetchPosterTags,
+  recordPosterTagClick,
 } from '../services/postersApi';
 import type {
   PosterStory,
   PosterFrame,
   PosterReactionType,
+  PosterTag,
 } from '../services/postersApi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Type, Typography, Space } from '../theme/designTokens';
+import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Type, Typography, Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { PosterViewerSkeleton } from '../components/skeletons/PosterViewerSkeleton';
 import { PosterProgressSegments } from '../components/poster/PosterProgressSegments';
 import { PosterStickerLayer } from '../components/poster/PosterStickerLayer';
 import { PosterReactionReplyBar } from '../components/poster/PosterReactionReplyBar';
+import { ShareSheet } from '../components/ShareSheet';
 import { CachedImage } from '../components/CachedImage';
+import { VerificationBadge } from '../components/profile/VerificationBadge';
 import { Video } from '../components/compat/Video';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedReaction,
+  withTiming,
+  withSpring,
+  interpolate,
+  Extrapolation,
+  runOnJS,
+  cancelAnimation,
+  Easing as ReEasing,
+} from 'react-native-reanimated';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
+import * as Clipboard from 'expo-clipboard';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TICK_MS = 50;
+const LONG_PRESS_THRESHOLD_MS = 350;
+const SWIPE_THRESHOLD = 40;
+const DOUBLE_TAP_DEBOUNCE_MS = 300;
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 4;
+const ZOOM_DOUBLE_TAP = 2.5;
+const SPRING_SETTLE = Motion.spring.entrance;
 
-type NavT = StackNavigationProp<RootStackParamList>;
+// Rubber-band clamp: allows overscroll but with diminishing resistance.
+function rubberBand(value: number, min: number, max: number, friction = 0.24): number {
+  'worklet';
+  if (value < min) return min + (value - min) * friction;
+  if (value > max) return max + (value - max) * friction;
+  return value;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  'worklet';
+  return Math.min(max, Math.max(min, value));
+}
+
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'PosterViewer'>;
 
 function isVideoUrl(url: string): boolean {
-  return /\.(mp4|mov|m4v|quicktime)$/i.test(url);
+  return /\.(mp4|mov|m4v|webm|quicktime)(\?|$)/i.test(url);
 }
 
 export default function PosterViewerScreen() {
@@ -61,6 +104,9 @@ export default function PosterViewerScreen() {
   const insets = useSafeAreaInsets();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
 
   const [stories, setStories] = React.useState<PosterStory[]>([]);
   const [storyIndex, setStoryIndex] = React.useState(0);
@@ -70,6 +116,27 @@ export default function PosterViewerScreen() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [mediaError, setMediaError] = React.useState(false);
   const [recordedFrames, setRecordedFrames] = React.useState<Set<string>>(new Set());
+  const [posterTags, setPosterTags] = React.useState<PosterTag[]>([]);
+  const [shareVisible, setShareVisible] = React.useState(false);
+  const [isMuted, setIsMuted] = React.useState(true);
+  const [mediaRetryKey, setMediaRetryKey] = React.useState(0);
+  const [isBuffering, setIsBuffering] = React.useState(false);
+  const [heartBurst, setHeartBurst] = React.useState<{ id: number; x: number; y: number } | null>(null);
+
+  // Double-tap detection: track last tap timestamp to distinguish double-tap
+  // (heart reaction) from single-tap (frame navigation).
+  const lastTapRef = React.useRef(0);
+  const heartBurstIdRef = React.useRef(0);
+
+  // 300ms debounce guard to prevent multiple heart bursts from rapid tapping.
+  const lastHeartBurstRef = React.useRef(0);
+
+  // Track whether a long-press fired during the current touch to avoid
+  // advancing the frame when the user releases after a hold-pause.
+  const didLongPressRef = React.useRef(false);
+
+  // Single-tap timer for delayed frame navigation (double-tap detection).
+  const singleTapTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const storyId = route.params?.storyId;
   const startFrameIndex = route.params?.startFrameIndex ?? 0;
@@ -104,6 +171,12 @@ export default function PosterViewerScreen() {
     return () => { mounted = false; };
   }, [storyId, startFrameIndex, show]);
 
+  // Clear recorded-frames set when the storyId changes so view counts are
+  // re-recorded for a freshly opened story (prevents stale-set memory leak).
+  React.useEffect(() => {
+    setRecordedFrames(new Set());
+  }, [storyId]);
+
   const activeStory = stories[storyIndex];
   const activeFrame: PosterFrame | undefined = activeStory?.frames[frameIndex];
   const isOwner = !!activeStory && !!currentUser && activeStory.creatorId === currentUser.id;
@@ -131,10 +204,11 @@ export default function PosterViewerScreen() {
     } else if (storyIndex < stories.length - 1) {
       setStoryIndex(storyIndex + 1);
       setFrameIndex(0);
-    } else {
-      navigation.goBack();
     }
-  }, [activeStory, frameIndex, storyIndex, stories.length, navigation]);
+    // At the last frame of the last story, do NOT auto-exit.
+    // Instagram/Snapchat pattern: user must manually swipe down or tap X.
+    // The progress timer simply stops advancing.
+  }, [activeStory, frameIndex, storyIndex, stories.length]);
 
   const goPrevFrame = React.useCallback(() => {
     setProgress(0);
@@ -146,8 +220,55 @@ export default function PosterViewerScreen() {
     }
   }, [frameIndex, storyIndex, stories]);
 
+  // ── 3D cube transition between stories ──────────────────────────────
+  // Instagram-style 3D perspective transition. When the story index changes,
+  // the media container rotates on the Y axis with perspective foreshortening.
+  const cubeRotate = useSharedValue(0);
+  const cubeScale = useSharedValue(1);
+  const prevStoryIndexRef = React.useRef(storyIndex);
+
+  React.useEffect(() => {
+    if (prevStoryIndexRef.current === storyIndex) return;
+    const direction = storyIndex > prevStoryIndexRef.current ? 1 : -1;
+    prevStoryIndexRef.current = storyIndex;
+    // Animate: start from rotated position, spring back to center
+    cubeRotate.value = direction * 45;
+    cubeScale.value = 0.85;
+    cubeRotate.value = withSpring(0, { damping: 14, stiffness: 120, mass: 0.8 });
+    cubeScale.value = withSpring(1, { damping: 14, stiffness: 120, mass: 0.8 });
+  }, [storyIndex, cubeRotate, cubeScale]);
+
+  const cubeAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: SCREEN_WIDTH * 1.5 },
+      { rotateY: `${cubeRotate.value}deg` },
+      { scale: cubeScale.value },
+    ],
+  }));
+
+  // Skip to the next story (account) — used by swipe-left gesture.
+  const goNextStory = React.useCallback(() => {
+    setProgress(0);
+    if (storyIndex < stories.length - 1) {
+      haptic.selection();
+      setStoryIndex(storyIndex + 1);
+      setFrameIndex(0);
+    }
+  }, [storyIndex, stories.length, haptic]);
+
+  // Go to the previous story (account) — used by swipe-right gesture.
+  const goPrevStory = React.useCallback(() => {
+    setProgress(0);
+    if (storyIndex > 0) {
+      haptic.selection();
+      setStoryIndex(storyIndex - 1);
+      setFrameIndex(0);
+    }
+  }, [storyIndex, haptic]);
+
   const handleDelete = async () => {
     if (!activeStory || !isOwner) return;
+    haptic.medium();
     Alert.alert(
       'Delete story?',
       'This will permanently remove your poster story.',
@@ -172,6 +293,7 @@ export default function PosterViewerScreen() {
 
   const handleArchive = async () => {
     if (!activeStory || !isOwner) return;
+    haptic.medium();
     try {
       await archivePosterStory(activeStory.id);
       show('Story archived', 'info');
@@ -190,6 +312,43 @@ export default function PosterViewerScreen() {
     recordPosterFrameView(activeFrame.id).catch(() => {});
   }, [activeFrame?.id, activeStory, isOwner, recordedFrames]);
 
+  // Fetch shoppable product tags for the active poster story. Tags are
+  // scoped to the poster (story), so we refetch whenever the active story
+  // changes. The hotspots themselves are only rendered for the current frame.
+  React.useEffect(() => {
+    if (!activeStory) {
+      setPosterTags([]);
+      return;
+    }
+    let mounted = true;
+    fetchPosterTags(activeStory.id)
+      .then((res) => {
+        if (mounted) setPosterTags(res.tags ?? []);
+      })
+      .catch(() => {
+        if (mounted) setPosterTags([]);
+      });
+    return () => { mounted = false; };
+  }, [activeStory?.id]);
+
+  // Preload the next frame's media and the first frame of the next story
+  // to eliminate blank-spinner gaps during navigation (Snapchat/Instagram
+  // three-layer preloading pattern).
+  React.useEffect(() => {
+    if (!activeStory) return;
+
+    const nextFrame = activeStory.frames[frameIndex + 1];
+    if (nextFrame?.mediaUrl && !isVideoUrl(nextFrame.mediaUrl)) {
+      Image.prefetch(nextFrame.mediaUrl).catch(() => {});
+    }
+
+    const nextStory = stories[storyIndex + 1];
+    const nextStoryFirstFrame = nextStory?.frames[0];
+    if (nextStoryFirstFrame?.mediaUrl && !isVideoUrl(nextStoryFirstFrame.mediaUrl)) {
+      Image.prefetch(nextStoryFirstFrame.mediaUrl).catch(() => {});
+    }
+  }, [activeStory, frameIndex, stories, storyIndex]);
+
   // Pause when app goes to background
   React.useEffect(() => {
     const sub = AppState.addEventListener('change', (nextAppState) => {
@@ -201,6 +360,23 @@ export default function PosterViewerScreen() {
   // Auto-advance timer
   React.useEffect(() => {
     if (!activeFrame || isPaused || isLoading) return;
+
+    // At the last frame of the last story, don't auto-advance — let the user
+    // manually exit (Instagram/Snapchat pattern).
+    const isLastFrameOfLastStory =
+      frameIndex >= (activeStory?.frames.length ?? 1) - 1 &&
+      storyIndex >= stories.length - 1;
+    if (isLastFrameOfLastStory) return;
+
+    // Reduced-motion: skip the animated progress and just advance after the
+    // full duration, so there's no visible progress animation.
+    if (reducedMotion) {
+      const duration = activeFrame.durationMs || 5000;
+      const timeoutId = setTimeout(() => {
+        goNextFrame();
+      }, duration);
+      return () => clearTimeout(timeoutId);
+    }
 
     const duration = activeFrame.durationMs || 5000;
     const intervalId = setInterval(() => {
@@ -216,16 +392,363 @@ export default function PosterViewerScreen() {
     }, TICK_MS);
 
     return () => clearInterval(intervalId);
-  }, [activeFrame?.id, isPaused, isLoading, goNextFrame]);
+  }, [activeFrame?.id, isPaused, isLoading, goNextFrame, reducedMotion, frameIndex, storyIndex, activeStory?.frames.length, stories.length]);
 
-  const handleReaction = async (reaction: PosterReactionType) => {
+  // Reset media error, pause, and buffering state when frame changes.
+  // For video frames, set buffering=true so the indicator shows until onLoad fires.
+  React.useEffect(() => {
+    setMediaError(false);
+    setIsPaused(false);
+    const isVideoFrame = activeFrame?.mediaType === 'video' ||
+      (activeFrame?.mediaUrl && isVideoUrl(activeFrame.mediaUrl));
+    setIsBuffering(!!isVideoFrame);
+  }, [activeFrame?.id, activeFrame?.mediaType, activeFrame?.mediaUrl]);
+
+  // ── Pinch-to-zoom shared values (image frames only) ────────────────
+  const zoomScale = useSharedValue(1);
+  const zoomSavedScale = useSharedValue(1);
+  const zoomTranslateX = useSharedValue(0);
+  const zoomTranslateY = useSharedValue(0);
+  const zoomSavedTranslateX = useSharedValue(0);
+  const zoomSavedTranslateY = useSharedValue(0);
+  const [isZoomed, setIsZoomed] = React.useState(false);
+
+  // Reset zoom whenever the frame changes — prevents carrying zoom state
+  // across frames. Respects reducedMotion (instant, no animation).
+  React.useEffect(() => {
+    if (reducedMotion) {
+      zoomScale.value = 1;
+      zoomSavedScale.value = 1;
+      zoomTranslateX.value = 0;
+      zoomTranslateY.value = 0;
+      zoomSavedTranslateX.value = 0;
+      zoomSavedTranslateY.value = 0;
+    } else {
+      cancelAnimation(zoomScale);
+      cancelAnimation(zoomTranslateX);
+      cancelAnimation(zoomTranslateY);
+      zoomScale.value = 1;
+      zoomSavedScale.value = 1;
+      zoomTranslateX.value = 0;
+      zoomTranslateY.value = 0;
+      zoomSavedTranslateX.value = 0;
+      zoomSavedTranslateY.value = 0;
+    }
+  }, [activeFrame?.id, reducedMotion, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]);
+
+  // Track zoom state in React for conditional gesture enabling.
+  useAnimatedReaction(
+    () => zoomScale.value > 1.01,
+    (isZoomedNow, wasZoomed) => {
+      if (isZoomedNow !== wasZoomed) {
+        runOnJS(setIsZoomed)(isZoomedNow);
+      }
+    }
+  );
+
+  const zoomAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: zoomTranslateX.value },
+      { translateY: zoomTranslateY.value },
+      { scale: zoomScale.value },
+    ],
+  }));
+
+  // ── Image zoom gestures (pinch + pan + double-tap toggle) ───────────
+  // Only active for image frames (not videos, not composition docs).
+  const isImageFrame = !compositionDoc && !!activeFrame?.mediaUrl &&
+    activeFrame.mediaType !== 'video' && !isVideoUrl(activeFrame.mediaUrl);
+
+  const zoomPinchGesture = React.useMemo(
+    () =>
+      Gesture.Pinch()
+        .enabled(isImageFrame)
+        .onStart(() => {
+          zoomSavedScale.value = zoomScale.value;
+        })
+        .onUpdate((e) => {
+          const newScale = zoomSavedScale.value * e.scale;
+          zoomScale.value = clamp(newScale, ZOOM_MIN, ZOOM_MAX);
+        })
+        .onEnd(() => {
+          if (zoomScale.value < ZOOM_MIN) {
+            zoomScale.value = withSpring(ZOOM_MIN, SPRING_SETTLE);
+            zoomTranslateX.value = withSpring(0, SPRING_SETTLE);
+            zoomTranslateY.value = withSpring(0, SPRING_SETTLE);
+            zoomSavedScale.value = ZOOM_MIN;
+            zoomSavedTranslateX.value = 0;
+            zoomSavedTranslateY.value = 0;
+          } else if (zoomScale.value > ZOOM_MAX) {
+            zoomScale.value = withSpring(ZOOM_MAX, SPRING_SETTLE);
+            zoomSavedScale.value = ZOOM_MAX;
+          } else {
+            zoomSavedScale.value = zoomScale.value;
+          }
+        }),
+    [isImageFrame, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]
+  );
+
+  const zoomPanGesture = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(isImageFrame && isZoomed)
+        .onStart(() => {
+          zoomSavedTranslateX.value = zoomTranslateX.value;
+          zoomSavedTranslateY.value = zoomTranslateY.value;
+        })
+        .onUpdate((e) => {
+          const zoomLevel = Math.max(zoomScale.value, zoomSavedScale.value);
+          if (zoomLevel <= 1) return;
+          const maxTransX = (SCREEN_WIDTH * (zoomLevel - 1)) / 2;
+          const maxTransY = (SCREEN_HEIGHT * (zoomLevel - 1)) / 2;
+          const nextX = zoomSavedTranslateX.value + e.translationX;
+          const nextY = zoomSavedTranslateY.value + e.translationY;
+          zoomTranslateX.value = rubberBand(nextX, -maxTransX, maxTransX);
+          zoomTranslateY.value = rubberBand(nextY, -maxTransY, maxTransY);
+        })
+        .onEnd((e) => {
+          const zoomLevel = Math.max(zoomScale.value, zoomSavedScale.value);
+          if (zoomLevel <= 1) {
+            zoomSavedTranslateX.value = 0;
+            zoomSavedTranslateY.value = 0;
+            zoomTranslateX.value = withSpring(0, SPRING_SETTLE);
+            zoomTranslateY.value = withSpring(0, SPRING_SETTLE);
+            return;
+          }
+          const maxTransX = (SCREEN_WIDTH * (zoomLevel - 1)) / 2;
+          const maxTransY = (SCREEN_HEIGHT * (zoomLevel - 1)) / 2;
+          const projectedX = zoomTranslateX.value + e.velocityX * 0.08;
+          const projectedY = zoomTranslateY.value + e.velocityY * 0.08;
+          const targetX = clamp(projectedX, -maxTransX, maxTransX);
+          const targetY = clamp(projectedY, -maxTransY, maxTransY);
+          zoomSavedTranslateX.value = targetX;
+          zoomSavedTranslateY.value = targetY;
+          zoomTranslateX.value = withSpring(targetX, SPRING_SETTLE);
+          zoomTranslateY.value = withSpring(targetY, SPRING_SETTLE);
+        }),
+    [isImageFrame, isZoomed, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]
+  );
+
+  // Double-tap zoom toggle is integrated into the tap zone double-tap logic
+  // (triggerHeartBurst) to avoid gesture conflicts with the tap layer that
+  // sits on top of the image. See triggerHeartBurst for the zoom-toggle logic.
+
+  // Compose zoom gestures: pinch + pan simultaneous.
+  // Double-tap zoom toggle is handled by the tap zone gestures (which are
+  // layered on top of the image) via triggerHeartBurst, so we don't include
+  // a separate double-tap here to avoid gesture conflicts.
+  const zoomComposedGesture = React.useMemo(
+    () =>
+      Gesture.Simultaneous(zoomPanGesture, zoomPinchGesture),
+    [zoomPanGesture, zoomPinchGesture]
+  );
+
+  // ── Container swipe gesture (down=dismiss, left=next story, right=prev story, up=view profile) ──
+  // Uses Gesture.Pan() with activeOffset thresholds so it only activates for
+  // clear swipes, avoiding interference with tap zones and the reply input.
+  const handleSwipeUpProfile = React.useCallback(() => {
+    if (activeStory) {
+      haptic.light();
+      navigation.navigate('UserProfile', { userId: activeStory.creatorId });
+    }
+  }, [activeStory, haptic, navigation]);
+
+  const handleSwipeDismiss = React.useCallback(() => {
+    haptic.light();
+    navigation.goBack();
+  }, [haptic, navigation]);
+
+  const containerPanGesture = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-SWIPE_THRESHOLD, SWIPE_THRESHOLD])
+        .activeOffsetY([-SWIPE_THRESHOLD, SWIPE_THRESHOLD])
+        .onEnd((e) => {
+          const { translationX: dx, translationY: dy } = e;
+          // Swipe-down to dismiss (primary exit gesture per IG/Snapchat)
+          if (dy > SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+            runOnJS(handleSwipeDismiss)();
+            return;
+          }
+          // Swipe-up to view creator profile
+          if (dy < -SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+            runOnJS(handleSwipeUpProfile)();
+            return;
+          }
+          // Horizontal swipe between stories (accounts)
+          if (Math.abs(dx) > Math.abs(dy)) {
+            if (dx < -SWIPE_THRESHOLD) {
+              runOnJS(goNextStory)();
+            } else if (dx > SWIPE_THRESHOLD) {
+              runOnJS(goPrevStory)();
+            }
+          }
+        }),
+    [handleSwipeDismiss, handleSwipeUpProfile, goNextStory, goPrevStory]
+  );
+
+  // Cleanup single-tap timer on unmount to prevent frame advance after exit.
+  React.useEffect(() => {
+    return () => {
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleReaction = React.useCallback(async (reaction: PosterReactionType) => {
     if (!activeFrame) return;
+    haptic.light();
     try {
       await setPosterFrameReaction(activeFrame.id, reaction);
     } catch {
       show('Failed to set reaction', 'error');
     }
-  };
+  }, [activeFrame, haptic, show]);
+
+  // Double-tap to heart — Instagram core gesture. Uses a delayed single-tap
+  // approach: on first tap, schedule frame advance after 280ms. If a second
+  // tap arrives within that window, cancel the advance and trigger heart.
+  // A 300ms debounce guard prevents multiple heart bursts from rapid tapping.
+
+  const triggerHeartBurst = React.useCallback((x: number, y: number) => {
+    // If zoomed in, double-tap zooms out instead of triggering a heart.
+    if (zoomScale.value > 1) {
+      zoomScale.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
+      zoomTranslateX.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
+      zoomTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
+      zoomSavedScale.value = 1;
+      zoomSavedTranslateX.value = 0;
+      zoomSavedTranslateY.value = 0;
+      return;
+    }
+    // Not zoomed: trigger heart reaction + zoom to 2.5x
+    const now = Date.now();
+    if (now - lastHeartBurstRef.current < DOUBLE_TAP_DEBOUNCE_MS) return;
+    lastHeartBurstRef.current = now;
+    haptic.medium();
+    setHeartBurst({
+      id: ++heartBurstIdRef.current,
+      x,
+      y,
+    });
+    setTimeout(() => setHeartBurst(null), 2500);
+    handleReaction('love');
+    // Zoom to 2.5x on double-tap (only for image frames)
+    if (isImageFrame) {
+      zoomScale.value = reducedMotion ? ZOOM_DOUBLE_TAP : withSpring(ZOOM_DOUBLE_TAP, SPRING_SETTLE);
+      zoomSavedScale.value = ZOOM_DOUBLE_TAP;
+    }
+  }, [haptic, handleReaction, reducedMotion, isImageFrame, zoomScale, zoomTranslateX, zoomTranslateY, zoomSavedScale, zoomSavedTranslateX, zoomSavedTranslateY]);
+
+  const handleTapLeft = React.useCallback((absoluteX: number, absoluteY: number) => {
+    if (didLongPressRef.current) {
+      didLongPressRef.current = false;
+      return;
+    }
+    // If a pending single-tap exists, this is a double-tap → trigger heart
+    if (singleTapTimerRef.current) {
+      clearTimeout(singleTapTimerRef.current);
+      singleTapTimerRef.current = null;
+      if (activeFrame && activeStory?.allowReactions) {
+        triggerHeartBurst(absoluteX, absoluteY);
+      }
+      return;
+    }
+    // Schedule single-tap (go to previous frame) after delay
+    singleTapTimerRef.current = setTimeout(() => {
+      singleTapTimerRef.current = null;
+      goPrevFrame();
+    }, 280);
+  }, [activeFrame, activeStory?.allowReactions, triggerHeartBurst, goPrevFrame]);
+
+  const handleTapRight = React.useCallback((absoluteX: number, absoluteY: number) => {
+    if (didLongPressRef.current) {
+      didLongPressRef.current = false;
+      return;
+    }
+    if (singleTapTimerRef.current) {
+      clearTimeout(singleTapTimerRef.current);
+      singleTapTimerRef.current = null;
+      if (activeFrame && activeStory?.allowReactions) {
+        triggerHeartBurst(absoluteX, absoluteY);
+      }
+      return;
+    }
+    singleTapTimerRef.current = setTimeout(() => {
+      singleTapTimerRef.current = null;
+      goNextFrame();
+    }, 280);
+  }, [activeFrame, activeStory?.allowReactions, triggerHeartBurst, goNextFrame]);
+
+  // ── Tap zone gestures (Gesture.Tap + Gesture.LongPress) ─────────────
+  // Long-press callbacks for hold-to-pause (shared by both zones).
+  const handleLongPressStart = React.useCallback(() => {
+    didLongPressRef.current = true;
+    setIsPaused(true);
+    haptic.light();
+  }, [haptic]);
+
+  const handleLongPressEnd = React.useCallback(() => {
+    if (didLongPressRef.current) {
+      setIsPaused(false);
+    }
+  }, []);
+
+  // Left zone: single-tap → prev frame, double-tap → heart, long-press → pause
+  const tapLeftGesture = React.useMemo(
+    () =>
+      Gesture.Tap().onEnd((e, success) => {
+        if (success) runOnJS(handleTapLeft)(e.absoluteX, e.absoluteY);
+      }),
+    [handleTapLeft]
+  );
+
+  const longPressLeftGesture = React.useMemo(
+    () =>
+      Gesture.LongPress()
+        .minDuration(LONG_PRESS_THRESHOLD_MS)
+        .onStart(() => {
+          runOnJS(handleLongPressStart)();
+        })
+        .onEnd(() => {
+          runOnJS(handleLongPressEnd)();
+        }),
+    [handleLongPressStart, handleLongPressEnd]
+  );
+
+  // Right zone: single-tap → next frame, double-tap → heart, long-press → pause
+  const tapRightGesture = React.useMemo(
+    () =>
+      Gesture.Tap().onEnd((e, success) => {
+        if (success) runOnJS(handleTapRight)(e.absoluteX, e.absoluteY);
+      }),
+    [handleTapRight]
+  );
+
+  const longPressRightGesture = React.useMemo(
+    () =>
+      Gesture.LongPress()
+        .minDuration(LONG_PRESS_THRESHOLD_MS)
+        .onStart(() => {
+          runOnJS(handleLongPressStart)();
+        })
+        .onEnd(() => {
+          runOnJS(handleLongPressEnd)();
+        }),
+    [handleLongPressStart, handleLongPressEnd]
+  );
+
+  // Compose each zone's tap + long-press as exclusive (long-press cancels tap)
+  const leftZoneGesture = React.useMemo(
+    () => Gesture.Exclusive(longPressLeftGesture, tapLeftGesture),
+    [longPressLeftGesture, tapLeftGesture]
+  );
+  const rightZoneGesture = React.useMemo(
+    () => Gesture.Exclusive(longPressRightGesture, tapRightGesture),
+    [longPressRightGesture, tapRightGesture]
+  );
 
   const handleRemoveReaction = async () => {
     if (!activeFrame) return;
@@ -247,11 +770,36 @@ export default function PosterViewerScreen() {
     }
   };
 
+  const handleShare = () => {
+    haptic.light();
+    setShareVisible(true);
+  };
+
+  const handleCopyLink = async () => {
+    if (!activeStory) return;
+    haptic.light();
+    const url = `https://thryftverse.com/story/${activeStory.id}`;
+    try {
+      await Clipboard.setStringAsync(url);
+      show('Link copied', 'info');
+    } catch {
+      show('Could not copy link', 'error');
+    }
+  };
+
+  const handleRetryMedia = () => {
+    setMediaError(false);
+    // Force media components to remount by incrementing a key.
+    // This causes CachedImage/Video to re-fetch from the network.
+    setMediaRetryKey((k) => k + 1);
+    setProgress(0);
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#fff" />
+        <PosterViewerSkeleton />
       </View>
     );
   }
@@ -261,7 +809,15 @@ export default function PosterViewerScreen() {
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" />
         <Text style={styles.emptyText}>No stories available</Text>
-        <AnimatedPressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          style={styles.closeBtn}
+          scaleValue={0.97}
+          activeOpacity={0.85}
+          hapticFeedback="light"
+          accessibilityLabel="Close"
+          accessibilityHint="Closes the story viewer and returns to the previous screen"
+        >
           <Text style={styles.closeBtnText}>Close</Text>
         </AnimatedPressable>
       </View>
@@ -271,13 +827,22 @@ export default function PosterViewerScreen() {
   const creatorName = activeStory.creator.username ?? activeStory.creatorId;
   const minutesSincePosted = Math.max(1, Math.floor((Date.now() - new Date(activeStory.createdAt).getTime()) / (60 * 1000)));
   const postedTimeLabel = minutesSincePosted < 60 ? `${minutesSincePosted}m` : `${Math.floor(minutesSincePosted / 60)}h`;
+  // Expiration time — shows how long until the story expires (24h lifecycle).
+  const minutesUntilExpiry = Math.max(0, Math.floor((new Date(activeStory.expiresAt).getTime() - Date.now()) / (60 * 1000)));
+  const expiryLabel = minutesUntilExpiry < 60
+    ? `${minutesUntilExpiry}m left`
+    : `${Math.floor(minutesUntilExpiry / 60)}h left`;
   const isVideo = activeFrame.mediaType === 'video' || (activeFrame.mediaUrl && isVideoUrl(activeFrame.mediaUrl));
 
   return (
-    <View style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
+      <GestureDetector gesture={containerPanGesture}>
+        <View style={StyleSheet.absoluteFill}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Background — canonical composition or legacy media */}
+      {/* Background — canonical composition or legacy media.
+          Wrapped in a Reanimated.View for the 3D cube transition between stories. */}
+      <Reanimated.View style={[styles.mediaFull, cubeAnimatedStyle]}>
       {compositionDoc && compositionPage ? (
         <CreatorCanvas
           document={compositionDoc}
@@ -288,23 +853,30 @@ export default function PosterViewerScreen() {
         />
       ) : isVideo && activeFrame.mediaUrl ? (
         <Video
+          key={`video-${activeFrame.id}-${mediaRetryKey}`}
           source={{ uri: activeFrame.mediaUrl }}
           style={styles.mediaFull}
           shouldPlay={!isPaused}
-          isMuted={false}
+          isMuted={isMuted}
           isLooping={false}
           resizeMode="cover"
-          onError={() => setMediaError(true)}
+          onLoad={() => setIsBuffering(false)}
+          onError={() => { setMediaError(true); setIsBuffering(false); }}
         />
       ) : activeFrame.mediaUrl ? (
-        <CachedImage
-          uri={activeFrame.mediaUrl}
-          style={styles.mediaFull}
-          contentFit="cover"
-          priority="high"
-          containerStyle={StyleSheet.absoluteFill}
-          onError={() => setMediaError(true)}
-        />
+        <GestureDetector gesture={zoomComposedGesture}>
+          <Reanimated.View style={[styles.mediaFull, zoomAnimatedStyle]}>
+            <CachedImage
+              key={`img-${activeFrame.id}-${mediaRetryKey}`}
+              uri={activeFrame.mediaUrl}
+              style={styles.mediaFull}
+              contentFit="cover"
+              priority="high"
+              containerStyle={StyleSheet.absoluteFill}
+              onError={() => setMediaError(true)}
+            />
+          </Reanimated.View>
+        </GestureDetector>
       ) : (
         <View style={[styles.mediaFull, { backgroundColor: activeFrame.backgroundColor ?? '#1a1a1a' }]}>
           <Text
@@ -317,14 +889,57 @@ export default function PosterViewerScreen() {
           </Text>
         </View>
       )}
+      </Reanimated.View>
 
       <View style={styles.backdropOverlay} />
+
+      {/* Top gradient scrim — ensures progress bar, username, and close button
+          are always legible regardless of media content. Instagram pattern. */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.40)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0)']}
+        locations={[0, 0.5, 1]}
+        style={styles.topScrim}
+        pointerEvents="none"
+      />
 
       {mediaError && (
         <View style={styles.mediaErrorOverlay}>
           <Ionicons name="alert-circle-outline" size={48} color="#fff" />
           <Text style={styles.mediaErrorText}>Unable to load media</Text>
+          <AnimatedPressable
+            onPress={handleRetryMedia}
+            style={styles.retryBtn}
+            activeOpacity={0.8}
+            scaleValue={0.97}
+            hapticFeedback="light"
+            accessibilityLabel="Retry loading media"
+            accessibilityHint="Reloads the story media"
+          >
+            <Ionicons name="refresh-outline" size={18} color="#fff" />
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </AnimatedPressable>
         </View>
+      )}
+
+      {/* Pause indicator — subtle, appears only when paused by long-press */}
+      {isPaused && !mediaError && (
+        <View style={styles.pauseIndicator} pointerEvents="none">
+          <Ionicons name="pause" size={20} color="rgba(255,255,255,0.7)" />
+        </View>
+      )}
+
+      {/* Video buffering indicator — shows while video is loading/buffering.
+          Instagram pattern: progress bar pauses, subtle spinner shows. */}
+      {isBuffering && !mediaError && !isPaused && (
+        <View style={styles.bufferingIndicator} pointerEvents="none">
+          <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" />
+        </View>
+      )}
+
+      {/* Double-tap heart burst — Instagram core gesture.
+          Shows a floating heart at the tap location that scales up and fades. */}
+      {heartBurst && (
+        <HeartBurst key={heartBurst.id} x={heartBurst.x} y={heartBurst.y} reducedMotion={reducedMotion} />
       )}
 
       <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
@@ -334,38 +949,41 @@ export default function PosterViewerScreen() {
           currentIndex={frameIndex}
           progress={progress}
           isPaused={isPaused}
+          isLoading={isLoading}
+          reducedMotion={reducedMotion}
         />
 
-        {/* Story navigation dots if multiple stories */}
-        {stories.length > 1 && (
-          <View style={styles.storyDots}>
-            {stories.map((s, i) => (
-              <View
-                key={s.id}
-                style={[styles.storyDot, i === storyIndex && styles.storyDotActive]}
-              />
-            ))}
-          </View>
-        )}
-
-        {/* Tap zones for frame navigation */}
-        <View style={styles.tapLayer} pointerEvents="box-none">
-          <Pressable
-            style={styles.tapLeft}
-            onPress={goPrevFrame}
-            onPressIn={() => setIsPaused(true)}
-            onPressOut={() => setIsPaused(false)}
-            accessibilityLabel="Previous frame"
-            accessibilityRole="button"
-          />
-          <Pressable
-            style={styles.tapRight}
-            onPress={goNextFrame}
-            onPressIn={() => setIsPaused(true)}
-            onPressOut={() => setIsPaused(false)}
-            accessibilityLabel="Next frame"
-            accessibilityRole="button"
-          />
+        {/* Tap zones for frame navigation.
+            The tap layer is positioned between the top meta row and the
+            bottom footer using safe-area insets, so it never overlaps the
+            reply bar or the top controls. Long-press on either zone pauses
+            without advancing (the didLongPressRef flag prevents the tap
+            from firing after a hold). */}
+        <View
+          style={[
+            styles.tapLayer,
+            { top: insets.top + 52, bottom: insets.bottom + 72 },
+          ]}
+          pointerEvents="box-none"
+        >
+          <GestureDetector gesture={leftZoneGesture}>
+            <Reanimated.View
+              style={styles.tapLeft}
+              accessible
+              accessibilityLabel="Previous frame"
+              accessibilityRole="button"
+              accessibilityHint="Double-tap to go back, double-tap again to react with heart"
+            />
+          </GestureDetector>
+          <GestureDetector gesture={rightZoneGesture}>
+            <Reanimated.View
+              style={styles.tapRight}
+              accessible
+              accessibilityLabel="Next frame"
+              accessibilityRole="button"
+              accessibilityHint="Double-tap to go forward, double-tap again to react with heart"
+            />
+          </GestureDetector>
         </View>
 
         {/* Top meta row */}
@@ -374,14 +992,17 @@ export default function PosterViewerScreen() {
             style={styles.authorBtn}
             onPress={() => navigation.navigate('UserProfile', { userId: activeStory.creatorId })}
             activeOpacity={0.85}
+            scaleValue={0.97}
+            hapticFeedback="light"
             accessibilityLabel={`Open @${creatorName} profile`}
             accessibilityRole="button"
+            accessibilityHint="Opens the creator's profile"
           >
             {activeStory.creator.avatar ? (
               <CachedImage
                 uri={activeStory.creator.avatar}
                 style={styles.authorAvatar}
-                containerStyle={{ borderRadius: 14, overflow: 'hidden' }}
+                containerStyle={{ borderRadius: Radius.full, overflow: 'hidden' }}
                 contentFit="cover"
               />
             ) : (
@@ -390,35 +1011,66 @@ export default function PosterViewerScreen() {
               </View>
             )}
             <Text style={styles.authorName}>@{creatorName}</Text>
-            <Text style={styles.postedTime}>| {postedTimeLabel}</Text>
+            {activeStory.creator.isVerified && activeStory.creator.verificationTier && (
+              <VerificationBadge tier={activeStory.creator.verificationTier} compact />
+            )}
+            {activeStory.creator.isFollowing && (
+              <Text style={styles.followingBadge}>Following</Text>
+            )}
+            <Text style={styles.postedTime}>{'\u2022'} {postedTimeLabel}</Text>
+            <Text style={styles.expiryLabel}>{'\u2022'} {expiryLabel}</Text>
           </AnimatedPressable>
 
           <View style={styles.topControlRow}>
+            <AnimatedPressable
+              style={styles.topIconBtn}
+              onPress={handleCopyLink}
+              activeOpacity={0.85}
+              scaleValue={0.97}
+              hapticFeedback="light"
+              accessibilityLabel="Copy story link"
+              accessibilityRole="button"
+              accessibilityHint="Copies the story link to clipboard"
+            >
+              <Ionicons name="link-outline" size={20} color="#fff" />
+            </AnimatedPressable>
             {isOwner && (
               <>
                 <AnimatedPressable
                   style={styles.topIconBtn}
                   onPress={handleArchive}
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
+                  scaleValue={0.97}
+                  hapticFeedback="light"
                   accessibilityLabel="Archive story"
+                  accessibilityRole="button"
+                  accessibilityHint="Archives this story"
                 >
                   <Ionicons name="archive-outline" size={20} color="#fff" />
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.topIconBtn}
                   onPress={handleDelete}
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
+                  scaleValue={0.97}
+                  hapticFeedback="light"
                   accessibilityLabel="Delete story"
+                  accessibilityRole="button"
+                  accessibilityHint="Deletes this story permanently"
                 >
                   <Ionicons name="trash-outline" size={20} color="#fff" />
                 </AnimatedPressable>
               </>
             )}
             <AnimatedPressable
-              style={styles.closeBtnTop}
+              style={styles.topIconBtn}
               onPress={() => navigation.goBack()}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
+              scaleValue={0.97}
+              hapticFeedback="light"
               accessibilityLabel="Close viewer"
+              accessibilityRole="button"
+              accessibilityHint="Closes the story viewer and returns to the previous screen"
             >
               <Ionicons name="close" size={22} color="#fff" />
             </AnimatedPressable>
@@ -428,14 +1080,92 @@ export default function PosterViewerScreen() {
         {/* Stickers overlay — skipped when rendering canonical composition,
             since the composition canvas already includes all layers */}
         {!compositionDoc && activeFrame.stickers.length > 0 && (
-          <PosterStickerLayer
-            stickers={activeFrame.stickers}
-            containerWidth={SCREEN_WIDTH}
-            containerHeight={SCREEN_HEIGHT}
-          />
+          <>
+            <PosterStickerLayer
+              stickers={activeFrame.stickers}
+              containerWidth={SCREEN_WIDTH}
+              containerHeight={SCREEN_HEIGHT}
+            />
+            {/* Mention sticker tap targets — the PosterStickerLayer renders
+                stickers with pointerEvents="none" in view mode, so we overlay
+                transparent Pressables at mention sticker positions for
+                tap-to-view-profile functionality. */}
+            <View style={styles.mentionTapLayer} pointerEvents="box-none">
+              {activeFrame.stickers
+                .filter((s) => s.type === 'mention' && s.payload.userId)
+                .map((sticker) => (
+                  <Pressable
+                    key={sticker.id}
+                    style={[
+                      styles.mentionTapTarget,
+                      {
+                        left: sticker.x * SCREEN_WIDTH - 30,
+                        top: sticker.y * SCREEN_HEIGHT - 24,
+                      },
+                    ]}
+                    hitSlop={8}
+                    accessibilityLabel={`View @${sticker.payload.username}'s profile`}
+                    accessibilityRole="button"
+                    accessibilityHint="Opens the mentioned user's profile"
+                    onPress={() => {
+                      if (sticker.payload.userId) {
+                        haptic.light();
+                        navigation.navigate('UserProfile', { userId: sticker.payload.userId });
+                      }
+                    }}
+                  />
+                ))}
+            </View>
+          </>
+        )}
+
+        {/* Shoppable product tag hotspots — only for the current frame.
+            Coordinates are normalized (0–1) relative to the frame media. */}
+        {posterTags.length > 0 && (
+          <View style={styles.tagLayer} pointerEvents="box-none">
+            {posterTags.map((tag) => (
+              <View
+                key={tag.id}
+                style={[
+                  styles.tagHotspot,
+                  {
+                    left: tag.x * SCREEN_WIDTH,
+                    top: tag.y * SCREEN_HEIGHT,
+                  },
+                ]}
+              >
+                <Pressable
+                  hitSlop={12}
+                  accessibilityLabel={tag.label}
+                  accessibilityRole="button"
+                  accessibilityHint="View tagged product"
+                  onPress={() => handleTagPress(tag, activeStory, navigation, haptic, show)}
+                  style={({ pressed }) => [
+                    styles.tagDot,
+                    pressed && styles.tagDotPressed,
+                  ]}
+                >
+                  <View style={[styles.tagDotInner, { backgroundColor: colors.brand }]} />
+                </Pressable>
+                <View style={styles.tagLabelWrap}>
+                  <Text style={styles.tagLabelText} numberOfLines={1}>
+                    {tag.label}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
         )}
 
         {/* Caption — skipped when rendering canonical composition */}
+        {/* Bottom gradient fade — ensures the reply bar and caption are
+            readable over any media background. Instagram pattern. */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.85)']}
+          style={[styles.footerGradient, { bottom: 0 }]}
+          pointerEvents="none"
+        />
+
         <View style={[styles.viewerFooter, { bottom: insets.bottom }]} pointerEvents="box-none">
           {!compositionDoc && activeFrame.caption && activeFrame.mediaType !== 'text' && (
             <View style={styles.captionWrap}>
@@ -456,13 +1186,187 @@ export default function PosterViewerScreen() {
             onRemoveReaction={handleRemoveReaction}
             onReply={handleReply}
             isOwner={isOwner}
+            viewerCount={activeStory.uniqueViewerCount}
             onShowActivity={() => navigation.navigate('PosterStoryActivity', { storyId: activeStory.id })}
+            onShare={handleShare}
           />
         </View>
       </SafeAreaView>
+
+      <ShareSheet
+        visible={shareVisible}
+        onDismiss={() => setShareVisible(false)}
+        url={`https://thryftverse.com/story/${activeStory.id}`}
+        title={`@${creatorName}'s story`}
+        imageUri={activeFrame.mediaUrl || activeStory.creator.avatar || undefined}
+      />
+        </View>
+      </GestureDetector>
+    </GestureHandlerRootView>
+  );
+}
+
+// Extracted tag-press handler to keep the component body focused on render.
+function handleTagPress(
+  tag: PosterTag,
+  activeStory: PosterStory,
+  navigation: NativeStackNavigationProp<RootStackParamList>,
+  haptic: ReturnType<typeof useHaptic>,
+  show: (message: string, type?: 'info' | 'error' | 'success') => void,
+) {
+  haptic.selection();
+  recordPosterTagClick(activeStory.id, tag.id).catch(() => {});
+  if (tag.listingId) {
+    (navigation as unknown as { navigate: (route: string, params: Record<string, unknown>) => void })
+      .navigate('ItemDetail', { itemId: tag.listingId });
+  } else {
+    show('This product is no longer available', 'info');
+  }
+}
+
+// ── Heart burst particle component ─────────────────────────────────────
+// Reanimated-based particle burst: 12–22 heart emoji particles explode
+// outward with random velocity, gravity, rotation, scale, and fade.
+// Respects reducedMotion (single heart fade only).
+interface ParticleConfig {
+  id: number;
+  velX: number;
+  velY: number;
+  scale: number;
+  rotSpeed: number;
+}
+
+const GRAVITY = 980; // pts/sec²
+const LIFETIME_MS = 2500;
+const FADE_DELAY_MS = 1500;
+
+function HeartBurst({ x, y, reducedMotion }: { x: number; y: number; reducedMotion: boolean }) {
+  // Reduced motion: single heart that fades out — no particle physics.
+  if (reducedMotion) {
+    return <ReducedMotionHeart x={x} y={y} />;
+  }
+
+  // Generate 12–22 particles with random initial properties.
+  // Configs are generated once per burst (not per render).
+  const configs = React.useMemo<ParticleConfig[]>(() => {
+    const count = 12 + Math.floor(Math.random() * 11); // 12–22
+    return Array.from({ length: count }, (_, i) => ({
+      id: i,
+      velX: -200 + Math.random() * 400, // -200 to 200
+      velY: -(400 + Math.random() * 400), // 400–800 upward
+      scale: 0.6 + Math.random() * 0.6, // 0.6–1.2
+      rotSpeed: -3 + Math.random() * 6, // -3 to 3 rad/sec
+    }));
+  }, []);
+
+  return (
+    <View style={[heartBurstStyles.container, { left: x, top: y }]} pointerEvents="none">
+      {configs.map((cfg) => (
+        <ParticleHeart key={cfg.id} config={cfg} />
+      ))}
     </View>
   );
 }
+
+// Single particle heart — owns its shared values and physics animation.
+function ParticleHeart({ config }: { config: ParticleConfig }) {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const scale = useSharedValue(config.scale);
+  const rotation = useSharedValue(0);
+  const opacity = useSharedValue(1);
+
+  React.useEffect(() => {
+    // Horizontal: constant velocity decay
+    translateX.value = withTiming(config.velX * 0.8, {
+      duration: LIFETIME_MS,
+      easing: ReEasing.out(ReEasing.cubic),
+    });
+
+    // Vertical: initial upward, then gravity pulls down (two-phase)
+    translateY.value = withTiming(config.velY * 0.5, {
+      duration: 1200,
+      easing: ReEasing.out(ReEasing.cubic),
+    });
+    const gravityTimer = setTimeout(() => {
+      translateY.value = withTiming(GRAVITY * 0.3, {
+        duration: 1300,
+        easing: ReEasing.in(ReEasing.cubic),
+      });
+    }, 1200);
+
+    // Rotation: constant angular velocity
+    rotation.value = withTiming(config.rotSpeed, { duration: LIFETIME_MS });
+
+    // Fade out after 1.5s
+    const fadeTimer = setTimeout(() => {
+      opacity.value = withTiming(0, { duration: 1000 });
+    }, FADE_DELAY_MS);
+
+    return () => {
+      clearTimeout(gravityTimer);
+      clearTimeout(fadeTimer);
+    };
+  }, [config, translateX, translateY, rotation, opacity, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+      { rotate: `${rotation.value}rad` },
+    ],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Reanimated.Text style={[heartBurstStyles.particle, animatedStyle]} allowFontScaling={false}>
+      ❤️
+    </Reanimated.Text>
+  );
+}
+
+// Reduced-motion heart: single heart that scales up briefly and fades.
+function ReducedMotionHeart({ x, y }: { x: number; y: number }) {
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(0.8);
+
+  React.useEffect(() => {
+    scale.value = withTiming(1, { duration: 200 });
+    const timer = setTimeout(() => {
+      opacity.value = withTiming(0, { duration: 400 });
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [scale, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <View style={[heartBurstStyles.container, { left: x, top: y }]} pointerEvents="none">
+      <Reanimated.Text style={[heartBurstStyles.text, animatedStyle]} allowFontScaling={false}>
+        ❤️
+      </Reanimated.Text>
+    </View>
+  );
+}
+
+const heartBurstStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    transform: [{ translateX: -20 }, { translateY: -20 }],
+    zIndex: 30,
+  },
+  text: {
+    fontSize: 60,
+  },
+  particle: {
+    position: 'absolute',
+    fontSize: 28,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -484,8 +1388,10 @@ const styles = StyleSheet.create({
   closeBtn: {
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: Radius.full,
+    // Near-transparent chrome (Instagram/Snapchat pattern). Legibility
+    // comes from the top scrim + text shadows, not an opaque pill fill.
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   closeBtnText: {
     color: '#fff',
@@ -507,48 +1413,60 @@ const styles = StyleSheet.create({
   },
   backdropOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  // Top gradient scrim — ensures chrome legibility over any media content
+  topScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 140,
+    zIndex: 5,
   },
   overlay: {
     flex: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: Space.sm + Space.xs,
   },
-  storyDots: {
+  // Tap layer positioned between the top meta row and the bottom footer
+  // using safe-area insets. This replaces the fragile Space.xxl*10-40 math.
+  tapLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 4,
-    marginTop: 6,
+    zIndex: 5,
   },
-  storyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+  tapLeft: {
+    flex: 1,
   },
-  storyDotActive: {
-    backgroundColor: '#fff',
+  tapRight: {
+    flex: 1,
   },
   topMetaRow: {
-    marginTop: 10,
+    marginTop: Space.xs + 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: Space.xs + 2,
+    zIndex: 10,
   },
   authorBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    minHeight: 44,
-    borderRadius: 22,
-    paddingHorizontal: 10,
-    backgroundColor: 'rgba(0,0,0,0.32)',
-    gap: 8,
+    minHeight: Control.hit,
+    borderRadius: Radius.full,
+    paddingHorizontal: Space.xs + 2,
+    // Near-transparent chrome (Instagram/Snapchat pattern). The author
+    // name + posted time carry text shadows for legibility over media.
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    gap: Space.sm,
   },
   authorAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: Space.lg + 4,
+    height: Space.lg + 4,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -558,53 +1476,53 @@ const styles = StyleSheet.create({
   authorAvatarText: {
     color: '#fff',
     fontFamily: Typography.family.bold,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
   },
   authorName: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  followingBadge: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    overflow: 'hidden',
   },
   postedTime: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    marginLeft: 4,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  expiryLabel: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
   },
   topControlRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   topIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  closeBtnTop: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  tapLayer: {
-    position: 'absolute',
-    top: 120,
-    bottom: 120,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-  },
-  tapLeft: {
-    flex: 1,
-  },
-  tapRight: {
-    flex: 1,
+    // Near-transparent chrome (Instagram/Snapchat pattern). Icons rely
+    // on the top scrim for legibility rather than an opaque dark disc.
+    backgroundColor: 'rgba(0,0,0,0.08)',
   },
   viewerFooter: {
     position: 'absolute',
@@ -613,15 +1531,22 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   captionWrap: {
-    paddingBottom: 8,
+    paddingBottom: Space.sm,
     position: 'relative',
   },
   bottomGradient: {
     position: 'absolute',
-    left: -12,
-    right: -12,
-    bottom: -8,
-    height: 80,
+    left: -Space.sm - 4,
+    right: -Space.sm - 4,
+    bottom: -Space.xs - 4,
+    height: Space.xxl + Space.xxl + Space.xl - 8,
+  },
+  footerGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 180,
+    zIndex: 5,
   },
   captionText: {
     color: '#fff',
@@ -629,19 +1554,115 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
     textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
   },
   mediaErrorOverlay: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',
-    gap: 12,
+    gap: Space.sm + 4,
+    zIndex: 25,
   },
   mediaErrorText: {
     fontFamily: Typography.family.medium,
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     color: '#fff',
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md + 4,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  retryBtnText: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+  },
+  pauseIndicator: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -22,
+    marginTop: -22,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 15,
+  },
+  bufferingIndicator: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -16,
+    marginTop: -16,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 15,
+  },
+  tagLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 15,
+  },
+  mentionTapLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 16,
+  },
+  mentionTapTarget: {
+    position: 'absolute',
+    width: 60,
+    height: 48,
+    borderRadius: Radius.full,
+  },
+  tagHotspot: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  tagDot: {
+    width: Space.lg,
+    height: Space.lg,
+    borderRadius: Radius.full,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  tagDotPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.9 }],
+  },
+  tagDotInner: {
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.full,
+  },
+  tagLabelWrap: {
+    marginTop: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs - 1,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    maxWidth: 140,
+  },
+  tagLabelText: {
+    color: '#fff',
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: LetterSpacing.wide,
   },
 });

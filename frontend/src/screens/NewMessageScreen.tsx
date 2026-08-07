@@ -1,24 +1,27 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type, TypeStyles, Typography } from '../theme/designTokens';
+import { createDmConversationOnApi } from '../services/chatApi';
+import { getAvailableAgents, deployAgent, type ChatAgent } from '../services/chatAgentsApi';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Space, Radius, Type, TypeStyles, Typography, Control } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CachedImage } from '../components/CachedImage';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
+import { ChatAgentPicker } from '../components/chat/ChatAgentPicker';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
-type Props = StackScreenProps<RootStackParamList, 'NewMessage'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'NewMessage'>;
 
 interface ContactItem {
   userId: string;
@@ -31,10 +34,117 @@ interface ContactItem {
 }
 
 export default function NewMessageScreen({ navigation, route }: Props) {
+  const { colors, isDark } = useAppTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+    searchWrap: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.sm,
+    },
+    searchBar: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.full,
+      minHeight: Control.hit,
+    },
+    quickActions: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.md,
+      gap: Space.sm,
+    },
+    quickActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 2,
+      paddingVertical: Space.sm + 2,
+      paddingHorizontal: Space.sm + 2,
+      borderRadius: Radius.lg,
+      backgroundColor: colors.surfaceAlt,
+    },
+    quickActionIcon: {
+      width: Control.hit,
+      height: Control.hit,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    quickActionBody: {
+      flex: 1,
+      gap: Space.xs / 4,
+    },
+    quickActionBadge: {
+      minWidth: Space.sm + 4,
+      height: Space.sm + 4,
+      borderRadius: Radius.lg,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: Space.xs + 2,
+    },
+    quickActionBadgeText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textInverse,
+    },
+    searchingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+    sectionLabelWrap: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.xs,
+    },
+    listContent: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.xxl,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 6,
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      marginHorizontal: -Space.md,
+      borderRadius: Radius.lg,
+    },
+    contactAvatar: {
+      width: Space.xl + Space.xl + 4,
+      height: Space.xl + Space.xl + 4,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceAlt,
+      overflow: 'hidden',
+    },
+    contactAvatarImage: {
+      width: Space.xl + Space.xl + 4,
+      height: Space.xl + Space.xl + 4,
+      borderRadius: Radius.full,
+    },
+    contactAvatarText: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: TypeStyles.title.fontFamily,
+      color: colors.textPrimary,
+    },
+    rowBody: {
+      flex: 1,
+      gap: Space.xs / 2,
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginHorizontal: -Space.md,
+    },
+  }), [colors]);
+
   const { show } = useToast();
   const haptic = useHaptic();
 
   const conversations = useStore((state) => state.conversations);
+  const upsertConversation = useStore((state) => state.upsertConversation);
   const preselectedUserId = route.params?.preselectedUserId;
   const preselectedDisplayName = route.params?.preselectedDisplayName;
   const currentUser = useStore((state) => state.currentUser);
@@ -45,6 +155,50 @@ export default function NewMessageScreen({ navigation, route }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [remoteResults, setRemoteResults] = useState<UserSearchResult[]>([]);
   const [isSearchingRemote, setIsSearchingRemote] = useState(false);
+  const [agentPickerVisible, setAgentPickerVisible] = useState(false);
+  const availableAgents = useMemo(() => getAvailableAgents(), []);
+
+  // Start a direct chat with an AI agent. Creates a local demo conversation
+  // (AGENTS.md §11 — truthful: the agent is demo-mode, clearly labelled).
+  const handleStartAgentChat = useCallback((agent: ChatAgent) => {
+    haptic.light();
+    const conversationId = `agent_dm_${agent.id}`;
+    // Deploy the agent via the chatAgentsApi so ChatScreen picks it up
+    // and generates suggestions/responses for this conversation.
+    deployAgent(conversationId, agent.type);
+    const existing = conversations.find((c) => c.id === conversationId);
+    if (existing) {
+      navigation.navigate('Chat', { conversationId, partnerUserId: agent.id });
+      setAgentPickerVisible(false);
+      return;
+    }
+    const now = new Date().toISOString();
+    upsertConversation({
+      id: conversationId,
+      type: 'dm',
+      title: agent.name,
+      avatar: undefined,
+      participantIds: [currentUser?.id ?? 'me', agent.id],
+      participantProfiles: [
+        { id: agent.id, username: agent.name, displayName: agent.name },
+      ],
+      botIds: [agent.id],
+      lastMessage: `Chat with ${agent.name} — demo mode`,
+      lastMessageTime: now,
+      unread: false,
+      messages: [{
+        id: `agent_intro_${Date.now()}`,
+        senderId: agent.id,
+        text: `Hi! I'm ${agent.name}, your AI ${agent.type.replace('_', ' ')}. I'm running in demo mode — I can suggest replies and help with ${agent.capabilities.join(', ').toLowerCase()}. What can I help you with?`,
+        timestamp: now,
+        isRead: true,
+        botId: agent.id,
+        isDemo: true,
+      } as any],
+    });
+    navigation.navigate('Chat', { conversationId, partnerUserId: agent.id });
+    setAgentPickerVisible(false);
+  }, [conversations, currentUser?.id, haptic, navigation, upsertConversation]);
 
   const recentContacts = useMemo<ContactItem[]>(() => {
     const seen = new Set<string>();
@@ -144,21 +298,31 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       return;
     }
     if (preselectedDisplayName) {
-      show(`You don't have a conversation with ${preselectedDisplayName} yet. Message them from one of their listings to start one.`, 'info');
+      createDmConversationOnApi({ recipientUserId: preselectedUserId })
+        .then((conversation) => {
+          navigation.navigate('Chat', { conversationId: conversation.id, partnerUserId: preselectedUserId });
+        })
+        .catch(() => {
+          show(`Could not start a conversation with ${preselectedDisplayName}. Please try again.`, 'error');
+        });
     }
   }, [preselectedUserId, preselectedDisplayName, recentContacts, navigation, show]);
 
-  const handlePress = (contact: ContactItem) => {
+  const handlePress = async (contact: ContactItem) => {
     haptic.light();
     if (contact.conversationId) {
       navigation.navigate('Chat', { conversationId: contact.conversationId });
       return;
     }
-    // No backend DM creation endpoint exists — be honest.
-    show(
-      'Starting new chats requires backend support. Message from a listing for now.',
-      'info',
-    );
+    try {
+      const conversation = await createDmConversationOnApi({
+        recipientUserId: contact.userId,
+        itemId: contact.listingId,
+      });
+      navigation.navigate('Chat', { conversationId: conversation.id, partnerUserId: contact.userId });
+    } catch {
+      show('Could not start conversation. Please try again.', 'error');
+    }
   };
 
   const renderItem = ({ item }: { item: ContactItem }) => (
@@ -183,19 +347,19 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       <View style={styles.rowBody}>
         <BodyEmphasis numberOfLines={1}>{item.name}</BodyEmphasis>
         {item.listingTitle ? (
-          <Caption color={Colors.textMuted} numberOfLines={1}>
+          <Caption color={colors.textMuted} numberOfLines={1}>
             {item.listingTitle}
           </Caption>
         ) : item.isExisting ? (
-          <Caption color={Colors.textMuted}>Existing conversation</Caption>
+          <Caption color={colors.textMuted}>Existing conversation</Caption>
         ) : (
-          <Caption color={Colors.textMuted}>No conversation yet — message from a listing</Caption>
+          <Caption color={colors.textMuted}>No conversation yet — message from a listing</Caption>
         )}
       </View>
       <Ionicons
         name={item.isExisting ? 'chevron-forward' : 'pricetag-outline'}
         size={18}
-        color={Colors.textMuted}
+        color={colors.textMuted}
       />
     </AnimatedPressable>
   );
@@ -228,14 +392,38 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityHint="Create a new group conversation with multiple people"
             accessibilityRole="button"
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: Colors.brand + '14' }]}>
-              <Ionicons name="people-outline" size={20} color={Colors.brand} />
+            <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
+              <Ionicons name="people-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>
               <BodyEmphasis numberOfLines={1}>Start group chat</BodyEmphasis>
-              <Caption color={Colors.textMuted} numberOfLines={1}>Create a group with multiple people</Caption>
+              <Caption color={colors.textMuted} numberOfLines={1}>Create a group with multiple people</Caption>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </AnimatedPressable>
+
+          {/* Chat with AI assistant — deploy a demo AI agent into a direct chat */}
+          <AnimatedPressable
+            style={styles.quickActionRow}
+            onPress={() => {
+              haptic.light();
+              setAgentPickerVisible(true);
+            }}
+            activeOpacity={0.85}
+            scaleValue={0.98}
+            hapticFeedback="light"
+            accessibilityLabel="Chat with AI assistant"
+            accessibilityHint="Start a conversation with an AI shopping, styling, or negotiation assistant"
+            accessibilityRole="button"
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
+              <Ionicons name="sparkles-outline" size={20} color={colors.brand} />
+            </View>
+            <View style={styles.quickActionBody}>
+              <BodyEmphasis numberOfLines={1}>Chat with AI assistant</BodyEmphasis>
+              <Caption color={colors.textMuted} numberOfLines={1}>Shop Scout, Style Muse, Deal Maker & more</Caption>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
 
           {/* Message requests (only if there are any) */}
@@ -249,17 +437,17 @@ export default function NewMessageScreen({ navigation, route }: Props) {
               accessibilityLabel={`${messageRequests.length} message requests`}
               accessibilityRole="button"
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: Colors.surfaceAlt }]}>
-                <Ionicons name="mail-unread-outline" size={20} color={Colors.textSecondary} />
+              <View style={[styles.quickActionIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name="mail-unread-outline" size={20} color={colors.textSecondary} />
               </View>
               <View style={styles.quickActionBody}>
                 <BodyEmphasis numberOfLines={1}>Message requests</BodyEmphasis>
-                <Caption color={Colors.textMuted} numberOfLines={1}>{messageRequests.length} pending</Caption>
+                <Caption color={colors.textMuted} numberOfLines={1}>{messageRequests.length} pending</Caption>
               </View>
               <View style={styles.quickActionBadge}>
                 <Text style={styles.quickActionBadgeText}>{messageRequests.length}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </AnimatedPressable>
           )}
         </View>
@@ -268,8 +456,8 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       {/* Search loading indicator */}
       {isSearching && isSearchingRemote && (
         <View style={styles.searchingRow}>
-          <ActivityIndicator size="small" color={Colors.brand} />
-          <Caption color={Colors.textMuted}>Searching users…</Caption>
+          <ActivityIndicator size="small" color={colors.brand} />
+          <Caption color={colors.textMuted}>Searching users…</Caption>
         </View>
       )}
 
@@ -277,7 +465,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
         <View style={{ flex: 1 }}>
           {!isSearching && (
             <View style={styles.sectionLabelWrap}>
-              <Meta color={Colors.textMuted}>RECENT CONTACTS</Meta>
+              <Meta color={colors.textMuted}>RECENT CONTACTS</Meta>
             </View>
           )}
           {isSearching && !isSearchingRemote && filtered.length === 0 ? (
@@ -318,110 +506,14 @@ export default function NewMessageScreen({ navigation, route }: Props) {
           />
         ) : null
       )}
+
+      {/* AI Agent Picker — choose an AI assistant to start a direct chat with */}
+      <ChatAgentPicker
+        visible={agentPickerVisible}
+        onClose={() => setAgentPickerVisible(false)}
+        onDeploy={handleStartAgentChat}
+        deployedAgentIds={[]}
+      />
     </FlagshipScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  searchWrap: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-  },
-  searchBar: {
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.full,
-    minHeight: 44,
-  },
-  quickActions: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.md,
-    gap: Space.sm,
-  },
-  quickActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 2,
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.sm + 2,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickActionBody: {
-    flex: 1,
-    gap: 1,
-  },
-  quickActionBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.brand,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  quickActionBadgeText: {
-    fontSize: 11,
-    fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
-  },
-  searchingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  sectionLabelWrap: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xs,
-  },
-  listContent: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xxl,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 6,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    marginHorizontal: -Space.md,
-    borderRadius: Radius.lg,
-  },
-  contactAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.surfaceAlt,
-    overflow: 'hidden',
-  },
-  contactAvatarImage: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.full,
-  },
-  contactAvatarText: {
-    fontSize: 15,
-    fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
-  },
-  rowBody: {
-    flex: 1,
-    gap: 2,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginHorizontal: -Space.md,
-  },
-});

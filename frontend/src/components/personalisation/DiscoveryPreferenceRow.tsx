@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Type } from '../../theme/designTokens';
 
 interface DiscoveryPreferenceRowProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -21,6 +21,9 @@ export function DiscoveryPreferenceRow({
   onPress,
   isLast,
 }: DiscoveryPreferenceRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Pressable
       style={styles.row}
@@ -29,19 +32,19 @@ export function DiscoveryPreferenceRow({
       accessibilityRole="button"
       accessibilityLabel={`${title}. Current value: ${value}. ${explanation}`}
     >
-      <Ionicons name={icon} size={20} color={Colors.textSecondary} />
+      <Ionicons name={icon} size={20} color={colors.textSecondary} />
       <View style={styles.content}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.explanation} numberOfLines={1}>{explanation}</Text>
       </View>
       <Text style={styles.value} numberOfLines={1}>{value}</Text>
-      <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       {!isLast && <View style={styles.separator} />}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -51,22 +54,22 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   title: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   explanation: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   value: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     maxWidth: 120,
   },
   separator: {
@@ -75,6 +78,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -6,6 +6,7 @@ import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useStore } from '../../store/useStore';
 import { haptics } from '../../utils/haptics';
+import { requestPushPermissionOnce } from '../../lib/pushPermission';
 
 export interface CoOwnWatchButtonProps {
   assetId: string;
@@ -16,11 +17,22 @@ export function CoOwnWatchButton({ assetId, assetTitle }: CoOwnWatchButtonProps)
   const { colors } = useAppTheme();
   const isWatched = useStore((s) => s.coOwnWatchlist.includes(assetId));
   const toggleCoOwnWatch = useStore((s) => s.toggleCoOwnWatch);
+  // Per App Store / Google Play 2026 guidelines, push permission is requested
+  // only after a meaningful user action — here, after the user watches a
+  // Co-Own asset for the first time.
+  const pushAskedRef = useRef(false);
 
   const handlePress = useCallback(() => {
     haptics.tap();
+    const willWatch = !isWatched;
     toggleCoOwnWatch(assetId);
-  }, [assetId, toggleCoOwnWatch]);
+    // Contextual push permission prompt — ask once after the user adds a
+    // Co-Own asset to their watchlist. Best-effort; never blocks the flow.
+    if (willWatch && !pushAskedRef.current) {
+      pushAskedRef.current = true;
+      requestPushPermissionOnce('favorite').catch(() => undefined);
+    }
+  }, [assetId, isWatched, toggleCoOwnWatch]);
 
   return (
     <AnimatedPressable
@@ -81,7 +93,7 @@ const styles = StyleSheet.create({
   notificationDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     marginLeft: 2,
   },
 });

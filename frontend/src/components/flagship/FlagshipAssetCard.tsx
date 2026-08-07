@@ -2,9 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface FlagshipAssetCardProps {
   imageUri?: string | null;
@@ -31,20 +32,23 @@ export function FlagshipAssetCard({
   actionLabel,
   index = 0,
 }: FlagshipAssetCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const ownershipPct = totalUnits > 0 ? Math.round((yourUnits / totalUnits) * 100) : 0;
+  const reducedMotion = useReducedMotion();
 
   const statusColor =
-    status === 'active' ? Colors.success : status === 'pending' ? Colors.textSecondary : status === 'sold' ? Colors.textMuted : Colors.textSecondary;
+    status === 'active' ? colors.success : status === 'pending' ? colors.textSecondary : status === 'sold' ? colors.textMuted : colors.textSecondary;
 
   return (
-    <Reanimated.View entering={FadeInDown.delay(index * 50).duration(350)}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(index * 50).duration(350)}>
       <Pressable onPress={onPress} style={styles.root}>
         <View style={styles.imageWrap}>
           {imageUri ? (
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
           ) : (
             <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="image-outline" size={28} color={Colors.textMuted} />
+              <Ionicons name="image-outline" size={28} color={colors.textMuted} />
             </View>
           )}
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -65,7 +69,7 @@ export function FlagshipAssetCard({
               <View
                 style={[
                   styles.ownershipBarFill,
-                  { width: `${Math.min(ownershipPct, 100)}%`, backgroundColor: status === 'active' ? Colors.brand : statusColor },
+                  { width: `${Math.min(ownershipPct, 100)}%`, backgroundColor: status === 'active' ? colors.brand : statusColor },
                 ]}
               />
             </View>
@@ -87,24 +91,24 @@ export function FlagshipAssetCard({
 
 const IMAGE_SIZE = 80;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.sm,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   imageWrap: {
     width: IMAGE_SIZE,
     height: IMAGE_SIZE,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     position: 'relative',
   },
   image: {
@@ -121,9 +125,9 @@ const styles = StyleSheet.create({
     right: 6,
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.sm,
     borderWidth: 2,
-    borderColor: Colors.surface,
+    borderColor: colors.surface,
   },
   content: {
     flex: 1,
@@ -134,7 +138,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: Type.body.size,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 20,
   },
   priceRow: {
@@ -145,13 +149,13 @@ const styles = StyleSheet.create({
   unitPrice: {
     fontSize: Type.price.size,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   perUnit: {
     fontSize: Type.caption.size,
     fontWeight: '400',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   ownershipRow: {
     marginTop: 2,
@@ -159,18 +163,18 @@ const styles = StyleSheet.create({
   },
   ownershipBarBg: {
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   ownershipBarFill: {
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   ownershipText: {
     fontSize: Type.meta.size,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   actionBtn: {
     marginLeft: Space.sm,
@@ -178,13 +182,13 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingVertical: 10,
     borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionLabel: {
     fontSize: Type.meta.size,
     fontWeight: '600',
-    color: Colors.background,
+    color: colors.background,
   },
 });

@@ -163,18 +163,18 @@ const styles = StyleSheet.create({
   // Seam row — begins at canvas boundary, minHeight reserves avatar overlap
   skeletonSeamRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Space.xs },
   skeletonSeamStats: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
-  skeletonSeamStat: { width: 40, height: 36, borderRadius: 4, backgroundColor: SURFACE_ALT },
+  skeletonSeamStat: { width: 40, height: 36, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
   // Identity — full-width
-  skeletonName: { width: 180, height: 20, borderRadius: 4, backgroundColor: SURFACE_ALT, marginBottom: 6 },
-  skeletonHandle: { width: 120, height: 14, borderRadius: 4, backgroundColor: SURFACE_ALT, marginBottom: Space.sm },
-  skeletonBioLine: { width: '100%', height: 14, borderRadius: 4, backgroundColor: SURFACE_ALT, marginBottom: 4 },
-  skeletonBioLineShort: { width: '60%', height: 14, borderRadius: 4, backgroundColor: SURFACE_ALT, marginBottom: Space.xs },
+  skeletonName: { width: 180, height: 20, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: 6 },
+  skeletonHandle: { width: 120, height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.sm },
+  skeletonBioLine: { width: '100%', height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.xs },
+  skeletonBioLineShort: { width: '60%', height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.xs },
   // Trust line
-  skeletonTrustLine: { width: 160, height: 13, borderRadius: 4, backgroundColor: SURFACE_ALT, marginBottom: Space.sm },
+  skeletonTrustLine: { width: 160, height: 13, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT, marginBottom: Space.sm },
   // Actions — flat 11pt radius
   skeletonActionRow: { flexDirection: 'row', gap: 8, marginBottom: Space.sm },
-  skeletonActionPrimary: { flex: 1, height: 44, borderRadius: 11, backgroundColor: SURFACE_ALT },
-  skeletonActionSecondary: { width: 44, height: 44, borderRadius: 11, backgroundColor: SURFACE_ALT },
+  skeletonActionPrimary: { flex: 1, height: 44, borderRadius: Radius.lg, backgroundColor: SURFACE_ALT },
+  skeletonActionSecondary: { width: 44, height: 44, borderRadius: Radius.lg, backgroundColor: SURFACE_ALT },
   // Tab rail
   skeletonTabRail: { height: 44, backgroundColor: SURFACE_ALT, marginBottom: Space.md },
   // Shop grid — 4:5 tiles
@@ -182,16 +182,16 @@ const styles = StyleSheet.create({
   skeletonCard: { borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
   // Looks grid — 3-column portrait
   skeletonLookGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: LOOK_GAP },
-  skeletonLookCard: { borderRadius: 2, backgroundColor: SURFACE_ALT },
+  skeletonLookCard: { borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
   // Reviews
   skeletonReviews: { gap: Space.sm },
   skeletonReviewSummary: { flexDirection: 'row', gap: Space.md, paddingVertical: Space.md },
-  skeletonReviewAvg: { width: 60, height: 60, borderRadius: 4, backgroundColor: SURFACE_ALT },
+  skeletonReviewAvg: { width: 60, height: 60, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
   skeletonReviewDist: { flex: 1, gap: 4 },
-  skeletonDistRow: { height: 8, borderRadius: 4, backgroundColor: SURFACE_ALT },
+  skeletonDistRow: { height: 8, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
   skeletonReviewRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
-  skeletonReviewAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: SURFACE_ALT },
+  skeletonReviewAvatar: { width: 36, height: 36, borderRadius: Radius.full, backgroundColor: SURFACE_ALT },
   skeletonReviewIdentity: { flex: 1, gap: 4 },
-  skeletonReviewName: { width: 120, height: 14, borderRadius: 4, backgroundColor: SURFACE_ALT },
-  skeletonReviewDate: { width: 80, height: 12, borderRadius: 4, backgroundColor: SURFACE_ALT },
+  skeletonReviewName: { width: 120, height: 14, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
+  skeletonReviewDate: { width: 80, height: 12, borderRadius: Radius.sm, backgroundColor: SURFACE_ALT },
 });

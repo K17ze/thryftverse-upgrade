@@ -2,7 +2,6 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Space, Radius, Elevation } from '../../theme/designTokens';
 import { AppButton, AppButtonVariant, AppButtonSize } from '../ui/AppButton';
-import { Colors } from '../../constants/colors';
 
 export interface ActionItem {
   label: string;

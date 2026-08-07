@@ -1,7 +1,8 @@
 import { Queue, Worker } from 'bullmq';
 import { Redis as IORedis } from 'ioredis';
 import { config } from '../config.js';
-import { recordBackgroundJob } from './metrics.js';
+import { recordBackgroundJob, recordBackgroundJobDuration } from './metrics.js';
+import { logger } from './logger.js';
 
 export interface PushJobData {
   eventId: string;
@@ -35,11 +36,16 @@ export interface ReconciliationJobData {
   runDate?: string;
 }
 
+export interface OutboxDrainJobData {
+  reason: 'scheduled' | 'after_commit' | 'manual';
+}
+
 type InfraJobData =
   | AuctionSweepJobData
   | OnezeWithdrawalExecuteJobData
   | OnezeMintReserveJobData
-  | ReconciliationJobData;
+  | ReconciliationJobData
+  | OutboxDrainJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
@@ -47,16 +53,52 @@ interface QueueHandlers {
   handleOnezeWithdrawalExecuteJob: (job: OnezeWithdrawalExecuteJobData) => Promise<void>;
   handleOnezeMintReserveJob: (job: OnezeMintReserveJobData) => Promise<void>;
   handleReconciliationJob: (job: ReconciliationJobData) => Promise<void>;
+  handleOutboxDrainJob: (job: OutboxDrainJobData) => Promise<void>;
+}
+
+export interface BackgroundJobLogger {
+  info: (obj: Record<string, unknown>, msg?: string) => void;
+  error: (obj: Record<string, unknown>, msg?: string) => void;
+  warn: (obj: Record<string, unknown>, msg?: string) => void;
+}
+
+let workerLogger: BackgroundJobLogger | null = null;
+
+function logJobEvent(
+  level: 'info' | 'error' | 'warn',
+  obj: Record<string, unknown>,
+  msg?: string,
+): void {
+  if (workerLogger) {
+    workerLogger[level](obj, msg);
+  } else {
+    const payload = msg ? { ...obj, msg } : obj;
+    if (level === 'error') {
+      logger.error(payload, '[queues]');
+    } else if (level === 'warn') {
+      logger.warn(payload, '[queues]');
+    } else {
+      logger.info(payload, '[queues]');
+    }
+  }
 }
 
 const queueConnection = new IORedis(config.redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
+  retryStrategy: (times) => Math.min(times * 500, 5000),
+});
+queueConnection.on('error', (err) => {
+  logger.warn({ err: err.message }, '[queues] queueConnection redis error');
 });
 
 const workerConnection = new IORedis(config.redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
+  retryStrategy: (times) => Math.min(times * 500, 5000),
+});
+workerConnection.on('error', (err) => {
+  logger.warn({ err: err.message }, '[queues] workerConnection redis error');
 });
 
 const PUSH_QUEUE_NAME = 'push_notifications';
@@ -73,24 +115,47 @@ const infraQueue = new Queue<InfraJobData>(INFRA_QUEUE_NAME, {
 let pushWorker: Worker<PushJobData> | null = null;
 let infraWorker: Worker<InfraJobData> | null = null;
 
-export function startBackgroundWorkers(handlers: QueueHandlers): void {
+export function startBackgroundWorkers(
+  handlers: QueueHandlers,
+  logger?: BackgroundJobLogger,
+): void {
+  if (logger) {
+    workerLogger = logger;
+  }
+
   if (!pushWorker) {
     pushWorker = new Worker<PushJobData>(
       PUSH_QUEUE_NAME,
       async (job) => {
+        const jobStart = Date.now();
+        logJobEvent('info', { queue: PUSH_QUEUE_NAME, job: job.name, jobId: job.id }, 'background_job_started');
         try {
           await handlers.handlePushJob(job.data);
+          const durationMs = Date.now() - jobStart;
           recordBackgroundJob({
             queue: PUSH_QUEUE_NAME,
             job: job.name,
             result: 'completed',
           });
+          recordBackgroundJobDuration({
+            queue: PUSH_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('info', { queue: PUSH_QUEUE_NAME, job: job.name, jobId: job.id, durationMs }, 'background_job_completed');
         } catch (error) {
+          const durationMs = Date.now() - jobStart;
           recordBackgroundJob({
             queue: PUSH_QUEUE_NAME,
             job: job.name,
             result: 'failed',
           });
+          recordBackgroundJobDuration({
+            queue: PUSH_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('error', { queue: PUSH_QUEUE_NAME, job: job.name, jobId: job.id, durationMs, err: error }, 'background_job_failed');
           throw error;
         }
       },
@@ -99,12 +164,17 @@ export function startBackgroundWorkers(handlers: QueueHandlers): void {
         concurrency: 6,
       }
     );
+    pushWorker.on('error', (err) => {
+      logJobEvent('warn', { err: err.message }, 'pushWorker error');
+    });
   }
 
   if (!infraWorker) {
     infraWorker = new Worker<InfraJobData>(
       INFRA_QUEUE_NAME,
       async (job) => {
+        const jobStart = Date.now();
+        logJobEvent('info', { queue: INFRA_QUEUE_NAME, job: job.name, jobId: job.id }, 'background_job_started');
         try {
           if (job.name === 'auction_sweep') {
             await handlers.handleAuctionSweepJob(job.data as AuctionSweepJobData);
@@ -114,19 +184,35 @@ export function startBackgroundWorkers(handlers: QueueHandlers): void {
             await handlers.handleOnezeMintReserveJob(job.data as OnezeMintReserveJobData);
           } else if (job.name === 'reconciliation_run') {
             await handlers.handleReconciliationJob(job.data as ReconciliationJobData);
+          } else if (job.name === 'domain_outbox_drain') {
+            await handlers.handleOutboxDrainJob(job.data as OutboxDrainJobData);
           }
 
+          const durationMs = Date.now() - jobStart;
           recordBackgroundJob({
             queue: INFRA_QUEUE_NAME,
             job: job.name,
             result: 'completed',
           });
+          recordBackgroundJobDuration({
+            queue: INFRA_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('info', { queue: INFRA_QUEUE_NAME, job: job.name, jobId: job.id, durationMs }, 'background_job_completed');
         } catch (error) {
+          const durationMs = Date.now() - jobStart;
           recordBackgroundJob({
             queue: INFRA_QUEUE_NAME,
             job: job.name,
             result: 'failed',
           });
+          recordBackgroundJobDuration({
+            queue: INFRA_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('error', { queue: INFRA_QUEUE_NAME, job: job.name, jobId: job.id, durationMs, err: error }, 'background_job_failed');
           throw error;
         }
       },
@@ -135,11 +221,15 @@ export function startBackgroundWorkers(handlers: QueueHandlers): void {
         concurrency: 1,
       }
     );
+    infraWorker.on('error', (err) => {
+      logJobEvent('warn', { err: err.message }, 'infraWorker error');
+    });
   }
 }
 
 export async function enqueuePushNotificationJob(input: PushJobData): Promise<void> {
   await pushQueue.add('push_send', input, {
+    jobId: `push_${input.eventId}`,
     attempts: 4,
     backoff: {
       type: 'exponential',
@@ -212,6 +302,26 @@ export async function enqueueReconciliationJob(input: ReconciliationJobData): Pr
       removeOnComplete: true,
       removeOnFail: 100,
     }
+  );
+}
+
+export async function enqueueOutboxDrainJob(
+  reason: OutboxDrainJobData['reason'] = 'scheduled',
+): Promise<void> {
+  const timeBucket = Math.floor(Date.now() / 2_000);
+  await infraQueue.add(
+    'domain_outbox_drain',
+    { reason },
+    {
+      jobId: `domain_outbox_drain_${timeBucket}`,
+      attempts: 5,
+      backoff: {
+        type: 'exponential',
+        delay: 1_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 200,
+    },
   );
 }
 

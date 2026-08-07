@@ -9,17 +9,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { Typography, Space } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke, Control } from '../theme/designTokens';
 
-type Props = StackScreenProps<RootStackParamList, 'SavedSearches'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'SavedSearches'>;
 
 type FilterTab = 'all' | 'new';
 
@@ -35,7 +34,7 @@ function relativeTime(isoTs?: string): string | null {
 }
 
 export default function SavedSearchesScreen({ navigation }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const savedSearches = useStore((s) => s.savedSearches);
   const removeSavedSearch = useStore((s) => s.removeSavedSearch);
   const toggleSavedSearchAlerts = useStore((s) => s.toggleSavedSearchAlerts);
@@ -85,17 +84,190 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     navigation.navigate('GlobalSearch');
   };
 
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.sm + 4,
+      paddingVertical: Space.xs + 2,
+    },
+    backBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    markSeenBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+    },
+    tabRow: {
+      flexDirection: 'row',
+      gap: Space.sm,
+      marginBottom: Space.sm,
+    },
+    tab: {
+      flex: 1,
+      paddingVertical: Space.xs + 1,
+      paddingHorizontal: Space.sm + 4,
+      borderRadius: Radius.lg,
+      backgroundColor: colors.surface,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
+      alignItems: 'center',
+    },
+    tabActive: {
+      backgroundColor: `${colors.brand}12`,
+      borderColor: colors.brand,
+    },
+    tabText: {
+      fontSize: Type.captionElevated.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+    },
+    tabTextActive: {
+      color: colors.brand,
+      fontFamily: Typography.family.semibold,
+    },
+    noNewWrap: {
+      alignItems: 'center',
+      gap: Space.xs + 2,
+      paddingVertical: Space.xl + Space.xl - 8,
+    },
+    noNewText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+    listWrap: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+    },
+    sectionHint: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      marginBottom: Space.md,
+      letterSpacing: 0.2,
+    },
+    searchCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.sm + 4,
+      paddingHorizontal: Space.sm + 2,
+      borderRadius: Radius.xl,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      marginBottom: Space.sm,
+    },
+    searchMain: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 4,
+    },
+    searchIconWrap: {
+      width: Space.xl + 6,
+      height: Space.xl + 6,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    searchIconWrapInactive: {
+      opacity: 0.6,
+    },
+    searchTextWrap: {
+      flex: 1,
+      gap: Space.xs / 2 + 1,
+    },
+    searchQuery: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      flexShrink: 1,
+    },
+    searchQueryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs + 2,
+    },
+    newBadge: {
+      backgroundColor: `${colors.brand}15`,
+      borderRadius: Radius.lg,
+      paddingHorizontal: Space.xs + 3,
+      paddingVertical: Space.xs / 2,
+      flexShrink: 0,
+    },
+    newBadgeText: {
+      fontSize: Type.meta.size - 1,
+      fontFamily: Typography.family.semibold,
+      color: colors.brand,
+      letterSpacing: 0.2,
+    },
+    newMatchesBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      backgroundColor: `${colors.brand}10`,
+      borderRadius: Radius.lg,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs + 2,
+      marginBottom: Space.sm + 2,
+    },
+    newMatchesText: {
+      flex: 1,
+      fontSize: Type.captionElevated.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.brand,
+    },
+    searchMeta: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+    },
+    searchActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    actionBtn: {
+      width: Space.xl + Space.xs + 4,
+      height: Space.xl + Space.xs + 4,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  }), [colors]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
+        backgroundColor={colors.background}
       />
 
       {/* Header */}
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
         <Text style={styles.headerTitle}>Saved Searches</Text>
         {totalNewMatches > 0 ? (
@@ -105,7 +277,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
             accessibilityLabel="Mark all saved searches as seen"
             accessibilityRole="button"
           >
-            <Ionicons name="checkmark-done" size={20} color={Colors.brand} />
+            <Ionicons name="checkmark-done" size={20} color={colors.brand} />
           </AnimatedPressable>
         ) : (
           <View style={styles.backBtn} />
@@ -158,7 +330,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
 
             {totalNewMatches > 0 && (
               <View style={styles.newMatchesBanner}>
-                <Ionicons name="sparkles" size={16} color={Colors.brand} />
+                <Ionicons name="sparkles" size={16} color={colors.brand} />
                 <Text style={styles.newMatchesText}>
                   {totalNewMatches} new {totalNewMatches === 1 ? 'match' : 'matches'} across your saved searches
                 </Text>
@@ -167,7 +339,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
 
             {filteredSearches.length === 0 ? (
               <View style={styles.noNewWrap}>
-                <Ionicons name="checkmark-circle-outline" size={28} color={Colors.textMuted} />
+                <Ionicons name="checkmark-circle-outline" size={28} color={colors.textMuted} />
                 <Text style={styles.noNewText}>All caught up — no new matches right now</Text>
               </View>
             ) : filteredSearches.map((search) => {
@@ -188,7 +360,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                       <Ionicons
                         name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
                         size={18}
-                        color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
+                        color={search.alertsEnabled ? colors.brand : colors.textMuted}
                       />
                     </View>
                     <View style={styles.searchTextWrap}>
@@ -220,7 +392,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                       <Ionicons
                         name={search.alertsEnabled ? 'notifications' : 'notifications-off-outline'}
                         size={20}
-                        color={search.alertsEnabled ? Colors.brand : Colors.textMuted}
+                        color={search.alertsEnabled ? colors.brand : colors.textMuted}
                       />
                     </AnimatedPressable>
                     <AnimatedPressable
@@ -229,7 +401,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                       accessibilityLabel="Remove saved search"
                       accessibilityRole="button"
                     >
-                      <Ionicons name="trash-outline" size={18} color={Colors.danger} />
+                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
                     </AnimatedPressable>
                   </View>
                 </View>
@@ -241,176 +413,3 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  markSeenBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: Space.sm,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-  },
-  tabActive: {
-    backgroundColor: `${Colors.brand}12`,
-    borderColor: Colors.brand,
-  },
-  tabText: {
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-  tabTextActive: {
-    color: Colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
-  noNewWrap: {
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 40,
-  },
-  noNewText: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
-  },
-  listWrap: {
-    paddingHorizontal: 16,
-    paddingTop: Space.sm,
-  },
-  sectionHint: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginBottom: Space.md,
-    letterSpacing: 0.2,
-  },
-  searchCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    marginBottom: 8,
-  },
-  searchMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  searchIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchIconWrapInactive: {
-    opacity: 0.6,
-  },
-  searchTextWrap: {
-    flex: 1,
-    gap: 3,
-  },
-  searchQuery: {
-    fontSize: 15,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    flexShrink: 1,
-  },
-  searchQueryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  newBadge: {
-    backgroundColor: `${Colors.brand}15`,
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    flexShrink: 0,
-  },
-  newBadgeText: {
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-    letterSpacing: 0.2,
-  },
-  newMatchesBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: `${Colors.brand}10`,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: Space.sm + 2,
-  },
-  newMatchesText: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: Typography.family.semibold,
-    color: Colors.brand,
-  },
-  searchMeta: {
-    fontSize: 11,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-  searchActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

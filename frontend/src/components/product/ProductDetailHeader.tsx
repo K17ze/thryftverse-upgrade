@@ -7,9 +7,10 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface ProductDetailHeaderProps {
   brand?: string;
@@ -34,9 +35,15 @@ export function ProductDetailHeader({
   isFav,
   onToggleFav,
 }: ProductDetailHeaderProps) {
+  const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
 
   const containerStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { opacity: 1, transform: [{ translateY: 0 }] };
+    }
     const threshold = heroHeight - 60;
     const opacity = interpolate(
       scrollY.value,
@@ -68,7 +75,7 @@ export function ProductDetailHeader({
             <Ionicons
               name="arrow-back"
               size={22}
-              color={Colors.textPrimary}
+              color={colors.textPrimary}
               onPress={onBack}
               accessibilityLabel="Go back"
               accessibilityRole="button"
@@ -91,7 +98,7 @@ export function ProductDetailHeader({
             <Ionicons
               name="share-outline"
               size={20}
-              color={Colors.textPrimary}
+              color={colors.textPrimary}
               onPress={onShare}
               accessibilityLabel="Share"
               accessibilityRole="button"
@@ -101,7 +108,7 @@ export function ProductDetailHeader({
             <Ionicons
               name={isFav ? 'heart' : 'heart-outline'}
               size={20}
-              color={isFav ? Colors.danger : Colors.textPrimary}
+              color={isFav ? colors.danger : colors.textPrimary}
               onPress={onToggleFav}
               accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
               accessibilityRole="button"
@@ -117,15 +124,16 @@ export function ProductDetailHeader({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     zIndex: 50,
@@ -149,7 +157,7 @@ const styles = StyleSheet.create({
   iconBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -157,22 +165,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   brand: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.3,
   },
   title: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   priceRow: {
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   price: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+  });
+}

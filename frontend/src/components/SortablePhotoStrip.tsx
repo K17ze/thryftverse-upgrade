@@ -1,22 +1,24 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Image, Dimensions, Text } from 'react-native';
+import { View, StyleSheet, Dimensions, Text } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   useAnimatedReaction,
   runOnJS,
   withTiming,
   SharedValue,
+  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from './AnimatedPressable';
 import { isVideoUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = 80;
@@ -42,6 +44,9 @@ interface Props {
 
 export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, renderItem, showAddButton = true, reorderEnabled = true }: Props) {
   const ids = itemIds ?? photos;
+  const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       <Reanimated.ScrollView
@@ -62,6 +67,7 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
               onReorder={onReorder}
               renderItem={renderItem}
               reorderEnabled={reorderEnabled}
+              reducedMotion={reducedMotion}
             />
           ))}
           {/* Add more button */}
@@ -76,7 +82,7 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
               accessibilityRole="button"
               accessibilityLabel="Add more photos"
             >
-              <Ionicons name="add" size={28} color={Colors.background} />
+              <Ionicons name="add" size={28} color={colors.background} />
             </AnimatedPressable>
           )}
         </View>
@@ -98,10 +104,13 @@ interface ItemProps {
   onReorder: (newOrder: string[]) => void;
   renderItem?: (index: number) => React.ReactNode;
   reorderEnabled?: boolean;
+  reducedMotion?: boolean;
 }
 
-function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem, reorderEnabled = true }: ItemProps) {
+function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem, reorderEnabled = true, reducedMotion = false }: ItemProps) {
   const isVideo = isVideoUri(id);
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isDragging = useSharedValue(false);
   const position = useSharedValue(index * TOTAL_SIZE);
   const zIndex = useSharedValue(0);
@@ -112,10 +121,10 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     () => index,
     (currIndex) => {
       if (!isDragging.value) {
-        position.value = withSpring(currIndex * TOTAL_SIZE, { damping: 20, stiffness: 200 });
+        position.value = withTiming(currIndex * TOTAL_SIZE, { duration: reducedMotion ? 0 : 200, easing: Easing.out(Easing.cubic) });
       }
     },
-    [index]
+    [index, reducedMotion]
   );
 
   const panGesture = Gesture.Pan()
@@ -130,7 +139,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     .onEnd((e) => {
       const newIndex = Math.max(0, Math.min(total - 1, Math.round(position.value / TOTAL_SIZE)));
       isDragging.value = false;
-      position.value = withSpring(newIndex * TOTAL_SIZE, { damping: 20, stiffness: 200 }, () => {
+      position.value = withTiming(newIndex * TOTAL_SIZE, { duration: reducedMotion ? 0 : 200, easing: Easing.out(Easing.cubic) }, () => {
         zIndex.value = 0;
       });
 
@@ -151,9 +160,9 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
       zIndex: zIndex.value,
       transform: [
         { translateX: position.value },
-        { scale: withSpring(isDragging.value ? 1.05 : 1) }
+        { scale: withTiming(isDragging.value ? 1.05 : 1, { duration: reducedMotion ? 0 : 120 }) }
       ],
-      shadowOpacity: withTiming(isDragging.value ? 0.3 : 0),
+      shadowOpacity: withTiming(isDragging.value ? 0.3 : 0, { duration: reducedMotion ? 0 : 120 }),
     };
   });
 
@@ -200,7 +209,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
                 isLooping={false}
               />
             ) : (
-              <Image source={{ uri: id }} style={styles.image} />
+              <ExpoImage source={{ uri: id }} style={styles.image} cachePolicy="memory-disk" recyclingKey={id} enforceEarlyResizing />
             )}
 
             {isVideo && (
@@ -221,16 +230,16 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
-    paddingVertical: 16,
+    paddingVertical: Space.md,
     height: ITEM_SIZE + 60,
   },
   itemWrap: {
     width: ITEM_SIZE,
     height: ITEM_SIZE,
-    borderRadius: 16,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.xl,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -239,15 +248,15 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: 16,
+    borderRadius: Radius.xl,
   },
   addBtn: {
     position: 'absolute',
     width: ITEM_SIZE,
     height: ITEM_SIZE,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -258,7 +267,7 @@ const styles = StyleSheet.create({
     right: 6,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -268,20 +277,20 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     paddingVertical: 2,
     alignItems: 'center',
   },
   coverText: {
-    color: Colors.background,
+    color: colors.background,
     fontSize: 10,
     fontFamily: Typography.family.bold,
   },
   hintText: {
-    color: Colors.textMuted,
-    fontSize: 12,
+    color: colors.textMuted,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: Space.md,
   },
 });

@@ -1,6 +1,8 @@
-import { Listing } from '../../data/mockData';
 import { fetchJson } from '../../lib/apiClient';
-import { mapBackendListingToListing } from '../../services/listingMapper';
+import {
+  isDisplayReadyListing,
+  mapBackendListingToListing,
+} from '../../services/listingMapper';
 import type {
   RecommendationResponse,
   RecommendationRequest,
@@ -29,11 +31,12 @@ function mapApiLookToRecommendationLook(row: ApiLookRow): RecommendationLook {
   };
 }
 
-function mapApiItemToRecommendationItem(item: any): RecommendationItem {
+function mapApiItemToRecommendationItem(item: any): RecommendationItem | null {
   if (item && item.type === 'look') {
     return mapApiLookToRecommendationLook(item as ApiLookRow);
   }
-  return mapBackendListingToListing(item);
+  const listing = mapBackendListingToListing(item);
+  return isDisplayReadyListing(listing) ? listing : null;
 }
 
 export async function fetchRecommendations(
@@ -48,6 +51,12 @@ export async function fetchRecommendations(
 
   const payload = await fetchJson<{
     listingId: string;
+    decision?: {
+      policyVersion: string;
+      capabilityLevel: 'heuristic_baseline';
+      trainedModel: false;
+      generatedAt: string;
+    };
     sections: Array<{
       key: string;
       title: string;
@@ -61,13 +70,16 @@ export async function fetchRecommendations(
 
   return {
     listingId: payload.listingId,
+    decision: payload.decision,
     sections: (payload.sections ?? []).map((s) => ({
       key: s.key as RecommendationSection['key'],
       title: s.title,
       subtitle: s.subtitle,
       reason: s.reason,
       personalised: s.personalised,
-      items: (s.items ?? []).map(mapApiItemToRecommendationItem),
+      items: (s.items ?? [])
+        .map(mapApiItemToRecommendationItem)
+        .filter((item): item is RecommendationItem => item !== null),
       nextCursor: s.nextCursor,
     })),
   };

@@ -1,5 +1,5 @@
-import { Space, Typography } from '../theme/designTokens';
-import React, { useState } from 'react';
+import { Space, Typography, Type } from '../theme/designTokens';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppInput } from '../components/ui/AppInput';
 import { Ionicons } from '@expo/vector-icons';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { requestPasswordReset } from '../services/authApi';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { AppButton } from '../components/ui/AppButton';
@@ -20,6 +20,7 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation<any>();
+  const { colors, isDark } = useAppTheme();
   const [email, setEmail] = useState('');
   const [isSent, setIsSent] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -27,6 +28,7 @@ export default function ForgotPasswordScreen() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const reducedMotionEnabled = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleReset = async () => {
     if (isSubmitting) {
@@ -59,7 +61,7 @@ export default function ForgotPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <ScreenHeader
         title=""
@@ -83,7 +85,7 @@ export default function ForgotPasswordScreen() {
             style={styles.successState}
             entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)}
           >
-            <Ionicons name="mail-unread-outline" size={48} color={Colors.success} />
+            <Ionicons name="mail-unread-outline" size={48} color={colors.success} />
             <Text style={styles.successText}>We have sent a password reset link to {email}.</Text>
             <AppButton
               title="Return to Login"
@@ -138,30 +140,32 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
 
   content: { flex: 1, paddingHorizontal: Space.lg },
   contentContainer: { justifyContent: 'center', flexGrow: 1, paddingBottom: Space.xl },
-  title: { fontSize: 44, fontFamily: Typography.family.bold, color: Colors.textPrimary, lineHeight: 48, letterSpacing: -1, marginBottom: Space.lg },
-  subtitle: { fontSize: 16, fontFamily: Typography.family.regular, color: Colors.textSecondary, marginBottom: Space.xl, lineHeight: 24 },
+  title: { fontSize: Type.display.size + Space.sm + Space.xs, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight + 10, letterSpacing: Type.display.letterSpacing * 2, marginBottom: Space.lg },
+  subtitle: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginBottom: Space.xl, lineHeight: Type.subtitle.lineHeight },
 
   form: { marginBottom: Space.xl },
   inputGroup: { marginBottom: Space.xl },
 
   footer: { paddingBottom: Space.xl },
-  errorText: { color: Colors.danger, fontSize: 13, fontFamily: Typography.family.medium, marginBottom: Space.xs },
+  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, marginBottom: Space.xs },
 
   successState: {
     alignItems: 'center',
     paddingTop: Space.lg,
   },
   successText: {
-    fontSize: 16,
-    color: Colors.textPrimary,
+    fontSize: Type.bodyLarge.size,
+    color: colors.textPrimary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     marginVertical: Space.lg,
-    lineHeight: 24,
+    lineHeight: Type.subtitle.lineHeight,
   }
-});
+  });
+}

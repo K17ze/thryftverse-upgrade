@@ -1,0 +1,186 @@
+# ── ThryftVerse production docker-compose ─────────────────────────────
+# All secrets MUST be provided via environment variables or a .env file.
+# No development defaults are included — every secret is required and
+# must be injected by the deployment environment (CI/CD, secrets manager,
+# or an explicit .env.production file passed with --env-file).
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml --env-file .env.production up -d
+
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: thryftverse-postgres-prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - thryftverse_pg_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+    restart: unless-stopped
+    # No host port mapping in production — only internal network access.
+    networks:
+      - thryftverse_internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: thryftverse-redis-prod
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - thryftverse_redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    restart: unless-stopped
+    networks:
+      - thryftverse_internal
+
+  key-service:
+    build:
+      context: ./key-service
+      dockerfile: Dockerfile
+    container_name: thryftverse-key-service-prod
+    environment:
+      NODE_ENV: production
+      PORT: 4100
+      KEY_SERVICE_MASTER_KEY_B64: ${KEY_SERVICE_MASTER_KEY_B64}
+      KEY_SERVICE_ALLOWED_KEYS: ${KEY_SERVICE_ALLOWED_KEYS:-profile,message,wallet}
+      KEY_SERVICE_CLIENT_TOKEN: ${KEY_SERVICE_CLIENT_TOKEN}
+      KEY_SERVICE_ADMIN_TOKEN: ${KEY_SERVICE_ADMIN_TOKEN}
+      KEY_SERVICE_DEFAULT_KEY_VERSION: ${KEY_SERVICE_DEFAULT_KEY_VERSION:-1}
+      KEY_SERVICE_REGION: ${KEY_SERVICE_REGION}
+      KEY_SERVICE_COUNTRY: ${KEY_SERVICE_COUNTRY}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4100/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    restart: unless-stopped
+    networks:
+      - thryftverse_internal
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: thryftverse-api-prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      key-service:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      APP_URL: ${APP_URL}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-20}
+      REDIS_URL: redis://redis:6379
+      KEY_SERVICE_URL: http://key-service:4100
+      KEY_SERVICE_CLIENT_TOKEN: ${KEY_SERVICE_CLIENT_TOKEN}
+      KEY_SERVICE_ADMIN_TOKEN: ${KEY_SERVICE_ADMIN_TOKEN}
+      # S3 / media storage
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+      S3_CDN_BASE_URL: ${S3_CDN_BASE_URL}
+      MEDIA_PROCESSING_ENABLED: ${MEDIA_PROCESSING_ENABLED:-true}
+      MEDIA_PUBLICATION_GATE_ENABLED: ${MEDIA_PUBLICATION_GATE_ENABLED:-true}
+      # Decision / ML service
+      DECISION_SERVICE_URL: ${DECISION_SERVICE_URL}
+      DECISION_SERVICE_TIMEOUT_MS: ${DECISION_SERVICE_TIMEOUT_MS:-2500}
+      DECISION_SERVICE_TOKEN: ${DECISION_SERVICE_TOKEN}
+      # Auth secrets — required in production
+      AUTH_ACCESS_TOKEN_SECRET: ${AUTH_ACCESS_TOKEN_SECRET}
+      AUTH_REFRESH_TOKEN_SECRET: ${AUTH_REFRESH_TOKEN_SECRET}
+      AUTH_ACCESS_TOKEN_TTL_SECONDS: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:-900}
+      AUTH_REFRESH_TOKEN_TTL_SECONDS: ${AUTH_REFRESH_TOKEN_TTL_SECONDS:-2592000}
+      AUTH_PASSWORD_HASH_COST: ${AUTH_PASSWORD_HASH_COST:-12}
+      AUTH_EMAIL_PROVIDER: ${AUTH_EMAIL_PROVIDER:-resend}
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      # Security admin token for ops endpoints
+      API_SECURITY_ADMIN_TOKEN: ${API_SECURITY_ADMIN_TOKEN}
+      # Admin token for /documentation and /metrics auth gate
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      # Rate limiting
+      API_RATE_LIMIT_MAX: ${API_RATE_LIMIT_MAX:-140}
+      API_RATE_LIMIT_WINDOW: ${API_RATE_LIMIT_WINDOW:-1 minute}
+      USER_RATE_LIMIT_MAX: ${USER_RATE_LIMIT_MAX:-200}
+      USER_RATE_LIMIT_WINDOW: ${USER_RATE_LIMIT_WINDOW:-60}
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Sentry / observability
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.15}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_HTTP_URL: ${OTEL_EXPORTER_OTLP_HTTP_URL:-}
+      # AI / agent runtime
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_AGENT_DEFAULT_MODEL: ${OPENAI_AGENT_DEFAULT_MODEL:-gpt-5.6-terra}
+      # Payment providers
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      WISE_API_KEY: ${WISE_API_KEY:-}
+      WISE_WEBHOOK_SECRET: ${WISE_WEBHOOK_SECRET:-}
+      # Oneze governance
+      ONEZE_ATTESTATION_SIGNING_SECRET: ${ONEZE_ATTESTATION_SIGNING_SECRET}
+    ports:
+      - "${API_PORT:-4000}:4000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+    restart: unless-stopped
+    networks:
+      - thryftverse_internal
+
+volumes:
+  thryftverse_pg_data_prod:
+  thryftverse_redis_data_prod:
+
+networks:
+  thryftverse_internal:
+    driver: bridge

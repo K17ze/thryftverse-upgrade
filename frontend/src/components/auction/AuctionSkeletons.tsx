@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 
 export function AuctionSkeletons() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const contentWidth = width - Space.md * 2;
   const featuredWidth = contentWidth * 0.62;
@@ -45,9 +47,9 @@ export function AuctionSkeletons() {
   );
 }
 
-const SKELETON_BG = Colors.surfaceAlt;
-
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => {
+  const SKELETON_BG = colors.surfaceAlt;
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
@@ -114,3 +116,4 @@ const styles = StyleSheet.create({
     backgroundColor: SKELETON_BG,
   },
 });
+};

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, ActiveTheme } from '../constants/colors';
-import { Typography } from '../theme/designTokens';
+import { Typography, Radius, Type, Space } from '../theme/designTokens';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -96,7 +96,7 @@ export function ImageEmptyGraphic({
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
-    borderRadius: 0,
+    borderRadius: Radius.none,
     position: 'relative',
   },
   texture: {
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   iconRing: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor:
@@ -130,14 +130,14 @@ const styles = StyleSheet.create({
   },
   labelWrap: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.sm,
     backgroundColor:
       ActiveTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)',
   },
   label: {
     fontFamily: Typography.family.medium,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     color: ActiveTheme === 'light' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
     letterSpacing: 0.3,
     textTransform: 'uppercase',

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke } from '../../theme/designTokens';
 import { ListingQualityResult } from '../../utils/listingQuality';
 import { useAppTheme } from '../../theme/ThemeContext';
 
@@ -75,8 +75,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 8,
+    borderWidth: Stroke.hairline,
+    gap: Space.sm,
   },
   headerRow: {
     flexDirection: 'row',
@@ -86,75 +86,75 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   title: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
   },
   scoreWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   score: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
   },
   tierBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2,
     borderRadius: Radius.sm,
   },
   tierText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.semibold,
   },
   barTrack: {
-    height: 2,
-    borderRadius: 1,
+    height: Stroke.emphasis,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    borderRadius: 1,
+    borderRadius: Radius.sm,
   },
   itemsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 5,
+    gap: Space.xs + 1,
   },
   missingChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2 + 1,
     backgroundColor: 'transparent',
     borderRadius: Radius.sm,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   missingChipText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.medium,
   },
   tipsCol: {
-    gap: 4,
+    gap: Space.xs,
   },
   tipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   tipBullet: {
-    fontSize: 12,
-    lineHeight: 15,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight - 1,
     fontFamily: Typography.family.bold,
   },
   tipText: {
     flex: 1,
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    lineHeight: 15,
+    lineHeight: Type.caption.lineHeight - 1,
   },
 });

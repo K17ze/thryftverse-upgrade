@@ -3,12 +3,11 @@ import { View, Text, StyleSheet } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { Colors } from '../constants/colors';
-import { Typography } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import { Typography, Space } from '../theme/designTokens';
 
 interface AnimatedBadgeProps {
   count: number;
@@ -16,14 +15,16 @@ interface AnimatedBadgeProps {
 }
 
 export function AnimatedBadge({ count, size = 18 }: AnimatedBadgeProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const scale = useSharedValue(1);
 
   useEffect(() => {
     if (count > 0) {
-      // Rubber-band bounce effect on count change
+      // Quick scale pop then settle — timing-based, no bounce
       scale.value = withSequence(
         withTiming(1.3, { duration: 100 }),
-        withSpring(1, { damping: 10, stiffness: 300 })
+        withTiming(1, { duration: 120 })
       );
     } else {
       scale.value = withTiming(0, { duration: 200 }); // Shrink out if 0
@@ -53,12 +54,12 @@ export function AnimatedBadge({ count, size = 18 }: AnimatedBadgeProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   badge: {
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     position: 'absolute',
     top: -4,
     right: -4,

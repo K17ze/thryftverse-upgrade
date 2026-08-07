@@ -7,25 +7,25 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 
-type Props = StackScreenProps<RootStackParamList, 'CustomBots'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'CustomBots'>;
 
 export default function CustomBotsScreen({ navigation }: Props) {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
 
@@ -95,7 +95,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
             accessibilityLabel="Create bot"
           >
             <View style={styles.createBtn}>
-              <Ionicons name="add" size={22} color={Colors.textPrimary} />
+              <Ionicons name="add" size={22} color={colors.textPrimary} />
             </View>
           </AnimatedPressable>
         }
@@ -150,13 +150,27 @@ export default function CustomBotsScreen({ navigation }: Props) {
           </Section>
         )}
 
-        {customBots.length === 0 && (
+        {isLoading && customBots.length === 0 && (
+          <View style={styles.loadingContainer}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.skeletonRow}>
+                <View style={styles.skeletonIcon} />
+                <View style={styles.skeletonCopy}>
+                  <View style={styles.skeletonLine} />
+                  <View style={[styles.skeletonLine, { width: '60%' }]} />
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {!isLoading && customBots.length === 0 && (
           <View style={styles.empty}>
             <View style={styles.emptyMark}>
-              <Ionicons name="chatbubble-ellipses-outline" size={25} color={Colors.textPrimary} />
+              <Ionicons name="chatbubble-ellipses-outline" size={25} color={colors.textPrimary} />
             </View>
             <Text style={styles.emptyTitle}>Create an agent that works your way</Text>
-            <Caption color={Colors.textSecondary} style={styles.emptyText}>
+            <Caption color={colors.textSecondary} style={styles.emptyText}>
               Give it a specialty, clear boundaries, and the context it needs. You decide when it joins a chat.
             </Caption>
             <AnimatedPressable
@@ -168,7 +182,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
             >
               <Text style={styles.createEmptyBtnText}>Create your first agent</Text>
             </AnimatedPressable>
-            <Caption color={Colors.textMuted} style={styles.emptyNote}>
+            <Caption color={colors.textMuted} style={styles.emptyNote}>
               Agents stay private to your account until you connect them.
             </Caption>
           </View>
@@ -179,12 +193,22 @@ export default function CustomBotsScreen({ navigation }: Props) {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const items = React.Children.toArray(children);
   return (
     <View style={styles.section}>
-      <Meta color={Colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={colors.textMuted} style={styles.sectionLabel}>
         {title}
       </Meta>
-      <View style={styles.card}>{children}</View>
+      <View>
+        {items.map((child, index) => (
+          <React.Fragment key={index}>
+            {child}
+            {index < items.length - 1 ? <View style={styles.rowDivider} /> : null}
+          </React.Fragment>
+        ))}
+      </View>
     </View>
   );
 }
@@ -202,6 +226,8 @@ function BotRow({
   onDelete: () => void;
   onView: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <AnimatedPressable
       onPress={onView}
@@ -217,13 +243,13 @@ function BotRow({
             category={bot.category}
             name={bot.name}
             size={21}
-            color={Colors.textPrimary}
+            color={colors.textPrimary}
           />
         </View>
 
         <View style={styles.botText}>
           <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
-          <Caption color={Colors.textMuted} numberOfLines={1}>
+          <Caption color={colors.textMuted} numberOfLines={1}>
             {bot.isDraft
               ? 'Draft'
               : bot.runtimeReady === false
@@ -242,7 +268,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel="Edit bot"
           >
-            <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
+            <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -254,7 +280,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel="Delete bot"
           >
-            <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
           </AnimatedPressable>
         </View>
       </View>
@@ -262,10 +288,11 @@ function BotRow({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingHorizontal: Space.md,
@@ -273,8 +300,8 @@ const styles = StyleSheet.create({
     gap: Space.lg,
   },
   createBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -287,77 +314,108 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   card: {
-    backgroundColor: Colors.background,
-    gap: 1,
+    backgroundColor: colors.background,
+    gap: Space.xs / 4,
+  },
+  rowDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginLeft: Space.xl + Space.xs + Space.sm,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: Space.sm + 2,
     gap: Space.sm,
   },
+  loadingContainer: {
+    gap: Space.md,
+    paddingTop: Space.md,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+  },
+  skeletonIcon: {
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceAlt,
+  },
+  skeletonCopy: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceAlt,
+  },
   iconWrap: {
-    width: 32,
-    height: 44,
+    width: Space.xl + Space.xs,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
   botText: {
     flex: 1,
     justifyContent: 'center',
-    gap: 2,
+    gap: Space.xs / 2,
   },
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   rowAction: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
   empty: {
     alignItems: 'center',
     paddingHorizontal: Space.lg,
-    paddingTop: 72,
-    gap: 12,
+    paddingTop: Space.xxl + Space.xxl + Space.xxl - 24,
+    gap: Space.sm + 4,
   },
   emptyMark: {
-    width: 48,
-    height: 48,
+    width: Space.xl + Space.xl - 4,
+    height: Space.xl + Space.xl - 4,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.sm,
   },
   emptyTitle: {
-    maxWidth: 300,
+    maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl - 4,
     textAlign: 'center',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   emptyText: {
     textAlign: 'center',
-    maxWidth: 310,
+    maxWidth: Space.xxl * 6 + Space.lg - 2,
     fontSize: Type.captionElevated.size,
-    lineHeight: 19,
+    lineHeight: Type.captionElevated.lineHeight + 1,
   },
   createEmptyBtn: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     paddingHorizontal: Space.md,
-    paddingVertical: 12,
+    paddingVertical: Space.sm + 4,
     borderRadius: Radius.lg,
   },
   createEmptyBtnText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   emptyNote: {
     marginTop: Space.xs,
     textAlign: 'center',
-    lineHeight: 17,
+    lineHeight: Type.caption.lineHeight + 1,
   },
-});
+  });
+}

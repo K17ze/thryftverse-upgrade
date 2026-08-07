@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Confetti } from '../components/Confetti';
 import { useToast } from '../context/ToastContext';
-import { Typography } from '../theme/designTokens';
 import { FlagshipActionCluster } from '../components/flagship';
-import { Space, Radius } from '../theme/designTokens';
 import { RootStackParamList } from '../navigation/types';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -24,14 +22,15 @@ import { getListingCoverUri } from '../utils/media';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { Elevation } from '../theme/designTokens';
-
+import { Typography, Radius, Type, Space, Elevation, Stroke } from '../theme/designTokens';
 type RouteT = RouteProp<RootStackParamList, 'Success'>;
 
 export default function SuccessScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { orderId } = route.params;
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
@@ -79,13 +78,13 @@ export default function SuccessScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
       {!reducedMotionEnabled && <Confetti />}
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.centerContent}>
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)} style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={48} color={Colors.background} />
+            <Ionicons name="checkmark" size={48} color={colors.background} />
           </Reanimated.View>
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(80)}>
@@ -169,11 +168,11 @@ export default function SuccessScreen() {
               accessibilityLabel="Open order support"
             >
               <View style={styles.supportIdentity}>
-                <View style={[styles.supportAvatarWrap, { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons name="help-circle-outline" size={20} color={Colors.textSecondary} />
+                <View style={[styles.supportAvatarWrap, { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
                 </View>
                 <Text style={styles.supportText}>Need help with this order?</Text>
-                <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </View>
             </AnimatedPressable>
           </Reanimated.View>
@@ -203,14 +202,16 @@ function TimelineStep({
   isActive,
   isLast,
 }: {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   detail: string;
   isComplete: boolean;
   isActive?: boolean;
   isLast?: boolean;
 }) {
-  const color = isComplete ? Colors.success : isActive ? Colors.brand : Colors.textMuted;
+  const { colors } = useAppTheme();
+  const timelineStyles = useMemo(() => createTimelineStyles(colors), [colors]);
+  const color = isComplete ? colors.success : isActive ? colors.brand : colors.textMuted;
   return (
     <View style={timelineStyles.step}>
       <View style={timelineStyles.iconCol}>
@@ -219,7 +220,7 @@ function TimelineStep({
           isComplete && timelineStyles.iconWrapComplete,
           isActive && timelineStyles.iconWrapActive,
         ]}>
-          <Ionicons name={icon as any} size={14} color={isComplete || isActive ? Colors.background : Colors.textMuted} />
+          <Ionicons name={icon} size={14} color={isComplete || isActive ? colors.background : colors.textMuted} />
         </View>
         {!isLast && <View style={[
           timelineStyles.connector,
@@ -227,7 +228,7 @@ function TimelineStep({
         ]} />}
       </View>
       <View style={timelineStyles.textCol}>
-        <Text style={[timelineStyles.label, { color: isComplete || isActive ? Colors.textPrimary : Colors.textMuted }]}>
+        <Text style={[timelineStyles.label, { color: isComplete || isActive ? colors.textPrimary : colors.textMuted }]}>
           {label}
         </Text>
         <Text style={timelineStyles.detail}>{detail}</Text>
@@ -236,124 +237,128 @@ function TimelineStep({
   );
 }
 
-const timelineStyles = StyleSheet.create({
+function createTimelineStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   step: {
     flexDirection: 'row',
-    gap: 12,
-    paddingBottom: 16,
+    gap: Space.sm + 4,
+    paddingBottom: Space.md,
   },
   iconCol: {
     alignItems: 'center',
   },
   iconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
+    width: Space.lg + 4,
+    height: Space.lg + 4,
+    borderRadius: Radius.xl,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconWrapComplete: {
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
   },
   iconWrapActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   connector: {
-    width: 2,
+    width: Stroke.standard,
     flex: 1,
-    backgroundColor: Colors.border,
-    marginTop: 4,
-    minHeight: 20,
+    backgroundColor: colors.border,
+    marginTop: Space.xs,
+    minHeight: Space.md + 4,
   },
   connectorComplete: {
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
   },
   textCol: {
     flex: 1,
-    gap: 2,
-    paddingBottom: 4,
+    gap: Space.xs / 2,
+    paddingBottom: Space.xs,
   },
   label: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   detail: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    lineHeight: 16,
+    color: colors.textMuted,
+    lineHeight: Type.caption.size + 4,
   },
-});
+  });
+}
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 24 },
-  centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40, paddingBottom: 20 },
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { flexGrow: 1, paddingHorizontal: Space.lg },
+  centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: Space.xl + Space.xl - 8, paddingBottom: 20 },
   iconCircle: {
-    width: 96, height: 96, borderRadius: 48,
-    backgroundColor: Colors.success,
+    width: Space.xxl + Space.xxl + Space.xxl, height: Space.xxl + Space.xxl + Space.xxl, borderRadius: Radius.full,
+    backgroundColor: colors.success,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 32,
+    marginBottom: Space.xl,
   },
 
-  title: { fontSize: 28, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginBottom: 12, textAlign: 'center' },
-  subtitle: { fontSize: 15, fontFamily: Typography.family.regular, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.sm + 4, textAlign: 'center' },
+  subtitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
-  orderCardWrap: { width: '100%', marginTop: 24 },
+  orderCardWrap: { width: '100%', marginTop: Space.lg },
   orderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 12,
+    gap: Space.sm + 4,
+    padding: Space.sm + 4,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
-  orderImage: { width: 64, height: 64, borderRadius: Radius.md },
+  orderImage: { width: Space.xxl + Space.xl + Space.xs, height: Space.xxl + Space.xl + Space.xs, borderRadius: Radius.md },
   orderInfo: { flex: 1, gap: 2 },
-  orderTitle: { fontSize: 15, fontFamily: Typography.family.semibold, color: Colors.textPrimary },
-  orderSeller: { fontSize: 13, fontFamily: Typography.family.regular, color: Colors.textSecondary },
-  orderAmount: { fontSize: 15, fontFamily: Typography.family.bold, color: Colors.textPrimary, marginTop: 2 },
+  orderTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  orderSeller: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  orderAmount: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
 
   timelineWrap: {
     width: '100%',
-    marginTop: 28,
-    paddingHorizontal: 4,
+    marginTop: Space.xl + 4,
+    paddingHorizontal: Space.xs,
   },
   timelineTitle: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    marginBottom: 14,
+    color: colors.textPrimary,
+    marginBottom: Space.sm + 2,
     textAlign: 'left',
   },
   timeline: {
-    paddingLeft: 4,
+    paddingLeft: Space.xs,
   },
 
-  supportRowWrap: { marginTop: 24, width: '100%' },
+  supportRowWrap: { marginTop: Space.lg, width: '100%' },
   supportIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.xs + 2,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: Space.sm + 4,
+    paddingVertical: Space.xs + 2,
   },
   supportAvatarWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: Space.lg + 4,
+    height: Space.lg + 4,
+    borderRadius: Radius.xl,
   },
   supportText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 
-  footer: { paddingHorizontal: 24, paddingBottom: 40, gap: 12 },
-});
+  footer: { paddingHorizontal: Space.lg, paddingBottom: Space.xl + Space.xl - 8, gap: 12 },
+  });
+}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography , Space, Radius, Elevation  } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption } from '../ui/Text';
@@ -21,6 +21,9 @@ export function ScrollToBottomFAB({
   style,
   bottomOffset,
 }: ScrollToBottomFABProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   if (!visible) return null;
 
   return (
@@ -35,10 +38,10 @@ export function ScrollToBottomFAB({
         scaleValue={0.92}
         hapticFeedback="light"
       >
-        <Ionicons name="chevron-down" size={20} color={Colors.textPrimary} />
+        <Ionicons name="chevron-down" size={20} color={colors.textPrimary} />
         {unreadCount > 0 ? (
           <View style={styles.badge}>
-            <Caption color={Colors.textInverse} style={styles.badgeText}>
+            <Caption color={colors.textInverse} style={styles.badgeText}>
               {unreadCount > 99 ? '99+' : unreadCount}
             </Caption>
           </View>
@@ -48,7 +51,7 @@ export function ScrollToBottomFAB({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     position: 'absolute',
     bottom: Space.xl + 52,
@@ -59,11 +62,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     ...Elevation.floating,
   },
   badge: {
@@ -72,13 +75,13 @@ const styles = StyleSheet.create({
     right: -4,
     minWidth: 18,
     height: 18,
-    borderRadius: 9,
-    backgroundColor: Colors.brand,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     borderWidth: 2,
-    borderColor: Colors.background,
+    borderColor: colors.background,
   },
   badgeText: {
     fontSize: 10,

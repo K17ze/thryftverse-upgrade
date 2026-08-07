@@ -109,12 +109,12 @@ const styles = StyleSheet.create({
   barBg: {
     flex: 1,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
   },
   barFill: {
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   barLabel: {
     fontSize: Type.bodyEmphasis.size,

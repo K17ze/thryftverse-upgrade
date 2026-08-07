@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Elevation } from '../../theme/designTokens';
 
 export type SurfaceVariant = 'surface' | 'elevated' | 'subtle' | 'tint';
@@ -13,31 +13,31 @@ interface ElevatedSurfaceProps {
   noBorder?: boolean;
 }
 
-function resolveSurfaceStyle(variant: SurfaceVariant) {
+function resolveSurfaceStyle(variant: SurfaceVariant, colors: ThemeColors) {
   switch (variant) {
     case 'elevated':
       return {
-        backgroundColor: Colors.surface,
-        borderColor: Colors.border,
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
         shadowConfig: Elevation.card,
       };
     case 'subtle':
       return {
-        backgroundColor: Colors.surfaceAlt,
-        borderColor: Colors.borderLight,
+        backgroundColor: colors.surfaceAlt,
+        borderColor: colors.borderSubtle,
         shadowConfig: Elevation.subtle,
       };
     case 'tint':
       return {
-        backgroundColor: Colors.surfaceAlt,
-        borderColor: Colors.borderLight,
+        backgroundColor: colors.surfaceAlt,
+        borderColor: colors.borderSubtle,
         shadowConfig: Elevation.none,
       };
     case 'surface':
     default:
       return {
-        backgroundColor: Colors.surface,
-        borderColor: Colors.border,
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
         shadowConfig: Elevation.none,
       };
   }
@@ -50,7 +50,8 @@ export function ElevatedSurface({
   contentStyle,
   noBorder = false,
 }: ElevatedSurfaceProps) {
-  const tone = resolveSurfaceStyle(variant);
+  const { colors } = useAppTheme();
+  const tone = resolveSurfaceStyle(variant, colors);
 
   return (
     <View

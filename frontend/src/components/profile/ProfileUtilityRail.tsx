@@ -2,8 +2,8 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Typography, Type } from '../../theme/designTokens';
 
 interface UtilityItem {
   icon: keyof typeof Ionicons.glyphMap;
@@ -11,9 +11,12 @@ interface UtilityItem {
   value?: string;
   onPress: () => void;
   accessibilityLabel: string;
+  accessibilityHint?: string;
 }
 
 export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const scrollRef = React.useRef<ScrollView>(null);
 
   React.useEffect(() => {
@@ -42,8 +45,9 @@ export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
             hapticFeedback="light"
             accessibilityRole="button"
             accessibilityLabel={item.accessibilityLabel}
+            accessibilityHint={item.accessibilityHint}
           >
-            <Ionicons name={item.icon} size={20} color={Colors.textPrimary} />
+            <Ionicons name={item.icon} size={20} color={colors.textPrimary} />
             <Text style={styles.label} numberOfLines={1}>
               {item.label}
             </Text>
@@ -61,36 +65,38 @@ export function ProfileUtilityRail({ items }: { items: UtilityItem[] }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   content: {
     paddingHorizontal: Space.md,
-    gap: 4,
+    gap: Space.xs,
   },
   item: {
-    width: 104,
-    minHeight: 76,
+    width: Space.xxl + Space.xxl + Space.xs,
+    minHeight: Space.xxl + Space.xxl + Space.xs - Space.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   label: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
   },
   value: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: Type.meta.size - 2,
+    lineHeight: Type.meta.lineHeight,
   },
   valuePlaceholder: {
     height: 12,
   },
-});
+  });
+}

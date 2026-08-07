@@ -1,4 +1,4 @@
-import type { Listing, ListingSeller } from '../../data/mockData';
+import type { Listing, ListingSeller } from '../../services/listingsApi';
 
 export interface SellerTrustSummary {
   id: string;
@@ -138,7 +138,7 @@ export function deriveSellerBadges(trust: SellerTrustSummary | null): SellerBadg
 }
 
 export interface ListingCommerceContext {
-  itemPrice: number;
+  itemPrice: number | null;
   buyerProtectionFee?: number;
   shippingPrice?: number;
   estimatedTotal?: number;
@@ -164,10 +164,19 @@ export interface ListingCommerceContext {
 }
 
 export interface ListingEngagementSummary {
+  listingId?: string;
   likes?: number;
   views?: number;
   saves?: number;
   offers?: number;
+  wishlistCount?: number | null;
+  collectionSaveCount?: number | null;
+  activeOfferCount?: number | null;
+  /** Per spec 04_DIRECT §5: backend-backed question count. The
+   * frontend must not fabricate this value. */
+  questionCount?: number;
+  answeredQuestionCount?: number;
+  generatedAt?: string;
 }
 
 export interface ListingCapabilities {
@@ -179,6 +188,16 @@ export interface ListingCapabilities {
   isOwner: boolean;
   isSold: boolean;
   isAvailable: boolean;
+  unavailableReason:
+    | 'sold'
+    | 'reserved'
+    | 'paused'
+    | 'draft'
+    | 'removed'
+    | 'missing_price'
+    | 'missing_seller'
+    | 'status_unknown'
+    | null;
 }
 
 export interface ListingDetail {
@@ -193,10 +212,10 @@ export function buildSellerTrustSummary(
   seller: ListingSeller | null | undefined,
   extras?: Partial<SellerTrustSummary>
 ): SellerTrustSummary | null {
-  if (!seller) return null;
+  if (!seller || !seller.username) return null;
   return {
     id: seller.id,
-    username: seller.username ?? 'Seller',
+    username: seller.username,
     avatar: seller.avatar ?? null,
     rating: seller.rating ?? null,
     reviewCount: seller.reviewCount ?? null,
@@ -229,8 +248,10 @@ export function buildCommerceContext(
 export function buildEngagementSummary(
   listing: Listing
 ): ListingEngagementSummary {
-  const engagement: ListingEngagementSummary = {};
-  if (listing.likes && listing.likes > 0) engagement.likes = listing.likes;
+  const engagement: ListingEngagementSummary = listing.engagement
+    ? { ...listing.engagement }
+    : {};
+  if (listing.likes && listing.likes > 0 && engagement.likes === undefined) engagement.likes = listing.likes;
   if (listing.views && listing.views > 0) engagement.views = listing.views;
   return engagement;
 }
@@ -240,18 +261,30 @@ export function buildCapabilities(
   currentUserId?: string
 ): ListingCapabilities {
   const isOwner = !!currentUserId && listing.sellerId === currentUserId;
-  const isSold = !!listing.isSold;
-  const isAvailable = !isSold;
+  const status = listing.status ?? (listing.isSold ? 'sold' : 'unknown');
+  const isSold = status === 'sold';
+  let unavailableReason: ListingCapabilities['unavailableReason'] = null;
+  if (isSold) unavailableReason = 'sold';
+  else if (status === 'reserved') unavailableReason = 'reserved';
+  else if (status === 'paused') unavailableReason = 'paused';
+  else if (status === 'draft') unavailableReason = 'draft';
+  else if (status === 'deleted' || status === 'removed') unavailableReason = 'removed';
+  else if (status !== 'active') unavailableReason = 'status_unknown';
+  else if (listing.price === null) unavailableReason = 'missing_price';
+  else if (listing.sellerId === null) unavailableReason = 'missing_seller';
+
+  const isAvailable = unavailableReason === null;
 
   return {
     canBuy: !isOwner && isAvailable,
     canOffer: !isOwner && isAvailable,
     canEdit: isOwner,
     canManage: isOwner,
-    canMessage: !isOwner,
+    canMessage: !isOwner && listing.sellerId !== null,
     isOwner,
     isSold,
     isAvailable,
+    unavailableReason,
   };
 }
 

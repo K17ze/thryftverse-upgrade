@@ -12,7 +12,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Radius } from '../../theme/designTokens';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -55,24 +56,26 @@ const FONT_OPTIONS: { key: FontFamily; label: string }[] = [
 ];
 
 const COLOR_OPTIONS = [
-  '#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00',
-  '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55',
-  '#e2d5c2', '#ffd9b5', '#d6f5de', '#ffccda', '#c7c7cc',
+  '#ffffff', '#000000', '#9b0202', '#8A6A3F', '#C9A46A',
+  '#215634', '#06489A', '#4A7AC4', '#6B3245', '#7B0E1E',
+  '#e2d5c2', '#d4b896', '#b8d4c0', '#d4b8c0', '#c7c7cc',
 ];
 
 const BG_OPTIONS = [
   undefined,
   'rgba(0,0,0,0.6)',
   'rgba(255,255,255,0.8)',
-  '#ff3b30',
-  '#007aff',
-  '#4cd964',
-  '#ff9500',
-  '#5856d6',
-  '#ff2d55',
+  '#9b0202',
+  '#06489A',
+  '#215634',
+  '#8A6A3F',
+  '#6B3245',
+  '#7B0E1E',
 ];
 
 export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, isActive }: TextOverlayCanvasProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const inputRef = React.useRef<TextInput>(null);
@@ -255,7 +258,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                 onPress={() => removeLayer(layer.id)}
                 hitSlop={8}
               >
-                <Ionicons name="close-circle" size={20} color="#ff3b30" />
+                <Ionicons name="close-circle" size={20} color={colors.danger} />
               </Pressable>
             )}
           </View>
@@ -317,7 +320,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                   style={[styles.alignBtn, activeLayer.alignment === a && styles.alignBtnActive]}
                   onPress={() => updateLayer(activeLayer.id, { alignment: a })}
                 >
-                  <Text style={{ fontSize: 16, color: activeLayer.alignment === a ? Colors.brand : Colors.textMuted, fontFamily: 'Inter_700Bold' }}>
+                  <Text style={{ fontSize: 16, color: activeLayer.alignment === a ? colors.brand : colors.textMuted, fontFamily: 'Inter_700Bold' }}>
                     {a === 'left' ? 'L' : a === 'center' ? 'C' : 'R'}
                   </Text>
                 </Pressable>
@@ -336,7 +339,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                     <Ionicons
                       name="checkmark"
                       size={14}
-                      color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#ffd9b5' || c === '#d6f5de' || c === '#ffccda' ? '#000' : '#fff'}
+                      color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#d4b896' || c === '#b8d4c0' || c === '#d4b8c0' ? '#000' : '#fff'}
                     />
                   )}
                 </Pressable>
@@ -350,12 +353,12 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                   key={i}
                   style={[
                     styles.bgOrb,
-                    { backgroundColor: c || 'transparent', borderColor: c ? 'transparent' : Colors.border },
+                    { backgroundColor: c || 'transparent', borderColor: c ? 'transparent' : colors.border },
                     activeLayer.backgroundColor === c && styles.bgOrbActive,
                   ]}
                   onPress={() => updateLayer(activeLayer.id, { backgroundColor: c })}
                 >
-                  {!c && <Ionicons name="close" size={12} color={Colors.textMuted} />}
+                  {!c && <Ionicons name="close" size={12} color={colors.textMuted} />}
                 </Pressable>
               ))}
             </ScrollView>
@@ -371,10 +374,11 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: any) {
+  return StyleSheet.create({
   textBubble: {
     position: 'absolute',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 12,
     paddingVertical: 8,
     maxWidth: SCREEN_W - 40,
@@ -398,7 +402,7 @@ const styles = StyleSheet.create({
     top: -10,
     right: -10,
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: Radius.lg,
   },
   addTextBtn: {
     position: 'absolute',
@@ -408,7 +412,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 18,
+    borderRadius: Radius.full,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -425,8 +429,8 @@ const styles = StyleSheet.create({
   },
   controlsPanel: {
     backgroundColor: 'rgba(0,0,0,0.85)',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 28,
@@ -440,7 +444,7 @@ const styles = StyleSheet.create({
   fontPill: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
   fontPillActive: {
@@ -462,7 +466,7 @@ const styles = StyleSheet.create({
   sizeBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -487,7 +491,7 @@ const styles = StyleSheet.create({
   alignBtn: {
     width: 38,
     height: 38,
-    borderRadius: 10,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -504,7 +508,7 @@ const styles = StyleSheet.create({
   colorOrb: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
@@ -517,7 +521,7 @@ const styles = StyleSheet.create({
   bgOrb: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.full,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -528,8 +532,8 @@ const styles = StyleSheet.create({
   },
   doneBtn: {
     alignSelf: 'center',
-    backgroundColor: Colors.brand,
-    borderRadius: 14,
+    backgroundColor: colors.brand,
+    borderRadius: Radius.xl,
     paddingHorizontal: 32,
     paddingVertical: 12,
   },
@@ -539,3 +543,4 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
 });
+}

@@ -10,8 +10,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useBackendData } from '../../context/BackendDataContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
@@ -23,6 +23,8 @@ export interface OutfitPieceEditorProps {
 }
 
 export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { listings } = useBackendData();
   const [searchVisibleId, setSearchVisibleId] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
             value={tag.label}
             onChangeText={(text) => handleLabelChange(tag.id, text)}
             placeholder="Piece label (e.g. Vintage Jacket)"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             maxLength={80}
             accessibilityLabel="Outfit piece label"
           />
@@ -87,7 +89,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
             accessibilityRole="button"
             accessibilityLabel="Remove piece"
           >
-            <Ionicons name="close" size={20} color={Colors.textMuted} />
+            <Ionicons name="close" size={20} color={colors.textMuted} />
           </Pressable>
         </View>
 
@@ -100,7 +102,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
                 contentFit="cover"
               />
             )}
-            <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flex: 1, gap: Space.xs / 2 }}>
               <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
               <Text style={styles.listingPrice}>£{listing.price}</Text>
             </View>
@@ -110,7 +112,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
               accessibilityRole="button"
               accessibilityLabel="Unlink listing"
             >
-              <Ionicons name="link" size={18} color={Colors.brand} />
+              <Ionicons name="link" size={18} color={colors.brand} />
             </Pressable>
           </View>
         ) : (
@@ -123,7 +125,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
             accessibilityRole="button"
             accessibilityLabel="Link to marketplace listing"
           >
-            <Ionicons name="pricetag-outline" size={16} color={Colors.textSecondary} />
+            <Ionicons name="pricetag-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.linkBtnText}>
               {isSearching ? 'Cancel linking' : 'Link to listing (optional)'}
             </Text>
@@ -137,7 +139,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholder="Search listings..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               accessibilityLabel="Search listings to link"
             />
             {filteredListings.length > 0 && (
@@ -158,11 +160,11 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
                         contentFit="cover"
                       />
                     )}
-                    <View style={{ flex: 1, gap: 2 }}>
+                    <View style={{ flex: 1, gap: Space.xs / 2 }}>
                       <Text style={styles.searchResultTitle} numberOfLines={1}>{item.title}</Text>
                       <Text style={styles.searchResultPrice}>£{item.price}</Text>
                     </View>
-                    <Ionicons name="add-circle-outline" size={20} color={Colors.brand} />
+                    <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
                   </Pressable>
                 )}
                 scrollEnabled={false}
@@ -180,7 +182,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
   if (tags.length === 0) {
     return (
       <View style={styles.emptyWrap}>
-        <Ionicons name="pricetag-outline" size={24} color={Colors.textMuted} />
+        <Ionicons name="pricetag-outline" size={24} color={colors.textMuted} />
         <Text style={styles.emptyText}>
           Tap on your photo to tag outfit pieces. Each tag can optionally link to a marketplace listing.
         </Text>
@@ -203,7 +205,7 @@ export function OutfitPieceEditor({ tags, onTagsChange }: OutfitPieceEditorProps
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     gap: Space.sm,
   },
@@ -212,21 +214,21 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.lg,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
   },
   pieceCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     padding: Space.md,
     gap: Space.sm,
   },
@@ -238,92 +240,92 @@ const styles = StyleSheet.create({
   pieceDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.brand,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.brand,
   },
   labelInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-    paddingVertical: 4,
+    color: colors.textPrimary,
+    paddingVertical: Space.xs,
   },
   linkedListing: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     padding: Space.sm,
   },
   listingThumb: {
     width: 40,
     height: 40,
-    borderRadius: 6,
-    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surface,
   },
   listingTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   listingPrice: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   linkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
+    gap: Space.xs + 2,
+    paddingVertical: Space.xs + 2,
   },
   linkBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   searchSection: {
     gap: Space.sm,
   },
   searchInput: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
-    paddingVertical: 8,
-    fontSize: 14,
+    paddingVertical: Space.sm,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    color: colors.textPrimary,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
   searchResult: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: 6,
+    paddingVertical: Space.xs + 2,
   },
   searchResultThumb: {
     width: 36,
     height: 36,
-    borderRadius: 6,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
   },
   searchResultTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   searchResultPrice: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   noResults: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
-    paddingVertical: 8,
+    paddingVertical: Space.sm,
   },
 });

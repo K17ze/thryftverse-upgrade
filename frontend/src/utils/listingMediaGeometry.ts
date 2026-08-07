@@ -1,6 +1,15 @@
 import type { Listing } from "../data/mockData";
+import { AspectRatio } from "../theme/designTokens";
 
-export const DEFAULT_LISTING_MEDIA_ASPECT_RATIO = 4 / 5;
+/**
+ * Default listing media aspect ratio (width / height).
+ *
+ * 2026 standard: portrait 3:4 imagery — the Poshmark March 2026 redesign
+ * made 3:4 the canonical marketplace crop. Real media geometry is still
+ * honoured when the API provides it (AGENTS.md §11: never fabricate image
+ * shapes); this token is only the honest fallback.
+ */
+export const DEFAULT_LISTING_MEDIA_ASPECT_RATIO = AspectRatio.portrait;
 
 const MIN_ASPECT_RATIO = 0.55;
 const MAX_ASPECT_RATIO = 1.8;

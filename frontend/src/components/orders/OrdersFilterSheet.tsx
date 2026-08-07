@@ -8,8 +8,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Typography } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 export type FilterClassification =
   | 'all'
@@ -46,6 +46,7 @@ export function OrdersFilterSheet({
   onApply,
   onClose,
 }: OrdersFilterSheetProps) {
+  const { colors } = useAppTheme();
   const [localClassification, setLocalClassification] =
     React.useState<FilterClassification>(currentFilter.classification);
   const [localYear, setLocalYear] = React.useState<number | null>(currentFilter.year);
@@ -78,23 +79,30 @@ export function OrdersFilterSheet({
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
+        <Pressable
+          style={[styles.sheet, { backgroundColor: colors.background }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           <View style={styles.header}>
-            <Text style={styles.title}>Filter orders</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>
+              Filter orders
+            </Text>
             <Pressable
               onPress={onClose}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel="Close filter sheet"
             >
-              <Ionicons name="close" size={22} color={Colors.textPrimary} />
+              <Ionicons name="close" size={22} color={colors.textPrimary} />
             </Pressable>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionLabel}>Status</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
+              Status
+            </Text>
             {CLASSIFICATION_OPTIONS.map((option) => {
               const isSelected = localClassification === option.key;
               return (
@@ -109,13 +117,14 @@ export function OrdersFilterSheet({
                   <Text
                     style={[
                       styles.optionText,
-                      isSelected && styles.optionTextActive,
+                      { color: colors.textSecondary },
+                      isSelected && { color: colors.textPrimary, fontFamily: Typography.family.semibold },
                     ]}
                   >
                     {option.label}
                   </Text>
                   {isSelected && (
-                    <Ionicons name="checkmark" size={18} color={Colors.brand} />
+                    <Ionicons name="checkmark" size={18} color={colors.brand} />
                   )}
                 </Pressable>
               );
@@ -123,7 +132,7 @@ export function OrdersFilterSheet({
 
             {availableYears.length > 0 && (
               <>
-                <Text style={[styles.sectionLabel, { marginTop: Space.md }]}>
+                <Text style={[styles.sectionLabel, { color: colors.textMuted, marginTop: Space.md }]}>
                   Year
                 </Text>
                 <Pressable
@@ -136,13 +145,14 @@ export function OrdersFilterSheet({
                   <Text
                     style={[
                       styles.optionText,
-                      localYear === null && styles.optionTextActive,
+                      { color: colors.textSecondary },
+                      localYear === null && { color: colors.textPrimary, fontFamily: Typography.family.semibold },
                     ]}
                   >
                     All years
                   </Text>
                   {localYear === null && (
-                    <Ionicons name="checkmark" size={18} color={Colors.brand} />
+                    <Ionicons name="checkmark" size={18} color={colors.brand} />
                   )}
                 </Pressable>
                 {availableYears.map((year) => {
@@ -159,13 +169,14 @@ export function OrdersFilterSheet({
                       <Text
                         style={[
                           styles.optionText,
-                          isSelected && styles.optionTextActive,
+                          { color: colors.textSecondary },
+                          isSelected && { color: colors.textPrimary, fontFamily: Typography.family.semibold },
                         ]}
                       >
                         {year}
                       </Text>
                       {isSelected && (
-                        <Ionicons name="checkmark" size={18} color={Colors.brand} />
+                        <Ionicons name="checkmark" size={18} color={colors.brand} />
                       )}
                     </Pressable>
                   );
@@ -174,24 +185,28 @@ export function OrdersFilterSheet({
             )}
           </ScrollView>
 
-          <View style={styles.footer}>
+          <View style={[styles.footer, { borderTopColor: colors.borderSubtle }]}>
             <Pressable
-              style={styles.clearBtn}
+              style={[styles.clearBtn, { borderColor: colors.border }]}
               onPress={handleClear}
-              hitSlop={{ top: 8, bottom: 8 }}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Clear all filters"
             >
-              <Text style={styles.clearBtnText}>Clear</Text>
+              <Text style={[styles.clearBtnText, { color: colors.textSecondary }]}>
+                Clear
+              </Text>
             </Pressable>
             <Pressable
-              style={styles.applyBtn}
+              style={[styles.applyBtn, { backgroundColor: colors.brand }]}
               onPress={handleApply}
-              hitSlop={{ top: 8, bottom: 8 }}
+              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Apply filters"
             >
-              <Text style={styles.applyBtnText}>Apply</Text>
+              <Text style={[styles.applyBtnText, { color: colors.textInverse }]}>
+                Apply
+              </Text>
             </Pressable>
           </View>
         </Pressable>
@@ -207,9 +222,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
     maxHeight: '80%',
@@ -217,8 +231,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.borderLight,
+    borderRadius: Radius.full,
     alignSelf: 'center',
     marginTop: Space.sm,
     marginBottom: Space.md,
@@ -228,70 +241,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Space.md,
+    minHeight: 44,
   },
   title: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    letterSpacing: Type.metaElevated.letterSpacing,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
     marginBottom: Space.xs,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: Space.md,
     minHeight: 44,
   },
   optionText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-  },
-  optionTextActive: {
-    color: Colors.textPrimary,
-    fontFamily: Typography.family.semibold,
   },
   footer: {
     flexDirection: 'row',
     gap: Space.md,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
   },
   clearBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingVertical: Space.md + 2,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
   },
   clearBtnText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
   applyBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: Colors.brand,
+    paddingVertical: Space.md + 2,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
   },
   applyBtnText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
   },
 });

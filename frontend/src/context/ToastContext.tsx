@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
 import { AccessibilityInfo } from 'react-native';
 
 export type ToastType = 'success' | 'error' | 'info';
@@ -46,8 +46,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     timers.current[id] = setTimeout(() => dismiss(id), 3500);
   }, [dismiss]);
 
+  const value = useMemo(() => ({ show, toasts, dismiss }), [show, toasts, dismiss]);
+
   return (
-    <ToastContext.Provider value={{ show, toasts, dismiss }}>
+    <ToastContext.Provider value={value}>
       {children}
     </ToastContext.Provider>
   );

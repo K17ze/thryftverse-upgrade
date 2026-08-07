@@ -21,7 +21,7 @@ describe('theme migration visual integrity', () => {
     ['screens/InboxScreen.tsx', ['backgroundColor:background', 'color:textPrimary', 'borderColor:border']],
     ['screens/SettingsScreen.tsx', ['color:textPrimary', 'color:success', 'color:textMuted']],
     ['screens/EditProfileScreen.tsx', ['backgroundColor:surface', 'color:textPrimary', 'borderColor:border']],
-    ['screens/ClosetScreen.tsx', ['backgroundColor:background', 'color:textPrimary', 'backgroundColor:surface']],
+    ['screens/ClosetScreen.tsx', ['backgroundColor:background', 'color:textPrimary', 'color:textSecondary']],
     ['screens/ItemDetailScreen.tsx', ['backgroundColor:background', 'color:textPrimary', 'borderColor:border']],
     ['components/ProductCardV2.tsx', ['backgroundColor:surfaceAlt', 'color:textPrimary', 'color:textSecondary']],
   ])('%s retains explicit flagship colour roles', (relativePath, requiredRoles) => {

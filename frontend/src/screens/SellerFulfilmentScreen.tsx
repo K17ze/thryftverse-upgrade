@@ -1,9 +1,8 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   ScrollView,
   Pressable,
   TextInput,
@@ -12,10 +11,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { ActiveTheme, Colors } from '../constants/colors';
-import { Space, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -24,6 +23,9 @@ import { parseApiError } from '../lib/apiClient';
 import { fetchJson } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
 import { normaliseOrderStatus, humaniseStatus } from '../components/orders/orderCapabilities';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type SellerFulfilmentRoute = RouteProp<{ SellerFulfilment: { orderId: string } }, 'SellerFulfilment'>;
 
@@ -50,6 +52,9 @@ export default function SellerFulfilmentScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const reducedMotionEnabled = useReducedMotion();
 
   const { orderId } = route.params;
 
@@ -140,61 +145,35 @@ export default function SellerFulfilmentScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Dispatch</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.textSecondary} />
-          <Text style={styles.loadingText}>Loading order…</Text>
-        </View>
-      </View>
+      <FlagshipScreen header={<FlagshipHeader title="Dispatch" onBack={() => navigation.goBack()} />}>
+        <FlagshipState variant="loading" />
+      </FlagshipScreen>
     );
   }
 
   if (loadError || !order) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Dispatch</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.errorTitle}>Order could not be loaded</Text>
-          <Pressable style={styles.retryBtn} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </Pressable>
-        </View>
-      </View>
+      <FlagshipScreen header={<FlagshipHeader title="Dispatch" onBack={() => navigation.goBack()} />}>
+        <FlagshipState
+          variant="error"
+          icon="cloud-offline-outline"
+          title="Order could not be loaded"
+          actionLabel="Retry"
+          onAction={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }}
+        />
+      </FlagshipScreen>
     );
   }
 
   if (!isSeller) {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Dispatch</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.errorContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={Colors.textMuted} />
-          <Text style={styles.errorTitle}>Only the seller can dispatch this order</Text>
-        </View>
-      </View>
+      <FlagshipScreen header={<FlagshipHeader title="Dispatch" onBack={() => navigation.goBack()} />}>
+        <FlagshipState
+          variant="empty"
+          icon="lock-closed-outline"
+          title="Only the seller can dispatch this order"
+        />
+      </FlagshipScreen>
     );
   }
 
@@ -202,32 +181,37 @@ export default function SellerFulfilmentScreen() {
   const statusLabel = humaniseStatus(order.status);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={Colors.background} />
-
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Pressable style={styles.headerBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Dispatch item</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
+    <FlagshipScreen
+      header={<FlagshipHeader title="Dispatch item" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
       >
-        <View style={styles.orderSummary}>
-          <Text style={styles.orderNumber}>ORDER #{shortOrderId}</Text>
-          <Text style={styles.statusLabel}>{statusLabel}</Text>
-        </View>
+        {/* Hero summary — order status */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="cube" size={18} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>ORDER #{shortOrderId}</Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>{statusLabel}</Text>
+              </View>
+            </View>
+          </View>
+        </Reanimated.View>
 
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <View style={styles.itemCard}>
           {order.listingImageUrl ? (
             <CachedImage uri={order.listingImageUrl} style={styles.itemImage} contentFit="cover" />
           ) : (
             <View style={[styles.itemImage, styles.itemImagePlaceholder]}>
-              <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+              <Ionicons name="image-outline" size={24} color={colors.textMuted} />
             </View>
           )}
           <View style={styles.itemInfo}>
@@ -235,10 +219,12 @@ export default function SellerFulfilmentScreen() {
             <Text style={styles.itemTotal}>{formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' })}</Text>
           </View>
         </View>
+        </Reanimated.View>
 
         <View style={styles.sectionDivider} />
 
         {/* Seller-side escrow narrative — when funds are held */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
         {(() => {
           const normalised = normaliseOrderStatus(order.status);
           const isHeld = normalised === 'paid' || normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery';
@@ -251,7 +237,7 @@ export default function SellerFulfilmentScreen() {
           return (
             <View style={styles.escrowBanner}>
               <View style={styles.escrowIconWrap}>
-                <Ionicons name="lock-closed" size={14} color={Colors.success} />
+                <Ionicons name="lock-closed" size={14} color={colors.success} />
               </View>
               <View style={styles.escrowTextWrap}>
                 <Text style={styles.escrowTitle}>Funds held in escrow</Text>
@@ -269,9 +255,11 @@ export default function SellerFulfilmentScreen() {
             </View>
           );
         })()}
+        </Reanimated.View>
 
         <View style={styles.sectionDivider} />
 
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
         <Text style={styles.sectionLabel}>Shipping details</Text>
 
         <Text style={styles.inputLabel}>Carrier</Text>
@@ -284,7 +272,7 @@ export default function SellerFulfilmentScreen() {
           <Text style={[styles.carrierSelectorText, !shippingProvider && styles.placeholderText]}>
             {shippingProvider || 'Select carrier (optional)'}
           </Text>
-          <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textMuted} />
+          <Ionicons name={showCarrierDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
         </Pressable>
 
         {showCarrierDropdown && (
@@ -308,7 +296,7 @@ export default function SellerFulfilmentScreen() {
                   {carrier}
                 </Text>
                 {shippingProvider === carrier && (
-                  <Ionicons name="checkmark" size={16} color={Colors.brand} />
+                  <Ionicons name="checkmark" size={16} color={colors.brand} />
                 )}
               </Pressable>
             ))}
@@ -319,7 +307,7 @@ export default function SellerFulfilmentScreen() {
         <TextInput
           style={styles.textInput}
           placeholder="Enter tracking number (optional)"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={trackingNumber}
           onChangeText={setTrackingNumber}
           autoCapitalize="none"
@@ -338,10 +326,10 @@ export default function SellerFulfilmentScreen() {
               accessibilityLabel="Generate shipping label"
             >
               {isGeneratingLabel ? (
-                <ActivityIndicator size="small" color={Colors.brand} />
+                <ActivityIndicator size="small" color={colors.brand} />
               ) : (
                 <>
-                  <Ionicons name="document-text-outline" size={18} color={Colors.brand} />
+                  <Ionicons name="document-text-outline" size={18} color={colors.brand} />
                   <Text style={styles.generateLabelBtnText}>
                     {generatedLabelUrl ? 'Regenerate label' : 'Generate shipping label'}
                   </Text>
@@ -363,7 +351,7 @@ export default function SellerFulfilmentScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="View and print shipping label"
               >
-                <Ionicons name="print-outline" size={18} color={Colors.textPrimary} />
+                <Ionicons name="print-outline" size={18} color={colors.textPrimary} />
                 <Text style={styles.printLabelBtnText}>View & print label</Text>
               </Pressable>
             )}
@@ -376,12 +364,13 @@ export default function SellerFulfilmentScreen() {
 
         {!canShip && (
           <View style={styles.warningBanner}>
-            <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
             <Text style={styles.warningText}>
               This order cannot be dispatched from its current status ({statusLabel}).
             </Text>
           </View>
         )}
+        </Reanimated.View>
       </ScrollView>
 
       {canShip && (
@@ -406,102 +395,52 @@ export default function SellerFulfilmentScreen() {
             accessibilityLabel="Mark order as shipped"
           >
             {isShipping ? (
-              <ActivityIndicator size="small" color={Colors.textInverse} />
+              <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
               <Text style={styles.shipBtnText}>Mark as shipped</Text>
             )}
           </Pressable>
         </View>
       )}
-    </View>
+    </FlagshipScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  heroCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    marginBottom: Space.md,
   },
-  header: {
+  heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  headerBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  headerSpacer: {
-    width: 44,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: Space.md,
   },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
+  heroIcon: {
+    width: Space.xl + Space.sm,
+    height: Space.xl + Space.sm,
+    borderRadius: Radius.full,
     justifyContent: 'center',
-    paddingHorizontal: Space.xl,
-    gap: Space.md,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: Space.xl,
-    borderRadius: 10,
-    backgroundColor: Colors.brand,
-    minHeight: 48,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  retryBtnText: {
-    fontSize: 16,
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    letterSpacing: LetterSpacing.caps,
+    textTransform: 'uppercase',
+  },
+  heroSubtitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
+    marginTop: Space.xs / 2,
   },
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-  },
-  orderSummary: {
-    paddingVertical: Space.sm,
-    gap: 4,
-  },
-  orderNumber: {
-    fontSize: 12,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  statusLabel: {
-    fontSize: 22,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
   },
   itemCard: {
     flexDirection: 'row',
@@ -509,89 +448,89 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   itemImage: {
-    width: 64,
-    height: 80,
-    borderRadius: 6,
+    width: Space.xl * 2,
+    height: Space.xxl + Space.xl,
+    borderRadius: Radius.sm,
   },
   itemImagePlaceholder: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   itemInfo: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
     justifyContent: 'center',
   },
   itemTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    lineHeight: 20,
+    color: colors.textPrimary,
+    lineHeight: Type.bodyEmphasis.size + 5,
   },
   itemTotal: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginVertical: Space.sm,
   },
   escrowBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: 12,
-    backgroundColor: `${Colors.success}08`,
+    borderRadius: Radius.lg,
+    backgroundColor: `${colors.success}08`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.success}25`,
+    borderColor: `${colors.success}25`,
   },
   escrowIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: `${Colors.success}15`,
+    width: Space.lg + 4,
+    height: Space.lg + 4,
+    borderRadius: Radius.full,
+    backgroundColor: `${colors.success}15`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   escrowTextWrap: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   escrowTitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   escrowSub: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
-    lineHeight: 16,
+    color: colors.textSecondary,
+    lineHeight: Type.caption.size + 4,
   },
   escrowCountdown: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    marginTop: 2,
+    color: colors.textMuted,
+    marginTop: Space.xs / 2,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps,
     marginBottom: Space.sm,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    marginBottom: 6,
+    color: colors.textSecondary,
+    marginBottom: Space.xs + 2,
     marginTop: Space.sm,
   },
   carrierSelector: {
@@ -599,25 +538,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: Colors.surface,
-    minHeight: 48,
+    height: Space.xl + Space.xl - 4,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
+    minHeight: Space.xl + Space.xl - 4,
   },
   carrierSelectorText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   placeholderText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   carrierDropdown: {
-    marginTop: 4,
-    borderRadius: 10,
-    backgroundColor: Colors.surface,
+    marginTop: Space.xs,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   carrierOption: {
@@ -625,34 +564,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: 14,
-    minHeight: 44,
+    paddingVertical: Space.sm + 2,
+    minHeight: Control.hit,
   },
   carrierOptionText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   carrierOptionTextActive: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   textInput: {
     paddingHorizontal: Space.md,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: Colors.surface,
-    fontSize: 15,
+    height: Space.xl + Space.xl - 4,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    minHeight: 48,
+    color: colors.textPrimary,
+    minHeight: Space.xl + Space.xl - 4,
   },
   hintText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: Space.xs,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.size + 5,
   },
   labelSection: {
     marginTop: Space.md,
@@ -662,51 +601,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingVertical: Space.sm + 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.brand,
-    backgroundColor: `${Colors.brand}08`,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
+    borderColor: colors.brand,
+    backgroundColor: `${colors.brand}08`,
   },
   generateLabelBtnDisabled: {
     opacity: 0.6,
   },
   generateLabelBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   printLabelBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Space.sm,
     paddingVertical: Space.sm + 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   printLabelBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.md,
     padding: Space.sm,
-    borderRadius: 8,
-    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surface,
   },
   warningText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.danger,
+    color: colors.danger,
   },
   footer: {
     position: 'absolute',
@@ -716,23 +655,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
   },
   shipBtn: {
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: Colors.brand,
+    paddingVertical: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
+    minHeight: Control.hit + Space.sm,
   },
   shipBtnDisabled: {
     opacity: 0.6,
   },
   shipBtnText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
-});
+  });
+}

@@ -23,7 +23,7 @@ export interface LookApiItem {
   mediaUrl: string;
   /** Media type — defaults to 'image' when absent for backward compatibility */
   mediaType?: 'image' | 'video';
-  visibility: 'public' | 'private';
+  visibility: 'public' | 'closeFriends' | 'private';
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
   updatedAt?: string;
@@ -62,7 +62,7 @@ export interface LookCreateBody {
   title: string;
   caption?: string;
   mediaUrl: string;
-  visibility?: 'public' | 'private';
+  visibility?: 'public' | 'closeFriends' | 'private';
   tags?: LookCreateTag[];
   status?: 'draft' | 'published' | 'archived';
   compositionDocument?: unknown;
@@ -71,6 +71,17 @@ export interface LookCreateBody {
 export async function createLookOnApi(body: LookCreateBody): Promise<{ ok: boolean; lookId: string }> {
   return fetchJson<{ ok: boolean; lookId: string }>('/looks', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateLookOnApi(
+  lookId: string,
+  body: Partial<LookCreateBody>
+): Promise<{ ok: boolean; lookId: string }> {
+  return fetchJson<{ ok: boolean; lookId: string }>(`/looks/${lookId}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });

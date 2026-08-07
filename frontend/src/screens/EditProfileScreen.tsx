@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,15 +10,18 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../constants/colors';
-import { Space, Typography, Radius, Type } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { Space, Typography, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -34,11 +37,13 @@ const VERIFIED_LABEL = 'Verified';
 const UNVERIFIED_LABEL = 'Not verified';
 
 export default function EditProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const queryClient = useQueryClient();
   const currentUser = useStore((state) => state.currentUser);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
@@ -47,7 +52,6 @@ export default function EditProfileScreen() {
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
 
   const user = currentUser;
-  const userAny = user as any;
   const initialName = user?.displayName ?? user?.username ?? '';
   const initialUsername = user?.username ?? '';
 
@@ -55,7 +59,7 @@ export default function EditProfileScreen() {
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(user?.bio ?? '');
   const [website, setWebsite] = useState(user?.website ?? '');
-  const [phone, setPhone] = useState(userAny?.phone ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
 
   const [isSaving, setIsSaving] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
@@ -67,7 +71,7 @@ export default function EditProfileScreen() {
     username !== initialUsername ||
     bio !== (user?.bio ?? '') ||
     website !== (user?.website ?? '');
-  const hasPhoneChanged = phone !== (userAny?.phone ?? '');
+  const hasPhoneChanged = phone !== (user?.phone ?? '');
   const hasChanges = hasTextChanges || hasPhoneChanged;
 
   const openEdit = (field: string, current: string) => {
@@ -79,9 +83,9 @@ export default function EditProfileScreen() {
     setEditValue('');
   };
 
-  const email = userAny?.email ?? '';
+  const email = user?.email ?? '';
   const emailVerified = !!user?.emailVerified;
-  const country = (userAny?.country as string) || '';
+  const country = user?.country ?? '';
 
   const validateWebsite = useCallback((value: string) => {
     if (!value) {
@@ -181,7 +185,7 @@ export default function EditProfileScreen() {
           title="Not signed in"
           subtitle="Sign in to edit your profile."
           ctaLabel="Sign In"
-          onCtaPress={() => (navigation as any).navigate('Login')}
+          onCtaPress={() => navigation.navigate('Login')}
         />
       </FlagshipScreen>
     );
@@ -200,7 +204,7 @@ export default function EditProfileScreen() {
       style={[styles.saveBtn, canSave && styles.saveBtnActive]}
     >
       {isSaving ? (
-        <ActivityIndicator size="small" color={Colors.textInverse} />
+        <ActivityIndicator size="small" color={colors.textInverse} />
       ) : (
         <Text style={[styles.saveBtnText, canSave && styles.saveBtnTextActive]}>
           Done
@@ -227,7 +231,8 @@ export default function EditProfileScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
       >
         {/* ── Compact identity row ── */}
-        <View style={styles.identityRow}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View style={styles.identityRow}>
           {userAvatar ? (
             <CachedImage
               uri={userAvatar}
@@ -235,7 +240,7 @@ export default function EditProfileScreen() {
               contentFit="cover"
             />
           ) : (
-            <View style={[styles.identityAvatar, { backgroundColor: Colors.surfaceAlt }]}>
+            <View style={[styles.identityAvatar, { backgroundColor: colors.surfaceAlt }]}>
               <Text style={styles.identityAvatarText}>
                 {(user?.username ?? '?').charAt(0).toUpperCase()}
               </Text>
@@ -246,13 +251,14 @@ export default function EditProfileScreen() {
             <Text style={styles.identityHandle} numberOfLines={1}>@{username}</Text>
           </View>
         </View>
+        </Reanimated.View>
 
         <Text style={styles.photoHint}>
           Photo and cover are managed from your profile.
         </Text>
 
         {/* ── Profile fields ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Profile</Text>
 
           <ProfileEditField
@@ -272,10 +278,10 @@ export default function EditProfileScreen() {
             autoCapitalize="none"
             returnKeyType="next"
           />
-        </View>
+        </Reanimated.View>
 
         {/* ── About fields ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>About</Text>
 
           <ProfileEditField
@@ -299,10 +305,10 @@ export default function EditProfileScreen() {
             returnKeyType="done"
             isLast
           />
-        </View>
+        </Reanimated.View>
 
         {/* ── Private details — integrated as form fields, not settings dump ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Private details</Text>
 
           <View style={styles.detailCard}>
@@ -316,13 +322,13 @@ export default function EditProfileScreen() {
               <View style={styles.detailStatusWrap}>
                 {emailVerified ? (
                   <View style={[styles.statusPill, styles.statusPillVerified]}>
-                    <Ionicons name="checkmark-circle" size={12} color={Colors.brand} />
-                    <Text style={[styles.statusPillText, { color: Colors.brand }]}>Verified</Text>
+                    <Ionicons name="checkmark-circle" size={12} color={colors.brand} />
+                    <Text style={[styles.statusPillText, { color: colors.brand }]}>Verified</Text>
                   </View>
                 ) : (
                   <View style={[styles.statusPill, styles.statusPillUnverified]}>
-                    <Ionicons name="alert-circle" size={12} color={Colors.textMuted} />
-                    <Text style={[styles.statusPillText, { color: Colors.textMuted }]}>Not verified</Text>
+                    <Ionicons name="alert-circle" size={12} color={colors.textMuted} />
+                    <Text style={[styles.statusPillText, { color: colors.textMuted }]}>Not verified</Text>
                   </View>
                 )}
               </View>
@@ -337,54 +343,54 @@ export default function EditProfileScreen() {
               <Text style={styles.detailLabel}>Phone</Text>
               <View style={styles.detailRight}>
                 <Text style={styles.detailValue} numberOfLines={1}>{phone || '—'}</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </View>
             </Pressable>
           </View>
-        </View>
+        </Reanimated.View>
 
         {/* ── Security — stronger hierarchy with icon chips ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Security</Text>
 
           <View style={styles.detailCard}>
             <PressableRow
               icon="lock-closed-outline"
-              iconColor={Colors.brand}
+              iconColor={colors.brand}
               title="Password"
               subtitle="Change your password"
-              onPress={() => (navigation as any).navigate('ChangePassword')}
+              onPress={() => navigation.navigate('ChangePassword')}
               isFirst
             />
             <View style={styles.detailDivider} />
             <PressableRow
               icon="shield-checkmark-outline"
-              iconColor={twoFactorEnabled ? Colors.brand : Colors.textMuted}
+              iconColor={twoFactorEnabled ? colors.brand : colors.textMuted}
               title="Two-factor authentication"
               subtitle={twoFactorEnabled ? 'Enabled' : 'Add an extra layer of security'}
               statusPill={
                 twoFactorEnabled ? (
                   <View style={[styles.statusPill, styles.statusPillVerified]}>
-                    <Text style={[styles.statusPillText, { color: Colors.brand }]}>On</Text>
+                    <Text style={[styles.statusPillText, { color: colors.brand }]}>On</Text>
                   </View>
                 ) : (
                   <View style={[styles.statusPill, styles.statusPillUnverified]}>
-                    <Text style={[styles.statusPillText, { color: Colors.textMuted }]}>Off</Text>
+                    <Text style={[styles.statusPillText, { color: colors.textMuted }]}>Off</Text>
                   </View>
                 )
               }
-              onPress={() => (navigation as any).navigate('TwoFactorSetup')}
+              onPress={() => navigation.navigate('TwoFactorSetup')}
               isLast
             />
           </View>
-        </View>
+        </Reanimated.View>
 
         {/* ── Account — prominent, not buried ── */}
-        <View style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Account</Text>
 
           <Pressable
-            onPress={() => (navigation as any).navigate('AccountControl')}
+            onPress={() => navigation.navigate('AccountControl')}
             style={({ pressed }) => [
               styles.accountCard,
               {
@@ -405,13 +411,13 @@ export default function EditProfileScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
-        </View>
+        </Reanimated.View>
       </KeyboardAwareScrollView>
 
       {/* ── Phone Edit Modal — premium bottom sheet ── */}
       <Modal visible={editingField !== null} transparent animationType="slide" onRequestClose={closeEdit}>
-        <Pressable style={styles.modalOverlay} onPress={closeEdit}>
-          <Pressable style={[styles.modalCard, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={styles.modalOverlay} onPress={closeEdit} accessibilityLabel="Close edit dialog" accessibilityRole="button">
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()} accessibilityRole="none">
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>
               {editingField === 'phone' ? 'Phone number' : editingField}
@@ -455,7 +461,7 @@ export default function EditProfileScreen() {
 
 // ── PressableRow — compact row with icon chip for security section ──
 interface PressableRowProps {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   iconColor: string;
   title: string;
   subtitle?: string;
@@ -466,6 +472,8 @@ interface PressableRowProps {
 }
 
 function PressableRow({ icon, iconColor, title, subtitle, statusPill, onPress, isLast }: PressableRowProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <Pressable
       onPress={onPress}
@@ -477,7 +485,7 @@ function PressableRow({ icon, iconColor, title, subtitle, statusPill, onPress, i
       accessibilityLabel={title}
     >
       <View style={[styles.rowIconChip, { backgroundColor: `${iconColor}15` }]}>
-        <Ionicons name={icon as any} size={18} color={iconColor} />
+        <Ionicons name={icon} size={18} color={iconColor} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
@@ -487,7 +495,7 @@ function PressableRow({ icon, iconColor, title, subtitle, statusPill, onPress, i
       </View>
       <View style={styles.rowRight}>
         {statusPill}
-        <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       </View>
     </Pressable>
   );
@@ -525,6 +533,8 @@ function ProfileEditField({
   returnKeyType = 'next',
   isLast,
 }: ProfileEditFieldProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(error);
   const showCounter = maxLength !== undefined;
@@ -549,14 +559,14 @@ function ProfileEditField({
           onFocus={() => setIsFocused(true)}
           onBlur={() => { setIsFocused(false); onBlur?.(); }}
           placeholder={placeholder}
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           autoCapitalize={autoCapitalize}
           keyboardType={keyboardType}
           returnKeyType={returnKeyType}
           multiline={multiline}
           maxLength={maxLength}
           textAlignVertical={multiline ? 'top' : 'center'}
-          selectionColor={Colors.brand}
+          selectionColor={colors.brand}
         />
         {showCounter && (
           <Text style={[styles.fieldCounter, isNearLimit && styles.fieldCounterError]}>
@@ -574,30 +584,31 @@ function ProfileEditField({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   // ── Top-right Done button — visible pill ──
   saveBtn: {
     paddingHorizontal: Space.md,
-    height: 34,
+    height: Control.chrome - 2,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 44,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    minWidth: Control.hit,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
   saveBtnActive: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   saveBtnText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   saveBtnTextActive: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
 
   // ── Identity row ──
@@ -609,38 +620,38 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
   },
   identityAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.xxl,
   },
   identityAvatarText: {
-    fontSize: 16,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
-    lineHeight: 44,
+    lineHeight: Control.hit,
   },
   identityText: {
     flex: 1,
     minWidth: 0,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   identityName: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.2,
+    color: colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
   },
   identityHandle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: Type.caption.letterSpacing,
   },
   photoHint: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingHorizontal: Space.md,
     paddingTop: Space.xs,
     paddingBottom: 0,
@@ -652,9 +663,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.sm - 2,
   },
 
@@ -666,78 +677,78 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    marginBottom: 4,
+    color: colors.textSecondary,
+    marginBottom: Space.xs,
   },
   fieldSurface: {
     borderRadius: Radius.md + 2,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     paddingHorizontal: Space.md - 2,
-    minHeight: 48,
+    minHeight: Space.xxl,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
   },
   fieldSurfaceFocused: {
-    borderColor: Colors.brand,
-    borderWidth: 1.5,
+    borderColor: colors.brand,
+    borderWidth: Stroke.standard + Stroke.hairline,
   },
   fieldSurfaceError: {
-    borderColor: Colors.danger,
+    borderColor: colors.danger,
   },
   fieldSurfaceMultiline: {
     alignItems: 'flex-end',
     paddingVertical: Space.sm,
-    minHeight: 80,
+    minHeight: Space.xxl + Space.xl,
   },
   fieldInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
-    paddingVertical: 8,
+    color: colors.textPrimary,
+    paddingVertical: Space.sm,
     paddingHorizontal: 0,
   },
   fieldInputMultiline: {
     flex: 1,
-    minHeight: 56,
-    lineHeight: 21,
+    minHeight: Space.xxl + Space.sm,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     paddingVertical: 0,
   },
   fieldCounter: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    paddingBottom: 2,
+    color: colors.textMuted,
+    paddingBottom: Space.xs / 2,
   },
   fieldCounterError: {
-    color: Colors.danger,
+    color: colors.danger,
   },
   fieldHelper: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 5,
-    lineHeight: 15,
+    color: colors.textMuted,
+    marginTop: Space.xs + 1,
+    lineHeight: Type.meta.lineHeight + 1,
   },
   fieldError: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
-    marginTop: 5,
-    lineHeight: 15,
+    color: colors.danger,
+    marginTop: Space.xs + 1,
+    lineHeight: Type.meta.lineHeight + 1,
   },
 
   // ── Detail card (private details + security) ──
   detailCard: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   detailRow: {
@@ -746,7 +757,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md - 2,
-    minHeight: 48,
+    minHeight: Space.xxl,
   },
   detailRowTouchable: {
     flexDirection: 'row',
@@ -754,17 +765,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md - 2,
-    minHeight: 48,
+    minHeight: Space.xxl,
   },
   detailLabel: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   detailValue: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     flexShrink: 1,
     textAlign: 'right',
     maxWidth: 180,
@@ -780,7 +791,7 @@ const styles = StyleSheet.create({
   },
   detailDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginHorizontal: Space.md - 2,
   },
 
@@ -788,22 +799,22 @@ const styles = StyleSheet.create({
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   statusPillVerified: {
-    backgroundColor: Colors.surfaceAlt,
-    borderColor: Colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
   },
   statusPillUnverified: {
-    backgroundColor: Colors.surfaceAlt,
-    borderColor: Colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
   },
   statusPillText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
 
@@ -813,33 +824,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md - 2,
-    minHeight: 52,
+    minHeight: Space.xxl + Space.xs,
     gap: Space.sm,
   },
   pressableRowPressed: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   rowIconChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: Control.chromeCompact,
+    height: Control.chromeCompact,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rowText: {
     flex: 1,
     minWidth: 0,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   rowTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   rowSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   rowRight: {
     flexDirection: 'row',
@@ -855,27 +866,27 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 4,
     paddingHorizontal: Space.md - 2,
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    minHeight: 56,
+    borderWidth: Stroke.standard,
+    minHeight: Space.xxl + Space.sm,
   },
   accountIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: Control.chrome,
+    height: Control.chrome,
+    borderRadius: Radius.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   accountText: {
     flex: 1,
     minWidth: 0,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   accountTitle: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
   accountSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
   },
 
@@ -893,24 +904,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
   },
   modalHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
+    width: Control.chrome,
+    height: Space.xs,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
   modalTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    marginBottom: 2,
+    color: colors.textPrimary,
+    marginBottom: Space.xs / 2,
     letterSpacing: Type.subtitle.letterSpacing,
   },
   modalSubtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: Space.md + 2,
   },
   modalActions: {
@@ -919,30 +930,31 @@ const styles = StyleSheet.create({
   },
   modalBtnSecondary: {
     flex: 1,
-    height: 50,
+    height: Space.xxl + Space.xs / 2,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
   modalBtnPrimary: {
     flex: 1,
-    height: 50,
+    height: Space.xxl + Space.xs / 2,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   modalBtnSecondaryText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   modalBtnPrimaryText: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
-});
+  });
+}

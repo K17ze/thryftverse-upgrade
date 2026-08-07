@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,13 +10,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Colors } from '../constants/colors';
-import { Space, Radius, Type, Typography, Elevation } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import type { ThemeColors } from '../theme/ThemeContext';
+import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -24,11 +25,13 @@ import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function CreateCollectionScreen() {
   const navigation = useNavigation<NavT>();
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
   const createCollectionOnApi = useStore((state) => state.createCollectionOnApi);
@@ -87,7 +90,7 @@ export default function CreateCollectionScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)} style={styles.card}>
           <Text style={styles.label}>Name</Text>
           <AppInput
             value={name}
@@ -100,7 +103,7 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{name.length}/40</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(80)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)} style={styles.card}>
           <Text style={styles.label}>Description</Text>
           <AppInput
             value={description}
@@ -114,10 +117,10 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{description.length}/200</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleIconWrap}>
-              <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={Colors.textSecondary} />
+              <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={colors.textSecondary} />
             </View>
             <View style={styles.toggleText}>
               <Text style={styles.toggleLabel}>Private collection</Text>
@@ -141,7 +144,7 @@ export default function CreateCollectionScreen() {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.footer}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)} style={styles.footer}>
           <AppButton
             title={isSubmitting ? 'Creating...' : 'Create Collection'}
             onPress={handleCreate}
@@ -158,10 +161,11 @@ export default function CreateCollectionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -175,14 +179,14 @@ const styles = StyleSheet.create({
   headerAction: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   headerActionDisabled: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
@@ -190,19 +194,19 @@ const styles = StyleSheet.create({
   label: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: LetterSpacing.caps + 0.38,
     marginBottom: Space.sm,
   },
   textArea: {
-    minHeight: 80,
+    minHeight: Space.xl + Space.xxl,
     textAlignVertical: 'top',
   },
   charCount: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
     marginTop: Space.xs,
   },
@@ -212,10 +216,10 @@ const styles = StyleSheet.create({
     gap: Space.sm + 4,
   },
   toggleIconWrap: {
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -225,35 +229,35 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   toggleSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 2,
+    color: colors.textMuted,
+    marginTop: Space.xs / 2,
     letterSpacing: Type.caption.letterSpacing,
   },
   togglePill: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceAlt,
+    width: Space.xxl,
+    height: Space.lg + Space.xs,
+    borderRadius: Radius.xl,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: Space.xs - 1,
   },
   togglePillActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
+    borderColor: colors.textPrimary,
   },
   toggleKnob: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.background,
+    width: Space.lg - Space.xs,
+    height: Space.lg - Space.xs,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.background,
     ...Elevation.card,
   },
   toggleKnobActive: {
@@ -265,4 +269,5 @@ const styles = StyleSheet.create({
   btnDisabled: {
     opacity: 0.45,
   },
-});
+  });
+}

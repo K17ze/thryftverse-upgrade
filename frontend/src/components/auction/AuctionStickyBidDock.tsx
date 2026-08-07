@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface Props {
@@ -44,6 +44,8 @@ export function AuctionStickyBidDock({
   terminalAccent,
   disabled,
 }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
 
   if (variant === 'terminal') {
@@ -53,9 +55,9 @@ export function AuctionStickyBidDock({
           <Ionicons
             name={terminalIcon ?? 'checkmark-circle'}
             size={16}
-            color={terminalAccent ?? Colors.textMuted}
+            color={terminalAccent ?? colors.textMuted}
           />
-          <Text style={[styles.terminalText, { color: terminalAccent ?? Colors.textSecondary }]}>
+          <Text style={[styles.terminalText, { color: terminalAccent ?? colors.textSecondary }]}>
             {terminalMessage ?? 'Auction ended'}
           </Text>
         </View>
@@ -67,7 +69,7 @@ export function AuctionStickyBidDock({
     return (
       <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, Space.sm) }]}>
         <View style={styles.sellerRow}>
-          <Ionicons name="storefront-outline" size={16} color={Colors.brand} />
+          <Ionicons name="storefront-outline" size={16} color={colors.brand} />
           <Text style={styles.sellerText}>{terminalMessage ?? 'Your auction'}</Text>
         </View>
       </View>
@@ -110,18 +112,18 @@ export function AuctionStickyBidDock({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   dock: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   contextLine: {
     fontFamily: Typography.family.regular,
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
     textAlign: 'center',
     marginBottom: Space.xs,
   },
@@ -133,7 +135,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Space.md + 2,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -142,22 +144,22 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     fontFamily: Typography.family.bold,
-    fontSize: 15,
-    color: Colors.textInverse,
+    fontSize: Type.bodyEmphasis.size,
+    color: colors.textInverse,
     letterSpacing: 0.2,
   },
   secondaryBtn: {
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.md + 2,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 13,
-    color: Colors.textPrimary,
+    fontSize: Type.captionElevated.size,
+    color: colors.textPrimary,
   },
   terminalRow: {
     flexDirection: 'row',
@@ -168,7 +170,7 @@ const styles = StyleSheet.create({
   },
   terminalText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
+    fontSize: Type.body.size,
   },
   sellerRow: {
     flexDirection: 'row',
@@ -179,7 +181,7 @@ const styles = StyleSheet.create({
   },
   sellerText: {
     fontFamily: Typography.family.semibold,
-    fontSize: 14,
-    color: Colors.textPrimary,
+    fontSize: Type.body.size,
+    color: colors.textPrimary,
   },
 });

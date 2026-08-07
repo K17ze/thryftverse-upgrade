@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
-import { Colors } from '../../constants/colors';
-import { Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Type, Space } from '../../theme/designTokens';
 import { NativePicker, type NativePickerOption } from '../native/NativePicker';
 
 export interface ControlledSelectProps {
@@ -23,6 +23,9 @@ export function ControlledSelect({
   rules,
   options,
 }: ControlledSelectProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -43,20 +46,22 @@ export function ControlledSelect({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginBottom: 12,
   },
   label: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   errorText: {
-    fontSize: 12,
-    color: Colors.danger,
-    marginTop: 4,
+    fontSize: Type.caption.size,
+    color: colors.danger,
+    marginTop: Space.xs,
     fontFamily: Typography.family.regular,
   },
-});
+  });
+}

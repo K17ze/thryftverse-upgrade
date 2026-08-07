@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { type ReserveStatus } from '../../utils/auctionDetailLogic';
 
 interface Props {
@@ -13,11 +13,12 @@ interface Props {
 }
 
 export function ReserveStatusBadge({ status, compact, showExplanation }: Props) {
+  const { colors } = useAppTheme();
   if (status === 'none') return null;
 
   const isMet = status === 'met';
   const iconName = isMet ? 'shield-checkmark-outline' : 'shield-half-outline';
-  const color = isMet ? Colors.success : '#E8A93C';
+  const color = isMet ? colors.success : '#E8A93C';
   const label = isMet ? 'Reserve met' : 'Reserve not met';
   const explanation = isMet
     ? 'The seller\u2019s minimum price has been reached.'
@@ -47,7 +48,7 @@ export function ReserveStatusBadge({ status, compact, showExplanation }: Props) 
         </Text>
       </View>
       {showExplanation && !compact ? (
-        <Text style={[styles.explanation, { color: Colors.textMuted }]} numberOfLines={2}>
+        <Text style={[styles.explanation, { color: colors.textMuted }]} numberOfLines={2}>
           {explanation}
         </Text>
       ) : null}
@@ -73,7 +74,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   explanation: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     lineHeight: 15,
   },

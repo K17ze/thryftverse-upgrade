@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type, Stroke } from '../../theme/designTokens';
 
 export interface ProfileCompletenessInput {
   avatar?: string | null;
@@ -53,12 +53,14 @@ export function ProfileCompletenessIndicator({
   input,
   onCompleteProfile,
 }: ProfileCompletenessIndicatorProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { score, items } = React.useMemo(() => calculateCompleteness(input), [input]);
   const missingItems = items.filter((i) => !i.done);
 
   if (score >= 100 || missingItems.length === 0) return null;
 
-  const barColor = score >= 75 ? Colors.success : score >= 50 ? Colors.brand : Colors.warning;
+  const barColor = score >= 75 ? colors.success : score >= 50 ? colors.brand : colors.warning;
 
   return (
     <Pressable
@@ -74,7 +76,7 @@ export function ProfileCompletenessIndicator({
           <Text style={styles.title}>Profile {score}% complete</Text>
         </View>
         {onCompleteProfile ? (
-          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
         ) : null}
       </View>
 
@@ -87,7 +89,7 @@ export function ProfileCompletenessIndicator({
       <View style={styles.itemsRow}>
         {missingItems.slice(0, 4).map((item) => (
           <View key={item.key} style={styles.missingChip}>
-            <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={11} color={Colors.textMuted} />
+            <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={11} color={colors.textMuted} />
             <Text style={styles.missingChipText}>{item.label}</Text>
           </View>
         ))}
@@ -101,17 +103,18 @@ export function ProfileCompletenessIndicator({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    gap: 8,
+    borderColor: colors.border,
+    gap: Space.sm,
   },
   headerRow: {
     flexDirection: 'row',
@@ -121,40 +124,41 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   title: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   barTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.surfaceAlt,
+    height: Stroke.standard * 2,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   itemsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 5,
+    gap: Space.xs + 1,
   },
   missingChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    backgroundColor: Colors.surfaceAlt,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.xs + 3,
+    paddingVertical: Space.xs / 2 + 1,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.sm,
   },
   missingChipText: {
-    fontSize: 10,
+    fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  });
+}

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Typography } from '../theme/designTokens';
+import React, { useState, useMemo } from 'react';
+import { Space, Type, Typography, Radius, Stroke, Control } from '../theme/designTokens';
 import {
-  AnimatedPressable } from '../components/AnimatedPressable';
+  AnimatedPressable,
+} from '../components/AnimatedPressable';
 import {
   View,
   Text,
@@ -9,14 +10,18 @@ import {
   TextInput,
   ScrollView,
   StatusBar,
-  Platform
+  Platform,
+  Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { StackScreenProps } from '@react-navigation/stack';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { ActiveTheme, Colors } from '../constants/colors';
+import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CURRENCIES } from '../constants/currencies';
 import { useToast } from '../context/ToastContext';
@@ -29,36 +34,36 @@ import { AppButton } from '../components/ui/AppButton';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { CachedImage } from '../components/CachedImage';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
+import {
+  counterListingOfferOnApi,
+  createListingOfferOnApi,
+} from '../services/listingOffersApi';
 import { haptics } from '../utils/haptics';
+import { createStableId } from '../utils/createStableId';
 
-type Props = StackScreenProps<RootStackParamList, 'MakeOffer'>;
-
-
-const BG = Colors.background;
-const CARD = Colors.surface;
-const CARD_ALT = Colors.surfaceAlt;
-const BORDER = Colors.border;
-const MUTED = Colors.textMuted;
-const TEXT = Colors.textPrimary;
-const BRAND = Colors.brand;
-const TIP_BG = Colors.surfaceAlt;
-const TIP_BORDER = Colors.border;
-const FOOTER_BG = Colors.background;
+type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
 
 export default function MakeOfferScreen({ navigation, route }: Props) {
   const { itemId, price, title } = route.params;
+  const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
+  const reducedMotionEnabled = useReducedMotion();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const [offerPrice, setOfferPrice] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [expiryHours, setExpiryHours] = useState(48);
   const isCounterOffer = route.params.counterOffer ?? false;
   const previousOffer = route.params.previousOffer;
   const counterRound = route.params.counterRound ?? 0;
+  const parentOfferId = route.params.parentOfferId;
+  const idempotencyKeyRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -87,12 +92,22 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     totalGbp: total,
   } = calculateOfferSummaryFromDisplay(numericOffer, currencyCode, goldRates);
 
+  // Discount percentage relative to listing price — key trust signal
+  // shown dynamically as the buyer adjusts their offer. Depop/Vinted/
+  // Vestiaire all show this prominently.
+  const discountPct = useMemo(() => {
+    if (!price || price <= 0) return null;
+    const pct = ((price - numericOfferGbp) / price) * 100;
+    if (pct <= 0) return null;
+    return Math.round(pct);
+  }, [price, numericOfferGbp]);
+
   const handleOfferChange = (value: string) => {
     setOfferPrice(sanitizeDecimalInput(value));
     if (errorMsg) setErrorMsg('');
   };
 
-  const handleSendOffer = () => {
+  const handleSendOffer = async () => {
     if (!numericOffer || !Number.isFinite(numericOfferGbp) || numericOfferGbp <= 0) {
       setErrorMsg('Enter a valid offer amount.');
       return;
@@ -107,27 +122,66 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       setErrorMsg(`Seller's minimum offer is ${formatFromFiat(sellerMinOffer, 'GBP')}.`);
       return;
     }
-    // No backend offer API yet — send offer context via chat
     if (!listing?.sellerId) {
       setErrorMsg('Could not load seller info. Please try again.');
       return;
     }
-    const offerText = isCounterOffer
-      ? `Counter-offer: ${formatFromFiat(numericOfferGbp, 'GBP')} (was ${formatFromFiat(previousOffer ?? 0, 'GBP')}). Valid for ${expiryHours}h.`
-      : `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${title}. Valid for ${expiryHours}h.`;
-    const expiresAt = new Date(Date.now() + expiryHours * 3600000).toISOString();
-    navigation.navigate('Chat', {
-      conversationId: `offer_${listing.sellerId}_${itemId}`,
-      focusQuery: offerText,
-      partnerUserId: listing.sellerId,
-      offerPayload: {
-        price: numericOfferGbp,
-        originalPrice: price,
-        expiresAt,
-        counterRound,
-      },
-    });
-    show('Opening chat to send your offer.', 'info');
+
+    setIsSubmitting(true);
+    try {
+      // Persist the offer server-side so expiry, accept/decline and counter
+      // chains are authoritative across devices. The server computes
+      // expires_at — the frontend only suggests an expiryHours window.
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current = createStableId(isCounterOffer ? 'counter' : 'offer');
+      }
+      if (isCounterOffer && !parentOfferId) {
+        throw new Error('The original offer is unavailable. Refresh the conversation and try again.');
+      }
+      const offer = isCounterOffer
+        ? await counterListingOfferOnApi(parentOfferId!, {
+          offerPriceGbp: numericOfferGbp,
+          expiryHours,
+          idempotencyKey: idempotencyKeyRef.current,
+        })
+        : await createListingOfferOnApi({
+          listingId: itemId,
+          offerPriceGbp: numericOfferGbp,
+          expiryHours,
+          idempotencyKey: idempotencyKeyRef.current,
+          metadata: {
+            originalPriceGbp: price,
+            source: 'initial',
+          },
+        });
+
+      const offerText = isCounterOffer
+        ? `Counter-offer: ${formatFromFiat(numericOfferGbp, 'GBP')} (was ${formatFromFiat(previousOffer ?? 0, 'GBP')}). Valid for ${expiryHours}h.`
+        : `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${title}. Valid for ${expiryHours}h.`;
+
+      navigation.navigate('Chat', {
+        conversationId: `offer_${listing.sellerId}_${itemId}`,
+        focusQuery: offerText,
+        partnerUserId: listing.sellerId,
+        offerPayload: {
+          offerId: offer.id,
+          price: numericOfferGbp,
+          originalPrice: price,
+          expiresAt: offer.expiresAt,
+          counterRound: offer.counterRound,
+        },
+      });
+      show('Opening chat to send your offer.', 'info');
+    } catch (err) {
+      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+      const message = isNetworkError
+        ? 'You appear to be offline. Check your connection and try again.'
+        : err instanceof Error ? err.message : 'Could not submit offer.';
+      setErrorMsg(message);
+      show('Could not submit offer. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const quickOfferPercentages = [0.8, 0.9, 0.95];
@@ -136,6 +190,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, goldRates);
     setOfferPrice((Number.isFinite(displayAmount) ? displayAmount : gbpAmount).toFixed(2));
     if (errorMsg) setErrorMsg('');
+    haptics.tap();
   };
 
   const expiryOptions = [24, 48, 72];
@@ -150,87 +205,147 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     show('Opening seller chat.', 'info');
   }, [itemId, navigation, listing?.sellerId, show, title]);
 
+  // Item image — use listing image if available, fall back to icon
+  const itemImageUri = listing?.images?.[0] ?? listing?.imageUrl;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={ActiveTheme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={BG} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <ScreenHeader
-        title="Make Offer"
+        title={isCounterOffer ? 'Counter-offer' : 'Make offer'}
         onBack={() => navigation.goBack()}
         backIcon="close"
       />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Item Info Context */}
-        <View style={styles.itemCard}>
-          <View style={styles.itemThumb}>
-            <Ionicons name="shirt-outline" size={24} color={MUTED} />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Item summary ──
+            Compact, flat, no card. Image + title + listed price + message
+            action. Per AGENTS.md surface budget: flat canvas, no cards. */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.itemSummary}>
+          <View style={[styles.itemThumb, { backgroundColor: colors.surfaceAlt }]}>
+            {itemImageUri ? (
+              <CachedImage
+                uri={itemImageUri}
+                style={styles.itemThumbImage}
+                contentFit="cover"
+              />
+            ) : (
+              <Ionicons name="shirt-outline" size={24} color={colors.textMuted} />
+            )}
           </View>
           <View style={styles.itemInfo}>
-            <Text style={styles.itemTitle} numberOfLines={1}>{title}</Text>
-            <View style={styles.sellerActionRow}>
-              <AnimatedPressable
-                style={styles.sellerMessageBtn}
-                onPress={handleMessageSeller}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Message seller"
-                accessibilityHint="Opens chat with the seller"
-              >
-                <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textPrimary} />
-                <Text style={styles.sellerHandle}>Message seller</Text>
-              </AnimatedPressable>
-            </View>
-            <Text style={styles.itemListingPrice}>Listed at {formatFromFiat(price, 'GBP')}</Text>
+            <Text
+              style={[styles.itemTitle, { color: colors.textPrimary }]}
+              numberOfLines={2}
+            >
+              {title}
+            </Text>
+            <Text style={[styles.itemListingPrice, { color: colors.textSecondary }]}>
+              Listed at {formatFromFiat(price, 'GBP')}
+            </Text>
           </View>
-        </View>
+        </Reanimated.View>
 
-        {/* Floating Input Block */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>
+        {/* ── Message seller action ──
+            Inline quiet action, not a bordered chip. Per Design.md:
+            quiet controls are transparent, no decorative chrome. */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        <Pressable
+          style={styles.messageAction}
+          onPress={handleMessageSeller}
+          accessibilityRole="button"
+          accessibilityLabel="Message seller"
+          accessibilityHint="Opens chat with the seller"
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.textSecondary} />
+          <Text style={[styles.messageActionText, { color: colors.textSecondary }]}>
+            Message seller
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Pressable>
+        </Reanimated.View>
+
+        {/* ── Price input ──
+            Large, centered price field. The currency symbol and amount
+            are the dominant visual element. No heavy border — the input
+            sits on the flat canvas with a subtle bottom hairline.
+            Per Design.md form-field: input background, 52px height,
+            Radius.xl. But for a price entry field, we want it to feel
+            like a number, not a form field — so we use a larger,
+            centered layout with a hairline underline. */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+        <View style={styles.priceSection}>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
             {isCounterOffer ? 'Your counter-offer' : 'Your offer'}
           </Text>
-          <View style={styles.priceInputRow}>
-            <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+
+          <View style={[styles.priceInputContainer, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.currencySymbol, { color: colors.brand }]}>
+              {currencySymbol}
+            </Text>
             <TextInput
-              style={styles.priceInput}
+              style={[styles.priceInput, { color: colors.textPrimary }]}
               value={offerPrice}
               onChangeText={handleOfferChange}
               keyboardType="decimal-pad"
-              selectionColor={BRAND}
-              placeholderTextColor={MUTED}
+              selectionColor={colors.brand}
+              placeholderTextColor={colors.textMuted}
               placeholder="0.00"
+              accessibilityLabel="Offer amount"
             />
           </View>
 
-          {/* Quick offer chips */}
+          {/* Discount indicator — dynamic, shows how much below asking */}
+          {discountPct != null && (
+            <View style={styles.discountRow}>
+              <Text style={[styles.discountText, { color: colors.warning }]}>
+                {discountPct}% below asking
+              </Text>
+            </View>
+          )}
+
+          {/* Quick offer chips — 80%, 90%, 95% of asking price */}
           <View style={styles.quickOfferRow}>
             {quickOfferPercentages.map((pct) => {
               const gbpAmount = price * pct;
               const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, goldRates);
               const label = Number.isFinite(displayAmount)
-                ? `${Math.round(pct * 100)}% · ${currencySymbol}${displayAmount.toFixed(0)}`
+                ? `${Math.round(pct * 100)}%`
                 : `${Math.round(pct * 100)}%`;
+              const sublabel = Number.isFinite(displayAmount)
+                ? `${currencySymbol}${displayAmount.toFixed(0)}`
+                : '';
               return (
-                <AnimatedPressable
+                <Pressable
                   key={pct}
-                  style={styles.quickOfferChip}
+                  style={[styles.quickOfferChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}
                   onPress={() => applyQuickOffer(pct)}
-                  activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityLabel={`Quick offer: ${Math.round(pct * 100)}% of asking price`}
+                  accessibilityLabel={`Quick offer: ${Math.round(pct * 100)}% of asking price, ${currencySymbol}${displayAmount.toFixed(0)}`}
                 >
-                  <Text style={styles.quickOfferChipText}>{label}</Text>
-                </AnimatedPressable>
+                  <Text style={[styles.quickOfferChipLabel, { color: colors.textPrimary }]}>
+                    {label}
+                  </Text>
+                  {sublabel ? (
+                    <Text style={[styles.quickOfferChipSub, { color: colors.textSecondary }]}>
+                      {sublabel}
+                    </Text>
+                  ) : null}
+                </Pressable>
               );
             })}
           </View>
 
-          {/* Counter-offer context */}
+          {/* Counter-offer context — previous offer reference */}
           {isCounterOffer && previousOffer && (
-            <View style={styles.counterContextRow}>
-              <Ionicons name="arrow-undo-outline" size={14} color={MUTED} />
-              <Text style={styles.counterContextText}>
+            <View style={styles.contextRow}>
+              <Ionicons name="arrow-undo-outline" size={14} color={colors.textMuted} />
+              <Text style={[styles.contextText, { color: colors.textMuted }]}>
                 Previous offer was {formatFromFiat(previousOffer, 'GBP')}
               </Text>
             </View>
@@ -241,84 +356,145 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
             if (sellerMinOffer <= 0) return null;
             return (
-              <View style={styles.counterContextRow}>
-                <Ionicons name="information-circle-outline" size={14} color={BRAND} />
-                <Text style={styles.counterContextText}>
+              <View style={styles.contextRow}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
+                <Text style={[styles.contextText, { color: colors.textSecondary }]}>
                   Seller's minimum offer: {formatFromFiat(sellerMinOffer, 'GBP')}
                 </Text>
               </View>
             );
           })()}
         </View>
+        </Reanimated.View>
 
-        {/* Offer expiry selector */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Offer valid for</Text>
+        {/* ── Offer expiry ──
+            Clean chip selector with selection state. Per Design.md:
+            selected state uses brand fill, unselected uses surfaceAlt. */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+        <View style={styles.expirySection}>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+            Offer valid for
+          </Text>
           <View style={styles.expiryRow}>
-            {expiryOptions.map((hours) => (
-              <AnimatedPressable
-                key={hours}
-                style={[styles.expiryChip, expiryHours === hours && styles.expiryChipActive]}
-                onPress={() => { setExpiryHours(hours); haptics.tap(); }}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={`Offer valid for ${hours} hours`}
-                accessibilityState={{ selected: expiryHours === hours }}
-              >
-                <Text style={[styles.expiryChipText, expiryHours === hours && styles.expiryChipTextActive]}>
-                  {hours}h
-                </Text>
-              </AnimatedPressable>
-            ))}
+            {expiryOptions.map((hours) => {
+              const isActive = expiryHours === hours;
+              return (
+                <Pressable
+                  key={hours}
+                  style={[
+                    styles.expiryChip,
+                    { backgroundColor: isActive ? colors.brand : colors.surfaceAlt,
+                      borderColor: isActive ? colors.brand : colors.borderSubtle },
+                  ]}
+                  onPress={() => { setExpiryHours(hours); haptics.tap(); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Offer valid for ${hours} hours`}
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <Text style={[
+                    styles.expiryChipText,
+                    { color: isActive ? colors.textInverse : colors.textSecondary },
+                  ]}>
+                    {hours}h
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-          <Text style={styles.expiryHint}>
+          <Text style={[styles.expiryHint, { color: colors.textMuted }]}>
             Seller has {expiryHours} hours to respond. After that, the offer expires automatically.
           </Text>
         </View>
+        </Reanimated.View>
 
-        {/* Spaced Anti-list Platform Charge */}
-        <Text style={styles.sectionLabel}>Summary</Text>
-        <View style={styles.protectionCard}>
-          <View style={styles.protectionRow}>
-            <Ionicons name="shield-checkmark" size={18} color={BRAND} />
-            <Text style={styles.protectionLabel}>Platform charge</Text>
-            <Text style={styles.protectionValue}>{formatFromFiat(platformChargeGbp, 'GBP')}</Text>
+        {/* ── Summary ──
+            Flat rows with hairline separator, not a card. Per AGENTS.md
+            surface budget: flat canvas, hairlines, no cards. */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+        <View style={styles.summarySection}>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+            Summary
+          </Text>
+          <View style={[styles.summaryRow, { borderBottomColor: colors.borderSubtle }]}>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+              Your offer
+            </Text>
+            <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+              {formatFromFiat(numericOfferGbp, 'GBP')}
+            </Text>
           </View>
-
-          <View style={[styles.protectionRow, { marginTop: 12 }]}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>{formatFromFiat(total, 'GBP')}</Text>
+          <View style={[styles.summaryRow, { borderBottomColor: colors.borderSubtle }]}>
+            <View style={styles.summaryLabelCluster}>
+              <Ionicons name="shield-checkmark-outline" size={15} color={colors.textSecondary} />
+              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+                Platform charge
+              </Text>
+            </View>
+            <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+              {formatFromFiat(platformChargeGbp, 'GBP')}
+            </Text>
           </View>
+          <View style={styles.totalRow}>
+            <Text style={[styles.totalLabel, { color: colors.textPrimary }]}>
+              Total
+            </Text>
+            <Text style={[styles.totalValue, { color: colors.brand }]}>
+              {formatFromFiat(total, 'GBP')}
+            </Text>
+          </View>
+        </View>
+        </Reanimated.View>
 
-          <Text style={styles.protectionNote}>
-            Includes our platform charge for secure settlement and support.
+        {/* ── Trust signal ──
+            Inline buyer protection note, not a card. Per Design.md:
+            trust signals are decision inputs, not decoration. */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
+        <View style={styles.trustRow}>
+          <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
+          <Text style={[styles.trustText, { color: colors.textSecondary }]}>
+            Protected by ThryftVerse Buyer Protection — secure settlement and support included.
           </Text>
         </View>
 
-        {/* Tip Pill */}
-        <View style={styles.tipCard}>
-          <View style={styles.tipIconBox}>
-            <Ionicons name="bulb" size={16} color={Colors.textInverse} />
-          </View>
-          <Text style={styles.tipText}>
-            Offers within 10% of the listing price are <Text style={{ fontFamily: Typography.family.bold, color: TEXT }}>3x</Text> more likely to be accepted.
+        {/* ── Tip ──
+            Subtle inline tip, not a card with icon box. Per Design.md:
+            quality comes from hierarchy, not decoration. */}
+        <Text style={[styles.tipText, { color: colors.textMuted }]}>
+          Offers within 10% of the listing price are{' '}
+          <Text style={{ fontFamily: Typography.family.semibold, color: colors.textSecondary }}>
+            3x
           </Text>
-        </View>
+          {' '}more likely to be accepted.
+        </Text>
+        </Reanimated.View>
 
-        {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+        {!!errorMsg && (
+          <Text style={[styles.errorText, { color: colors.danger }]}>
+            {errorMsg}
+          </Text>
+        )}
       </ScrollView>
 
-      {/* Floating CTA matches CheckoutScreen */}
-      <View style={styles.footer}>
+      {/* ── Sticky footer ──
+            Full-width CTA with total subtitle. Per Design.md dock-geometry:
+            single-action height, brand fill, full width. */}
+      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <AppButton
           style={styles.sendBtn}
-          title={isCounterOffer ? "Send counter-offer" : "Send offer via chat"}
+          title={
+            isSubmitting
+              ? 'Submitting…'
+              : isCounterOffer
+              ? 'Send counter-offer'
+              : 'Send offer via chat'
+          }
           subtitle={formatFromFiat(total, 'GBP')}
-          icon={<Ionicons name="paper-plane-outline" size={16} color={Colors.textInverse} />}
+          icon={<Ionicons name="paper-plane-outline" size={16} color={colors.textInverse} />}
           variant="primary"
           size="lg"
           onPress={handleSendOffer}
-          disabled={numericOffer <= 0}
+          disabled={numericOffer <= 0 || isSubmitting}
+          loading={isSubmitting}
           accessibilityLabel={`Send ${isCounterOffer ? 'counter-offer' : 'offer'} totaling ${formatFromFiat(total, 'GBP')} via chat`}
         />
       </View>
@@ -327,235 +503,247 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-
-
-  content: { paddingHorizontal: 20, paddingBottom: 40 },
-
-  itemCard: {
+  container: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xl,
+  },
+  // ── Item summary ──
+  itemSummary: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 32,
-    gap: 14,
+    gap: Space.md,
+    paddingVertical: Space.md,
   },
   itemThumb: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: CARD_ALT,
+    width: Space.xxl + Space.sm,
+    height: Space.xxl + Space.sm,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  itemThumbImage: {
+    width: '100%',
+    height: '100%',
   },
   itemInfo: {
     flex: 1,
+    gap: Space.xs,
   },
-  itemTitle: { fontSize: 18, fontFamily: Typography.family.bold, color: TEXT, marginBottom: 4, maxWidth: '90%' },
-  sellerActionRow: {
+  itemTitle: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  itemListingPrice: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  // ── Message seller action ──
+  messageAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 4,
+    gap: Space.sm,
+    paddingVertical: Space.sm + Space.xs,
+    minHeight: Control.hit,
   },
-  sellerIdentityChip: {
+  messageActionText: {
     flex: 1,
-    minHeight: 30,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD_ALT,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sellerAvatarWrap: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  sellerAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  sellerHandle: {
-    flex: 1,
-    fontSize: 12,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.medium,
-    color: MUTED,
   },
-  sellerMessageBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // ── Price input section ──
+  priceSection: {
+    paddingTop: Space.lg,
+    paddingBottom: Space.md,
   },
-  itemListingPrice: { fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
-
-  section: { marginBottom: 32 },
   sectionLabel: {
-    fontSize: 14,
-    fontFamily: Typography.family.bold,
-    color: MUTED,
-    marginBottom: 12,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
     textTransform: 'uppercase',
-    letterSpacing: 1
+    marginBottom: Space.md,
   },
-
-  priceInputRow: {
+  priceInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CARD,
-    borderRadius: 24,
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-    borderWidth: 2,
-    borderColor: BORDER,
+    borderBottomWidth: Stroke.emphasis,
+    paddingBottom: Space.xs,
   },
-  currencySymbol: { fontSize: 48, fontFamily: Typography.family.bold, color: BRAND, marginRight: 12, marginBottom: 4 },
+  currencySymbol: {
+    fontSize: Type.display.size,
+    fontFamily: Typography.family.bold,
+    marginRight: Space.sm,
+  },
   priceInput: {
     flex: 1,
-    fontSize: 56,
+    fontSize: Type.display.size + 8,
     fontFamily: Typography.family.bold,
-    color: TEXT,
-    paddingVertical: 12,
-    letterSpacing: -2,
+    letterSpacing: Type.title.letterSpacing * 2,
+    paddingVertical: Space.sm,
   },
-
+  discountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Space.sm,
+  },
+  discountText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  // ── Quick offer chips ──
   quickOfferRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
+    gap: Space.sm,
+    marginTop: Space.md,
   },
   quickOfferChip: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: CARD_ALT,
-    borderWidth: 1,
-    borderColor: BORDER,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
+    gap: Space.xs / 2,
   },
-  quickOfferChipText: {
-    fontSize: 12,
+  quickOfferChipLabel: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
   },
-  counterContextRow: {
+  quickOfferChipSub: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  // ── Context rows (counter-offer, seller minimum) ──
+  contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
+    gap: Space.xs + 2,
+    marginTop: Space.sm,
   },
-  counterContextText: {
-    fontSize: 12,
+  contextText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    color: MUTED,
+  },
+  // ── Expiry section ──
+  expirySection: {
+    paddingTop: Space.lg,
+    paddingBottom: Space.md,
   },
   expiryRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
+    gap: Space.sm,
   },
   expiryChip: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: CARD_ALT,
-    borderWidth: 1,
-    borderColor: BORDER,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
-  },
-  expiryChipActive: {
-    backgroundColor: `${BRAND}15`,
-    borderColor: BRAND,
   },
   expiryChipText: {
-    fontSize: 14,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-  },
-  expiryChipTextActive: {
-    color: BRAND,
   },
   expiryHint: {
-    fontSize: 12,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    color: MUTED,
-    marginTop: 10,
-    lineHeight: 16,
+    marginTop: Space.sm,
   },
-
-  protectionCard: {
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 24,
+  // ── Summary section ──
+  summarySection: {
+    paddingTop: Space.lg,
   },
-  protectionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  protectionLabel: { flex: 1, fontSize: 15, fontFamily: Typography.family.medium, color: MUTED },
-  protectionValue: { fontSize: 15, fontFamily: Typography.family.semibold, color: TEXT },
-
-  totalLabel: { flex: 1, fontSize: 18, fontFamily: Typography.family.bold, color: TEXT },
-  totalValue: { fontSize: 22, fontFamily: Typography.family.bold, color: BRAND },
-
-  protectionNote: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: MUTED,
-    lineHeight: 20,
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: BORDER
-  },
-
-  tipCard: {
+  summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: TIP_BG,
-    borderWidth: 1,
-    borderColor: TIP_BORDER,
-    borderRadius: 20,
-    padding: 16,
-    gap: 16,
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: Control.hit,
   },
-  tipIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: BRAND,
+  summaryLabelCluster: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: Space.xs + 2,
   },
-  tipText: { flex: 1, fontSize: 14, fontFamily: Typography.family.medium, color: Colors.textSecondary, lineHeight: 20 },
+  summaryLabel: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  summaryValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  totalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Space.md,
+    minHeight: Control.hit,
+  },
+  totalLabel: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  totalValue: {
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
+  },
+  // ── Trust signal ──
+  trustRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs + 2,
+    paddingTop: Space.lg,
+  },
+  trustText: {
+    flex: 1,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontFamily: Typography.family.regular,
+  },
+  // ── Tip ──
+  tipText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 4,
+    fontFamily: Typography.family.regular,
+    paddingTop: Space.md,
+  },
+  // ── Error ──
   errorText: {
-    marginTop: 14,
-    color: Colors.danger,
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    marginTop: Space.sm + 2,
   },
-
+  // ── Footer ──
   footer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-    backgroundColor: FOOTER_BG,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    paddingBottom: Platform.OS === 'ios' ? Space.lg : Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  sendBtn: { width: '100%' },
+  sendBtn: {
+    width: '100%',
+  },
 });

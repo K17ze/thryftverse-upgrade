@@ -4,13 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { listCoOwnAssets } from '../services/marketApi';
@@ -26,7 +26,7 @@ import {
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 interface LeaderboardAsset {
   id: string;
@@ -327,8 +327,8 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   sectionIcon: {
-    width: 32,
-    height: 32,
+    width: Control.chromeCompact,
+    height: Control.chromeCompact,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -336,21 +336,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   row: {
-    minHeight: 72,
+    minHeight: Space.xxl + Space.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   lastRow: {
     borderBottomWidth: 0,
   },
   rank: {
-    width: 20,
+    width: Space.md + Space.xs,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
@@ -362,18 +362,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   thumb: {
-    width: 52,
-    height: 52,
+    width: Space.xxl + Space.xs,
+    height: Space.xxl + Space.xs,
   },
   rowBody: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   rowTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   priceRow: {
     flexDirection: 'row',
@@ -399,13 +399,13 @@ const styles = StyleSheet.create({
     maxWidth: 112,
     minWidth: 76,
     alignItems: 'flex-end',
-    gap: 1,
+    gap: Space.xs / 4,
   },
   metric: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: -0.2,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
     maxWidth: '100%',

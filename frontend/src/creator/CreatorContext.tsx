@@ -13,6 +13,7 @@ import { CreatorDraftService } from './drafts';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { getTemplateById } from './templates';
 import { createStableId } from '../utils/createStableId';
+import { haptics } from '../utils/haptics';
 
 export interface CreatorContextValue {
   document: CreatorDocument;
@@ -53,6 +54,19 @@ export interface CreatorContextValue {
 
   saveDraft: () => Promise<void>;
   loadDraft: (id: string) => Promise<boolean>;
+
+  clipboard: CreatorLayer | null;
+  copyLayer: (layerId: string) => void;
+  pasteLayer: () => void;
+
+  selectedLayerIds: string[];
+  toggleMultiSelect: (layerId: string) => void;
+  clearMultiSelect: () => void;
+  deleteMultiSelected: () => void;
+
+  alignLayerToCenter: (layerId: string) => void;
+  alignLayerToHorizontalCenter: (layerId: string) => void;
+  alignLayerToVerticalCenter: (layerId: string) => void;
 }
 
 const CreatorContext = createContext<CreatorContextValue | null>(null);
@@ -465,6 +479,64 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     return false;
   }, [setDocument]);
 
+  // ─── Copy / Paste ────────────────────────────────────────────────────────
+  const [clipboard, setClipboard] = useState<CreatorLayer | null>(null);
+
+  const copyLayer = useCallback((layerId: string) => {
+    const layer = document.pages[activePageIndex].layers.find((l) => l.id === layerId);
+    if (layer) {
+      setClipboard({ ...layer });
+      haptics.selection();
+    }
+  }, [document, activePageIndex]);
+
+  const pasteLayer = useCallback(() => {
+    if (!clipboard) return;
+    const newLayer: CreatorLayer = {
+      ...clipboard,
+      id: createStableId(clipboard.type),
+      x: Math.min(clipboard.x + 0.05, 1.4),
+      y: Math.min(clipboard.y + 0.05, 1.4),
+    };
+    addLayer(newLayer);
+    setClipboard(null);
+    haptics.tap();
+  }, [clipboard, addLayer]);
+
+  // ─── Multi-Select ────────────────────────────────────────────────────────
+  const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>([]);
+
+  const toggleMultiSelect = useCallback((layerId: string) => {
+    setSelectedLayerIds((prev) => {
+      if (prev.includes(layerId)) {
+        return prev.filter((id) => id !== layerId);
+      }
+      return [...prev, layerId];
+    });
+  }, []);
+
+  const clearMultiSelect = useCallback(() => {
+    setSelectedLayerIds([]);
+  }, []);
+
+  const deleteMultiSelected = useCallback(() => {
+    selectedLayerIds.forEach((id) => removeLayer(id));
+    setSelectedLayerIds([]);
+  }, [selectedLayerIds, removeLayer]);
+
+  // ─── Alignment Tools ─────────────────────────────────────────────────────
+  const alignLayerToCenter = useCallback((layerId: string) => {
+    updateLayer(layerId, { x: 0.5, y: 0.5 });
+  }, [updateLayer]);
+
+  const alignLayerToHorizontalCenter = useCallback((layerId: string) => {
+    updateLayer(layerId, { x: 0.5 });
+  }, [updateLayer]);
+
+  const alignLayerToVerticalCenter = useCallback((layerId: string) => {
+    updateLayer(layerId, { y: 0.5 });
+  }, [updateLayer]);
+
   // Autosave
   useEffect(() => {
     if (!isDirty) return;
@@ -525,6 +597,16 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     retryAutosave,
     saveDraft,
     loadDraft,
+    clipboard,
+    copyLayer,
+    pasteLayer,
+    selectedLayerIds,
+    toggleMultiSelect,
+    clearMultiSelect,
+    deleteMultiSelected,
+    alignLayerToCenter,
+    alignLayerToHorizontalCenter,
+    alignLayerToVerticalCenter,
   };
 
   return <CreatorContext.Provider value={value}>{children}</CreatorContext.Provider>;

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,14 +15,14 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
-import { Colors } from '../constants/colors';
-import { Typography, Radius } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, FontSize, Stroke, Elevation } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -46,6 +46,8 @@ function firstQueryParam(value: string | string[] | undefined): string | undefin
 
 export default function AuthLandingScreen() {
   const navigation = useNavigation<any>();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const login = useStore((state) => state.login);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const reducedMotionEnabled = useReducedMotion();
@@ -223,13 +225,6 @@ export default function AuthLandingScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Premium dark gradient background */}
-      <LinearGradient
-        colors={['rgba(9,9,9,0.15)', 'rgba(9,9,9,0.50)', 'rgba(9,9,9,0.92)', '#090909']}
-        locations={[0, 0.4, 0.7, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-
       <SafeAreaView style={styles.safeArea}>
         {/* Top - animated brand wordmark */}
         <Reanimated.View
@@ -287,7 +282,7 @@ export default function AuthLandingScreen() {
             entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}
             style={styles.errorBanner}
           >
-            <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
             <Text style={styles.errorBannerText}>{authError}</Text>
             <Pressable
               onPress={() => setAuthError(null)}
@@ -343,18 +338,22 @@ export default function AuthLandingScreen() {
                 <Ionicons name="logo-apple" size={20} color="#fff" />
               )}
             </AnimatedPressable>
-            <AnimatedPressable
-              style={[styles.socialBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
-              activeOpacity={0.8}
-              onPress={handleGoogleSignIn}
-              disabled={!!socialLoading || isMagicLinkLoading}
-            >
-              {socialLoading === 'google' ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Ionicons name="logo-google" size={18} color="#fff" />
-              )}
-            </AnimatedPressable>
+            {hasGoogleOAuth ? (
+              <AnimatedPressable
+                style={[styles.socialBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
+                activeOpacity={0.8}
+                onPress={handleGoogleSignIn}
+                disabled={!!socialLoading || isMagicLinkLoading}
+                accessibilityRole="button"
+                accessibilityLabel="Sign in with Google"
+              >
+                {socialLoading === 'google' ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Ionicons name="logo-google" size={18} color="#fff" />
+                )}
+              </AnimatedPressable>
+            ) : null}
           </View>
 
           {isMagicLinkLoading && (
@@ -376,12 +375,11 @@ export default function AuthLandingScreen() {
                   displayName: 'Dev User',
                   email: 'dev@thryftverse.app',
                   avatar: '',
-                  cover: '',
+                  coverPhoto: '',
                   bio: '',
-                  reputationScore: 100,
-                  verified: true,
+                  emailVerified: true,
                   createdAt: new Date().toISOString(),
-                } as any);
+                });
                 navigation.replace('MainTabs');
               }}
             >
@@ -394,109 +392,110 @@ export default function AuthLandingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090909',
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
     justifyContent: 'space-between',
   },
   topSection: {
-    paddingHorizontal: 22,
-    paddingTop: 12,
+    paddingHorizontal: Space.lg - 2,
+    paddingTop: Space.sm + 4,
   },
   logo: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(232,220,200,0.9)',
-    letterSpacing: 2.8,
+    letterSpacing: Space.xs - 1.2,
     textTransform: 'uppercase',
   },
   content: {
-    paddingHorizontal: 22,
-    paddingBottom: 18,
+    paddingHorizontal: Space.lg - 2,
+    paddingBottom: Space.md + 2,
   },
   title: {
-    fontSize: 72,
-    fontFamily: Typography.family.bold,
+    fontSize: FontSize.giant,
+    fontFamily: Typography.family.extrabold,
     color: '#f6f2ea',
-    lineHeight: 74,
-    letterSpacing: -2.4,
-    marginBottom: 12,
+    lineHeight: FontSize.giant + 2,
+    letterSpacing: -2,
+    marginBottom: Space.sm + 4,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: 'rgba(245,239,230,0.72)',
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.size + 4,
     letterSpacing: 0.24,
   },
   trustRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 20,
+    gap: Space.xs + 2,
+    marginTop: Space.md + 4,
     flexWrap: 'wrap',
   },
   trustItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs / 2 + 1,
   },
   trustText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(245,239,230,0.6)',
     letterSpacing: 0.2,
   },
   trustDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
+    width: Space.xs - 1,
+    height: Space.xs - 1,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(245,239,230,0.25)',
   },
   footer: {
-    paddingHorizontal: 22,
-    paddingBottom: 14,
-    gap: 10,
+    paddingHorizontal: Space.lg + 4,
+    paddingBottom: Space.sm + 6,
+    gap: Space.xs + 2,
   },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginHorizontal: 22,
-    marginBottom: 6,
-    borderRadius: 12,
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs + 2,
+    marginHorizontal: Space.lg + 4,
+    marginBottom: Space.xs + 2,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,107,107,0.12)',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,107,107,0.25)',
   },
   errorBannerText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.danger,
-    lineHeight: 16,
+    color: colors.danger,
+    lineHeight: Type.caption.size + 2,
   },
   primaryBtn: {
-    backgroundColor: Colors.brand,
-    height: 56,
-    borderRadius: 28,
+    backgroundColor: colors.brand,
+    height: Space.xl + Space.xl + 8,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.brand,
+    shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowRadius: Space.xl,
+    elevation: Elevation.floating.elevation,
   },
   primaryText: {
-    color: Colors.textInverse,
-    fontSize: 16,
+    color: colors.textInverse,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
   },
@@ -504,45 +503,45 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     padding: 0,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     borderRadius: Radius.lg,
   },
   secondaryBtnGlass: {
-    height: 52,
-    borderRadius: 26,
+    height: Space.xl + Space.xl + 4,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
   },
   secondaryBtn: {
     backgroundColor: 'rgba(255,255,255,0.06)',
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1,
+    height: Space.xl + Space.xl + 4,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(232,220,200,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryText: {
     color: 'rgba(245,239,230,0.85)',
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
   socialRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
-    marginTop: 4,
+    gap: Space.md,
+    marginTop: Space.xs,
   },
   socialBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: Space.xl + Space.xl + 2,
+    height: Space.xl + Space.xl + 2,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -551,34 +550,35 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   magicLinkLoadingText: {
-    marginTop: 8,
+    marginTop: Space.sm,
     color: 'rgba(255,255,255,0.62)',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     textAlign: 'center',
     fontFamily: Typography.family.medium,
   },
   termsText: {
     color: 'rgba(255,255,255,0.3)',
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
-    lineHeight: 16,
-    marginTop: 4,
+    lineHeight: Type.caption.lineHeight,
+    marginTop: Space.xs,
   },
   devBypassBtn: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    marginTop: Space.sm + 4,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(52,199,89,0.15)',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(52,199,89,0.4)',
     alignSelf: 'center',
   },
   devBypassText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.success,
+    color: colors.success,
     textAlign: 'center',
   },
 });
+}

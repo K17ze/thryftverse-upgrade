@@ -4,13 +4,14 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { StackScreenProps } from '@react-navigation/stack';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { cancelCoOwnOrderReservation, placeCoOwnOrder } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -22,7 +23,7 @@ import {
   CoOwnRiskDisclosure,
 } from '../components/coown';
 
-type Props = StackScreenProps<RootStackParamList, 'TradeConfirm'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'TradeConfirm'>;
 
 export default function TradeConfirmScreen({ navigation, route }: Props) {
   const {
@@ -53,6 +54,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const isCompactDock = width < 360;
   const haptic = useHaptic();
   const { show } = useToast();
+  const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -209,7 +211,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         ]}
       >
         {/* Trade receipt — product identity, order details, totals */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(40)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
           <CoOwnTradeReceipt
             imageUri={assetImageUrl}
             title={assetTitle ?? 'Co-Own asset'}
@@ -235,7 +237,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Risk disclosure */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.riskWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.riskWrap}>
           <CoOwnRiskDisclosure />
         </Reanimated.View>
       </ScrollView>

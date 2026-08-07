@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   AnimatedPressable
 } from '../components/AnimatedPressable';
@@ -13,22 +13,24 @@ import {
 import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
-import { Type , Typography, Space, Radius  } from '../theme/designTokens';
+import { Type, Typography, Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
+import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
 import PulseTab from '../components/explore/PulseTab';
 import LooksTab from '../components/explore/LooksTab';
 import EditTab from '../components/explore/EditTab';
+import { OfflineBanner } from '../components/OfflineBanner';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const EXPLORE_TABS = [
@@ -46,6 +48,7 @@ export default function SearchScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
   const scrollRef = useRef<Reanimated.ScrollView>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useScrollToTop(scrollRef);
 
   const [activeTab, setActiveTab] = useState<'discover' | 'pulse' | 'looks' | 'edit'>('discover');
@@ -59,10 +62,269 @@ export default function SearchScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshListings();
-    setTimeout(() => setRefreshing(false), 400);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      setRefreshing(false);
+    }, 400);
   };
 
-  const { isDark } = useAppTheme();
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, []);
+
+  const { colors, isDark } = useAppTheme();
+  const reducedMotionEnabled = useReducedMotion();
+
+  const styles = useMemo(() => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+
+  // Header
+  headerRow: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm + Space.xs,
+  },
+  hugeTitle: {
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+    letterSpacing: LetterSpacing.tight,
+  },
+  itemCount: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: LetterSpacing.wide,
+    color: colors.textSecondary,
+  },
+  headerStatusWrap: {
+    marginTop: Space.xs + 3,
+  },
+  discoverBtn: {
+    marginTop: Space.sm,
+    minHeight: Control.chromeCompact,
+    borderRadius: Radius.xl,
+    borderWidth: 0,
+    backgroundColor: colors.surfaceAlt,
+    alignSelf: 'flex-end',
+    paddingHorizontal: Space.sm + Space.xs,
+  },
+  discoverBtnIconWrap: {
+    width: Control.iconCompact,
+    height: Control.iconCompact,
+    borderRadius: Radius.full,
+    backgroundColor: 'transparent',
+  },
+  discoverBtnText: {
+    color: colors.textInverse,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: LetterSpacing.wide,
+  },
+
+  // Search
+  searchRow: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm + 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+  },
+  searchBar: {
+    flex: 1,
+    minHeight: Control.hit + 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+    backgroundColor: colors.background,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    paddingHorizontal: Space.sm + 6,
+  },
+  searchPlaceholder: {
+    flex: 1,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    color: colors.textMuted,
+    fontFamily: Typography.family.regular,
+    letterSpacing: LetterSpacing.wide,
+  },
+  visualSearchButton: {
+    width: Control.hit + 2,
+    height: Control.hit + 2,
+    borderRadius: Radius.md,
+    backgroundColor: 'transparent',
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  exploreTabs: {
+    minHeight: Space.xxl,
+    marginBottom: Space.sm + 2,
+    paddingHorizontal: Space.sm,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
+  },
+  exploreTab: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: Space.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    paddingHorizontal: Space.sm,
+  },
+  exploreTabText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
+  },
+  exploreTabTextActive: {
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+  exploreTabIndicator: {
+    position: 'absolute',
+    bottom: -Stroke.hairline,
+    width: Space.xl,
+    height: Space.xs / 2,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.textPrimary,
+  },
+
+  // Tabs
+  tabsContainer: { paddingHorizontal: Space.md, paddingBottom: Space.sm + Space.xs },
+  tabsWrapper: { flexDirection: 'row', backgroundColor: 'transparent', gap: Space.sm + 2 },
+  tab: {
+    flex: 1,
+    borderRadius: Radius.xxl,
+    minHeight: Space.xl + Space.sm,
+    borderWidth: 0,
+    backgroundColor: colors.surface,
+    paddingHorizontal: Space.sm + Space.xs,
+  },
+  activeTab: { backgroundColor: colors.textPrimary },
+  tabIconWrap: {
+    width: Space.md,
+    height: Space.md,
+    borderRadius: Radius.md,
+    backgroundColor: 'transparent',
+  },
+  tabText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold, color: colors.textMuted, letterSpacing: LetterSpacing.wide },
+  activeTabText: { color: colors.textPrimary },
+  tabCountWrap: {
+    width: 'auto',
+    height: 'auto',
+    borderRadius: Radius.none,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  tabCount: {
+    marginLeft: Space.xs + 2,
+    minWidth: Space.lg - Space.xs,
+    textAlign: 'center',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceAlt,
+    color: colors.textSecondary,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  tabCountActive: {
+    backgroundColor: colors.textPrimary,
+    color: colors.textInverse,
+  },
+  syncRetryBanner: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm + Space.xs,
+  },
+
+  // Lists
+  listContent: { paddingHorizontal: Space.md, paddingBottom: Space.xxl * 2 + Space.lg },
+  gridContent: { paddingBottom: Space.xxl * 2 + Space.lg },
+  gridRow: { justifyContent: 'space-between' },
+  wishlistLoadingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.sm + Space.xs,
+    paddingBottom: Space.xxl * 2 + Space.lg,
+    rowGap: Space.sm + Space.xs,
+  },
+  wishlistLoadingCard: {
+    width: (SCREEN_WIDTH - Space.xl) / 2,
+    borderRadius: Radius.xl,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  wishlistLoadingBody: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.sm + 2,
+  },
+
+  emptyFooter: {
+    alignItems: 'center',
+    paddingVertical: Space.lg,
+  },
+  footerHint: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    textAlign: 'center',
+    letterSpacing: LetterSpacing.wide,
+  },
+  closetShortcut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    padding: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+  },
+  closetShortcutLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + Space.xs,
+  },
+  closetShortcutIcon: {
+    width: Space.xxl - Space.sm,
+    height: Space.xxl - Space.sm,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closetShortcutTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+  closetShortcutSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    marginTop: Space.xs / 2,
+  },
+  }), [colors]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -92,7 +354,7 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* -- Header -- */}
       <View style={styles.headerRow}>
@@ -108,7 +370,7 @@ export default function SearchScreen() {
           accessibilityRole="search"
           accessibilityLabel="Search items, brands and people"
         >
-          <Ionicons name="search" size={19} color={Colors.textMuted} />
+          <Ionicons name="search" size={19} color={colors.textMuted} />
           <Text style={styles.searchPlaceholder} numberOfLines={1}>Search items, brands and people</Text>
         </AnimatedPressable>
         <AnimatedPressable
@@ -118,7 +380,7 @@ export default function SearchScreen() {
           accessibilityLabel="Search with an image"
           accessibilityRole="button"
         >
-          <Ionicons name="camera-outline" size={20} color={Colors.textPrimary} />
+          <Ionicons name="camera-outline" size={20} color={colors.textPrimary} />
         </AnimatedPressable>
       </View>
 
@@ -153,6 +415,8 @@ export default function SearchScreen() {
             />
           }
         >
+          <OfflineBanner onRetry={() => void handleRefresh()} />
+
           <View style={styles.exploreTabs} accessibilityRole="tablist">
             {EXPLORE_TABS.map((tab) => {
               const selected = activeTab === tab.value;
@@ -175,9 +439,31 @@ export default function SearchScreen() {
             })}
           </View>
 
-          {/* Empty state when no listings and not loading */}
-          {listings.length === 0 && !isSyncing && !lastError ? (
-            <Reanimated.View entering={FadeInDown.duration(400)}>
+          {/* Loading skeleton during initial sync (no cached listings yet) */}
+          {isSyncing && listings.length === 0 && !lastError ? (
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              {activeTab === 'discover' ? (
+                <MasonrySkeleton itemCount={6} />
+              ) : (
+                <View style={styles.listContent}>
+                  <MasonrySkeleton itemCount={4} horizontalPadding={0} />
+                </View>
+              )}
+            </Reanimated.View>
+          ) : lastError && listings.length === 0 && !isSyncing ? (
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
+              <EmptyState
+                density="compact"
+                icon="cloud-offline-outline"
+                iconColor={colors.danger}
+                title="Explore unavailable"
+                subtitle="We couldn't load listings. Check your connection and try again."
+                ctaLabel="Retry"
+                onCtaPress={() => void handleRefresh()}
+              />
+            </Reanimated.View>
+          ) : listings.length === 0 && !isSyncing && !lastError ? (
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
               <EmptyState
                 density="compact"
                 icon="compass-outline"
@@ -185,14 +471,10 @@ export default function SearchScreen() {
                 subtitle="New items are uploaded every day. Check back soon or browse categories."
                 ctaLabel="Browse Categories"
                 onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
-                suggestedActions={[
-                  { label: 'Search', onPress: () => navigation.navigate('GlobalSearch') },
-                  { label: 'Visual Search', onPress: () => navigation.navigate('VisualSearch') },
-                ]}
               />
             </Reanimated.View>
           ) : (
-            <Reanimated.View entering={FadeInDown.duration(350).delay(100)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
               {renderTabContent()}
             </Reanimated.View>
           )}
@@ -203,249 +485,3 @@ export default function SearchScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-
-  // Header
-  headerRow: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  hugeTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  itemCount: {
-    fontSize: 13,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.12,
-    color: Colors.textSecondary,
-  },
-  headerStatusWrap: {
-    marginTop: 7,
-  },
-  discoverBtn: {
-    marginTop: 8,
-    minHeight: 32,
-    borderRadius: 16,
-    borderWidth: 0,
-    backgroundColor: Colors.surfaceAlt,
-    alignSelf: 'flex-end',
-    paddingHorizontal: 12,
-  },
-  discoverBtnIconWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'transparent',
-  },
-  discoverBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.2,
-  },
-
-  // Search
-  searchRow: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  searchBar: {
-    flex: 1,
-    minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.background,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    paddingHorizontal: 14,
-  },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    color: Colors.textMuted,
-    fontFamily: Typography.family.regular,
-    letterSpacing: 0.08,
-  },
-  visualSearchButton: {
-    width: 46,
-    height: 46,
-    borderRadius: Radius.md,
-    backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  exploreTabs: {
-    minHeight: 48,
-    marginBottom: 10,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  exploreTab: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    paddingHorizontal: 4,
-  },
-  exploreTabText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-  },
-  exploreTabTextActive: {
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  exploreTabIndicator: {
-    position: 'absolute',
-    bottom: -StyleSheet.hairlineWidth,
-    width: 28,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: Colors.textPrimary,
-  },
-
-  // Tabs
-  tabsContainer: { paddingHorizontal: 16, paddingBottom: 12 },
-  tabsWrapper: { flexDirection: 'row', backgroundColor: 'transparent', gap: 10 },
-  tab: {
-    flex: 1,
-    borderRadius: 24,
-    minHeight: 40,
-    borderWidth: 0,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-  },
-  activeTab: { backgroundColor: Colors.textPrimary },
-  tabIconWrap: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-  },
-  tabText: { fontSize: 13, fontFamily: Typography.family.semibold, color: Colors.textMuted, letterSpacing: 0.2 },
-  activeTabText: { color: Colors.textPrimary },
-  tabCountWrap: {
-    width: 'auto',
-    height: 'auto',
-    borderRadius: 0,
-    backgroundColor: 'transparent',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-  tabCount: {
-    marginLeft: 6,
-    minWidth: 20,
-    textAlign: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    color: Colors.textSecondary,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  tabCountActive: {
-    backgroundColor: Colors.textPrimary,
-    color: Colors.textInverse,
-  },
-  syncRetryBanner: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-  },
-
-  // Lists
-  listContent: { paddingHorizontal: 16, paddingBottom: 120 },
-  gridContent: { paddingBottom: 120 },
-  gridRow: { justifyContent: 'space-between' },
-  wishlistLoadingGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingBottom: 120,
-    rowGap: 12,
-  },
-  wishlistLoadingCard: {
-    width: (SCREEN_WIDTH - 32) / 2,
-    borderRadius: 16,
-    borderWidth: 0,
-    borderColor: 'transparent',
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  wishlistLoadingBody: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-
-  emptyFooter: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  footerHint: {
-    fontSize: 13,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    letterSpacing: 0.1,
-  },
-  closetShortcut: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  closetShortcutLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  closetShortcutIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closetShortcutTitle: {
-    fontSize: 15,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-  },
-  closetShortcutSub: {
-    fontSize: 12,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-});

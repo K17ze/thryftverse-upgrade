@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Pool, type PoolClient } from "pg";
+import { COOWN_POLICY } from "../lib/commercePolicies.js";
+import { appendDomainEvent } from "../lib/domainOutbox.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL?.trim();
 const shouldRun =
@@ -75,9 +77,10 @@ test(
         `
         INSERT INTO payment_intents (
           id, user_id, gateway_id, channel, order_id, amount_gbp,
-          amount_currency, status, idempotency_key
+          amount_currency, amount_minor, currency_exponent, money_registry_version,
+          status, idempotency_key
         )
-        VALUES ($1, $2, $3, 'commerce', $4, 84, 'GBP', 'requires_confirmation', $5)
+        VALUES ($1, $2, $3, 'commerce', $4, 84, 'GBP', 8400, 2, 'canonical-v1', 'requires_confirmation', $5)
       `,
         [intentId, buyerId, gatewayId, orderId, `idem_${suffix}`],
       );
@@ -340,6 +343,588 @@ test(
       `,
         [buyerId],
       );
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+      await pool.end();
+    }
+  },
+);
+
+test(
+  "accepted-offer checkout reservation reconciles listing state from the order lifecycle",
+  {
+    skip: !shouldRun,
+  },
+  async () => {
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const client = await pool.connect();
+    const suffix = `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+    const buyerId = `it_offer_buyer_${suffix}`;
+    const sellerId = `it_offer_seller_${suffix}`;
+    const listingId = `it_offer_listing_${suffix}`;
+    const offerId = `it_offer_${suffix}`;
+    const orderId = `it_offer_order_${suffix}`;
+    const reservationId = `it_offer_reservation_${suffix}`;
+
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO users (id, username) VALUES ($1, $2), ($3, $4)`,
+        [buyerId, `offer_buyer_${suffix}`, sellerId, `offer_seller_${suffix}`],
+      );
+      await client.query(
+        `INSERT INTO listings (
+           id, seller_id, title, description, price_gbp, status
+         )
+         VALUES ($1, $2, 'Reserved coat', 'Accepted offer fixture', 100, 'paused')`,
+        [listingId, sellerId],
+      );
+      await client.query(
+        `INSERT INTO listing_offers (
+           id, listing_id, buyer_id, seller_id,
+           offer_price_gbp, original_price_gbp,
+           status, expires_at, accepted_at
+         )
+         VALUES ($1, $2, $3, $4, 90, 100, 'accepted', NOW() + INTERVAL '1 hour', NOW())`,
+        [offerId, listingId, buyerId, sellerId],
+      );
+      await client.query(
+        `INSERT INTO orders (
+           id, buyer_id, seller_id, listing_id,
+           subtotal_gbp, buyer_protection_fee_gbp,
+           postage_fee_gbp, total_gbp, status
+         )
+         VALUES ($1, $2, $3, $4, 90, 5.20, 0, 95.20, 'created')`,
+        [orderId, buyerId, sellerId, listingId],
+      );
+      await client.query(
+        `INSERT INTO listing_checkout_reservations (
+           id, offer_id, listing_id, buyer_id, seller_id,
+           order_id, status, expires_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, 'active', NOW() + INTERVAL '30 minutes')`,
+        [reservationId, offerId, listingId, buyerId, sellerId, orderId],
+      );
+
+      await client.query(`UPDATE orders SET status = 'paid' WHERE id = $1`, [orderId]);
+
+      const result = await client.query<{
+        reservation_status: string;
+        listing_status: string;
+      }>(
+        `SELECT
+           r.status AS reservation_status,
+           l.status AS listing_status
+         FROM listing_checkout_reservations r
+         INNER JOIN listings l ON l.id = r.listing_id
+         WHERE r.id = $1`,
+        [reservationId],
+      );
+
+      assert.deepEqual(result.rows[0], {
+        reservation_status: "converted",
+        listing_status: "sold",
+      });
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+      await pool.end();
+    }
+  },
+);
+
+test(
+  "Co-Own database order cap matches the canonical commerce policy",
+  {
+    skip: !shouldRun,
+  },
+  async () => {
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const client = await pool.connect();
+    const suffix = `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+    const userId = `it_policy_user_${suffix}`;
+    const listingId = `it_policy_listing_${suffix}`;
+    const assetId = `it_policy_asset_${suffix}`;
+
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO users (id, username) VALUES ($1, $2)`,
+        [userId, `policy_user_${suffix}`],
+      );
+      await client.query(
+        `INSERT INTO listings (
+           id, seller_id, title, description, price_gbp, status
+         )
+         VALUES ($1, $2, 'Policy asset', 'Policy cap fixture', 200, 'active')`,
+        [listingId, userId],
+      );
+      await client.query(
+        `INSERT INTO coOwn_assets (
+           id, listing_id, issuer_id, title, total_units, available_units,
+           unit_price_gbp, unit_price_stable, settlement_mode
+         )
+         VALUES ($1, $2, $3, 'Policy asset', $4, $4, 10, 10, 'GBP')`,
+        [assetId, listingId, userId, COOWN_POLICY.maxIssuanceUnits],
+      );
+      await client.query(
+        `INSERT INTO coOwn_orders (
+           asset_id, user_id, side, units, unit_price_gbp, fee_gbp,
+           total_gbp, status, order_type, remaining_units, filled_units
+         )
+         VALUES ($1, $2, 'buy', $3, 10, 0, 200, 'open', 'market', $3, 0)`,
+        [assetId, userId, COOWN_POLICY.maxOrderUnits],
+      );
+      await expectConstraintViolation(
+        client,
+        `INSERT INTO coOwn_orders (
+           asset_id, user_id, side, units, unit_price_gbp, fee_gbp,
+           total_gbp, status, order_type, remaining_units, filled_units
+         )
+         VALUES ($1, $2, 'buy', $3, 10, 0, 210, 'open', 'market', $3, 0)`,
+        [assetId, userId, COOWN_POLICY.maxOrderUnits + 1],
+      );
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+      await pool.end();
+    }
+  },
+);
+
+test(
+  "domain outbox events commit and roll back with their aggregate transaction",
+  {
+    skip: !shouldRun,
+  },
+  async () => {
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const client = await pool.connect();
+    const suffix = `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+    const rolledBackKey = `it.outbox.rollback:${suffix}`;
+    const committedKey = `it.outbox.commit:${suffix}`;
+
+    try {
+      await client.query("BEGIN");
+      await appendDomainEvent(client, {
+        aggregateType: "integration_fixture",
+        aggregateId: suffix,
+        eventType: "integration.rolled_back",
+        payload: { suffix },
+        deduplicationKey: rolledBackKey,
+      });
+      await client.query("ROLLBACK");
+
+      const rolledBack = await client.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+         FROM domain_outbox
+         WHERE deduplication_key = $1`,
+        [rolledBackKey],
+      );
+      assert.equal(rolledBack.rows[0].count, "0");
+
+      await client.query("BEGIN");
+      await appendDomainEvent(client, {
+        aggregateType: "integration_fixture",
+        aggregateId: suffix,
+        eventType: "integration.committed",
+        payload: { suffix },
+        deduplicationKey: committedKey,
+      });
+      await client.query("COMMIT");
+
+      const committed = await client.query<{ status: string; attempts: number }>(
+        `SELECT status, attempts
+         FROM domain_outbox
+         WHERE deduplication_key = $1`,
+        [committedKey],
+      );
+      assert.deepEqual(committed.rows[0], { status: "pending", attempts: 0 });
+    } finally {
+      await client.query(
+        `DELETE FROM domain_outbox
+         WHERE deduplication_key IN ($1, $2)`,
+        [rolledBackKey, committedKey],
+      );
+      client.release();
+      await pool.end();
+    }
+  },
+);
+
+test(
+  "media publication requires one canonical asset and one active processing job",
+  {
+    skip: !shouldRun,
+  },
+  async () => {
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const client = await pool.connect();
+    const suffix = `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+    const userId = `it_media_user_${suffix}`;
+    const intentId = `it_media_intent_${suffix}`;
+    const finalizationId = `it_media_finalization_${suffix}`;
+    const mediaAssetId = `it_media_asset_${suffix}`;
+    const objectKey = `listings/${userId}/${suffix}.jpg`;
+
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO users (id, username) VALUES ($1, $2)`,
+        [userId, `media_user_${suffix}`],
+      );
+      await client.query(
+        `INSERT INTO upload_intents (
+           id, object_key, bucket, owner_id, folder, file_name,
+           content_type, size_bytes, public_url, expires_at, finalized_at
+         )
+         VALUES (
+           $1, $2, 'media', $3, 'listings', 'fixture.jpg',
+           'image/jpeg', 1024, $4, NOW() + INTERVAL '10 minutes', NOW()
+         )`,
+        [
+          intentId,
+          objectKey,
+          userId,
+          `https://objects.example.test/media/${objectKey}`,
+        ],
+      );
+      await client.query(
+        `INSERT INTO upload_finalizations (
+           id, object_key, bucket, owner_id, folder, file_name,
+           content_type, size_bytes, public_url, status, scope,
+           head_checked_at, upload_intent_id
+         )
+         VALUES (
+           $1, $2, 'media', $3, 'listings', 'fixture.jpg',
+           'image/jpeg', 1024, $4, 'finalized', 'listing_media',
+           NOW(), $5
+         )`,
+        [
+          finalizationId,
+          objectKey,
+          userId,
+          `https://objects.example.test/media/${objectKey}`,
+          intentId,
+        ],
+      );
+      await client.query(
+        `INSERT INTO media_assets (
+           id, upload_finalization_id, owner_id, bucket, object_key,
+           file_name, intended_purpose, media_kind,
+           declared_content_type, declared_size_bytes,
+           original_object_url, status
+         )
+         VALUES (
+           $1, $2, $3, 'media', $4, 'fixture.jpg',
+           'listing_media', 'image', 'image/jpeg', 1024, $5,
+           'integrity_verified'
+         )`,
+        [
+          mediaAssetId,
+          finalizationId,
+          userId,
+          objectKey,
+          `https://objects.example.test/media/${objectKey}`,
+        ],
+      );
+      await client.query(
+        `UPDATE upload_finalizations SET media_asset_id = $2 WHERE id = $1`,
+        [finalizationId, mediaAssetId],
+      );
+      await client.query(
+        `INSERT INTO media_processing_jobs (
+           id, media_asset_id, job_type, status
+         )
+         VALUES ($1, $2, 'inspect_scan_process_moderate', 'pending')`,
+        [`it_media_job_${suffix}`, mediaAssetId],
+      );
+
+      await expectConstraintViolation(
+        client,
+        `INSERT INTO media_processing_jobs (
+           id, media_asset_id, job_type, status
+         )
+         VALUES ($1, $2, 'retry_processing', 'retry')`,
+        [`it_media_job_duplicate_${suffix}`, mediaAssetId],
+      );
+      await expectConstraintViolation(
+        client,
+        `UPDATE media_assets SET status = 'untrusted_public' WHERE id = $1`,
+        [mediaAssetId],
+      );
+
+      const result = await client.query<{
+        asset_status: string;
+        job_status: string;
+        canonical_url: string | null;
+      }>(
+        `SELECT asset.status AS asset_status,
+                job.status AS job_status,
+                asset.canonical_url
+         FROM media_assets asset
+         INNER JOIN media_processing_jobs job
+           ON job.media_asset_id = asset.id
+         WHERE asset.id = $1`,
+        [mediaAssetId],
+      );
+      assert.deepEqual(result.rows[0], {
+        asset_status: "integrity_verified",
+        job_status: "pending",
+        canonical_url: null,
+      });
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+      await pool.end();
+    }
+  },
+);
+
+test(
+  "direct-message participant pairs are unique for one listing context",
+  {
+    skip: !shouldRun,
+  },
+  async () => {
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const client = await pool.connect();
+    const suffix = `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+    const firstUserId = `it_dm_first_${suffix}`;
+    const secondUserId = `it_dm_second_${suffix}`;
+    const firstConversationId = `it_dm_conversation_1_${suffix}`;
+    const secondConversationId = `it_dm_conversation_2_${suffix}`;
+    const pairKey = [
+      ...[firstUserId, secondUserId].sort(),
+      "",
+    ].join("\u001f");
+
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO users (id, username) VALUES ($1, $2), ($3, $4)`,
+        [
+          firstUserId,
+          `dm_first_${suffix}`,
+          secondUserId,
+          `dm_second_${suffix}`,
+        ],
+      );
+      await client.query(
+        `INSERT INTO chat_conversations (
+           id, type, owner_id, dm_pair_key
+         )
+         VALUES ($1, 'dm', $2, $3)`,
+        [firstConversationId, firstUserId, pairKey],
+      );
+      await client.query(
+        `INSERT INTO chat_members (conversation_id, user_id, role)
+         VALUES ($1, $2, 'owner'), ($1, $3, 'member')`,
+        [firstConversationId, firstUserId, secondUserId],
+      );
+
+      await expectConstraintViolation(
+        client,
+        `INSERT INTO chat_conversations (
+           id, type, owner_id, dm_pair_key
+         )
+         VALUES ($1, 'dm', $2, $3)`,
+        [secondConversationId, secondUserId, pairKey],
+      );
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+      await pool.end();
+    }
+  },
+);
+
+test(
+  "recommendation serves retain policy, impression, and idempotent feedback attribution",
+  {
+    skip: !shouldRun,
+  },
+  async () => {
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const client = await pool.connect();
+    const suffix = `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+    const userId = `it_rec_user_${suffix}`;
+    const otherUserId = `it_rec_other_${suffix}`;
+    const sellerId = `it_rec_seller_${suffix}`;
+    const listingId = `it_rec_listing_${suffix}`;
+    const requestId = `it_rec_request_${suffix}`;
+    const idempotencyKey = `it_rec_feedback_${suffix}`;
+
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO users (id, username)
+         VALUES ($1, $2), ($3, $4), ($5, $6)`,
+        [
+          userId,
+          `rec_user_${suffix}`,
+          otherUserId,
+          `rec_other_${suffix}`,
+          sellerId,
+          `rec_seller_${suffix}`,
+        ],
+      );
+      await client.query(
+        `INSERT INTO listings (
+           id, seller_id, title, description, price_gbp, status
+         )
+         VALUES ($1, $2, 'Recommendation fixture', 'Attribution fixture', 50, 'active')`,
+        [listingId, sellerId],
+      );
+      await client.query(
+        `INSERT INTO recommendation_serves (
+           request_id, user_id, policy_version, feature_schema_version,
+           capability_level, source, surface, candidate_count, eligible_count,
+           result_count, exploration_rate, cold_start, latency_ms,
+           diagnostics, generated_at
+         )
+         VALUES (
+           $1, $2, 'recommendation-heuristic-v2.0',
+           'recommendation-features-v2', 'heuristic_baseline',
+           'decision_service', 'integration', 1, 1, 1, 0.18, FALSE,
+           12, '{}'::jsonb, NOW()
+         )`,
+        [requestId, userId],
+      );
+      await client.query(
+        `INSERT INTO recommendation_impressions (
+           request_id, user_id, listing_id, position, score, policy, model,
+           reason_codes, component_scores
+         )
+         VALUES (
+           $1, $2, $3, 1, 0.82, 'exploit', 'heuristic_ranker_v2',
+           ARRAY['matches_recent_activity'], '{"affinity":0.9}'::jsonb
+         )`,
+        [requestId, userId, listingId],
+      );
+      await client.query(
+        `INSERT INTO interactions (
+           user_id, listing_id, action, idempotency_key, request_id,
+           position, policy_version
+         )
+         VALUES (
+           $1, $2, 'wishlist', $3, $4, 1, 'recommendation-heuristic-v2.0'
+         )`,
+        [userId, listingId, idempotencyKey, requestId],
+      );
+      await client.query(
+        `INSERT INTO recommendation_feedback (
+           user_id, listing_id, action, served_score, served_policy, surface,
+           request_id, position, model, policy_version, idempotency_key
+         )
+         VALUES (
+           $1, $2, 'wishlist', 0.82, 'exploit', 'integration',
+           $3, 1, 'heuristic_ranker_v2', 'recommendation-heuristic-v2.0', $4
+         )`,
+        [userId, listingId, requestId, idempotencyKey],
+      );
+
+      await expectConstraintViolation(
+        client,
+        `INSERT INTO interactions (
+           user_id, listing_id, action, idempotency_key
+         )
+         VALUES ($1, $2, 'wishlist', $3)`,
+        [userId, listingId, idempotencyKey],
+      );
+      await expectConstraintViolation(
+        client,
+        `INSERT INTO recommendation_impressions (
+           request_id, user_id, listing_id, position, score, policy, model
+         )
+         VALUES ($1, $2, $3, 2, 0.5, 'explore', 'invalid_actor')`,
+        [requestId, otherUserId, listingId],
+      );
+
+      const attribution = await client.query<{
+        policy_version: string;
+        model: string;
+        position: number;
+        idempotency_key: string;
+      }>(
+        `SELECT
+           rs.policy_version,
+           ri.model,
+           rf.position,
+           rf.idempotency_key
+         FROM recommendation_serves rs
+         INNER JOIN recommendation_impressions ri
+           ON ri.request_id = rs.request_id
+         INNER JOIN recommendation_feedback rf
+           ON rf.request_id = rs.request_id
+          AND rf.listing_id = ri.listing_id
+         WHERE rs.request_id = $1`,
+        [requestId],
+      );
+      assert.deepEqual(attribution.rows[0], {
+        policy_version: "recommendation-heuristic-v2.0",
+        model: "heuristic_ranker_v2",
+        position: 1,
+        idempotency_key: idempotencyKey,
+      });
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+      await pool.end();
+    }
+  },
+);
+
+test(
+  "listing lexical search excludes inactive marketplace inventory",
+  {
+    skip: !shouldRun,
+  },
+  async () => {
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const client = await pool.connect();
+    const suffix = `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+    const sellerId = `it_search_seller_${suffix}`;
+    const activeId = `it_search_active_${suffix}`;
+    const deletedId = `it_search_deleted_${suffix}`;
+
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO users (id, username) VALUES ($1, $2)`,
+        [sellerId, `search_seller_${suffix}`],
+      );
+      await client.query(
+        `INSERT INTO listings (
+           id, seller_id, title, description, price_gbp, status, category
+         )
+         VALUES
+           ($1, $3, 'Archive silk jacket', 'Search policy fixture', 70, 'active', 'outerwear'),
+           ($2, $3, 'Archive silk jacket', 'Search policy fixture', 70, 'deleted', 'outerwear')`,
+        [activeId, deletedId, sellerId],
+      );
+
+      const result = await client.query<{ id: string }>(
+        `SELECT l.id
+         FROM listings l
+         WHERE l.status = 'active'
+           AND (
+             l.search_vector @@ websearch_to_tsquery('simple', $1)
+             OR POSITION(lower($1) IN lower(COALESCE(l.brand, ''))) > 0
+             OR POSITION(lower($1) IN lower(COALESCE(l.category, ''))) > 0
+             OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
+             OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
+           )
+         ORDER BY
+           ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1)) DESC,
+           l.created_at DESC,
+           l.id DESC`,
+        ["silk"],
+      );
+
+      assert.ok(result.rows.some((row) => row.id === activeId));
+      assert.ok(result.rows.every((row) => row.id !== deletedId));
     } finally {
       await client.query("ROLLBACK");
       client.release();

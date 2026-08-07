@@ -14,8 +14,8 @@ import Reanimated, {
   FadeIn,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 
 export type ActivityBadgeVariant =
   | 'viewers'
@@ -35,72 +35,76 @@ interface ActivityBadgeProps {
   style?: object;
 }
 
-const VARIANT_CONFIG: Record<ActivityBadgeVariant, {
+function buildVariantConfig(colors: ThemeColors): Record<ActivityBadgeVariant, {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   iconColor: string;
   glowColor: string;
   defaultLabel: string;
   accent: boolean;
-}> = {
-  viewers: {
-    icon: 'eye-outline',
-    iconColor: Colors.textSecondary,
-    glowColor: Colors.brand,
-    defaultLabel: 'people viewing',
-    accent: false,
-  },
-  closeted: {
-    icon: 'bookmark-outline',
-    iconColor: Colors.brand,
-    glowColor: Colors.brand,
-    defaultLabel: 'in closets',
-    accent: true,
-  },
-  recentSale: {
-    icon: 'checkmark-circle-outline',
-    iconColor: Colors.success,
-    glowColor: Colors.success,
-    defaultLabel: 'sold recently',
-    accent: false,
-  },
-  trending: {
-    icon: 'flame-outline',
-    iconColor: '#FF6B35',
-    glowColor: '#FF6B35',
-    defaultLabel: 'trending',
-    accent: true,
-  },
-  offersPending: {
-    icon: 'chatbubble-outline',
-    iconColor: Colors.brand,
-    glowColor: Colors.brand,
-    defaultLabel: 'offers pending',
-    accent: true,
-  },
-  priceDropped: {
-    icon: 'trending-down-outline',
-    iconColor: Colors.success,
-    glowColor: Colors.success,
-    defaultLabel: 'price dropped',
-    accent: false,
-  },
-  rareItem: {
-    icon: 'diamond-outline',
-    iconColor: Colors.brand,
-    glowColor: Colors.brand,
-    defaultLabel: 'rare find',
-    accent: true,
-  },
-  fastSelling: {
-    icon: 'timer-outline',
-    iconColor: '#FF6B35',
-    glowColor: '#FF6B35',
-    defaultLabel: 'selling fast',
-    accent: true,
-  },
-};
+}> {
+  return {
+    viewers: {
+      icon: 'eye-outline',
+      iconColor: colors.textSecondary,
+      glowColor: colors.brand,
+      defaultLabel: 'people viewing',
+      accent: false,
+    },
+    closeted: {
+      icon: 'bookmark-outline',
+      iconColor: colors.brand,
+      glowColor: colors.brand,
+      defaultLabel: 'in closets',
+      accent: true,
+    },
+    recentSale: {
+      icon: 'checkmark-circle-outline',
+      iconColor: colors.success,
+      glowColor: colors.success,
+      defaultLabel: 'sold recently',
+      accent: false,
+    },
+    trending: {
+      icon: 'flame-outline',
+      iconColor: '#FF6B35',
+      glowColor: '#FF6B35',
+      defaultLabel: 'trending',
+      accent: true,
+    },
+    offersPending: {
+      icon: 'chatbubble-outline',
+      iconColor: colors.brand,
+      glowColor: colors.brand,
+      defaultLabel: 'offers pending',
+      accent: true,
+    },
+    priceDropped: {
+      icon: 'trending-down-outline',
+      iconColor: colors.success,
+      glowColor: colors.success,
+      defaultLabel: 'price dropped',
+      accent: false,
+    },
+    rareItem: {
+      icon: 'diamond-outline',
+      iconColor: colors.brand,
+      glowColor: colors.brand,
+      defaultLabel: 'rare find',
+      accent: true,
+    },
+    fastSelling: {
+      icon: 'timer-outline',
+      iconColor: '#FF6B35',
+      glowColor: '#FF6B35',
+      defaultLabel: 'selling fast',
+      accent: true,
+    },
+  };
+}
 
 function PulsingDot({ color }: { color: string }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const pulse = useSharedValue(1);
 
   React.useEffect(() => {
@@ -134,7 +138,10 @@ export function ActivityBadge({
   subtitle,
   style,
 }: ActivityBadgeProps) {
-  const config = VARIANT_CONFIG[variant];
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const variantConfig = React.useMemo(() => buildVariantConfig(colors), [colors]);
+  const config = variantConfig[variant];
   const displayLabel = label ?? config.defaultLabel;
   const showCount = count !== undefined && count > 0;
 
@@ -174,16 +181,16 @@ export function ActivityBadge({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.lg,
   },
   badgeAccent: {
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   badgeContent: {
     paddingHorizontal: Space.sm + 2,
@@ -198,26 +205,26 @@ const styles = StyleSheet.create({
   pulseDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     marginRight: 6,
   },
   icon: {
-    marginRight: 4,
+    marginRight: Space.xs,
   },
   text: {
     fontSize: Type.meta.size,
-    fontFamily: Type.meta.weight === '500' ? 'Inter_500Medium' : 'Inter_400Regular',
-    color: Colors.textSecondary,
+    fontFamily: Type.meta.weight === '500' ? Typography.family.medium : Typography.family.regular,
+    color: colors.textSecondary,
     lineHeight: Type.meta.lineHeight,
     letterSpacing: Type.meta.letterSpacing,
   },
   count: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   subtitle: {
     fontSize: Type.caption.size,
-    fontFamily: 'Inter_400Regular',
-    color: Colors.textMuted,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
     marginTop: 2,
     marginLeft: 20,
     lineHeight: Type.caption.lineHeight,
@@ -243,6 +250,8 @@ interface ActivityBadgeRowProps {
 }
 
 export function ActivityBadgeRow({ badges, style }: ActivityBadgeRowProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={[styles.rowContainer, style]}>
       {badges.map((badge, index) => (
@@ -257,4 +266,3 @@ export function ActivityBadgeRow({ badges, style }: ActivityBadgeRowProps) {
     </View>
   );
 }
-

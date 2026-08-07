@@ -6,7 +6,9 @@ import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tr
 import type { ChatBot, Conversation, Message as ConversationMessage } from '../data/mockData';
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
-import { updateUserAccountPreferences, updateUserPostagePreferences } from '../services/accountApi';
+import { setSentryUser } from '../platform/monitoring/sentry';
+import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
+import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
 import {
   fetchSystemBotsFromApi,
   fetchCustomBotsFromApi,
@@ -35,6 +37,7 @@ export interface User {
   id: string;
   username: string;
   avatar: string | null;
+  handle?: string;
   coverPhoto?: string | null;
   coverVideo?: string | null;
   bio?: string | null;
@@ -43,11 +46,15 @@ export interface User {
   website?: string | null;
   email?: string | null;
   phone?: string | null;
+  country?: string | null;
   displayName?: string | null;
   birthday?: string;
   role?: string;
   emailVerified?: boolean;
   twoFactorEnabled?: boolean;
+  rating?: number;
+  reviewCount?: number;
+  isVerified?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -70,6 +77,7 @@ export interface ListingPublicationRecovery {
     | 'failed_recoverable';
   listingId?: string;
   uploadedMediaByAssetId: Record<string, string>;
+  uploadedFinalizationByAssetId?: Record<string, string>;
   attachedAssetIds: string[];
   lastError?: string;
 }
@@ -118,7 +126,7 @@ interface CreateGroupConversationInput {
   creatorId?: string;
 }
 
-type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low';
+type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
 type BrowseConditionOption = 'Any' | 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
 
 interface BrowseFilterState {
@@ -127,6 +135,8 @@ interface BrowseFilterState {
   brands: string[];
   sizes: string[];
   condition: BrowseConditionOption;
+  /** Client-side filter: only show items with an estimated A/B sustainability grade. */
+  sustainableOnly: boolean;
 }
 
 interface SavedSearch {
@@ -189,6 +199,9 @@ interface CoOwnComplianceProfile {
   riskDisclosureAccepted: boolean;
   stableCoinWalletConnected: boolean;
   educationCompleted: boolean;
+  dac7Completed?: boolean;
+  dac7Tin?: string;
+  dac7Country?: string;
 }
 
 type CoOwnEligibilityResult = {
@@ -303,6 +316,15 @@ export interface Collection {
   updatedAt: number;
 }
 
+export interface Outfit {
+  id: string;
+  name: string;
+  itemIds: string[];
+  backgroundColor?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 interface StoreState {
   // Auth
   currentUser: User | null;
@@ -311,6 +333,13 @@ interface StoreState {
   logout: () => void;
   updateUserProfile: (updates: Partial<User>) => void;
   fetchMyProfile: () => Promise<void>;
+
+  // General app onboarding — first-launch gate.
+  // The authoritative check lives in AsyncStorage (@thryftverse_onboarding_complete)
+  // via OnboardingScreen.isOnboardingComplete; this flag mirrors it for in-app
+  // access (e.g. Settings reset) and is persisted so returning users skip it.
+  hasCompletedOnboarding: boolean;
+  setHasCompletedOnboarding: (value: boolean) => void;
 
   // Global Interactions
   wishlist: string[]; // array of string item IDs
@@ -411,6 +440,7 @@ interface StoreState {
   availableChatBots: ChatBot[];
   upsertConversation: (conversation: Conversation) => void;
   markConversationRead: (id: string) => void;
+  toggleConversationUnread: (id: string) => void;
   archiveConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
   toggleConversationPinned: (id: string) => void;
@@ -475,6 +505,8 @@ interface StoreState {
   loadBotsFromApi: () => Promise<void>;
 
   userLooks: UserLook[];
+  /** Internal: IDs of looks the current user has liked. */
+  __likedLooks?: string[];
   addUserLook: (look: Omit<UserLook, 'id' | 'createdAt'>) => string;
   removeUserLook: (id: string) => void;
   toggleUserLookLike: (lookId: string) => void;
@@ -489,6 +521,11 @@ interface StoreState {
   updateUserAvatar: (uri: string) => void;
   updateUserCover: (uri: string) => void;
 
+  // Outfits — user-created styling arrangements from closet items
+  outfits: Outfit[];
+  addOutfit: (outfit: Outfit) => void;
+  removeOutfit: (id: string) => void;
+
   // Create action sheet
   createSheetVisible: boolean;
   setCreateSheetVisible: (visible: boolean) => void;
@@ -499,13 +536,24 @@ export const useStore = create<StoreState>()(
     (set, get) => ({
   currentUser: null, // Note: For a real app, load this from secure storage initially
   isAuthenticated: false,
+  hasCompletedOnboarding: false,
+  setHasCompletedOnboarding: (value) => set({ hasCompletedOnboarding: value }),
   login: (user) => {
     set({ currentUser: user, isAuthenticated: true });
     persistLocalAuthSnapshot(user, get().twoFactorEnabled);
+    // Attach Sentry user context for crash attribution. Only authenticated
+    // users receive PII context; non-authenticated users stay unset.
+    setSentryUser({
+      id: user.id,
+      email: user.email ?? undefined,
+      username: user.username,
+    });
   },
   logout: () => {
     set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false });
     persistLocalAuthSnapshot(null, false);
+    // Scrub Sentry user context on logout so subsequent crashes are anonymous.
+    setSentryUser(null);
   },
   updateUserProfile: (updates) =>
     set((state) => {
@@ -852,6 +900,9 @@ export const useStore = create<StoreState>()(
     riskDisclosureAccepted: false,
     stableCoinWalletConnected: false,
     educationCompleted: false,
+    dac7Completed: false,
+    dac7Tin: undefined,
+    dac7Country: undefined,
   },
   updateCoOwnCompliance: (updates) =>
     set((state) => ({
@@ -1046,6 +1097,12 @@ export const useStore = create<StoreState>()(
   toggleCoOwnWatch: (assetId) =>
     set((state) => {
       const isWatched = state.coOwnWatchlist.includes(assetId);
+      // Fire-and-forget backend sync
+      if (isWatched) {
+        void removeFromCoOwnWatchlist(assetId);
+      } else {
+        void addToCoOwnWatchlist(assetId);
+      }
       return {
         coOwnWatchlist: isWatched
           ? state.coOwnWatchlist.filter((id) => id !== assetId)
@@ -1060,6 +1117,7 @@ export const useStore = create<StoreState>()(
     brands: [],
     sizes: [],
     condition: 'Any',
+    sustainableOnly: false,
   },
   updateBrowseFilters: (updates) =>
     set((state) => ({
@@ -1076,6 +1134,7 @@ export const useStore = create<StoreState>()(
         brands: [],
         sizes: [],
         condition: 'Any',
+        sustainableOnly: false,
       },
     }),
 
@@ -1173,10 +1232,12 @@ export const useStore = create<StoreState>()(
     brandsPref: 'Any',
     membersPref: 'Everyone',
   },
-  updatePersonalisationPreferences: (updates) =>
+  updatePersonalisationPreferences: (updates) => {
     set((state) => ({
       personalisationPreferences: { ...state.personalisationPreferences, ...updates },
-    })),
+    }));
+    void updateUserPersonalisation(updates);
+  },
 
   notificationCount: ENABLE_RUNTIME_MOCKS ? 3 : 0,
   setNotificationCount: (count) => set({ notificationCount: count }),
@@ -1216,6 +1277,12 @@ export const useStore = create<StoreState>()(
     set((state) => ({
       conversations: state.conversations.map((c) =>
         c.id === id ? { ...c, unread: false } : c
+      ),
+    })),
+  toggleConversationUnread: (id) =>
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === id ? { ...c, unread: !c.unread } : c
       ),
     })),
   archiveConversation: (id) =>
@@ -1417,9 +1484,24 @@ export const useStore = create<StoreState>()(
     }),
   isMutedConversation: (id) => get().mutedConversationIds.includes(id),
   readReceiptsEnabled: true,
-  setReadReceiptsEnabled: (v) => set({ readReceiptsEnabled: v }),
+  setReadReceiptsEnabled: (v) => {
+    const previous = get().readReceiptsEnabled;
+    set({ readReceiptsEnabled: v });
+    void updateChatPrivacy({ readReceiptsEnabled: v }).catch(() => {
+      // Revert optimistic state so the UI tells the truth (§11): the setting
+      // did not persist server-side. The toggle will visually snap back.
+      set({ readReceiptsEnabled: previous });
+    });
+  },
   allowMessagesFrom: 'everyone',
-  setAllowMessagesFrom: (v) => set({ allowMessagesFrom: v }),
+  setAllowMessagesFrom: (v) => {
+    const previous = get().allowMessagesFrom;
+    set({ allowMessagesFrom: v });
+    void updateChatPrivacy({ allowMessagesFrom: v }).catch(() => {
+      // Revert optimistic state so the UI tells the truth (§11).
+      set({ allowMessagesFrom: previous });
+    });
+  },
   archivedConversationIds: [],
   toggleArchivedConversation: (id) =>
     set((state) => {
@@ -1751,16 +1833,16 @@ export const useStore = create<StoreState>()(
     })),
   toggleUserLookLike: (lookId) =>
     set((state) => {
-      const likedSet = new Set<string>((state as any).__likedLooks ?? []);
+      const likedSet = new Set<string>(state.__likedLooks ?? []);
       if (likedSet.has(lookId)) {
         likedSet.delete(lookId);
       } else {
         likedSet.add(lookId);
       }
-      return { __likedLooks: Array.from(likedSet) } as any;
+      return { __likedLooks: Array.from(likedSet) };
     }),
   isUserLookLiked: (lookId) => {
-    const likedSet = new Set<string>((get() as any).__likedLooks ?? []);
+    const likedSet = new Set<string>(get().__likedLooks ?? []);
     return likedSet.has(lookId);
   },
 
@@ -1779,17 +1861,27 @@ export const useStore = create<StoreState>()(
       };
     }),
 
+  outfits: [],
+  addOutfit: (outfit) =>
+    set((state) => ({
+      outfits: [outfit, ...state.outfits],
+    })),
+  removeOutfit: (id) =>
+    set((state) => ({
+      outfits: state.outfits.filter((o) => o.id !== id),
+    })),
+
   createSheetVisible: false,
   setCreateSheetVisible: (visible) => set({ createSheetVisible: visible }),
 }),
     {
       name: 'thryftverse-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       migrate: (persistedState, version) => {
-        const state = persistedState as Partial<StoreState>;
+        let state = { ...(persistedState as Partial<StoreState>) };
         if (version < 2 && ENABLE_RUNTIME_MOCKS && state.conversations) {
-          return {
+          state = {
             ...state,
             conversations: state.conversations.map((conversation) => {
               if (conversation.participantProfiles?.length) return conversation;
@@ -1800,10 +1892,14 @@ export const useStore = create<StoreState>()(
             }),
           };
         }
+        if (version < 3) {
+          delete state.savedPaymentMethod;
+        }
         return state;
       },
       partialize: (state) => ({
         // Only persist user-critical data, not transient UI state
+        hasCompletedOnboarding: state.hasCompletedOnboarding,
         wishlist: state.wishlist,
         savedProducts: state.savedProducts,
         collections: state.collections,
@@ -1812,7 +1908,8 @@ export const useStore = create<StoreState>()(
         conversations: state.conversations,
         savedSearches: state.savedSearches,
         savedAddress: state.savedAddress,
-        savedPaymentMethod: state.savedPaymentMethod,
+        // Provider-backed payment methods are rehydrated after authentication.
+        // Persisting this projection could resurrect a detached legacy card.
         twoFactorEnabled: state.twoFactorEnabled,
         notificationCount: state.notificationCount,
         userAvatar: state.userAvatar,
@@ -1836,6 +1933,7 @@ export const useStore = create<StoreState>()(
         enabledBotIds: state.enabledBotIds,
         customBots: state.customBots,
         supportTickets: state.supportTickets,
+        outfits: state.outfits,
       }),
     },
   ),

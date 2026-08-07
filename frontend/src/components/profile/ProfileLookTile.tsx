@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
-import { Typography } from '../../theme/designTokens';
+import { Typography, Radius } from '../../theme/designTokens';
 import type { LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
 
@@ -47,7 +47,7 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
         <CachedImage
           uri={item.mediaUrl}
           style={styles.lookImage}
-          containerStyle={{ width: '100%', height: '100%', borderRadius: 2 }}
+          containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
           contentFit="cover"
         />
         {/* Single small badge bottom-right — video glyph takes priority,
@@ -66,7 +66,7 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
 
 const styles = StyleSheet.create({
   lookCard: {},
-  lookImageWrap: { borderRadius: 2, overflow: 'hidden', position: 'relative' },
+  lookImageWrap: { borderRadius: Radius.sm, overflow: 'hidden', position: 'relative' },
   lookImage: { width: '100%', height: '100%' },
   // Small video glyph — white circle with play triangle, subtle shadow
   videoGlyph: {
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     right: 6,
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     right: 6,
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
 });

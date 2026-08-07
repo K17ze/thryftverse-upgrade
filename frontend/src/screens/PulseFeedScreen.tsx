@@ -10,22 +10,23 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { Colors } from '../constants/colors';
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Type, Space, Radius, Typography, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
 import { formatCountdown } from '../data/tradeHub';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type ActivityType = 'auction_live' | 'fresh_drop' | 'price_drop' | 'sold';
 
@@ -44,19 +45,21 @@ interface FeedEvent {
 function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const iconMap: Record<ActivityType, string> = {
+  const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
     fresh_drop: 'cube-outline',
     price_drop: 'trending-down-outline',
     sold: 'checkmark-circle-outline',
   };
   const accentMap: Record<ActivityType, string> = {
-    auction_live: Colors.danger,
-    fresh_drop: Colors.brand,
+    auction_live: colors.danger,
+    fresh_drop: colors.brand,
     // Price-drop orange — semantic accent not yet in token system
     price_drop: '#dd6a33',
-    sold: Colors.success,
+    sold: colors.success,
   };
 
   const handlePress = () => {
@@ -72,7 +75,7 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
         <CachedImage uri={event.image} style={styles.cardImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
-            <Ionicons name={iconMap[event.type] as any} size={14} color={accentMap[event.type]} />
+            <Ionicons name={iconMap[event.type]} size={14} color={accentMap[event.type]} />
             <Text style={[styles.cardTypeLabel, { color: accentMap[event.type] }]}>
               {event.type === 'auction_live' ? 'LIVE AUCTION'
                 : event.type === 'fresh_drop' ? 'FRESH DROP'
@@ -92,7 +95,10 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
 export default function PulseFeedScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { listings } = useBackendData();
+  const reducedMotionEnabled = useReducedMotion();
   const customAuctions = useStore((state) => state.customAuctions);
   const now = Date.now();
 
@@ -191,66 +197,68 @@ export default function PulseFeedScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  scrollContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    padding: Space.md,
-    marginBottom: Space.sm,
-    gap: Space.md,
-  },
-  cardImage: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  cardContent: {
-    flex: 1,
-    gap: 4,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  cardTypeLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.8,
-  },
-  cardTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
-  cardSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  cardMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-    marginTop: 2,
-  },
-  cardMetaAccent: {
-    color: Colors.danger,
-    fontFamily: Typography.family.semibold,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    scrollContent: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.xl,
+    },
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: Space.md,
+      marginBottom: Space.sm,
+      gap: Space.md,
+    },
+    cardImage: {
+      width: Space.xxl + Space.xl,
+      height: Space.xxl + Space.xl,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+    },
+    cardContent: {
+      flex: 1,
+      gap: Space.xs,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs + 2,
+    },
+    cardTypeLabel: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: LetterSpacing.caps,
+    },
+    cardTitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      letterSpacing: Type.body.letterSpacing,
+      lineHeight: Type.body.lineHeight,
+    },
+    cardSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
+      letterSpacing: Type.caption.letterSpacing,
+    },
+    cardMeta: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      letterSpacing: Type.meta.letterSpacing,
+      marginTop: Space.xs / 2,
+    },
+    cardMetaAccent: {
+      color: colors.danger,
+      fontFamily: Typography.family.semibold,
+    },
+  });
+}

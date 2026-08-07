@@ -12,8 +12,8 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  withSpring,
   withTiming,
+  Easing,
   runOnJS,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -23,8 +23,8 @@ import {
   FlatList,
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -44,6 +44,16 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
   if (v > max) return max + (v - max) * friction;
   return v;
 };
+
+const subComponentStyles = StyleSheet.create({
+  page: {
+    backgroundColor: '#0a0a0a',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+});
 
 interface MediaPageProps {
   uri: string;
@@ -74,9 +84,9 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
     })
     .onEnd(() => {
       if (scale.value < MIN_ZOOM) {
-        scale.value = withSpring(MIN_ZOOM);
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        scale.value = withTiming(MIN_ZOOM, { duration: 200 });
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -100,8 +110,8 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
       if (zoom <= 1) {
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withSpring(0, { damping: 18, stiffness: 220 });
-        translateY.value = withSpring(0, { damping: 18, stiffness: 220 });
+        translateX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
         return;
       }
       const maxX = (width * (zoom - 1)) / 2;
@@ -110,23 +120,23 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
       const ty = clamp(translateY.value + e.velocityY * 0.08, -maxY, maxY);
       savedTranslateX.value = tx;
       savedTranslateY.value = ty;
-      translateX.value = withSpring(tx, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityX });
-      translateY.value = withSpring(ty, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityY });
+      translateX.value = withTiming(tx, { duration: 220, easing: Easing.out(Easing.cubic) });
+      translateY.value = withTiming(ty, { duration: 220, easing: Easing.out(Easing.cubic) });
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withSpring(1, { damping: 15 });
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        scale.value = withTiming(1, { duration: 200 });
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
         const target = reducedMotion ? 2 : 2.5;
-        scale.value = withSpring(target, { damping: 12 });
+        scale.value = withTiming(target, { duration: 200, easing: Easing.out(Easing.cubic) });
         savedScale.value = target;
         if (onDoubleTap) runOnJS(onDoubleTap)();
       }
@@ -139,18 +149,18 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
 
   return (
     <GestureDetector gesture={composed}>
-      <Reanimated.View style={[styles.page, { width, height }, animStyle]}>
+      <Reanimated.View style={[subComponentStyles.page, { width, height }, animStyle]}>
         {failed || !uri ? (
           // Premium fallback for missing/failed media — never a bare gray box.
           <ImageEmptyGraphic
             icon="image-outline"
             label="Photo unavailable"
-            style={styles.image}
+            style={subComponentStyles.image}
           />
         ) : (
           <SharedTransitionImage
             source={{ uri }}
-            style={styles.image}
+            style={subComponentStyles.image}
             resizeMode="cover"
             sharedTransitionTag={sharedTransitionTag}
             onError={() => setFailed(true)}
@@ -163,10 +173,10 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
 
 function VideoPage({ uri, width, height, shouldPlay }: { uri: string; width: number; height: number; shouldPlay: boolean }) {
   return (
-    <View style={[styles.page, { width, height }]}>
+    <View style={[subComponentStyles.page, { width, height }]}>
       <Video
         source={{ uri }}
-        style={styles.image}
+        style={subComponentStyles.image}
         resizeMode={ResizeMode.COVER}
         shouldPlay={shouldPlay}
         isMuted
@@ -214,6 +224,8 @@ export function ProductMediaGallery({
   bigHeartOpacity,
   bigHeartScale,
 }: ProductMediaGalleryProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList<any>>(null);
@@ -337,7 +349,7 @@ export function ProductMediaGallery({
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? Colors.brand : '#fff'}
+              color={isSaved ? colors.brand : '#fff'}
             />
           </AnimatedPressable>
 
@@ -346,7 +358,7 @@ export function ProductMediaGallery({
               isActive={isFav}
               onToggle={onToggleFav}
               size={24}
-              activeColor={Colors.danger}
+              activeColor={colors.danger}
               inactiveColor="#fff"
             />
           </View>
@@ -416,18 +428,12 @@ export function ProductMediaGallery({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   heroContainer: {
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
-  },
-  page: {
-    backgroundColor: '#0a0a0a',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
   },
   topScrim: {
     position: 'absolute',
@@ -452,14 +458,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: Space.lg,
     left: Space.md,
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
   },
   soldText: {
-    color: Colors.background,
-    fontSize: 16,
+    color: colors.background,
+    fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
   },
@@ -480,7 +486,7 @@ const styles = StyleSheet.create({
   controlBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.xxl,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -496,7 +502,7 @@ const styles = StyleSheet.create({
   },
   indexText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   videoBadge: {
@@ -505,15 +511,15 @@ const styles = StyleSheet.create({
     left: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
+    paddingHorizontal: Space.sm + 2,
     paddingVertical: 5,
     borderRadius: Radius.md,
   },
   videoBadgeText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   thumbnailStrip: {
@@ -524,7 +530,7 @@ const styles = StyleSheet.create({
   },
   thumbnailContent: {
     paddingHorizontal: Space.md,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   thumbnail: {
     width: 40,
@@ -549,9 +555,10 @@ const styles = StyleSheet.create({
     right: 2,
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  });
+}

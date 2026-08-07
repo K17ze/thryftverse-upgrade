@@ -18,6 +18,7 @@ export interface PublicationContext {
   stage: PublicationStage;
   listingId?: string;
   uploadedMediaByAssetId: Record<string, string>;
+  uploadedFinalizationByAssetId: Record<string, string>;
   attachedAssetIds: string[];
   lastError?: string;
 }
@@ -99,6 +100,9 @@ export async function executePublication(
     stage: 'validating',
     listingId: input.existingRecovery?.listingId,
     uploadedMediaByAssetId: { ...(input.existingRecovery?.uploadedMediaByAssetId ?? {}) },
+    uploadedFinalizationByAssetId: {
+      ...(input.existingRecovery?.uploadedFinalizationByAssetId ?? {}),
+    },
     attachedAssetIds: [...(input.existingRecovery?.attachedAssetIds ?? [])],
     lastError: undefined,
   };
@@ -137,8 +141,12 @@ export async function executePublication(
 
     // Merge uploaded URLs into context
     for (const m of resolvedMedia) {
+      const uploadResult = queue.getResultMap().get(m.id);
       if (m.publicUrl) {
         ctx.uploadedMediaByAssetId[m.id] = m.publicUrl;
+      }
+      if (uploadResult?.finalizationId) {
+        ctx.uploadedFinalizationByAssetId[m.id] = uploadResult.finalizationId;
       }
     }
 
@@ -163,7 +171,18 @@ export async function executePublication(
       return { ok: false, error: ctx.lastError, context: ctx };
     }
 
-    const coverImage = uploadedUrls[0];
+    const coverMedia = resolvedMedia.find((media) => media.kind === 'image');
+    const coverImage = coverMedia
+      ? ctx.uploadedMediaByAssetId[coverMedia.id] || coverMedia.publicUrl
+      : undefined;
+    const coverFinalizationId = coverMedia
+      ? ctx.uploadedFinalizationByAssetId[coverMedia.id]
+      : undefined;
+    if (!coverImage || !coverFinalizationId) {
+      setStage('failed_recoverable');
+      ctx.lastError = 'A verified cover image is required before publishing this listing.';
+      return { ok: false, error: ctx.lastError, context: ctx };
+    }
 
     // 2. Create listing if not already created
     setStage('creating_listing');
@@ -177,6 +196,7 @@ export async function executePublication(
         description: input.description.trim(),
         priceGbp: input.priceGbp,
         imageUrl: coverImage,
+        coverFinalizationId,
         status: 'active',
         category: input.category,
         brand: input.brand,
@@ -196,6 +216,10 @@ export async function executePublication(
       const url = ctx.uploadedMediaByAssetId[m.id] || m.publicUrl;
       if (!url || isLocalUri(url)) continue;
       if (ctx.attachedAssetIds.includes(m.id)) continue;
+      const finalizationId = ctx.uploadedFinalizationByAssetId[m.id];
+      if (!finalizationId) {
+        throw new Error(`Media ${m.id} is missing server verification. Upload it again before publishing.`);
+      }
 
       await createListingImageOnApi({
         id: makeAttachmentId(listingId, m.id),
@@ -204,6 +228,8 @@ export async function executePublication(
         sortOrder: i,
         mediaWidth: m.width,
         mediaHeight: m.height,
+        mediaType: m.kind,
+        finalizationId,
       });
       ctx.attachedAssetIds.push(m.id);
     }
@@ -226,6 +252,7 @@ export function buildRecoveryState(ctx: PublicationContext): ListingPublicationR
     stage: ctx.stage,
     listingId: ctx.listingId,
     uploadedMediaByAssetId: ctx.uploadedMediaByAssetId,
+    uploadedFinalizationByAssetId: ctx.uploadedFinalizationByAssetId,
     attachedAssetIds: ctx.attachedAssetIds,
     lastError: ctx.lastError,
   };

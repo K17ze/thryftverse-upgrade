@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Typography, Space, Radius } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import type { ListingEngagementSummary } from '../../platform/product';
 
 export interface ProductIdentitySummaryProps {
@@ -29,6 +29,8 @@ export function ProductIdentitySummary({
   izeText,
   engagement,
 }: ProductIdentitySummaryProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const engagementParts: string[] = [];
   if (engagement?.likes && engagement.likes > 0) {
     engagementParts.push(`${engagement.likes} like${engagement.likes > 1 ? 's' : ''}`);
@@ -84,13 +86,13 @@ export function ProductIdentitySummary({
 
       {showInterestSignal ? (
         <View style={styles.interestRow}>
-          <Ionicons name="people-outline" size={13} color={Colors.brand} />
+          <Ionicons name="people-outline" size={13} color={colors.brand} />
           <Text style={styles.interestText} numberOfLines={1}>
             {interestCount} people are interested
           </Text>
           {showWatching ? (
             <View style={styles.watchingBadge}>
-              <Ionicons name="eye" size={10} color={Colors.danger} />
+              <Ionicons name="eye" size={10} color={colors.danger} />
               <Text style={styles.watchingText} numberOfLines={1}>
                 {watcherCount} watching
               </Text>
@@ -106,24 +108,25 @@ export function ProductIdentitySummary({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
   brand: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Space.xs,
   },
   title: {
-    fontSize: 22,
+    fontSize: Type.title.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
-    lineHeight: 28,
-    letterSpacing: -0.4,
+    color: colors.textPrimary,
+    lineHeight: Type.title.lineHeight + 2,
+    letterSpacing: Type.title.letterSpacing,
     marginBottom: Space.sm,
   },
   priceRow: {
@@ -133,17 +136,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   price: {
-    fontSize: 28,
+    fontSize: Type.priceLarge.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.6,
     flexShrink: 1,
     minWidth: 0,
   },
   originalPrice: {
-    fontSize: 15,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textDecorationLine: 'line-through',
     flexShrink: 0,
   },
@@ -151,11 +154,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.danger,
+    backgroundColor: colors.danger,
     flexShrink: 0,
   },
   dropBadgeText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.bold,
     color: '#fff',
     letterSpacing: 0.2,
@@ -163,47 +166,48 @@ const styles = StyleSheet.create({
   interestRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.xs,
   },
   interestText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     flexShrink: 1,
   },
   watchingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.danger}12`,
+    backgroundColor: `${colors.danger}12`,
     flexShrink: 0,
   },
   watchingText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.danger,
+    color: colors.danger,
   },
   protectionTotal: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: Space.xs,
   },
   izeText: {
-    fontSize: 13,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
     letterSpacing: 0.1,
   },
   engagementText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: Space.xs,
   },
-});
+  });
+}

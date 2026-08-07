@@ -8,11 +8,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, TypeStyles } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -23,12 +23,13 @@ import { EmptyState } from '../components/EmptyState';
 import { useBackendData } from '../context/BackendDataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
 
   const conversations = useStore((state) => state.conversations);
   const messageRequests = useStore((state) => state.messageRequests);
@@ -43,6 +44,8 @@ export default function MessageRequestsScreen() {
   const requestConversations = useMemo(() => {
     return conversations.filter((c) => messageRequests.includes(c.id));
   }, [conversations, messageRequests]);
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleAccept = (id: string) => {
     haptic.medium();
@@ -137,10 +140,10 @@ export default function MessageRequestsScreen() {
               <View style={styles.requestTop}>
                 <BodyEmphasis numberOfLines={1} style={styles.requestName}>{displayTitle}</BodyEmphasis>
                 {item.lastMessageTime && (
-                  <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
+                  <Caption color={colors.textMuted}>{item.lastMessageTime}</Caption>
                 )}
               </View>
-              <Caption color={Colors.textMuted} numberOfLines={2} style={styles.requestPreview}>
+              <Caption color={colors.textMuted} numberOfLines={2} style={styles.requestPreview}>
                 {item.lastMessage ?? 'Wants to message you'}
               </Caption>
             </View>
@@ -153,25 +156,25 @@ export default function MessageRequestsScreen() {
                 <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
               ) : (
                 <View style={styles.listingThumbPlaceholder}>
-                  <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
+                  <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
                 </View>
               )}
               <View style={styles.listingInfo}>
-                <Caption color={Colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
+                <Caption color={colors.textSecondary} numberOfLines={1} style={styles.listingTitle}>{listing.title}</Caption>
                 {listing.price != null && (
                   <Text style={styles.listingPrice}>
                     £{listing.price.toFixed(2)}
                   </Text>
                 )}
               </View>
-              <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
             </View>
           )}
 
           {/* Safety note — only for non-marketplace requests */}
           {!listing && (
             <View style={styles.safetyNote}>
-              <Ionicons name="shield-outline" size={12} color={Colors.textMuted} />
+              <Ionicons name="shield-outline" size={12} color={colors.textMuted} />
               <Text style={styles.safetyNoteText}>
                 If this seems suspicious, decline and block.
               </Text>
@@ -216,7 +219,7 @@ export default function MessageRequestsScreen() {
                 accessibilityLabel={`Block ${displayTitle}`}
                 style={styles.expandedBtn}
               >
-                <Ionicons name="ban-outline" size={14} color={Colors.danger} />
+                <Ionicons name="ban-outline" size={14} color={colors.danger} />
                 <Text style={styles.expandedBtnTextDanger}>Block</Text>
               </AnimatedPressable>
               <AnimatedPressable
@@ -228,7 +231,7 @@ export default function MessageRequestsScreen() {
                 accessibilityLabel={`Report ${displayTitle}`}
                 style={styles.expandedBtn}
               >
-                <Ionicons name="flag-outline" size={14} color={Colors.danger} />
+                <Ionicons name="flag-outline" size={14} color={colors.danger} />
                 <Text style={styles.expandedBtnTextDanger}>Report</Text>
               </AnimatedPressable>
               <AnimatedPressable
@@ -240,7 +243,7 @@ export default function MessageRequestsScreen() {
                 accessibilityLabel="Hide options"
                 style={styles.expandedBtn}
               >
-                <Ionicons name="chevron-up-outline" size={14} color={Colors.textMuted} />
+                <Ionicons name="chevron-up-outline" size={14} color={colors.textMuted} />
                 <Text style={styles.expandedBtnTextMuted}>Less</Text>
               </AnimatedPressable>
             </View>
@@ -255,7 +258,7 @@ export default function MessageRequestsScreen() {
               style={styles.moreBtn}
             >
               <Text style={styles.moreBtnText}>Block or report</Text>
-              <Ionicons name="chevron-down-outline" size={12} color={Colors.textMuted} />
+              <Ionicons name="chevron-down-outline" size={12} color={colors.textMuted} />
             </AnimatedPressable>
           )}
         </View>
@@ -276,7 +279,7 @@ export default function MessageRequestsScreen() {
           accessibilityRole="button"
           style={styles.backBtn}
         >
-          <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerTitle}>Requests</Text>
@@ -300,7 +303,7 @@ export default function MessageRequestsScreen() {
         <FlashList
           data={requestConversations}
           keyExtractor={(c) => c.id}
-          renderItem={renderItem as any}
+          renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
@@ -309,196 +312,198 @@ export default function MessageRequestsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screenRoot: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  compactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: TypeStyles.title.fontFamily,
-    color: Colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  headerSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
-  },
-  listContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xxl,
-  },
-  requestRow: {
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
-  requestIdentity: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm + 6,
-  },
-  requestText: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 2,
-  },
-  requestTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  requestName: {
-    flex: 1,
-  },
-  requestPreview: {
-    lineHeight: Type.caption.lineHeight + 2,
-    marginTop: 2,
-  },
-  listingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.md,
-    padding: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  listingThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.sm,
-  },
-  listingThumbPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listingInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  listingTitle: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
-  listingPrice: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
-  },
-  safetyNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.xs,
-  },
-  safetyNoteText: {
-    fontSize: Type.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
-  },
-  requestActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-  },
-  requestDecline: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  requestDeclineText: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
-  },
-  requestAccept: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.textPrimary,
-  },
-  requestAcceptText: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textInverse,
-  },
-  requestSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginLeft: Space.md,
-    marginRight: Space.md,
-  },
-  expandedActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    paddingTop: Space.xs,
-  },
-  expandedBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  expandedBtnTextDanger: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.danger,
-  },
-  expandedBtnTextMuted: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textMuted,
-  },
-  moreBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 8,
-  },
-  moreBtnText: {
-    fontSize: Type.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screenRoot: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    compactHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    backBtn: {
+      width: Space.xl + Space.xs + 4,
+      height: Space.xl + Space.xs + 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitleWrap: {
+      flex: 1,
+      alignItems: 'center',
+      gap: Space.xs / 2,
+    },
+    headerTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: TypeStyles.title.fontFamily,
+      color: colors.textPrimary,
+      letterSpacing: Type.subtitle.letterSpacing,
+    },
+    headerSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      color: colors.textMuted,
+    },
+    listContent: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.xxl,
+    },
+    requestRow: {
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      gap: Space.sm,
+    },
+    requestIdentity: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.sm + 6,
+    },
+    requestText: {
+      flex: 1,
+      justifyContent: 'center',
+      gap: Space.xs / 2,
+    },
+    requestTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Space.sm,
+    },
+    requestName: {
+      flex: 1,
+    },
+    requestPreview: {
+      lineHeight: Type.caption.lineHeight + 2,
+      marginTop: Space.xs / 2,
+    },
+    listingCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.md,
+      padding: Space.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    listingThumb: {
+      width: Space.xl + Space.xs + 4,
+      height: Space.xl + Space.xs + 4,
+      borderRadius: Radius.sm,
+    },
+    listingThumbPlaceholder: {
+      width: Space.xl + Space.xs + 4,
+      height: Space.xl + Space.xs + 4,
+      borderRadius: Radius.sm,
+      backgroundColor: colors.surface,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    listingInfo: {
+      flex: 1,
+      gap: Space.xs / 2,
+    },
+    listingTitle: {
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    },
+    listingPrice: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      color: colors.textPrimary,
+    },
+    safetyNote: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.xs,
+    },
+    safetyNoteText: {
+      fontSize: Type.meta.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      color: colors.textMuted,
+    },
+    requestActions: {
+      flexDirection: 'row',
+      gap: Space.sm,
+    },
+    requestDecline: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: Space.xs + 3,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    requestDeclineText: {
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      color: colors.textPrimary,
+    },
+    requestAccept: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: Space.xs + 3,
+      borderRadius: Radius.md,
+      backgroundColor: colors.textPrimary,
+    },
+    requestAcceptText: {
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      color: colors.textInverse,
+    },
+    requestSeparator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginLeft: Space.md,
+      marginRight: Space.md,
+    },
+    expandedActions: {
+      flexDirection: 'row',
+      gap: Space.sm,
+      paddingTop: Space.xs,
+    },
+    expandedBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.xs + 2,
+      paddingVertical: Space.xs + 2,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    expandedBtnTextDanger: {
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      color: colors.danger,
+    },
+    expandedBtnTextMuted: {
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      color: colors.textMuted,
+    },
+    moreBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.sm,
+    },
+    moreBtnText: {
+      fontSize: Type.meta.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      color: colors.textMuted,
+    },
+  });
+}

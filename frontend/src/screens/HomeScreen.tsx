@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  ScrollView,
   Dimensions,
   RefreshControl,
   Modal,
@@ -15,6 +14,7 @@ import {
   AppState,
   useWindowDimensions,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
@@ -28,21 +28,19 @@ import { Video, ResizeMode } from '../components/compat/Video';
 import { ImageContentFit } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
 import { fetchPosterStories } from '../services/postersApi';
 import type { PosterStory } from '../services/postersApi';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../navigation/types';
+import { NativeStackNavigationProp, RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useTabScroll } from '../context/TabScrollContext';
 // Phase 3: Removed AnimatedBadge (badge clutter reduced)
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -54,25 +52,42 @@ import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile'
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { MasonryGrid, ProductCardV2 } from '../components/ProductCardV2';
 import { DoubleTapHeart } from '../components/DoubleTapHeart';
-import { getBackendSyncStatus } from '../utils/syncStatus';
-import { isVideoUri } from '../utils/media';
+import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Type } from '../theme/designTokens';
+import { Space, Radius, Type, Stroke } from '../theme/designTokens';
 import { T } from '../components/ui/Text';
 import { Typography } from '../theme/designTokens';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
+import { useForYouFeed } from '../hooks/useForYouFeed';
+import { markInteractive } from '../platform/monitoring';
+
+// Lazy-load the monitoring module at call time to avoid circular import
+// issues where the static binding may be undefined during initial module
+// evaluation.
+function safeMarkInteractive(attributes: Record<string, string | number | boolean | null | undefined> | undefined): void {
+  try {
+    // Use a dynamic require to bypass the static import binding which may
+    // be undefined due to circular dependency resolution order.
+    const mod = require('../platform/monitoring');
+    if (mod && typeof mod.markInteractive === 'function') {
+      mod.markInteractive(attributes);
+    }
+  } catch {
+    // Observability must never crash the app.
+  }
+}
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const HEADER_EXPANDED = 58;
 const HEADER_COLLAPSED = 52;
-const GRID_GAP = Space.sm; // 8pt — design contract discovery gutter
+const GRID_GAP = 12; // 12pt — breathable discovery gutter (flagship spacing)
 // Missing media is not photography and should not dominate discovery like it is.
 // Keep the fallback compact while real assets continue to use their API geometry.
 const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
@@ -81,10 +96,17 @@ const POSTER_CARD_HEIGHT = 135;
 const LISTING_CARD_CHROME_HEIGHT = 110;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-const PANEL_BG = Colors.surfaceAlt;
-
 // Skeleton variation communicates loading without inventing media geometry.
 const SKELETON_HEIGHT_RATIOS = [1.25, 1.08, 1.32, 1.16] as const;
+
+// P0-3: FlashList virtualizes the home feed so memory does not grow with feed
+// length. FlashList v2 measures items automatically, so per-item heights do
+// not need to be declared. `onEndReached` is a native FlashList prop (no `as
+// any` cast onto ScrollView). The animated wrapper lets Reanimated's scroll
+// handler drive the floating header collapse/expand.
+const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<
+  React.ComponentProps<typeof FlashList<ExploreTile>> & { ref?: React.Ref<any> }
+>;
 
 interface MediaPreviewProps {
   uri: string;
@@ -92,6 +114,7 @@ interface MediaPreviewProps {
   style?: StyleProp<ImageStyle>;
   containerStyle?: StyleProp<ViewStyle>;
   contentFit?: ImageContentFit;
+  focalPoint?: { x: number; y: number };
   autoPlay?: boolean;
   muted?: boolean;
   loop?: boolean;
@@ -104,6 +127,7 @@ function MediaPreview({
   style,
   containerStyle,
   contentFit = 'cover',
+  focalPoint,
   autoPlay = false,
   muted = true,
   loop = true,
@@ -130,26 +154,11 @@ function MediaPreview({
       style={style}
       containerStyle={containerStyle}
       contentFit={contentFit}
+      focalPoint={focalPoint}
       isVisible={isVisible}
     />
   );
 }
-
-type StoryStatus = 'new-listing' | 'live-auction' | 'co-own-launching' | 'sold-recently';
-
-const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
-  'new-listing': 'new listing',
-  'live-auction': 'auction',
-  'co-own-launching': 'co-own launch',
-  'sold-recently': 'sold recently',
-};
-
-const STORY_STATUS_GRADIENT: Record<StoryStatus, [string, string]> = {
-  'new-listing': [Colors.brand, Colors.brandPressed],
-  'live-auction': [Colors.textSecondary, Colors.textMuted],
-  'co-own-launching': [Colors.success, Colors.success + '99'],
-  'sold-recently': [Colors.danger, Colors.danger + '99'],
-};
 
 // Trend clips removed — demo-only content, not real data
 
@@ -169,18 +178,9 @@ type ExploreTile = {
   isSaved?: boolean;
 };
 
-type StoryBubble = {
-  id: string;
-  userId: string;
-  username: string;
-  avatar: string;
-  posterId?: string;
-  isNew: boolean;
-  status: StoryStatus;
-  isSaved?: boolean;
-};
-
 const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { story: PosterStory }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const firstFrame = story.frames[0];
   const composition = React.useMemo<CreatorDocument | null>(() => {
     if (!story.compositionDocument) return null;
@@ -218,7 +218,7 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
     return <CachedImage uri={firstFrame.mediaUrl} style={styles.posterImage} contentFit="cover" />;
   }
 
-  const backgroundColor = firstFrame?.backgroundColor ?? Colors.surfaceAlt;
+  const backgroundColor = firstFrame?.backgroundColor ?? colors.surfaceAlt;
   return (
     <LinearGradient
       colors={[backgroundColor, '#111111']}
@@ -236,6 +236,8 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
 });
 
 function ListingMediaPlaceholder({ category }: { category?: string }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const normalized = category?.toLowerCase() ?? '';
   const icon: React.ComponentProps<typeof Ionicons>['name'] = normalized.includes('shoe')
     ? 'footsteps-outline'
@@ -247,16 +249,17 @@ function ListingMediaPlaceholder({ category }: { category?: string }) {
 
   return (
     <LinearGradient
-      colors={[Colors.surfaceAlt, Colors.background]}
+      colors={[colors.surfaceAlt, colors.background]}
       start={{ x: 0.08, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.listingMediaPlaceholder}
       accessibilityLabel="Product image unavailable"
+      accessibilityRole="image"
     >
       <View style={styles.listingMediaPlaceholderOrbLarge} />
       <View style={styles.listingMediaPlaceholderOrbSmall} />
       <View style={styles.listingMediaPlaceholderIcon}>
-        <Ionicons name={icon} size={28} color={Colors.textMuted} />
+        <Ionicons name={icon} size={28} color={colors.textMuted} />
       </View>
     </LinearGradient>
   );
@@ -286,6 +289,8 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
   sellerUsername,
   sellerAvatar,
 }: ExploreGridItemProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const sharedTag = item.mediaType === 'image' && item.routeId
     ? `image-${item.routeId}-0`
     : undefined;
@@ -329,6 +334,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
                 loop
                 muted
                 contentFit="cover"
+                focalPoint={getCategoryFocalPoint(item.category)}
                 isVisible
               />
             ) : (
@@ -362,7 +368,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
               />
             ) : (
               <View style={styles.exploreSellerAvatarFallback}>
-                <Ionicons name="person" size={12} color={Colors.textMuted} />
+                <Ionicons name="person" size={12} color={colors.textMuted} />
               </View>
             )}
             <Text style={styles.exploreSellerText} numberOfLines={1}>
@@ -376,7 +382,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
             accessibilityRole="button"
             accessibilityLabel="Message seller"
           >
-            <Ionicons name="chatbubble-outline" size={14} color={Colors.textPrimary} />
+            <Ionicons name="chatbubble-outline" size={14} color={colors.textPrimary} />
             <Text style={styles.exploreMessageText}>Chat</Text>
           </AnimatedPressable>
         </View>
@@ -386,15 +392,18 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
 });
 
 export default function HomeScreen() {
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
   const followingFeed = useFollowingFeed();
+  const forYouFeed = useForYouFeed();
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<ExploreTile | null>(null);
@@ -407,6 +416,7 @@ export default function HomeScreen() {
   const scrollRef = React.useRef<any>(null);
   const knownListingIdsRef = React.useRef<Set<string>>(new Set());
   const seededKnownListingIdsRef = React.useRef(false);
+  const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const headerExpandedHeight = React.useMemo(() => HEADER_EXPANDED + insets.top, [insets.top]);
   const headerCollapsedHeight = React.useMemo(() => HEADER_COLLAPSED + insets.top, [insets.top]);
@@ -510,6 +520,9 @@ export default function HomeScreen() {
       if (pollingTimer) {
         clearInterval(pollingTimer);
       }
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
       appStateSubscription.remove();
     };
   }, [refreshListings, refreshing]);
@@ -527,20 +540,26 @@ export default function HomeScreen() {
       return new Set();
     });
 
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    // FlashList exposes scrollToOffset rather than ScrollView's scrollTo.
+    scrollRef.current?.scrollToOffset?.({ offset: 0, animated: true });
   }, [scrollRef]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshListings();
     void followingFeed.refresh();
+    void forYouFeed.refresh();
     setPostersLoading(true);
     fetchPosterStories({ active: true, limit: 20 })
       .then((res) => setRealPosters(res.items))
       .catch(() => {})
       .finally(() => setPostersLoading(false));
     acknowledgeNewListings();
-    setTimeout(() => setRefreshing(false), 380);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      setRefreshing(false);
+    }, 380);
   };
 
   const [realPosters, setRealPosters] = React.useState<PosterStory[]>([]);
@@ -557,16 +576,6 @@ export default function HomeScreen() {
       .finally(() => { if (mounted) setPostersLoading(false); });
     return () => { mounted = false; };
   }, []);
-
-  const feedStatus = React.useMemo(
-    () =>
-      getBackendSyncStatus({
-        isSyncing,
-        source,
-        hasError: Boolean(lastError),
-      }),
-    [isSyncing, lastError, source],
-  );
 
   const showFeedLoadingSkeleton = isSyncing && !lastError;
 
@@ -628,25 +637,58 @@ export default function HomeScreen() {
     });
   }, [followingFeed.listings, wishlist]);
 
-  const activeFeedData = feedMode === 'following' ? followingExploreData : exploreData;
-  const activeListings = feedMode === 'following' ? followingFeed.listings : listings;
+  // For You feed: transform personalised recommendations into ExploreTile shape
+  const forYouExploreData = React.useMemo<ExploreTile[]>(() => {
+    return forYouFeed.listings.map((item): ExploreTile => {
+      const primaryMediaUri = item.images?.[0] ?? '';
+      const posterUri = item.images?.find((uri) => !isVideoUri(uri));
+
+      return {
+        id: `item_${item.id}`,
+        type: 'listing',
+        mediaType: isVideoUri(primaryMediaUri) ? 'video' : 'image',
+        mediaUri: primaryMediaUri,
+        posterUri: isVideoUri(primaryMediaUri) ? posterUri : undefined,
+        likes: item.likes,
+        price: item.price,
+        routeId: item.id,
+        sellerId: item.sellerId,
+        caption: item.title,
+        category: item.subcategory || item.category,
+        aspectRatio: primaryMediaUri
+          ? resolveListingMediaHeightRatio(item)
+          : MISSING_MEDIA_HEIGHT_RATIO,
+        isSaved: wishlist.includes(item.id),
+      };
+    });
+  }, [forYouFeed.listings, wishlist]);
+
+  // For You mode uses personalised recommendations; fall back to all listings
+  // when the recommendation feed is empty or errored with no cached results.
+  const effectiveForYouData = forYouFeed.listings.length > 0 ? forYouExploreData : exploreData;
+  const effectiveForYouListings = forYouFeed.listings.length > 0 ? forYouFeed.listings : listings;
+
+  const activeFeedData = feedMode === 'following' ? followingExploreData : effectiveForYouData;
+  const activeListings = feedMode === 'following' ? followingFeed.listings : effectiveForYouListings;
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
-  const feedGridData = (showFeedLoadingSkeleton || showFollowingLoading) ? [] : activeFeedData;
+  const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
+  const feedGridData = (showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading) ? [] : activeFeedData;
 
-  const masonryColumns = React.useMemo(() => {
-    const columns: [Array<{ tile: ExploreTile; originalIndex: number }>, Array<{ tile: ExploreTile; originalIndex: number }>] = [[], []];
-    const columnHeights = [0, 0];
-
-    activeFeedData.forEach((tile, originalIndex) => {
-      const tileHeight = Math.round(gridTileWidth * tile.aspectRatio) + LISTING_CARD_CHROME_HEIGHT;
-      const targetIndex = columnHeights[0] <= columnHeights[1] ? 0 : 1;
-      columns[targetIndex].push({ tile, originalIndex });
-      columnHeights[targetIndex] += tileHeight + GRID_GAP;
-    });
-
-    return columns;
-  }, [activeFeedData, gridTileWidth]);
+  // EAS Observe: record TTI once the home feed has real content rendered for
+  // the first time. Only the first markInteractive() call across the whole app
+  // records the metric, so this is safe to fire on every transition into a
+  // populated feed.
+  const feedFirstRenderRef = React.useRef(false);
+  React.useEffect(() => {
+    if (feedFirstRenderRef.current) {
+      return;
+    }
+    if (feedGridData.length > 0) {
+      feedFirstRenderRef.current = true;
+      safeMarkInteractive({ surface: 'home_feed_first_render', feed_mode: feedMode });
+    }
+  }, [feedGridData.length, feedMode]);
 
   const closePeek = React.useCallback(() => {
     setPeekItem(null);
@@ -658,6 +700,15 @@ export default function HomeScreen() {
         <View style={styles.postersSection}>
           <View style={styles.posterSectionHeading}>
             <Text style={styles.posterSectionTitle}>Posters</Text>
+            <Pressable
+              style={styles.posterHeaderCameraBtn}
+              onPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
+              accessibilityRole="button"
+              accessibilityLabel="Create poster with camera"
+              accessibilityHint="Opens camera to create a new poster"
+            >
+              <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
+            </Pressable>
           </View>
           <HorizontalRail contentContainerStyle={styles.postersScroll}>
             {Array.from({ length: 4 }).map((_, index) => (
@@ -679,13 +730,48 @@ export default function HomeScreen() {
       <View style={styles.postersSection}>
         <View style={styles.posterSectionHeading}>
           <Text style={styles.posterSectionTitle}>Posters</Text>
+          <Pressable
+            style={styles.posterHeaderCameraBtn}
+            onPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
+            accessibilityRole="button"
+            accessibilityLabel="Create poster with camera"
+            accessibilityHint="Opens camera to create a new poster"
+          >
+            <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
+          </Pressable>
         </View>
 
         <HorizontalRail
           contentContainerStyle={styles.postersScroll}
         >
+          <AnimatedPressable
+            key="poster-create"
+            style={styles.posterCreateCard}
+            activeOpacity={0.9}
+            onPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
+            accessibilityRole="button"
+            accessibilityLabel="Create poster with camera"
+            accessibilityHint="Opens camera to create a new poster"
+          >
+            <View style={styles.posterCreateTile}>
+              <LinearGradient
+                colors={['#FF6B6B', '#FF8E53', '#FFA500']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.posterCreateGradient}
+              >
+                <View style={styles.posterCreateInner}>
+                  <Ionicons name="camera" size={28} color={colors.textPrimary} />
+                </View>
+              </LinearGradient>
+              <View style={styles.posterCreatePlusBadge}>
+                <Ionicons name="add" size={14} color="#fff" />
+              </View>
+            </View>
+            <Text style={styles.posterCreateLabel} numberOfLines={1}>Your Poster</Text>
+          </AnimatedPressable>
           {(() => {
-            // Sort stories: unwatched-first, then watched
+            // Sort posters: unwatched-first, then watched
             const sortedPosters = [...realPosters].sort((a, b) => {
               if (a.seenByViewer === b.seenByViewer) return 0;
               return a.seenByViewer ? 1 : -1;
@@ -693,7 +779,7 @@ export default function HomeScreen() {
             const unwatchedCount = realPosters.filter((s) => !s.seenByViewer).length;
             return sortedPosters.map((story, idx) => {
             const isUnwatched = !story.seenByViewer;
-            // Show unwatched badge on the first unwatched story
+            // Show unwatched badge on the first unwatched poster
             const showUnwatchedBadge = isUnwatched && idx === 0 && unwatchedCount > 1;
             return (
             <AnimatedPressable
@@ -702,8 +788,8 @@ export default function HomeScreen() {
               activeOpacity={0.9}
               onPress={() => { haptic.light(); navigation.navigate('PosterViewer', { storyId: story.id }); }}
               accessibilityRole="button"
-              accessibilityLabel={`Open poster story by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
-              accessibilityHint="Opens poster story viewer"
+              accessibilityLabel={`Open poster by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
+              accessibilityHint="Opens poster viewer"
             >
               <View style={[styles.posterTile, isUnwatched ? styles.posterTileUnseen : styles.posterTileSeen, isUnwatched && styles.posterTileRing]}>
                 <PosterStoryArtwork story={story} />
@@ -715,20 +801,19 @@ export default function HomeScreen() {
                   </Text>
                   <View
                     style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
-                    accessible
-                    accessibilityLabel={isUnwatched ? 'New poster' : 'Seen poster'}
+                    accessible={false}
                   />
                 </View>
 
                 {story.totalFrameCount > 1 && (
-                  <View style={styles.frameCountBadge}>
-                    <Ionicons name="layers" size={10} color={Colors.textInverse} />
+                  <View style={styles.frameCountBadge} accessible={false}>
+                    <Ionicons name="layers" size={10} color={colors.textInverse} />
                     <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                   </View>
                 )}
 
                 {showUnwatchedBadge && (
-                  <View style={styles.unwatchedBadge}>
+                  <View style={styles.unwatchedBadge} accessible={false}>
                     <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
                   </View>
                 )}
@@ -758,14 +843,15 @@ export default function HomeScreen() {
           style={styles.newListingsBanner}
           contentStyle={styles.newListingsBannerContent}
           titleStyle={styles.newListingsBannerText}
-          icon={<Ionicons name="sparkles-outline" size={13} color={Colors.background} />}
-          trailingIcon={<Ionicons name="arrow-up" size={13} color={Colors.background} />}
+          icon={<Ionicons name="sparkles-outline" size={13} color={colors.background} />}
+          trailingIcon={<Ionicons name="arrow-up" size={13} color={colors.background} />}
           iconContainerStyle={styles.newListingsBannerIconWrap}
           trailingIconContainerStyle={styles.newListingsBannerIconWrap}
           hapticFeedback="selection"
           onPress={acknowledgeNewListings}
           accessibilityLabel="Jump to new listings"
           accessibilityHint="Scrolls feed focus to newly added listings"
+          accessibilityRole="button"
         />
       </View>
     );
@@ -825,10 +911,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={Colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <Reanimated.View style={[styles.floatingHeaderShell, headerHeightStyle, headerShadowStyle]}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.background }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
 
         <View style={[styles.headerForeground, { paddingTop: insets.top + 2, paddingBottom: 8 }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
@@ -838,6 +924,28 @@ export default function HomeScreen() {
           <View style={styles.headerRight}>
             <AnimatedPressable
               style={styles.headerBtn}
+              onPress={() => navigation.navigate('Galleria')}
+              accessibilityLabel="Galleria"
+              accessibilityRole="button"
+              accessibilityHint="Opens curated Co-Own collections"
+              activeOpacity={0.58}
+              scaleValue={0.94}
+            >
+              <Ionicons name="grid-outline" size={22} color={colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.headerBtn}
+              onPress={() => navigation.navigate('AuctionHome')}
+              accessibilityLabel="Auctions"
+              accessibilityRole="button"
+              accessibilityHint="Opens live and upcoming auctions"
+              activeOpacity={0.58}
+              scaleValue={0.94}
+            >
+              <Ionicons name="hammer-outline" size={22} color={colors.textPrimary} />
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.headerBtn}
               onPress={() => navigation.navigate('Sell')}
               accessibilityLabel="List an item"
               accessibilityRole="button"
@@ -845,7 +953,7 @@ export default function HomeScreen() {
               activeOpacity={0.58}
               scaleValue={0.94}
             >
-              <Ionicons name="add" size={24} color={Colors.textPrimary} />
+              <Ionicons name="add" size={24} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -856,7 +964,7 @@ export default function HomeScreen() {
               activeOpacity={0.58}
               scaleValue={0.94}
             >
-              <Ionicons name="search" size={22} color={Colors.textPrimary} />
+              <Ionicons name="search" size={22} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -867,9 +975,9 @@ export default function HomeScreen() {
               activeOpacity={0.58}
               scaleValue={0.94}
             >
-              <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
+              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
-                <View style={styles.notificationBadge} pointerEvents="none">
+                <View style={styles.notificationBadge} pointerEvents="none" accessible={false}>
                   <Text style={styles.notificationBadgeText}>
                     {notificationCount > 99 ? '99+' : notificationCount}
                   </Text>
@@ -880,13 +988,142 @@ export default function HomeScreen() {
         </View>
       </Reanimated.View>
 
-      <Reanimated.ScrollView
+      <AnimatedFlashList
         ref={scrollRef}
+        data={feedGridData}
+        numColumns={2}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        {...({ onEndReached: () => { if (hasMore && !isLoadingMore) void loadMoreListings(); }, onEndReachedThreshold: 0.5 } as any)}
+        onEndReached={() => {
+          if (hasMore && !isLoadingMore) void loadMoreListings();
+        }}
+        onEndReachedThreshold={0.5}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => {
+          const listing = activeListings.find((l) => l.id === item.routeId);
+          return (
+            <View style={styles.flashListItem}>
+              <ExploreGridItem
+                item={item}
+                tileWidth={gridTileWidth}
+                formatPrice={formatFromFiat}
+                onPress={handleTilePress}
+                onLongPress={handleTileLongPress}
+                onPressSellerProfile={handleSellerProfilePress}
+                onPressSellerMessage={handleSellerMessagePress}
+                sellerUsername={listing?.seller?.username}
+                sellerAvatar={listing?.seller?.avatar}
+              />
+            </View>
+          );
+        }}
+        overrideItemLayout={(layout) => {
+          layout.span = 1;
+        }}
+        ListHeaderComponent={
+          <View>
+            {renderPosters()}
+
+            {renderNewListingsBanner()}
+
+            {lastError ? (
+              <SyncRetryBanner
+                message="Sync is unavailable. Showing cached items."
+                onRetry={() => void handleRefresh()}
+                isRetrying={isSyncing || refreshing}
+                telemetryContext="home_feed_sync"
+                containerStyle={styles.feedStatusBanner}
+              />
+            ) : null}
+
+            <DiscoverySectionHeader
+              kicker={feedMode === 'following' ? 'Latest from people you follow' : undefined}
+              title="Explore"
+              actionLabel="See all"
+              onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+              style={styles.feedDiscoveryHeader}
+            />
+
+            <View style={styles.feedTabBar} accessibilityRole="tablist">
+              {(['foryou', 'following'] as const).map((option) => {
+                const isSelected = feedMode === option;
+                const label = option === 'foryou' ? 'For you' : 'Following';
+                return (
+                  <AnimatedPressable
+                    key={option}
+                    style={styles.feedTab}
+                    onPress={() => {
+                      if (!isSelected) {
+                        haptic.selection();
+                        setFeedMode(option);
+                      }
+                    }}
+                    activeOpacity={0.68}
+                    scaleValue={0.98}
+                    accessibilityRole="tab"
+                    accessibilityLabel={option === 'foryou'
+                      ? 'For you feed'
+                      : `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`}
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1}>
+                      {label}
+                    </Text>
+                    {option === 'following' && followingFeed.listings.length > 0 ? (
+                      <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]}>
+                        {followingFeed.listings.length}
+                      </Text>
+                    ) : null}
+                    {isSelected ? <View style={styles.feedTabIndicator} /> : null}
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+
+            {showFeedLoadingSkeleton || showFollowingLoading ? (
+              renderExploreLoadingState()
+            ) : feedGridData.length === 0 ? (
+              feedMode === 'following' ? (
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
+                    title={followingFeed.hasFollowing ? 'No new drops from sellers you follow' : 'Follow sellers to see their drops here'}
+                    subtitle={followingFeed.hasFollowing
+                      ? 'When sellers you follow list new items, they\u2019ll appear here in chronological order. Pull to refresh.'
+                      : 'Build your following feed by tapping follow on seller profiles. Their latest listings will show up here.'
+                    }
+                    ctaLabel={followingFeed.hasFollowing ? 'Refresh' : 'Discover sellers'}
+                    onCtaPress={followingFeed.hasFollowing ? () => void handleRefresh() : () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                  />
+                </Reanimated.View>
+              ) : (
+                // Premium empty state — backend returned zero items and we are not
+                // loading. Preserves the flagship layout instead of collapsing to
+                // a blank masonry. Distinct from the sync-error banner above.
+                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="sparkles-outline"
+                    title="No drops live yet"
+                    subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
+                    ctaLabel="Browse all"
+                    onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                  />
+                </Reanimated.View>
+              )
+            ) : null}
+          </View>
+        }
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
+              <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading more...</Text>
+            </View>
+          ) : null
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -896,152 +1133,7 @@ export default function HomeScreen() {
             progressBackgroundColor="transparent"
           />
         }
-      >
-        {renderPosters()}
-
-        {renderNewListingsBanner()}
-
-        {lastError ? (
-          <SyncRetryBanner
-            message="Sync is unavailable. Showing cached items."
-            onRetry={() => void handleRefresh()}
-            isRetrying={isSyncing || refreshing}
-            telemetryContext="home_feed_sync"
-            containerStyle={styles.feedStatusBanner}
-          />
-        ) : null}
-
-        <DiscoverySectionHeader
-          kicker={feedMode === 'following' ? 'Latest from people you follow' : undefined}
-          title="Explore"
-          actionLabel="See all"
-          onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-          style={styles.feedDiscoveryHeader}
-        />
-
-        <View style={styles.feedTabBar} accessibilityRole="tablist">
-          {(['foryou', 'following'] as const).map((option) => {
-            const isSelected = feedMode === option;
-            const label = option === 'foryou' ? 'For you' : 'Following';
-            return (
-              <AnimatedPressable
-                key={option}
-                style={styles.feedTab}
-                onPress={() => {
-                  if (!isSelected) {
-                    haptic.selection();
-                    setFeedMode(option);
-                  }
-                }}
-                activeOpacity={0.68}
-                scaleValue={0.98}
-                accessibilityRole="tab"
-                accessibilityLabel={option === 'foryou'
-                  ? 'For you feed'
-                  : `Following feed${followingFeed.listings.length > 0 ? `, ${followingFeed.listings.length} listings` : ''}`}
-                accessibilityState={{ selected: isSelected }}
-              >
-                <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1}>
-                  {label}
-                </Text>
-                {option === 'following' && followingFeed.listings.length > 0 ? (
-                  <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]}>
-                    {followingFeed.listings.length}
-                  </Text>
-                ) : null}
-                {isSelected ? <View style={styles.feedTabIndicator} /> : null}
-              </AnimatedPressable>
-            );
-          })}
-        </View>
-
-        {showFeedLoadingSkeleton || showFollowingLoading ? (
-          renderExploreLoadingState()
-        ) : feedGridData.length === 0 ? (
-          feedMode === 'following' ? (
-            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
-              <EmptyState
-                density="compact"
-                icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
-                title={followingFeed.hasFollowing ? 'No new drops from sellers you follow' : 'Follow sellers to see their drops here'}
-                subtitle={followingFeed.hasFollowing
-                  ? 'When sellers you follow list new items, they\u2019ll appear here in chronological order. Pull to refresh.'
-                  : 'Build your following feed by tapping follow on seller profiles. Their latest listings will show up here.'
-                }
-                ctaLabel={followingFeed.hasFollowing ? 'Refresh' : 'Discover sellers'}
-                onCtaPress={followingFeed.hasFollowing ? () => void handleRefresh() : () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-                secondaryCtaLabel={followingFeed.hasFollowing ? 'Explore all' : undefined}
-                onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
-              />
-            </Reanimated.View>
-          ) : (
-            // Premium empty state — backend returned zero items and we are not
-            // loading. Preserves the flagship layout instead of collapsing to
-            // a blank masonry. Distinct from the sync-error banner above.
-            <Reanimated.View entering={FadeInDown.duration(300)} style={{ flex: 1 }}>
-              <EmptyState
-                density="compact"
-                icon="sparkles-outline"
-                title="No drops live yet"
-                subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
-                ctaLabel="Browse all"
-                onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-                secondaryCtaLabel="Refresh"
-                onSecondaryCtaPress={() => void handleRefresh()}
-              />
-            </Reanimated.View>
-          )
-        ) : (
-          <View style={styles.masonryGrid}>
-            <View style={styles.masonryColumn}>
-              {masonryColumns[0].map(({ tile: item, originalIndex }) => {
-                const listing = activeListings.find((l) => l.id === item.routeId);
-                return (
-                <View key={item.id}>
-                  <ExploreGridItem
-                    item={item}
-                    tileWidth={gridTileWidth}
-                    formatPrice={formatFromFiat}
-                    onPress={handleTilePress}
-                    onLongPress={handleTileLongPress}
-                    onPressSellerProfile={handleSellerProfilePress}
-                    onPressSellerMessage={handleSellerMessagePress}
-                    sellerUsername={listing?.seller?.username}
-                    sellerAvatar={listing?.seller?.avatar}
-                  />
-                </View>
-                );
-              })}
-            </View>
-            <View style={styles.masonryColumn}>
-              {masonryColumns[1].map(({ tile: item, originalIndex }) => {
-                const listing = activeListings.find((l) => l.id === item.routeId);
-                return (
-                <View key={item.id}>
-                  <ExploreGridItem
-                    item={item}
-                    tileWidth={gridTileWidth}
-                    formatPrice={formatFromFiat}
-                    onPress={handleTilePress}
-                    onLongPress={handleTileLongPress}
-                    onPressSellerProfile={handleSellerProfilePress}
-                    onPressSellerMessage={handleSellerMessagePress}
-                    sellerUsername={listing?.seller?.username}
-                    sellerAvatar={listing?.seller?.avatar}
-                  />
-                </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {isLoadingMore && (
-          <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-            <Text style={{ color: Colors.textMuted, fontSize: 13 }}>Loading more...</Text>
-          </View>
-        )}
-      </Reanimated.ScrollView>
+      />
 
       <Modal
         transparent
@@ -1049,11 +1141,20 @@ export default function HomeScreen() {
         animationType="fade"
         onRequestClose={closePeek}
       >
-        <Pressable style={styles.peekBackdrop} onPress={closePeek}>
+        <Pressable
+          style={styles.peekBackdrop}
+          onPress={closePeek}
+          accessibilityRole="button"
+          accessibilityLabel="Close preview"
+        >
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.75)' }]} />
 
           {peekItem ? (
-            <Pressable style={styles.peekCard} onPress={(event) => event.stopPropagation()}>
+            <Pressable
+              style={styles.peekCard}
+              onPress={(event) => event.stopPropagation()}
+              accessibilityRole="none"
+            >
               <View style={styles.peekMediaWrap}>
                 <MediaPreview
                   uri={peekItem.mediaUri}
@@ -1080,6 +1181,7 @@ export default function HomeScreen() {
                     onPress={closePeek}
                     accessibilityLabel="Close preview"
                     accessibilityHint="Closes the quick listing preview"
+                    accessibilityRole="button"
                   />
 
                   <AppButton
@@ -1089,7 +1191,7 @@ export default function HomeScreen() {
                     align="center"
                     style={styles.peekPrimaryBtn}
                     titleStyle={styles.peekPrimaryText}
-                    icon={<Ionicons name="arrow-forward" size={14} color={Colors.background} />}
+                    icon={<Ionicons name="arrow-forward" size={14} color={colors.background} />}
                     iconContainerStyle={styles.peekPrimaryIconWrap}
                     onPress={() => {
                       if (peekItem.routeId) {
@@ -1099,6 +1201,7 @@ export default function HomeScreen() {
                     }}
                     accessibilityLabel="Open listing details"
                     accessibilityHint="Navigates to full listing details"
+                    accessibilityRole="button"
                   />
                 </View>
               </View>
@@ -1110,10 +1213,10 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   floatingHeaderShell: {
     position: 'absolute',
@@ -1123,7 +1226,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
     overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: colors.borderSubtle,
   },
   headerForeground: {
     flex: 1,
@@ -1140,15 +1243,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.35,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 26,
-  },
-  brandSubtitle: {
-    marginTop: 2,
-    fontSize: 11,
-    fontFamily: Typography.family.regular,
-    letterSpacing: 0.25,
-    color: Colors.textSecondary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1166,16 +1262,16 @@ const styles = StyleSheet.create({
     right: -2,
     minWidth: 18,
     height: 18,
-    borderRadius: 9,
-    backgroundColor: Colors.danger,
+    borderRadius: Radius.full,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
-    borderWidth: 1.5,
-    borderColor: Colors.background,
+    borderWidth: Stroke.standard,
+    borderColor: colors.background,
   },
   notificationBadgeText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 10,
     fontFamily: 'Inter_700Bold',
     lineHeight: 12,
@@ -1195,7 +1291,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   feedTab: {
     minWidth: 76,
@@ -1210,11 +1306,11 @@ const styles = StyleSheet.create({
   feedTabLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   feedTabLabelActive: {
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   feedTabCount: {
     minWidth: 20,
@@ -1227,12 +1323,12 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: 20,
     fontFamily: Typography.family.semibold,
-    color: Colors.textSecondary,
-    backgroundColor: Colors.surfaceAlt,
+    color: colors.textSecondary,
+    backgroundColor: colors.surfaceAlt,
   },
   feedTabCountActive: {
-    color: Colors.textInverse,
-    backgroundColor: Colors.textPrimary,
+    color: colors.textInverse,
+    backgroundColor: colors.textPrimary,
   },
   feedTabIndicator: {
     position: 'absolute',
@@ -1241,7 +1337,7 @@ const styles = StyleSheet.create({
     bottom: -1,
     height: 2,
     borderRadius: Radius.full,
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   newListingsBannerWrap: {
     marginTop: 6,
@@ -1253,8 +1349,8 @@ const styles = StyleSheet.create({
     minHeight: 40,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: Colors.brand,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand,
     borderWidth: 0,
   },
   newListingsBannerContent: {
@@ -1269,7 +1365,7 @@ const styles = StyleSheet.create({
   newListingsBannerText: {
     fontSize: 12,
     fontFamily: Typography.family.semibold,
-    color: Colors.background,
+    color: colors.background,
     letterSpacing: 0.2,
   },
 
@@ -1283,208 +1379,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.1,
   },
   sectionHint: {
     fontSize: 11,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.22,
-  },
-
-  storiesSection: {
-    paddingTop: 6,
-    paddingBottom: 10,
-  },
-  storiesScroll: {
-    paddingHorizontal: 16,
-    gap: 14,
-  },
-  storyCreateWrap: {
-    alignItems: 'center',
-    width: 68,
-  },
-  storyCreateRing: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2,
-    marginBottom: 6,
-  },
-  storyItem: {
-    alignItems: 'center',
-    width: 68,
-  },
-  storyRingGradient: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-    position: 'relative',
-  },
-  storyRingGradientMuted: {
-    opacity: 0.64,
-  },
-  storyRingInner: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.background,
-  },
-  storyAvatarWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-  },
-  storyAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 27,
-  },
-  storyPulseDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.brand,
-    position: 'absolute',
-    right: 1,
-    top: 1,
-    borderWidth: 1,
-    borderColor: Colors.background,
-  },
-  storyName: {
-    fontSize: 10,
-    fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
-    width: 66,
-    textAlign: 'center',
-  },
-  storyStatus: {
-    marginTop: 2,
-    fontSize: 9,
-    fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
-    width: 66,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.24,
-  },
-
-  looksSection: {
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  looksRail: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  lookCard: {
-    width: SCREEN_WIDTH * 0.82,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  lookImageWrap: {
-    width: '100%',
-    height: 280,
-  },
-  lookFeedRow: {
-    paddingHorizontal: GRID_GAP,
-    marginBottom: GRID_GAP,
-  },
-  lookFeedCard: {
-    width: '100%',
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
-  },
-  lookFeedImageWrap: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-  },
-  lookImage: {
-    width: '100%',
-    height: '100%',
-  },
-  lookOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  lookOwnerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  lookOwnerAvatarWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  lookOwnerAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 10,
-  },
-  lookOwnerName: {
-    color: Colors.textInverse,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  lookTitle: {
-    color: Colors.textInverse,
-    fontSize: 21,
-    fontFamily: Typography.family.extrabold,
-    letterSpacing: -0.4,
-    lineHeight: 24,
-  },
-  lookDescription: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
-    fontFamily: Typography.family.medium,
-    marginTop: 2,
-  },
-  lookMetaRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  lookMetaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.34)',
-  },
-  lookMetaText: {
-    color: Colors.textInverse,
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-  },
-  lookTime: {
-    color: 'rgba(255,255,255,0.82)',
-    fontSize: 11,
-    fontFamily: Typography.family.medium,
-    marginLeft: 'auto',
   },
 
   postersSection: {
@@ -1492,15 +1394,25 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   posterSectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     marginBottom: Space.xs,
   },
   posterSectionTitle: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
+  },
+  posterHeaderCameraBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   postersScroll: {
     paddingHorizontal: Space.md,
@@ -1521,14 +1433,19 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
   posterTileUnseen: {
     borderWidth: 2,
-    borderColor: Colors.brand,
+    borderColor: colors.brand,
   },
   posterTileRing: {
-    shadowColor: Colors.brand,
+    shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 6,
@@ -1536,7 +1453,58 @@ const styles = StyleSheet.create({
   },
   posterTileSeen: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
+  },
+  posterCreateCard: {
+    width: POSTER_CARD_WIDTH,
+  },
+  posterCreateTile: {
+    width: POSTER_CARD_WIDTH,
+    height: POSTER_CARD_HEIGHT,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  posterCreateGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 3.5,
+  },
+  posterCreateInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Radius.lg - 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  posterCreatePlusBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brand,
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  posterCreateLabel: {
+    marginTop: 6,
+    fontSize: 10,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
+    width: POSTER_CARD_WIDTH,
+    textAlign: 'center',
   },
   posterImage: {
     width: '100%',
@@ -1559,7 +1527,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   posterTextArtworkCopy: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.bold,
@@ -1579,7 +1547,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: Colors.textInverse,
+    borderColor: colors.textInverse,
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -1627,7 +1595,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
   },
   posterOwnerName: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 8,
     fontFamily: Typography.family.medium,
     flex: 1,
@@ -1642,7 +1610,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   posterExpiryText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -1656,7 +1624,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.44)',
   },
   posterCaption: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     lineHeight: 12,
     fontFamily: Typography.family.medium,
@@ -1676,7 +1644,7 @@ const styles = StyleSheet.create({
   },
   posterCreatorName: {
     flex: 1,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     lineHeight: 12,
     fontFamily: Typography.family.semibold,
@@ -1694,7 +1662,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   frameCountBadgeText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -1702,13 +1670,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     left: 6,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   unwatchedBadgeText: {
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontSize: 9,
     fontFamily: Typography.family.bold,
   },
@@ -1716,13 +1684,13 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
   },
   posterSeenDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
 
   masonryGrid: {
@@ -1735,15 +1703,19 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: Space.sm,
   },
+  flashListItem: {
+    paddingHorizontal: Space.xs,
+    paddingBottom: GRID_GAP,
+  },
   exploreItemBox: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     // Pinterest feel: no border, no shadow — image is the card
   },
   exploreMediaWrap: {
     position: 'relative',
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   exploreSharedMedia: {
     ...StyleSheet.absoluteFill,
@@ -1766,7 +1738,7 @@ const styles = StyleSheet.create({
     top: -76,
     right: -64,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     backgroundColor: 'rgba(255,255,255,0.28)',
   },
   listingMediaPlaceholderOrbSmall: {
@@ -1777,7 +1749,7 @@ const styles = StyleSheet.create({
     bottom: -44,
     left: -30,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   listingMediaPlaceholderIcon: {
     width: 40,
@@ -1786,32 +1758,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
   exploreDetails: {
     paddingTop: Space.sm,
-    paddingHorizontal: 2,
-    gap: 2,
+    paddingHorizontal: Space.xs,
+    gap: Space.xs,
   },
   exploreTitle: {
     fontSize: Type.bodyEmphasis.size,
     lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
+  // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
   explorePrice: {
-    color: Colors.textPrimary,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    color: colors.textPrimary,
+    fontSize: 16,
+    lineHeight: 20,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
+    letterSpacing: -0.2,
   },
   exploreSellerRow: {
-    minHeight: 40,
+    minHeight: 32,
     marginTop: 2,
-    paddingHorizontal: 2,
+    paddingHorizontal: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1819,7 +1793,7 @@ const styles = StyleSheet.create({
   },
   exploreSellerChip: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
@@ -1841,18 +1815,18 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   exploreSellerText: {
     flex: 1,
-    color: Colors.textSecondary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
   exploreMessageBtn: {
     minWidth: 44,
-    height: 40,
+    height: 44,
     paddingHorizontal: Space.xs + 2,
     flexDirection: 'row',
     gap: 4,
@@ -1860,7 +1834,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   exploreMessageText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontSize: 10,
     fontFamily: Typography.family.semibold,
   },
@@ -1900,16 +1874,16 @@ const styles = StyleSheet.create({
   peekCard: {
     width: '100%',
     maxWidth: 420,
-    borderRadius: 18,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceAlt,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
   },
   peekMediaWrap: {
     width: '100%',
     height: 340,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   peekMedia: {
     width: '100%',
@@ -1922,14 +1896,14 @@ const styles = StyleSheet.create({
   peekTitle: {
     fontSize: 19,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   peekSubtitle: {
     marginTop: 4,
     fontSize: 13,
     fontFamily: Typography.family.regular,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   peekActionsRow: {
     marginTop: 14,
@@ -1939,18 +1913,18 @@ const styles = StyleSheet.create({
   peekGhostBtn: {
     flex: 1,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   peekGhostText: {
     fontSize: 13,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   peekPrimaryBtn: {
     flex: 1,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   peekPrimaryIconWrap: {
@@ -1962,6 +1936,6 @@ const styles = StyleSheet.create({
   peekPrimaryText: {
     fontSize: 13,
     fontFamily: Typography.family.bold,
-    color: Colors.background,
+    color: colors.background,
   },
 });

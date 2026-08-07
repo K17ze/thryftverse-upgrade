@@ -36,6 +36,10 @@ export interface CoOwnOrderBookProps {
   lastAgeSeconds?: number | null;
   onSelectLevel?: (side: 'bid' | 'ask', price: number) => void;
   mode: CoOwnBookMode;
+  /** Removes the outer card treatment when the book sits inside the
+   * page's single market surface. Data, row targets and states remain
+   * identical. */
+  embedded?: boolean;
 }
 
 export function CoOwnOrderBook({
@@ -46,13 +50,22 @@ export function CoOwnOrderBook({
   lastAgeSeconds,
   onSelectLevel,
   mode,
+  embedded = false,
 }: CoOwnOrderBookProps) {
   const { colors } = useAppTheme();
+  const containerStyle = [
+    styles.container,
+    embedded && styles.containerEmbedded,
+    {
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+    },
+  ];
 
   // RFQ mode — show CTA instead of book
   if (mode === 'rfq') {
     return (
-      <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={containerStyle}>
         <View style={styles.rfqWrap}>
           <Ionicons name="chatbubbles-outline" size={28} color={colors.brand} />
           <Text style={[styles.rfqTitle, { color: colors.textPrimary }]}>Request for quote</Text>
@@ -76,7 +89,7 @@ export function CoOwnOrderBook({
   if (mode === 'halted' || mode === 'closed') {
     const label = mode === 'halted' ? 'Trading halted' : 'Market closed';
     return (
-      <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={containerStyle}>
         <View style={styles.haltedWrap}>
           <Ionicons name="pause-circle-outline" size={28} color={colors.textMuted} />
           <Text style={[styles.haltedTitle, { color: colors.textSecondary }]}>{label}</Text>
@@ -120,7 +133,7 @@ export function CoOwnOrderBook({
   const isCallAuction = mode === 'call_auction';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={containerStyle}>
       {/* Header */}
       <View style={styles.headerRow}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order book</Text>
@@ -208,7 +221,9 @@ function BookSide({
   const ordered = reverseOrder ? [...levels].reverse() : levels;
   const barColor = side === 'bid' ? DEPTH_COLORS.bidBar : DEPTH_COLORS.askBar;
   const barEdgeColor = side === 'bid' ? DEPTH_COLORS.bidBarEdge : DEPTH_COLORS.askBarEdge;
-  const priceColor = side === 'bid' ? colors.success : colors.danger;
+  // Per Design.md: use coownUp/coownDown for financial truth (bid=up/buy,
+  // ask=down/sell), not generic success/danger.
+  const priceColor = side === 'bid' ? colors.coownUp : colors.coownDown;
 
   if (levels.length === 0) {
     return (
@@ -244,13 +259,28 @@ function BookSide({
                   { width: `${Math.min(depthFraction * 100, 100)}%`, backgroundColor: isEdge ? barEdgeColor : barColor },
                 ]}
               />
-              <Text style={[styles.levelPrice, { color: priceColor }]} numberOfLines={1}>
+              <Text
+                style={[styles.levelPrice, { color: priceColor }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
                 {level.price.toFixed(2)}
               </Text>
-              <Text style={[styles.levelSize, { color: colors.textPrimary }]} numberOfLines={1}>
+              <Text
+                style={[styles.levelSize, { color: colors.textPrimary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
                 {level.size.toLocaleString('en-GB')}
               </Text>
-              <Text style={[styles.levelTotal, { color: colors.textSecondary }]} numberOfLines={1}>
+              <Text
+                style={[styles.levelTotal, { color: colors.textSecondary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
                 {cumulative.toLocaleString('en-GB')}
               </Text>
             </View>
@@ -326,6 +356,12 @@ const styles = StyleSheet.create({
     padding: Space.md,
     gap: Space.xs,
   },
+  containerEmbedded: {
+    borderRadius: Radius.none,
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    paddingTop: Space.sm,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -387,7 +423,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     left: 0,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
   },
   depthBarRight: {
     left: undefined,

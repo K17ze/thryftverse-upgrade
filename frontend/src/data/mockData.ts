@@ -45,6 +45,7 @@ export interface ListingSeller {
   rating?: number | null;
   reviewCount?: number | null;
   location?: string | null;
+  verified?: boolean | null;
 }
 
 export interface Listing {
@@ -69,10 +70,11 @@ export interface Listing {
   views?: number;
   isBumped?: boolean;
   isSold?: boolean;
+  status?: 'draft' | 'active' | 'paused' | 'reserved' | 'sold' | 'deleted' | 'removed' | 'unknown';
   sellerId: string;
   seller?: ListingSeller | null;
   category: string;
-  subcategory: string;
+  subcategory?: string | null;
   description: string;
   createdAt?: string;
   shippingMethod?: string | null;
@@ -179,10 +181,12 @@ export interface Conversation {
   id: string;
   type: ConversationType;
   title?: string;
+  description?: string;
   avatar?: string;
   sellerId?: string;
   itemId?: string;
   ownerId?: string;
+  creatorId?: string;
   participantIds?: string[];
   participantProfiles?: Array<{
     id: string;

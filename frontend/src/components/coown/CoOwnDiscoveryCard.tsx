@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { Colors } from '../../constants/colors';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -28,6 +28,8 @@ export function CoOwnDiscoveryCard({
   onPress,
   index = 0,
 }: CoOwnDiscoveryCardProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const cardWidth = (width - Space.md * 2 - Space.sm) / 2;
@@ -35,7 +37,7 @@ export function CoOwnDiscoveryCard({
 
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
   const statusColor =
-    status === 'open' ? Colors.success : status === 'paused' ? Colors.textSecondary : Colors.textMuted;
+    status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
   const statusLabel =
     status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Allocated';
 
@@ -52,7 +54,7 @@ export function CoOwnDiscoveryCard({
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
           ) : (
             <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="cube-outline" size={28} color={Colors.textMuted} />
+              <Ionicons name="cube-outline" size={28} color={colors.textMuted} />
             </View>
           )}
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -76,18 +78,18 @@ export function CoOwnDiscoveryCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   imageWrap: {
     width: '100%',
     position: 'relative',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
   },
   image: {
     width: '100%',
@@ -103,9 +105,9 @@ const styles = StyleSheet.create({
     right: 8,
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.sm,
     borderWidth: 2,
-    borderColor: Colors.surface,
+    borderColor: colors.surface,
   },
   content: {
     padding: Space.sm,
@@ -114,7 +116,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 18,
     minHeight: 36,
   },
@@ -126,12 +128,12 @@ const styles = StyleSheet.create({
   unitPrice: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
   },
   perUnit: {
     fontSize: Type.caption.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   allocationRow: {
     flexDirection: 'row',
@@ -142,18 +144,18 @@ const styles = StyleSheet.create({
   allocationBarBg: {
     flex: 1,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   allocationBarFill: {
     height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.brand,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.brand,
   },
   allocationText: {
     fontSize: Type.meta.size,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
 });

@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 
 export type StatusPillTone =
   | 'active'
@@ -23,60 +23,61 @@ interface PremiumStatusPillProps {
   compact?: boolean;
 }
 
-function resolveTone(tone: StatusPillTone) {
+function resolveTone(tone: StatusPillTone, colors: ThemeColors) {
   switch (tone) {
     case 'active':
     case 'paid':
       return {
-        bg: Colors.brand + '12',
-        border: Colors.brand + '28',
-        text: Colors.brand,
-        dot: Colors.brand,
+        bg: colors.brand + '12',
+        border: colors.brand + '28',
+        text: colors.brand,
+        dot: colors.brand,
       };
     case 'sold':
     case 'delivered':
     case 'success':
       return {
-        bg: Colors.success + '12',
-        border: Colors.success + '28',
-        text: Colors.success,
-        dot: Colors.success,
+        bg: colors.success + '12',
+        border: colors.success + '28',
+        text: colors.success,
+        dot: colors.success,
       };
     case 'shipped':
       return {
-        bg: Colors.brand + '0A',
-        border: Colors.brand + '1A',
-        text: Colors.textPrimary,
-        dot: Colors.brand,
+        bg: colors.brand + '0A',
+        border: colors.brand + '1A',
+        text: colors.textPrimary,
+        dot: colors.brand,
       };
     case 'refunded':
     case 'error':
       return {
-        bg: Colors.danger + '10',
-        border: Colors.danger + '25',
-        text: Colors.danger,
-        dot: Colors.danger,
+        bg: colors.danger + '10',
+        border: colors.danger + '25',
+        text: colors.danger,
+        dot: colors.danger,
       };
     case 'pending':
       return {
-        bg: Colors.surfaceAlt,
-        border: Colors.border,
-        text: Colors.textSecondary,
-        dot: Colors.textMuted,
+        bg: colors.surfaceAlt,
+        border: colors.border,
+        text: colors.textSecondary,
+        dot: colors.textMuted,
       };
     case 'neutral':
     default:
       return {
-        bg: Colors.surfaceAlt,
-        border: Colors.borderLight,
-        text: Colors.textMuted,
-        dot: Colors.textMuted,
+        bg: colors.surfaceAlt,
+        border: colors.borderSubtle,
+        text: colors.textMuted,
+        dot: colors.textMuted,
       };
   }
 }
 
 export function PremiumStatusPill({ tone, label, icon, compact = false }: PremiumStatusPillProps) {
-  const colors = resolveTone(tone);
+  const { colors } = useAppTheme();
+  const toneColors = resolveTone(tone, colors);
 
   return (
     <View
@@ -84,17 +85,17 @@ export function PremiumStatusPill({ tone, label, icon, compact = false }: Premiu
         styles.pill,
         compact && styles.pillCompact,
         {
-          backgroundColor: colors.bg,
-          borderColor: colors.border,
+          backgroundColor: toneColors.bg,
+          borderColor: toneColors.border,
         },
       ]}
     >
       {icon ? (
-        <Ionicons name={icon} size={compact ? 12 : 14} color={colors.text} style={styles.icon} />
+        <Ionicons name={icon} size={compact ? 12 : 14} color={toneColors.text} style={styles.icon} />
       ) : (
-        <View style={[styles.dot, { backgroundColor: colors.dot }]} />
+        <View style={[styles.dot, { backgroundColor: toneColors.dot }]} />
       )}
-      <Text style={[styles.label, compact && styles.labelCompact, { color: colors.text }]}>
+      <Text style={[styles.label, compact && styles.labelCompact, { color: toneColors.text }]}>
         {label}
       </Text>
     </View>
@@ -113,26 +114,26 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   pillCompact: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
   },
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   icon: {
     marginRight: 0,
   },
   label: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
     textTransform: 'capitalize',
   },
   labelCompact: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     letterSpacing: 0.2,
   },
 });

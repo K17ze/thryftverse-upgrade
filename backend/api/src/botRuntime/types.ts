@@ -27,6 +27,12 @@ export interface BotHandlerResult {
   text: string;
   metadata?: Record<string, unknown>;
   shouldReply: boolean;
+  /** Confidence score 0–1. When below the agent's threshold, needsHumanReview is set. */
+  confidence?: number;
+  /** Human-readable rationale for why the agent produced this response. */
+  explanation?: string;
+  /** True when confidence is below threshold and a human should review before acting. */
+  needsHumanReview?: boolean;
 }
 
 export type BotCategoryHandler = (ctx: BotRuntimeContext) => BotHandlerResult | Promise<BotHandlerResult>;
@@ -46,6 +52,8 @@ export interface AgentConfig {
   reasoningEffort: AgentReasoningEffort;
   historyLimit: number;
   starterPrompts: string[];
+  /** Minimum confidence (0–1) for the agent to act autonomously. Below this, the response is flagged for human review. */
+  confidenceThreshold: number;
 }
 
 export interface AgentConversationTurn {
@@ -78,3 +86,6 @@ export interface BotInstallInfo {
   status: string;
   agentConfig: AgentConfig | null;
 }
+
+/** Callback invoked for each text delta during streaming. */
+export type AgentStreamChunkHandler = (delta: string) => void;

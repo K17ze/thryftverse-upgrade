@@ -5,26 +5,24 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
 
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type FlashListProps } from '@shopify/flash-list';
 
 
 import { Ionicons } from '@expo/vector-icons';
 
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import NetInfo from '@react-native-community/netinfo';
 
-import { Colors } from '../constants/colors';
-
-import { TypeStyles } from '../theme/designTokens';
+import { useAppTheme } from '../theme/ThemeContext';
 
 import type { Conversation } from '../data/mockData';
 
 import { RootStackParamList } from '../navigation/types';
 
-import { Swipeable } from 'react-native-gesture-handler';
+import { SwipeableRow } from '../components/SwipeableRow';
 
 import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 
@@ -32,7 +30,7 @@ import { EmptyState } from '../components/EmptyState';
 
 import { useStore } from '../store/useStore';
 
-import { useToast } from '../context/ToastContext';
+import { useNotifications } from '../hooks/useNotifications';
 
 import { RefreshIndicator } from '../components/RefreshIndicator';
 
@@ -44,8 +42,6 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 
 import { useHaptic } from '../hooks/useHaptic';
 
-import { Space, Radius, Type } from '../theme/designTokens';
-
 import { Caption } from '../components/ui/Text';
 
 import { AvatarRing } from '../components/chat/AvatarRing';
@@ -53,16 +49,19 @@ import { AvatarRing } from '../components/chat/AvatarRing';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 
 import { InboxConversationRow } from '../components/chat/InboxConversationRow';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 import { MessagingSegmentRail, MessagingSegment } from '../components/chat/MessagingSegmentRail';
 
 import { classifyConversation } from '../utils/conversationClassification';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 
 
-type NavT = StackNavigationProp<RootStackParamList>;
+import { TypeStyles, Radius, Type, Space, Control, Stroke } from '../theme/designTokens';
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 
 
@@ -71,12 +70,16 @@ type ConvoItem = Conversation;
 type InboxSegment = MessagingSegment | 'unread' | 'archived';
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
+  const { colors } = useAppTheme();
   const { listings } = useBackendData();
   const listing = useMemo(() => listings.find((l) => l.id === itemId), [listings, itemId]);
+  const listingThemed = useMemo(() => ({
+    contextThumb: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+  }), [colors]);
   if (!listing?.images?.[0]) {
     return (
-      <View style={styles.contextThumb}>
-        <Ionicons name="pricetag-outline" size={14} color={Colors.textMuted} />
+      <View style={[styles.contextThumb, listingThemed.contextThumb]}>
+        <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
       </View>
     );
   }
@@ -84,7 +87,7 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
     <CachedImage
       uri={listing.images[0]}
       style={styles.contextThumbImage}
-      containerStyle={styles.contextThumb}
+      containerStyle={[styles.contextThumb, listingThemed.contextThumb]}
       contentFit="cover"
     />
   );
@@ -92,9 +95,13 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
 
 export default function InboxScreen() {
 
+  const { colors, isDark } = useAppTheme();
+
+  const reducedMotion = useReducedMotion();
+
   const navigation = useNavigation<NavT>();
 
-  const { show } = useToast();
+  const { showSuccess, showInfo, showError } = useNotifications();
 
   const haptic = useHaptic();
 
@@ -111,6 +118,8 @@ export default function InboxScreen() {
   const toggleConversationPinned = useStore((state) => state.toggleConversationPinned);
 
   const markConversationRead = useStore((state) => state.markConversationRead);
+
+  const toggleConversationUnread = useStore((state) => state.toggleConversationUnread);
 
   const toggleMutedConversation = useStore((state) => state.toggleMutedConversation);
 
@@ -144,7 +153,11 @@ export default function InboxScreen() {
 
     onScroll: (e) => {
 
-      scrollY.value = e.contentOffset.y;
+      if (!reducedMotion) {
+
+        scrollY.value = e.contentOffset.y;
+
+      }
 
     },
 
@@ -242,9 +255,63 @@ export default function InboxScreen() {
 
 
 
-  const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
+  const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<FlashListProps<Conversation>>;
   const listRef = useRef<any>(null);
   useScrollToTop(listRef);
+
+  const t = useMemo(() => ({
+    screenRoot: { backgroundColor: colors.background },
+    headerTitle: { color: colors.textPrimary },
+    headerSubtitle: { color: colors.textMuted },
+    iconBtn: { backgroundColor: 'transparent' },
+    newMessageBtn: { backgroundColor: colors.textPrimary },
+    newMessageBtnText: { color: colors.textInverse },
+    searchWrap: { backgroundColor: colors.surfaceAlt },
+    filterChip: { backgroundColor: 'transparent', borderColor: colors.border },
+    filterChipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
+    filterChipText: { color: colors.textSecondary },
+    filterChipTextActive: { color: colors.textInverse },
+    rowSeparator: { backgroundColor: colors.border },
+    groupAvatar: { backgroundColor: colors.surfaceAlt },
+    groupAvatarText: { color: colors.textPrimary },
+    botIndicator: { backgroundColor: colors.surface, borderColor: colors.border },
+    nameText: { color: colors.textPrimary },
+    memberCount: { color: colors.textMuted },
+    snippet: { color: colors.textSecondary },
+    snippetUnread: { color: colors.textPrimary },
+    unreadDot: { backgroundColor: colors.textPrimary },
+    unreadPill: { backgroundColor: colors.textPrimary },
+    unreadPillText: { color: colors.textInverse },
+    timeUnread: { color: colors.textPrimary },
+    contextThumb: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    draftBadge: { backgroundColor: `${colors.brand}1A` },
+    draftBadgeText: { color: colors.brand },
+    rowInnerUnread: { backgroundColor: `${colors.brand}06` },
+    swipeDelete: { backgroundColor: `${colors.danger}1F` },
+    swipePin: { backgroundColor: `${colors.brand}14` },
+    swipeArchive: { backgroundColor: `${colors.brand}14` },
+    swipeMute: { backgroundColor: `${colors.textMuted}1F` },
+    requestRowSurface: { backgroundColor: colors.surface },
+    requestRowAccent: { borderLeftColor: colors.brand, backgroundColor: `${colors.brand}06` },
+    requestBtnDecline: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    requestBtnDeclineText: { color: colors.textPrimary },
+    requestBtnAccept: { backgroundColor: colors.brand },
+    requestsBannerRule: { backgroundColor: colors.border },
+    requestsAvatar: { backgroundColor: `${colors.brand}12` },
+    requestsBannerInner: { backgroundColor: colors.surface },
+    requestsBadge: { backgroundColor: colors.textPrimary },
+    requestsBadgeText: { color: colors.textInverse },
+    requestsIconWrap: { backgroundColor: colors.surfaceAlt },
+    requestsBannerText: { color: colors.textPrimary },
+    requestsBannerSub: { color: colors.textMuted },
+    requestBtnAcceptText: { color: colors.textInverse },
+    errorBanner: { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border },
+    errorBannerTitle: { color: colors.danger },
+    errorBannerSub: { color: colors.textMuted },
+    errorBannerRetry: { color: colors.brand },
+    needsActionChip: { backgroundColor: 'transparent', borderColor: colors.border },
+    needsActionText: { color: colors.brand },
+  }), [colors]);
 
 
 
@@ -406,7 +473,7 @@ export default function InboxScreen() {
 
             deleteConversation(id);
 
-            show('Conversation deleted', 'error');
+            showError('Conversation deleted', 'This conversation was removed from your inbox.');
 
             try {
 
@@ -414,7 +481,7 @@ export default function InboxScreen() {
 
             } catch {
 
-              show('Failed to delete on server. Restoring conversation.', 'error');
+              showError('Delete failed', 'Failed to delete on server. Restoring conversation.');
 
               if (previous) {
 
@@ -432,7 +499,7 @@ export default function InboxScreen() {
 
     );
 
-  }, [conversations, deleteConversation, upsertConversation, show, haptic]);
+  }, [conversations, deleteConversation, upsertConversation, showError, haptic]);
 
 
 
@@ -444,9 +511,9 @@ export default function InboxScreen() {
 
     const nowMuted = !mutedIds.includes(id);
 
-    show(nowMuted ? 'Conversation muted' : 'Conversation unmuted', 'info');
+    showInfo(nowMuted ? 'Conversation muted' : 'Conversation unmuted');
 
-  }, [toggleMutedConversation, mutedIds, show, haptic]);
+  }, [toggleMutedConversation, mutedIds, showInfo, haptic]);
 
 
 
@@ -458,9 +525,9 @@ export default function InboxScreen() {
 
     const nowArchived = !archivedIds.includes(id);
 
-    show(nowArchived ? 'Conversation archived' : 'Conversation unarchived', 'info');
+    showInfo(nowArchived ? 'Conversation archived' : 'Conversation unarchived');
 
-  }, [toggleArchivedConversation, archivedIds, show, haptic]);
+  }, [toggleArchivedConversation, archivedIds, showInfo, haptic]);
 
 
 
@@ -470,9 +537,9 @@ export default function InboxScreen() {
 
     acceptMessageRequest(id);
 
-    show('Message request accepted', 'success');
+    showSuccess('Request accepted', 'Message request accepted.');
 
-  }, [acceptMessageRequest, show, haptic]);
+  }, [acceptMessageRequest, showSuccess, haptic]);
 
 
 
@@ -482,9 +549,9 @@ export default function InboxScreen() {
 
     declineMessageRequest(id);
 
-    show('Message request declined', 'info');
+    showInfo('Request declined', 'Message request declined.');
 
-  }, [declineMessageRequest, show, haptic]);
+  }, [declineMessageRequest, showInfo, haptic]);
 
 
 
@@ -494,117 +561,82 @@ export default function InboxScreen() {
 
     toggleConversationPinned(id);
 
-    show('Conversation pinned', 'success');
+    showSuccess('Pinned', 'Conversation pinned.');
 
-  }, [toggleConversationPinned, show, haptic]);
-
-
-
-  const renderRightActions = (id: string) => (
-
-    <View style={styles.swipeRightGroup}>
-
-      <AnimatedPressable
-
-        style={styles.swipeArchive}
-
-        onPress={() => handleArchive(id)}
-
-        accessibilityLabel="Archive conversation"
-
-        accessibilityRole="button"
-
-        activeOpacity={0.7}
-
-        scaleValue={0.95}
-
-        hapticFeedback="light"
-
-      >
-
-        <Ionicons name="archive-outline" size={20} color={Colors.brand} />
-
-      </AnimatedPressable>
-
-      <AnimatedPressable
-
-        style={styles.swipeDelete}
-
-        onPress={() => handleDelete(id)}
-
-        accessibilityLabel="Delete conversation"
-
-        accessibilityRole="button"
-
-        activeOpacity={0.7}
-
-        scaleValue={0.95}
-
-        hapticFeedback="medium"
-
-      >
-
-        <Ionicons name="trash-outline" size={20} color={Colors.danger} />
-
-      </AnimatedPressable>
-
-    </View>
-
-  );
+  }, [toggleConversationPinned, showSuccess, haptic]);
 
 
 
-  const renderLeftActions = (id: string) => (
+  const handleToggleRead = useCallback((id: string) => {
 
-    <View style={styles.swipeLeftGroup}>
+    const convo = conversations.find((c) => c.id === id);
 
-      <AnimatedPressable
+    const willMarkUnread = convo ? !convo.unread : false;
 
-        style={styles.swipeMute}
+    haptic.light();
 
-        onPress={() => handleMute(id)}
+    toggleConversationUnread(id);
 
-        accessibilityLabel="Mute conversation"
+    showInfo(willMarkUnread ? 'Marked unread' : 'Marked read', willMarkUnread ? 'Conversation marked as unread' : 'Conversation marked as read');
 
-        accessibilityRole="button"
+  }, [conversations, toggleConversationUnread, showInfo, haptic]);
 
-        activeOpacity={0.7}
 
-        scaleValue={0.95}
 
-        hapticFeedback="light"
+  // Long-press quick actions: a native alert sheet exposing mute, pin, and
+  // delete. Preserves the capabilities previously surfaced via the old
+  // multi-button swipe panels (AGENTS.md §8: preserve working functionality).
+  const handleQuickActions = useCallback((id: string) => {
 
-      >
+    const convo = conversations.find((c) => c.id === id);
 
-        <Ionicons name={mutedIds.includes(id) ? 'volume-high-outline' : 'volume-mute-outline'} size={20} color={Colors.textPrimary} />
+    const isMuted = mutedIds.includes(id);
 
-      </AnimatedPressable>
+    const isPinned = !!convo?.isPinned;
 
-      <AnimatedPressable
+    Alert.alert(
 
-        style={styles.swipePin}
+      'Quick actions',
 
-        onPress={() => handlePin(id)}
+      undefined,
 
-        accessibilityLabel="Pin conversation"
+      [
 
-        accessibilityRole="button"
+        {
 
-        activeOpacity={0.7}
+          text: isMuted ? 'Unmute' : 'Mute',
 
-        scaleValue={0.95}
+          onPress: () => handleMute(id),
 
-        hapticFeedback="light"
+        },
 
-      >
+        {
 
-        <Ionicons name="pin-outline" size={20} color={Colors.brand} />
+          text: isPinned ? 'Unpin' : 'Pin',
 
-      </AnimatedPressable>
+          onPress: () => handlePin(id),
 
-    </View>
+        },
 
-  );
+        {
+
+          text: 'Delete',
+
+          style: 'destructive',
+
+          onPress: () => handleDelete(id),
+
+        },
+
+        { text: 'Cancel', style: 'cancel' },
+
+      ],
+
+      { cancelable: true }
+
+    );
+
+  }, [conversations, mutedIds, handleMute, handlePin, handleDelete]);
 
 
 
@@ -622,13 +654,13 @@ export default function InboxScreen() {
       : undefined;
 
     const avatarEl = isGroup ? (
-      <View style={styles.groupAvatar}>
-        <Text style={styles.groupAvatarText}>
+      <View style={[styles.groupAvatar, t.groupAvatar]}>
+        <Text style={[styles.groupAvatarText, t.groupAvatarText]}>
           {item.title?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? 'G'}
         </Text>
         {(item.botIds?.length ?? 0) > 0 && (
-          <View style={styles.botIndicator}>
-            <Ionicons name="hardware-chip-outline" size={10} color={Colors.brand} />
+          <View style={[styles.botIndicator, t.botIndicator]}>
+            <Ionicons name="hardware-chip-outline" size={10} color={colors.brand} />
           </View>
         )}
       </View>
@@ -643,24 +675,24 @@ export default function InboxScreen() {
     );
 
     const requestRow = (
-      <View style={styles.requestRowAccent}>
+      <View style={[styles.requestRowAccent, t.requestRowAccent]}>
         <View style={styles.requestRowInner}>
           {avatarEl}
           <View style={styles.messageBody}>
             <View style={styles.messageTop}>
-              <Text style={[styles.nameText, styles.nameUnread]}>{displayTitle}</Text>
-              <Caption color={Colors.textMuted}>{item.lastMessageTime}</Caption>
+              <Text style={[styles.nameText, t.nameText, styles.nameUnread]}>{displayTitle}</Text>
+              <Caption color={colors.textMuted}>{item.lastMessageTime}</Caption>
             </View>
-            <Caption color={Colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
+            <Caption color={colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
             {item.itemId && (
               <View style={styles.requestListingContext}>
                 <ListingContextThumbnail itemId={item.itemId} />
-                <Caption color={Colors.textSecondary} style={styles.requestListingText}>About a listing</Caption>
+                <Caption color={colors.textSecondary} style={styles.requestListingText}>About a listing</Caption>
               </View>
             )}
             <View style={styles.requestActions}>
               <AnimatedPressable
-                style={styles.requestBtnDecline}
+                style={[styles.requestBtnDecline, t.requestBtnDecline]}
                 onPress={() => handleDeclineRequest(item.id)}
                 activeOpacity={0.85}
                 scaleValue={0.96}
@@ -668,10 +700,10 @@ export default function InboxScreen() {
                 accessibilityLabel="Decline message request"
                 accessibilityRole="button"
               >
-                <Text style={styles.requestBtnDeclineText}>Decline</Text>
+                <Text style={[styles.requestBtnDeclineText, t.requestBtnDeclineText]}>Decline</Text>
               </AnimatedPressable>
               <AnimatedPressable
-                style={styles.requestBtnAccept}
+                style={[styles.requestBtnAccept, t.requestBtnAccept]}
                 onPress={() => handleAcceptRequest(item.id)}
                 activeOpacity={0.85}
                 scaleValue={0.96}
@@ -679,7 +711,7 @@ export default function InboxScreen() {
                 accessibilityLabel="Accept message request"
                 accessibilityRole="button"
               >
-                <Text style={styles.requestBtnAcceptText}>Accept</Text>
+                <Text style={[styles.requestBtnAcceptText, t.requestBtnAcceptText]}>Accept</Text>
               </AnimatedPressable>
             </View>
           </View>
@@ -711,23 +743,33 @@ export default function InboxScreen() {
             focusQuery: searchQuery.trim() || undefined,
           });
         }}
+        onLongPress={() => handleQuickActions(item.id)}
       />
     );
 
     return (
       <View>
         {isRequest ? requestRow : (
-          <Swipeable
-            friction={2}
-            overshootLeft={false}
-            overshootRight={false}
-            renderRightActions={() => renderRightActions(item.id)}
-            renderLeftActions={() => renderLeftActions(item.id)}
+          <SwipeableRow
+            accessibilityLabel={safeDisplayTitle}
+            accessibilityHint="Opens the conversation thread. Swipe right to mark read or unread, swipe left to archive, long press for quick actions"
+            leftAction={{
+              icon: 'checkmark-done-outline',
+              label: item.unread ? 'Mark unread' : 'Mark read',
+              onPress: () => handleToggleRead(item.id),
+              color: colors.brand,
+            }}
+            rightAction={{
+              icon: 'archive-outline',
+              label: 'Archive',
+              onPress: () => handleArchive(item.id),
+              color: colors.surfaceAlt,
+            }}
           >
             {conversationRow}
-          </Swipeable>
+          </SwipeableRow>
         )}
-        {!isRequest && <View style={styles.rowSeparator} />}
+        {!isRequest && <View style={[styles.rowSeparator, t.rowSeparator]} />}
       </View>
     );
   };
@@ -736,19 +778,19 @@ export default function InboxScreen() {
 
   return (
 
-    <SafeAreaView edges={['top']} style={styles.screenRoot}>
+    <SafeAreaView edges={['top']} style={[styles.screenRoot, t.screenRoot]}>
 
 
 
       <View style={styles.compactHeader}>
 
-        <Text style={styles.headerTitle}>Inbox</Text>
+        <Text style={[styles.headerTitle, t.headerTitle]}>Inbox</Text>
 
         <View style={styles.headerActions}>
 
           <AnimatedPressable
 
-            style={styles.iconBtn}
+            style={[styles.iconBtn, t.iconBtn]}
 
             onPress={() => navigation.navigate('ChatSettings')}
 
@@ -758,6 +800,8 @@ export default function InboxScreen() {
 
             hapticFeedback="light"
 
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+
             accessibilityLabel="Message settings"
 
             accessibilityHint="Opens privacy, automation, and quick reply settings"
@@ -766,13 +810,13 @@ export default function InboxScreen() {
 
           >
 
-            <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
+            <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
 
           </AnimatedPressable>
 
           <AnimatedPressable
 
-            style={styles.newMessageBtn}
+            style={[styles.newMessageBtn, t.newMessageBtn]}
 
             onPress={() => navigation.navigate('NewMessage')}
 
@@ -788,9 +832,9 @@ export default function InboxScreen() {
 
           >
 
-            <Ionicons name="create-outline" size={18} color={Colors.textInverse} />
+            <Ionicons name="create-outline" size={18} color={colors.textInverse} />
 
-            <Text style={styles.newMessageBtnText}>New</Text>
+            <Text style={[styles.newMessageBtnText, t.newMessageBtnText]}>New</Text>
 
           </AnimatedPressable>
 
@@ -810,7 +854,7 @@ export default function InboxScreen() {
 
           onChangeText={setSearchQuery}
 
-          containerStyle={styles.searchWrap}
+          containerStyle={[styles.searchWrap, t.searchWrap]}
 
           inputProps={{
 
@@ -842,13 +886,7 @@ export default function InboxScreen() {
 
       {isOffline && (
 
-        <View style={styles.offlineBanner}>
-
-          <Ionicons name="cloud-offline-outline" size={16} color={Colors.textSecondary} />
-
-          <Text style={styles.offlineBannerText}>You are offline</Text>
-
-        </View>
+        <OfflineBanner message="You are offline" />
 
       )}
 
@@ -856,13 +894,13 @@ export default function InboxScreen() {
 
       {!!syncError && (
 
-        <View style={styles.errorBanner}>
+        <View style={[styles.errorBanner, t.errorBanner]}>
 
-          <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
 
           <View style={styles.errorBannerCopy}>
-            <Text style={styles.errorBannerTitle}>Couldn't sync messages</Text>
-            <Text style={styles.errorBannerSub}>Check your connection or retry.</Text>
+            <Text style={[styles.errorBannerTitle, t.errorBannerTitle]}>Couldn't sync messages</Text>
+            <Text style={[styles.errorBannerSub, t.errorBannerSub]}>Check your connection or retry.</Text>
           </View>
 
           <AnimatedPressable
@@ -881,7 +919,7 @@ export default function InboxScreen() {
 
           >
 
-            <Text style={styles.errorBannerRetry}>Retry</Text>
+            <Text style={[styles.errorBannerRetry, t.errorBannerRetry]}>Retry</Text>
 
           </AnimatedPressable>
 
@@ -928,7 +966,7 @@ export default function InboxScreen() {
             {segment === 'all' && messageRequests.length > 0 && (
 
               <View style={styles.requestsBanner}>
-                <View style={styles.requestsBannerRule} />
+                <View style={[styles.requestsBannerRule, t.requestsBannerRule]} />
                 <AnimatedPressable
                   onPress={() => navigation.navigate('MessageRequests')}
                   activeOpacity={0.85}
@@ -939,18 +977,18 @@ export default function InboxScreen() {
                   style={styles.requestsBannerTap}
                 >
                   <View style={styles.requestsAvatarStack}>
-                    <View style={styles.requestsAvatar}>
-                      <Ionicons name="mail-unread-outline" size={16} color={Colors.brand} />
+                    <View style={[styles.requestsAvatar, t.requestsAvatar]}>
+                      <Ionicons name="mail-unread-outline" size={16} color={colors.brand} />
                     </View>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.requestsBannerText}>Requests</Text>
-                    <Text style={styles.requestsBannerSub}>{messageRequests.length} pending</Text>
+                    <Text style={[styles.requestsBannerText, t.requestsBannerText]}>Requests</Text>
+                    <Text style={[styles.requestsBannerSub, t.requestsBannerSub]}>{messageRequests.length} pending</Text>
                   </View>
-                  <View style={styles.requestsBadge}>
-                    <Text style={styles.requestsBadgeText}>{messageRequests.length}</Text>
+                  <View style={[styles.requestsBadge, t.requestsBadge]}>
+                    <Text style={[styles.requestsBadgeText, t.requestsBadgeText]}>{messageRequests.length}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </AnimatedPressable>
               </View>
 
@@ -960,7 +998,7 @@ export default function InboxScreen() {
               <View style={styles.needsActionRow}>
                 {buyingUnreadCount > 0 && (
                   <AnimatedPressable
-                    style={styles.needsActionChip}
+                    style={[styles.needsActionChip, t.needsActionChip]}
                     onPress={() => setSegment('buying')}
                     activeOpacity={0.85}
                     scaleValue={0.97}
@@ -968,13 +1006,13 @@ export default function InboxScreen() {
                     accessibilityLabel={`${buyingUnreadCount} unread buying conversations`}
                     accessibilityRole="button"
                   >
-                    <Ionicons name="cart-outline" size={14} color={Colors.brand} />
-                    <Text style={styles.needsActionText}>{buyingUnreadCount} buying</Text>
+                    <Ionicons name="cart-outline" size={14} color={colors.brand} />
+                    <Text style={[styles.needsActionText, t.needsActionText]}>{buyingUnreadCount} buying</Text>
                   </AnimatedPressable>
                 )}
                 {sellingUnreadCount > 0 && (
                   <AnimatedPressable
-                    style={styles.needsActionChip}
+                    style={[styles.needsActionChip, t.needsActionChip]}
                     onPress={() => setSegment('selling')}
                     activeOpacity={0.85}
                     scaleValue={0.97}
@@ -982,8 +1020,8 @@ export default function InboxScreen() {
                     accessibilityLabel={`${sellingUnreadCount} unread selling conversations`}
                     accessibilityRole="button"
                   >
-                    <Ionicons name="pricetag-outline" size={14} color={Colors.brand} />
-                    <Text style={styles.needsActionText}>{sellingUnreadCount} selling</Text>
+                    <Ionicons name="pricetag-outline" size={14} color={colors.brand} />
+                    <Text style={[styles.needsActionText, t.needsActionText]}>{sellingUnreadCount} selling</Text>
                   </AnimatedPressable>
                 )}
               </View>
@@ -1000,7 +1038,7 @@ export default function InboxScreen() {
 
             contentContainerStyle={styles.listContent}
 
-            renderItem={renderItem as any}
+            renderItem={renderItem}
 
             onScroll={scrollHandler}
 
@@ -1218,7 +1256,6 @@ const styles = StyleSheet.create({
 
   screenRoot: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
 
   compactHeader: {
@@ -1244,7 +1281,7 @@ const styles = StyleSheet.create({
 
   headerTitleBlock: {
 
-    gap: 2,
+    gap: Space.xs / 2,
 
     marginBottom: Space.xs,
 
@@ -1256,7 +1293,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.title.fontFamily,
 
-    color: Colors.textPrimary,
 
     letterSpacing: Type.title.letterSpacing,
 
@@ -1270,7 +1306,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.body.fontFamily,
 
-    color: Colors.textMuted,
 
   },
 
@@ -1286,13 +1321,12 @@ const styles = StyleSheet.create({
 
   iconBtn: {
 
-    width: 40,
+    width: Space.xxl,
 
-    height: 40,
+    height: Space.xxl,
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surfaceAlt,
 
     justifyContent: 'center',
 
@@ -1310,11 +1344,10 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: Space.md,
 
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.textPrimary,
 
   },
 
@@ -1324,19 +1357,17 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textInverse,
 
   },
 
   searchWrap: {
 
-    backgroundColor: Colors.surfaceAlt,
 
     borderRadius: Radius.full,
 
     paddingHorizontal: Space.md,
 
-    minHeight: 40,
+    minHeight: Space.xxl,
 
   },
 
@@ -1347,24 +1378,18 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   filterChip: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
+    paddingVertical: Space.xs + 1,
+    paddingHorizontal: Space.sm + Space.xs,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
   },
   filterChipActive: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
   },
   filterChipText: {
     fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.textInverse,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
@@ -1396,9 +1421,8 @@ const styles = StyleSheet.create({
 
     height: StyleSheet.hairlineWidth,
 
-    backgroundColor: Colors.border,
 
-    marginLeft: 72,
+    marginLeft: Space.xxl + Space.lg,
 
     marginRight: Space.md,
 
@@ -1408,13 +1432,12 @@ const styles = StyleSheet.create({
 
   groupAvatar: {
 
-    width: 56,
+    width: Space.xxl + Space.sm,
 
-    height: 56,
+    height: Space.xxl + Space.sm,
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surfaceAlt,
 
     alignItems: 'center',
 
@@ -1430,7 +1453,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.title.fontFamily,
 
-    color: Colors.textPrimary,
 
   },
 
@@ -1442,17 +1464,15 @@ const styles = StyleSheet.create({
 
     right: -2,
 
-    width: 18,
+    width: Control.iconCompact,
 
-    height: 18,
+    height: Control.iconCompact,
 
     borderRadius: Radius.full,
 
-    backgroundColor: Colors.surface,
 
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
 
-    borderColor: Colors.border,
 
     justifyContent: 'center',
 
@@ -1460,7 +1480,7 @@ const styles = StyleSheet.create({
 
   },
 
-  messageBody: { flex: 1, justifyContent: 'center', gap: 2 },
+  messageBody: { flex: 1, justifyContent: 'center', gap: Space.xs / 2 },
 
   messageTop: {
 
@@ -1468,7 +1488,7 @@ const styles = StyleSheet.create({
 
     justifyContent: 'space-between',
 
-    marginBottom: 4,
+    marginBottom: Space.xs,
 
     alignItems: 'center',
 
@@ -1490,7 +1510,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textPrimary,
 
     letterSpacing: Type.body.letterSpacing,
 
@@ -1504,7 +1523,7 @@ const styles = StyleSheet.create({
 
   pinIcon: {
 
-    marginLeft: 2,
+    marginLeft: Space.xs / 2,
 
   },
 
@@ -1524,13 +1543,11 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textMuted,
 
   },
 
   snippet: {
 
-    color: Colors.textSecondary,
 
     fontSize: Type.caption.size,
 
@@ -1544,39 +1561,34 @@ const styles = StyleSheet.create({
 
   snippetUnread: {
 
-    color: Colors.textPrimary,
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.textPrimary,
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.sm,
   },
   unreadPill: {
-    backgroundColor: Colors.textPrimary,
     borderRadius: Radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs / 2,
     marginLeft: Space.xs,
   },
   unreadPillText: {
-    fontSize: 10,
+    fontSize: Type.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textInverse,
   },
   timeUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
   },
   rowMeta: {
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: Space.xs,
-    minWidth: 40,
+    minWidth: Space.xxl,
     paddingLeft: Space.xs,
   },
   rowMetaBottom: {
@@ -1585,19 +1597,17 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   contextThumb: {
-    width: 28,
-    height: 28,
+    width: Space.lg + Space.xs,
+    height: Space.lg + Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
   contextThumbImage: {
-    width: 28,
-    height: 28,
+    width: Space.lg + Space.xs,
+    height: Space.lg + Space.xs,
   },
 
   snippetWithBadge: {
@@ -1614,11 +1624,10 @@ const styles = StyleSheet.create({
 
   draftBadge: {
 
-    backgroundColor: `${Colors.brand}1A`,
 
     paddingHorizontal: Space.sm - 2,
 
-    paddingVertical: 2,
+    paddingVertical: Space.xs / 2,
 
     borderRadius: Radius.sm,
 
@@ -1630,12 +1639,10 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.brand,
 
   },
 
   rowInnerUnread: {
-    backgroundColor: `${Colors.brand}06`,
   },
   requestListingContext: {
     flexDirection: 'row',
@@ -1668,15 +1675,14 @@ const styles = StyleSheet.create({
 
   swipeDelete: {
 
-    backgroundColor: `${Colors.danger}1F`,
 
     justifyContent: 'center',
 
     alignItems: 'center',
 
-    width: 72,
+    width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
     flex: 1,
 
@@ -1684,15 +1690,14 @@ const styles = StyleSheet.create({
 
   swipePin: {
 
-    backgroundColor: `${Colors.brand}14`,
 
     justifyContent: 'center',
 
     alignItems: 'center',
 
-    width: 72,
+    width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
     flex: 1,
 
@@ -1700,15 +1705,14 @@ const styles = StyleSheet.create({
 
   swipeArchive: {
 
-    backgroundColor: `${Colors.brand}14`,
 
     justifyContent: 'center',
 
     alignItems: 'center',
 
-    width: 72,
+    width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
     flex: 1,
 
@@ -1716,15 +1720,14 @@ const styles = StyleSheet.create({
 
   swipeMute: {
 
-    backgroundColor: `${Colors.textMuted}1F`,
 
     justifyContent: 'center',
 
     alignItems: 'center',
 
-    width: 72,
+    width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
     flex: 1,
 
@@ -1732,7 +1735,6 @@ const styles = StyleSheet.create({
 
   requestRowSurface: {
 
-    backgroundColor: Colors.surface,
 
     borderRadius: Radius.lg,
 
@@ -1743,8 +1745,6 @@ const styles = StyleSheet.create({
   },
   requestRowAccent: {
     borderLeftWidth: 3,
-    borderLeftColor: Colors.brand,
-    backgroundColor: `${Colors.brand}06`,
     marginHorizontal: Space.md,
     marginVertical: Space.xs,
     borderRadius: Radius.sm,
@@ -1776,15 +1776,13 @@ const styles = StyleSheet.create({
 
     justifyContent: 'center',
 
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
-    backgroundColor: Colors.surfaceAlt,
 
     borderWidth: StyleSheet.hairlineWidth,
 
-    borderColor: Colors.border,
 
   },
 
@@ -1794,7 +1792,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textPrimary,
 
   },
 
@@ -1806,11 +1803,10 @@ const styles = StyleSheet.create({
 
     justifyContent: 'center',
 
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
-    backgroundColor: Colors.brand,
 
   },
 
@@ -1823,7 +1819,6 @@ const styles = StyleSheet.create({
   },
   requestsBannerRule: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
     marginBottom: Space.sm,
     marginHorizontal: Space.md,
   },
@@ -1831,17 +1826,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: 10,
+    paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
   },
   requestsAvatarStack: {
     flexDirection: 'row',
   },
   requestsAvatar: {
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}12`,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1854,11 +1848,10 @@ const styles = StyleSheet.create({
 
     gap: Space.sm,
 
-    paddingVertical: 12,
+    paddingVertical: Space.sm + Space.xs,
 
     paddingHorizontal: Space.md,
 
-    backgroundColor: Colors.surface,
 
     borderRadius: Radius.lg,
 
@@ -1866,13 +1859,12 @@ const styles = StyleSheet.create({
 
   requestsBadge: {
 
-    width: 24,
+    width: Space.lg,
 
-    height: 24,
+    height: Space.lg,
 
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
 
-    backgroundColor: Colors.textPrimary,
 
     justifyContent: 'center',
 
@@ -1886,29 +1878,25 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.title.fontFamily,
 
-    color: Colors.textInverse,
 
   },
 
   requestsIconWrap: {
-    width: 40,
-    height: 40,
+    width: Space.xxl,
+    height: Space.xxl,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   requestsBannerText: {
     fontSize: Type.body.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.textPrimary,
     letterSpacing: Type.body.letterSpacing,
   },
   requestsBannerSub: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: Colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
 
   requestBtnAcceptText: {
@@ -1917,39 +1905,6 @@ const styles = StyleSheet.create({
 
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
-    color: Colors.textInverse,
-
-  },
-
-  offlineBanner: {
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    gap: Space.xs,
-
-    backgroundColor: Colors.surfaceAlt,
-
-    borderBottomWidth: StyleSheet.hairlineWidth,
-
-    borderBottomColor: Colors.border,
-
-    paddingVertical: Space.xs + 2,
-
-    paddingHorizontal: Space.md,
-
-  },
-
-  offlineBannerText: {
-
-    color: Colors.textSecondary,
-
-    fontSize: Type.caption.size,
-
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
 
   },
 
@@ -1961,43 +1916,37 @@ const styles = StyleSheet.create({
 
     gap: Space.sm,
 
-    backgroundColor: '#FFF5F5',
-
     paddingVertical: Space.sm,
 
     paddingHorizontal: Space.md,
 
     borderBottomWidth: StyleSheet.hairlineWidth,
 
-    borderBottomColor: Colors.border,
 
   },
 
   errorBannerCopy: {
     flex: 1,
-    gap: 1,
+    gap: Space.xs / 4,
   },
 
   errorBannerTitle: {
-    color: Colors.danger,
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
   errorBannerSub: {
-    color: Colors.textMuted,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
   },
 
   errorBannerRetryBtn: {
     paddingHorizontal: Space.sm,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
   },
 
   errorBannerRetry: {
 
-    color: Colors.brand,
 
     fontSize: Type.caption.size,
 
@@ -2043,17 +1992,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.sm + Space.xs,
     borderRadius: Radius.full,
-    backgroundColor: `${Colors.brand}0D`,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${Colors.brand}33`,
   },
   needsActionText: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: Colors.brand,
   },
 
 });

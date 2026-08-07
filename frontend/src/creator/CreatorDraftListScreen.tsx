@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,18 +12,29 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { Colors } from '../constants/colors';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CreatorDraftService, type DraftMeta } from './drafts';
 import { createStableId } from '../utils/createStableId';
 import { CreatorCanvas } from './CreatorCanvas';
 import type { CreatorDocument } from './composition';
 
+type SortBy = 'recent' | 'name' | 'type';
+
+const SORT_OPTIONS: { key: SortBy; label: string }[] = [
+  { key: 'recent', label: 'Recent' },
+  { key: 'name', label: 'Name' },
+  { key: 'type', label: 'Type' },
+];
+
 export function CreatorDraftListScreen() {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const [drafts, setDrafts] = useState<DraftMeta[]>([]);
   const [draftDocs, setDraftDocs] = useState<Record<string, CreatorDocument | null>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sortBy, setSortBy] = useState<SortBy>('recent');
 
   const loadDrafts = useCallback(async () => {
     const items = await CreatorDraftService.listDrafts();
@@ -40,6 +51,23 @@ export function CreatorDraftListScreen() {
   useEffect(() => {
     loadDrafts();
   }, [loadDrafts]);
+
+  const sortedDrafts = useMemo(() => {
+    const copy = [...drafts];
+    if (sortBy === 'recent') {
+      copy.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    } else if (sortBy === 'name') {
+      copy.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === 'type') {
+      copy.sort((a, b) => {
+        if (a.type === b.type) {
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        }
+        return a.type.localeCompare(b.type);
+      });
+    }
+    return copy;
+  }, [drafts, sortBy]);
 
   const handleOpenDraft = useCallback((draft: DraftMeta) => {
     navigation.navigate('CreatorStudio', {
@@ -92,75 +120,81 @@ export function CreatorDraftListScreen() {
     loadDrafts();
   }, [loadDrafts]);
 
+  const handleStartCreating = useCallback(() => {
+    navigation.navigate('CreatorStudio', { type: 'look' });
+  }, [navigation]);
+
   const renderItem = useCallback(({ item }: { item: DraftMeta }) => {
     const doc = draftDocs[item.id];
-    const thumbW = 44;
-    const thumbH = doc ? Math.floor(thumbW / doc.canvas.aspectRatio) : 44;
+    const thumbW = 72;
+    const thumbH = doc ? Math.floor(thumbW / doc.canvas.aspectRatio) : 72;
+    const isPortrait = thumbH > thumbW;
+    const finalThumbW = isPortrait ? 80 : thumbW;
+    const finalThumbH = isPortrait ? Math.min(100, Math.floor(finalThumbW / (doc?.canvas.aspectRatio ?? 0.8))) : thumbH;
     return (
     <Pressable
       onPress={() => handleOpenDraft(item)}
-      style={styles.draftRow}
+      style={({ pressed }) => [styles.draftRow, pressed && styles.draftRowPressed]}
       accessibilityLabel={`Open draft ${item.title}`}
       accessibilityRole="button"
     >
       {doc ? (
-        <View style={[styles.draftThumb, { height: thumbH }]}>
+        <View style={[styles.draftThumb, { width: finalThumbW, height: finalThumbH }]}>
           <CreatorCanvas
             document={doc}
             page={doc.pages[0]}
-            canvasWidth={thumbW}
-            canvasHeight={thumbH}
+            canvasWidth={finalThumbW}
+            canvasHeight={finalThumbH}
             mode="view"
           />
         </View>
       ) : (
-        <View style={[styles.draftIcon, { backgroundColor: item.type === 'look' ? '#5856d620' : '#ff950020' }]}>
+        <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discovery + '20' : colors.bronze + '20' }]}>
           <Ionicons
             name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
-            size={20}
-            color={item.type === 'look' ? '#5856d6' : '#ff9500'}
+            size={28}
+            color={item.type === 'look' ? colors.discovery : colors.bronze}
           />
         </View>
       )}
       <View style={styles.draftInfo}>
         <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.draftMeta}>
+        <Text style={styles.draftMeta} numberOfLines={1}>
           {item.type === 'look' ? 'Look' : 'Poster'} · {new Date(item.updatedAt).toLocaleDateString()}
         </Text>
         <View style={styles.statusRow}>
-          <View style={styles.statusBadge}>
-            <Ionicons name="phone-portrait-outline" size={10} color={Colors.textMuted} />
-            <Text style={styles.statusText}>Local</Text>
+          <View style={[styles.typeBadge, item.type === 'look' ? styles.typeBadgeLook : styles.typeBadgePoster]}>
+            <Text style={styles.typeBadgeText}>{item.type === 'look' ? 'Look' : 'Poster'}</Text>
           </View>
         </View>
       </View>
       <View style={styles.actions}>
         <Pressable
           onPress={() => handleDuplicateDraft(item)}
-          style={styles.actionBtn}
+          style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel={`Duplicate draft ${item.title}`}
           accessibilityRole="button"
         >
-          <Ionicons name="copy-outline" size={16} color={Colors.textSecondary} />
+          <Ionicons name="copy-outline" size={18} color={colors.textSecondary} />
         </Pressable>
         <Pressable
           onPress={() => handleDeleteDraft(item)}
-          style={styles.actionBtn}
+          style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel={`Delete draft ${item.title}`}
           accessibilityRole="button"
         >
-          <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+          <Ionicons name="trash-outline" size={18} color={colors.danger} />
         </Pressable>
       </View>
     </Pressable>
-  ); }, [handleOpenDraft, handleDeleteDraft, handleDuplicateDraft, draftDocs]);
+  ); }, [handleOpenDraft, handleDeleteDraft, handleDuplicateDraft, draftDocs, styles, colors]);
 
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -174,14 +208,38 @@ export function CreatorDraftListScreen() {
           accessibilityLabel="Back"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Drafts</Text>
         <View style={styles.backBtn} />
       </View>
 
+      {/* Sort toggle pills */}
+      <View style={styles.sortBar}>
+        {SORT_OPTIONS.map((opt) => {
+          const isActive = sortBy === opt.key;
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => setSortBy(opt.key)}
+              style={({ pressed }) => [
+                styles.sortPill,
+                isActive ? styles.sortPillActive : styles.sortPillInactive,
+                pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] },
+              ]}
+              accessibilityLabel={`Sort by ${opt.label}`}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.sortPillText, isActive ? styles.sortPillTextActive : styles.sortPillTextInactive]}>
+                {opt.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <FlatList
-        data={drafts}
+        data={sortedDrafts}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
@@ -190,9 +248,17 @@ export function CreatorDraftListScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="document-outline" size={40} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No drafts</Text>
-            <Text style={styles.emptySubtext}>Drafts are saved automatically as you create</Text>
+            <Ionicons name="document-outline" size={48} color={colors.textMuted} />
+            <Text style={styles.emptyTitle}>No drafts yet</Text>
+            <Text style={styles.emptySubtext}>Start creating to see your drafts here</Text>
+            <Pressable
+              onPress={handleStartCreating}
+              style={({ pressed }) => [styles.emptyCta, pressed && { opacity: 0.85 }]}
+              accessibilityLabel="Start creating"
+              accessibilityRole="button"
+            >
+              <Text style={styles.emptyCtaText}>Start Creating</Text>
+            </Pressable>
           </View>
         }
       />
@@ -200,16 +266,17 @@ export function CreatorDraftListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -218,7 +285,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   backBtn: {
     width: 40,
@@ -229,57 +296,111 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.title.size,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
+  },
+  // ── Sort bar ──
+  sortBar: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  sortPill: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.lg,
+  },
+  sortPillActive: {
+    backgroundColor: colors.brand,
+  },
+  sortPillInactive: {
+    backgroundColor: colors.surfaceAlt,
+  },
+  sortPillText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  sortPillTextActive: {
+    color: colors.textInverse,
+  },
+  sortPillTextInactive: {
+    color: colors.textSecondary,
   },
   listContent: {
     padding: Space.md,
-    gap: Space.sm,
   },
+  // ── Draft row ──
   draftRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    gap: Space.md,
+    padding: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.xl,
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  draftRowPressed: {
+    opacity: 0.85,
   },
   draftThumb: {
-    width: 44,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   draftIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   draftInfo: {
     flex: 1,
-    gap: 2,
+    gap: 3,
+  },
+  draftTitle: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    color: colors.textPrimary,
+  },
+  draftMeta: {
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+    color: colors.textSecondary,
   },
   statusRow: {
     flexDirection: 'row',
-    marginTop: 2,
+    marginTop: Space.xs,
   },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
+  typeBadge: {
+    paddingHorizontal: Space.sm,
     paddingVertical: 2,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.full,
   },
-  statusText: {
-    fontFamily: Typography.family.regular,
-    fontSize: 10,
-    color: Colors.textMuted,
+  typeBadgeLook: {
+    backgroundColor: colors.discovery + '20',
+  },
+  typeBadgePoster: {
+    backgroundColor: colors.bronze + '20',
+  },
+  typeBadgeText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    color: colors.textSecondary,
+    letterSpacing: Type.meta.letterSpacing,
   },
   actions: {
     flexDirection: 'row',
@@ -292,16 +413,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: Radius.sm,
   },
-  draftTitle: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: Colors.textPrimary,
+  actionBtnPressed: {
+    opacity: 0.6,
   },
-  draftMeta: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    color: Colors.textMuted,
-  },
+  // ── Empty state ──
   emptyState: {
     alignItems: 'center',
     paddingVertical: Space.xl * 2,
@@ -309,13 +424,27 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    color: Colors.textSecondary,
+    fontSize: Type.subtitle.size,
+    color: colors.textPrimary,
+    marginTop: Space.xs,
   },
   emptySubtext: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    color: Colors.textMuted,
+    fontSize: Type.body.size,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
-});
+  emptyCta: {
+    backgroundColor: colors.brand,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
+    marginTop: Space.sm,
+  },
+  emptyCtaText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    color: colors.textInverse,
+  },
+  });
+}

@@ -1,8 +1,79 @@
-import { Listing, ListingSeller } from '../data/mockData';
 import { fetchJson } from '../lib/apiClient';
-import { mapBackendListingToListing, friendlyBackendError } from './listingMapper';
+import {
+  mapBackendListingToListing,
+  mapBackendListings,
+  friendlyBackendError,
+} from './listingMapper';
+import type { DisplayReadyListing } from './listingMapper';
+import type { SupportedCurrencyCode } from '../constants/currencies';
 
-export { ListingSeller };
+export interface ListingSeller {
+  id: string;
+  username: string | null;
+  avatar: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  location?: string | null;
+  verified?: boolean | null;
+}
+
+export interface ListingEngagementSummaryApi {
+  listingId: string;
+  likes: number;
+  views?: number;
+  saves?: number;
+  wishlistCount: number | null;
+  collectionSaveCount: number | null;
+  activeOfferCount: number | null;
+  questionCount: number;
+  answeredQuestionCount: number;
+  generatedAt: string;
+}
+
+export type ListingCondition =
+  | 'New with tags'
+  | 'Very good'
+  | 'Good'
+  | 'Satisfactory';
+
+export type ListingLifecycleStatus =
+  | 'draft'
+  | 'active'
+  | 'paused'
+  | 'reserved'
+  | 'sold'
+  | 'deleted'
+  | 'removed'
+  | 'unknown';
+
+export interface Listing {
+  id: string;
+  title: string | null;
+  brand: string | null;
+  size: string | null;
+  condition: ListingCondition | null;
+  price: number | null;
+  originalPrice?: number;
+  priceWithProtection?: number;
+  images: string[];
+  mediaAspectRatio?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
+  likes: number;
+  views?: number;
+  isBumped?: boolean;
+  isSold?: boolean;
+  sellerId: string | null;
+  seller?: ListingSeller | null;
+  category: string | null;
+  subcategory?: string | null;
+  description: string | null;
+  createdAt?: string | null;
+  status?: ListingLifecycleStatus;
+  shippingMethod?: string | null;
+  shippingPayer?: string | null;
+  engagement?: ListingEngagementSummaryApi | null;
+}
 
 interface ApiListingRow {
   id: string;
@@ -31,7 +102,7 @@ interface ApiListingsResponse {
 }
 
 export interface ListingsSyncResult {
-  listings: Listing[];
+  listings: DisplayReadyListing[];
   source: 'api' | 'mock';
   error?: string;
   nextCursor?: string;
@@ -44,7 +115,7 @@ export async function fetchListingsFromApi(cursor?: string): Promise<ListingsSyn
     const rows = Array.isArray(payload.items) ? payload.items : [];
 
     return {
-      listings: rows.map((row) => mapBackendListingToListing(row)),
+      listings: mapBackendListings(rows),
       source: 'api',
       error: rows.length === 0 ? 'API returned zero listings.' : undefined,
       nextCursor: payload.nextCursor,
@@ -68,6 +139,8 @@ export interface ListingSearchResult {
   rank: number;
   createdAt: string;
   seller: ListingSeller | null;
+  brand?: string | null;
+  size?: string | null;
 }
 
 export async function searchListingsFromApi(query: string, limit?: number): Promise<{ items: ListingSearchResult[]; fallback: boolean }> {
@@ -113,7 +186,7 @@ export async function fetchFilteredListings(options?: {
     const rows = Array.isArray(payload.items) ? payload.items : [];
 
     return {
-      listings: rows.map((row) => mapBackendListingToListing(row)),
+      listings: mapBackendListings(rows),
       source: 'api',
       error: rows.length === 0 ? 'No listings match your filters.' : undefined,
       nextCursor: payload.nextCursor,
@@ -128,7 +201,7 @@ export async function fetchFilteredListings(options?: {
 }
 
 export interface VisualSearchResult {
-  listings: Listing[];
+  listings: DisplayReadyListing[];
   source: 'api' | 'fallback';
   visualMatching: boolean;
   note?: string;
@@ -180,7 +253,7 @@ export async function visualSearch(params: {
 
     const rows = Array.isArray(payload.items) ? payload.items : [];
     return {
-      listings: rows.map((row) => mapBackendListingToListing(row)),
+      listings: mapBackendListings(rows),
       source: 'api',
       visualMatching: payload.visualMatching === true,
       note: payload.note,
@@ -205,6 +278,7 @@ export interface ListingCreateBody {
   description: string;
   priceGbp: number;
   imageUrl?: string;
+  coverFinalizationId?: string;
   status?: 'draft' | 'active' | 'paused' | 'sold' | 'deleted';
   category?: string;
   brand?: string;
@@ -232,14 +306,69 @@ export interface ListingApiItem {
   shippingMethod: string | null;
   shippingPayer: string | null;
   createdAt: string;
+  /** M07: When media was frozen (cannot be silently swapped). */
+  mediaFrozenAt?: string | null;
   seller?: ListingSeller | null;
+  engagement?: ListingEngagementSummaryApi | null;
 }
+
+export interface ListingSoldComparables {
+  listingId: string;
+  category: string | null;
+  brand: string | null;
+  currency: SupportedCurrencyCode;
+  sampleSize: number;
+  minPrice: number | null;
+  medianPrice: number | null;
+  maxPrice: number | null;
+  dateFrom: string | null;
+  dateTo: string | null;
+  generatedAt: string;
+}
+
+export interface ListingPriceEvent {
+  previousPrice: number;
+  newPrice: number;
+  currency: SupportedCurrencyCode;
+  changedAt: string;
+}
+
+export interface ListingQaSummary {
+  listingId: string;
+  questionCount: number;
+  answeredQuestionCount: number;
+  latestAnsweredQuestion: string | null;
+  latestAnswer: string | null;
+  latestActivityAt: string | null;
+}
+
+export interface ListingQuestionApi {
+  id: string;
+  listingId: string;
+  askerId: string;
+  askerName?: string;
+  text: string;
+  createdAt: string;
+  answer: {
+    text: string;
+    responderName: string;
+    createdAt: string;
+  } | null;
+}
+
+export type ListingReportReason =
+  | 'spam'
+  | 'inappropriate'
+  | 'counterfeit'
+  | 'unresponsive'
+  | 'harassment'
+  | 'other';
 
 export interface ListingCommerceServerContext {
   itemPrice: number;
   buyerProtectionFee: number;
   estimatedTotal: number;
-  currency: string;
+  currency: SupportedCurrencyCode;
   shippingMethod: string | null;
   shippingPayer: string | null;
   protectionPolicy: {
@@ -279,7 +408,78 @@ export async function createListingOnApi(body: ListingCreateBody): Promise<{ ok:
 }
 
 export async function fetchListingByIdFromApi(listingId: string): Promise<ListingSingleResponse> {
-  return fetchJson<ListingSingleResponse>(`/listings/${listingId}`);
+  return fetchJson<ListingSingleResponse>(`/listings/${encodeURIComponent(listingId)}`);
+}
+
+export async function fetchListingSoldComparables(listingId: string): Promise<ListingSoldComparables> {
+  const payload = await fetchJson<{ ok: boolean; comparables: ListingSoldComparables }>(
+    `/listings/${encodeURIComponent(listingId)}/sold-comparables`
+  );
+  return payload.comparables;
+}
+
+export async function fetchListingPriceHistory(listingId: string): Promise<ListingPriceEvent[]> {
+  const payload = await fetchJson<{ ok: boolean; items: ListingPriceEvent[] }>(
+    `/listings/${encodeURIComponent(listingId)}/price-history`
+  );
+  return payload.items;
+}
+
+export async function fetchListingQaSummary(listingId: string): Promise<ListingQaSummary> {
+  const payload = await fetchJson<{ ok: boolean; summary: ListingQaSummary }>(
+    `/listings/${encodeURIComponent(listingId)}/qa-summary`
+  );
+  return payload.summary;
+}
+
+export async function fetchListingQuestions(listingId: string): Promise<ListingQuestionApi[]> {
+  const payload = await fetchJson<{ ok: boolean; items: ListingQuestionApi[] }>(
+    `/listings/${encodeURIComponent(listingId)}/questions`
+  );
+  return payload.items;
+}
+
+export async function askListingQuestion(listingId: string, text: string): Promise<ListingQuestionApi> {
+  const payload = await fetchJson<{ ok: boolean; question: ListingQuestionApi }>(
+    `/listings/${encodeURIComponent(listingId)}/questions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }
+  );
+  return payload.question;
+}
+
+export async function answerListingQuestion(
+  listingId: string,
+  questionId: string,
+  text: string
+): Promise<ListingQuestionApi['answer']> {
+  const payload = await fetchJson<{ ok: boolean; answer: NonNullable<ListingQuestionApi['answer']> }>(
+    `/listings/${encodeURIComponent(listingId)}/questions/${encodeURIComponent(questionId)}/answer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }
+  );
+  return payload.answer;
+}
+
+export async function reportListing(
+  listingId: string,
+  reason: ListingReportReason,
+  details?: string
+): Promise<{ reportId: string }> {
+  return fetchJson<{ ok: boolean; reportId: string }>(
+    `/listings/${encodeURIComponent(listingId)}/report`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason, details }),
+    }
+  );
 }
 
 export async function patchListingOnApi(
@@ -316,6 +516,12 @@ export async function createListingImageOnApi(body: {
   sortOrder: number;
   mediaWidth?: number;
   mediaHeight?: number;
+  mediaType?: 'image' | 'video';
+  finalizationId: string;
+  posterUrl?: string | null;
+  blurhash?: string | null;
+  focalX?: number | null;
+  focalY?: number | null;
 }): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>('/listing-images', {
     method: 'POST',
@@ -324,13 +530,13 @@ export async function createListingImageOnApi(body: {
   });
 }
 
-export async function fetchRelatedListings(listingId: string): Promise<{ ok: boolean; items?: Listing[]; error?: string }> {
+export async function fetchRelatedListings(listingId: string): Promise<{ ok: boolean; items?: DisplayReadyListing[]; error?: string }> {
   try {
     const payload = await fetchJson<{ ok: boolean; items: ApiListingRow[] }>(`/listings/${listingId}/related`);
     if (!payload.ok) return { ok: false, error: 'Related listings request failed' };
     return {
       ok: true,
-      items: payload.items.map((row) => mapBackendListingToListing(row)),
+      items: mapBackendListings(payload.items),
     };
   } catch (error) {
     return { ok: false, error: friendlyBackendError(error) };

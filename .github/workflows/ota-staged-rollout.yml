@@ -1,0 +1,86 @@
+name: OTA Staged Rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'EAS Update channel (production/preview)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - preview
+      message:
+        description: 'Update message'
+        required: true
+      rollout_percentage:
+        description: 'Rollout percentage (1, 10, 25, 50, 100)'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '10'
+          - '25'
+          - '50'
+          - '100'
+
+jobs:
+  publish-update:
+    name: Publish EAS Update (${{ inputs.rollout_percentage }}%)
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.channel == 'production' && 'production' || 'preview' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Publish EAS Update (${{ inputs.rollout_percentage }}%)
+        working-directory: frontend
+        run: |
+          eas update \
+            --channel ${{ inputs.channel }} \
+            --message "${{ inputs.message }}" \
+            --rollout-percentage ${{ inputs.rollout_percentage }}
+        env:
+          EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+
+      - name: Notify rollout published
+        if: success()
+        run: |
+          echo "::notice::OTA update published to ${{ inputs.channel }} at ${{ inputs.rollout_percentage }}% rollout. Monitor EAS Observe before progressing."
+
+      - name: Failure notification
+        if: failure()
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+            -d "{\"content\":\"OTA staged rollout FAILED for channel ${{ inputs.channel }}\"}" \
+            ${{ secrets.ALERTING_WEBHOOK_URL }} || true

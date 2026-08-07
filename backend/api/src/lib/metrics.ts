@@ -50,10 +50,48 @@ const backgroundJobsTotal = new Counter({
   registers: [registry],
 });
 
+const backgroundJobDurationSeconds = new Histogram({
+  name: 'thryftverse_background_job_duration_seconds',
+  help: 'Background job execution duration by queue/job',
+  labelNames: ['queue', 'job'] as const,
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120],
+  registers: [registry],
+});
+
+const recommendationServesTotal = new Counter({
+  name: 'thryftverse_recommendation_serves_total',
+  help: 'Recommendation serves grouped by source, policy, and cold-start status',
+  labelNames: ['source', 'policy_version', 'cold_start'] as const,
+  registers: [registry],
+});
+
+const recommendationServeDurationSeconds = new Histogram({
+  name: 'thryftverse_recommendation_serve_duration_seconds',
+  help: 'Decision-service or fallback recommendation latency',
+  labelNames: ['source', 'policy_version'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  registers: [registry],
+});
+
+const recommendationResults = new Histogram({
+  name: 'thryftverse_recommendation_results',
+  help: 'Number of recommendation results returned per serve',
+  labelNames: ['source', 'policy_version'] as const,
+  buckets: [0, 1, 4, 8, 12, 18, 24, 50, 100],
+  registers: [registry],
+});
+
 const databasePoolConnections = new Gauge({
   name: 'thryftverse_database_pool_connections',
   help: 'Postgres pool connections grouped by pool and state',
   labelNames: ['pool', 'state'] as const,
+  registers: [registry],
+});
+
+const redisConnectionState = new Gauge({
+  name: 'thryftverse_redis_connection_state',
+  help: 'Redis connection state (1 for connected, 0 for disconnected)',
+  labelNames: ['state'] as const,
   registers: [registry],
 });
 
@@ -134,6 +172,42 @@ export function recordBackgroundJob(input: {
   );
 }
 
+export function recordBackgroundJobDuration(input: {
+  queue: string;
+  job: string;
+  durationSeconds: number;
+}): void {
+  backgroundJobDurationSeconds.observe(
+    {
+      queue: input.queue,
+      job: input.job,
+    },
+    Math.max(0, input.durationSeconds),
+  );
+}
+
+export function recordRecommendationServe(input: {
+  source: 'decision_service' | 'fallback';
+  policyVersion: string;
+  coldStart: boolean;
+  durationSeconds: number;
+  resultCount: number;
+}): void {
+  const labels = {
+    source: input.source,
+    policy_version: input.policyVersion,
+  };
+  recommendationServesTotal.inc(
+    { ...labels, cold_start: String(input.coldStart) },
+    1,
+  );
+  recommendationServeDurationSeconds.observe(
+    labels,
+    Math.max(0, input.durationSeconds),
+  );
+  recommendationResults.observe(labels, Math.max(0, input.resultCount));
+}
+
 export function observeDatabasePool(input: {
   pool: 'primary' | 'replica';
   total: number;
@@ -143,6 +217,11 @@ export function observeDatabasePool(input: {
   databasePoolConnections.set({ pool: input.pool, state: 'total' }, input.total);
   databasePoolConnections.set({ pool: input.pool, state: 'idle' }, input.idle);
   databasePoolConnections.set({ pool: input.pool, state: 'waiting' }, input.waiting);
+}
+
+export function observeRedisConnection(connected: boolean): void {
+  redisConnectionState.set({ state: 'connected' }, connected ? 1 : 0);
+  redisConnectionState.set({ state: 'disconnected' }, connected ? 0 : 1);
 }
 
 export async function renderMetrics(): Promise<string> {

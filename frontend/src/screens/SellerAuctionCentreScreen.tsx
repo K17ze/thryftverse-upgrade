@@ -12,9 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../constants/colors';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
@@ -28,18 +27,19 @@ import {
   buildAuctionAccessibilityLabel,
   type AuctionHomeItem,
 } from '../utils/auctionHomeLogic';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CachedImage } from '../components/CachedImage';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Typography } from '../theme/designTokens';
+import { RetryState } from '../components/RetryState';
+import { Space, Radius, Typography, Type, Stroke, Control } from '../theme/designTokens';
 import {
   listAuctions,
   type MarketAuction,
 } from '../services/marketApi';
 
-type NavT = StackNavigationProp<RootStackParamList>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type SellerTab = 'scheduled' | 'live' | 'sold' | 'unsold' | 'cancelled';
 
@@ -61,6 +61,7 @@ function toViewModel(api: MarketAuction): AuctionHomeItem {
     minimumNextBidGbp: api.minimumNextBidGbp,
     bidCount: api.bidCount,
     buyNowPriceGbp: api.buyNowPriceGbp,
+    reservePriceGbp: api.reservePriceGbp ?? null,
     viewerState: api.viewerState,
     isWatched: api.isWatched,
     winnerBidderId: api.winnerBidderId ?? null,
@@ -134,6 +135,7 @@ function resolveStatePresentation(
   timing: ReturnType<typeof resolveAuctionTiming>,
   urgency: ReturnType<typeof resolveUrgency>,
   timeLabel: string,
+  colors: ThemeColors,
 ): StatePresentation {
   const isCancelled = timing.effectiveState === 'cancelled' || item.cancelledAt;
   const isSold = (timing.effectiveState === 'ended' || timing.effectiveState === 'settled') && item.bidCount > 0 && !isCancelled;
@@ -144,9 +146,9 @@ function resolveStatePresentation(
   if (isCancelled) {
     return {
       stateLabel: 'Cancelled',
-      stateColor: Colors.textMuted,
+      stateColor: colors.textMuted,
       leadingLabel: mapTerminalReason(item.terminalReason),
-      leadingColor: Colors.textMuted,
+      leadingColor: colors.textMuted,
       actionLabel: 'View details',
       showLiveDot: false,
       useDangerState: false,
@@ -155,9 +157,9 @@ function resolveStatePresentation(
   if (isSold) {
     return {
       stateLabel: 'Sold',
-      stateColor: Colors.success,
+      stateColor: colors.success,
       leadingLabel: `Sold · ${item.bidCount} ${item.bidCount === 1 ? 'bid' : 'bids'}`,
-      leadingColor: Colors.textSecondary,
+      leadingColor: colors.textSecondary,
       actionLabel: 'View sale',
       showLiveDot: false,
       useDangerState: false,
@@ -166,9 +168,9 @@ function resolveStatePresentation(
   if (isUnsold) {
     return {
       stateLabel: 'Unsold',
-      stateColor: Colors.textMuted,
+      stateColor: colors.textMuted,
       leadingLabel: 'No bids received',
-      leadingColor: Colors.textMuted,
+      leadingColor: colors.textMuted,
       actionLabel: 'Review result',
       showLiveDot: false,
       useDangerState: false,
@@ -178,9 +180,9 @@ function resolveStatePresentation(
     const finalUrgency = urgency === 'finalMinutes';
     return {
       stateLabel: finalUrgency ? 'Ending' : 'Live',
-      stateColor: finalUrgency ? Colors.danger : Colors.textPrimary,
+      stateColor: finalUrgency ? colors.danger : colors.textPrimary,
       leadingLabel: timeLabel,
-      leadingColor: finalUrgency ? Colors.danger : Colors.textSecondary,
+      leadingColor: finalUrgency ? colors.danger : colors.textSecondary,
       actionLabel: 'View bids',
       showLiveDot: true,
       useDangerState: finalUrgency,
@@ -189,9 +191,9 @@ function resolveStatePresentation(
   if (isScheduled) {
     return {
       stateLabel: 'Scheduled',
-      stateColor: Colors.textSecondary,
+      stateColor: colors.textSecondary,
       leadingLabel: timeLabel,
-      leadingColor: Colors.textSecondary,
+      leadingColor: colors.textSecondary,
       actionLabel: 'View schedule',
       showLiveDot: false,
       useDangerState: false,
@@ -199,9 +201,9 @@ function resolveStatePresentation(
   }
   return {
     stateLabel: 'Ended',
-    stateColor: Colors.textMuted,
+    stateColor: colors.textMuted,
     leadingLabel: timeLabel,
-    leadingColor: Colors.textMuted,
+    leadingColor: colors.textMuted,
     actionLabel: 'Review result',
     showLiveDot: false,
     useDangerState: false,
@@ -222,12 +224,14 @@ function SellerAuctionRow({
   formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
   goldRates: any;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const timing = resolveAuctionTiming(item, clockMs);
   const urgency = resolveUrgency(timing);
   const priceLabel = resolvePriceLabel(item, timing);
   const priceText = resolvePriceText(item, timing, priceLabel, formatFromFiat);
   const timeLabel = resolveTimeLabel(timing);
-  const presentation = resolveStatePresentation(item, timing, urgency, timeLabel);
+  const presentation = resolveStatePresentation(item, timing, urgency, timeLabel, colors);
 
   const amount = item.currentBidGbp > 0 ? item.currentBidGbp : item.startingBidGbp;
   const izeText = amount > 0 ? formatAuctionIze(toIze(amount, 'GBP', goldRates)) : null;
@@ -260,7 +264,7 @@ function SellerAuctionRow({
           />
         ) : (
           <View style={styles.rowImagePlaceholder}>
-            <Ionicons name="image-outline" size={22} color={Colors.textMuted} />
+            <Ionicons name="image-outline" size={22} color={colors.textMuted} />
           </View>
         )}
         {presentation.showLiveDot && <View style={styles.rowLiveDot} />}
@@ -293,7 +297,7 @@ function SellerAuctionRow({
           </View>
           <View style={styles.rowActionCol}>
             <Text style={styles.rowActionLabel}>{presentation.actionLabel}</Text>
-            <Ionicons name="chevron-forward" size={13} color={Colors.textMuted} style={styles.rowActionChevron} />
+            <Ionicons name="chevron-forward" size={13} color={colors.textMuted} style={styles.rowActionChevron} />
           </View>
         </View>
         <View style={styles.rowLeadingRow}>
@@ -323,8 +327,10 @@ function SellerSummary({
   formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
   goldRates: any;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const active = stats.live;
-  const activeColor = active > 0 ? Colors.danger : Colors.textPrimary;
+  const activeColor = active > 0 ? colors.danger : colors.textPrimary;
   const hasBidContext = stats.totalBids > 0 && stats.highestBid > 0;
   const highestBidIze = hasBidContext
     ? formatAuctionIze(toIze(stats.highestBid, 'GBP', goldRates))
@@ -339,7 +345,7 @@ function SellerSummary({
         {/* Primary measure — Active auctions */}
         <View style={styles.summaryPrimary}>
           <Text style={[styles.summaryPrimaryValue, { color: activeColor }]}>{active}</Text>
-          <Text style={[styles.summaryPrimaryLabel, { color: active > 0 ? Colors.danger : Colors.textMuted }]}>
+          <Text style={[styles.summaryPrimaryLabel, { color: active > 0 ? colors.danger : colors.textMuted }]}>
             Active auctions
           </Text>
         </View>
@@ -378,7 +384,8 @@ export default function SellerAuctionCentreScreen() {
   const navigation = useNavigation<NavT>();
   const { formatFromFiat } = useFormattedPrice();
   const { goldRates } = useCurrencyContext();
-  const { isDark } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = React.useState<SellerTab>('scheduled');
@@ -548,23 +555,10 @@ export default function SellerAuctionCentreScreen() {
     }
     if (error) {
       return (
-        <View style={styles.inlineStateWrap}>
-          <Text style={styles.inlineStateTitle}>Couldn't load auctions</Text>
-          <Text style={styles.inlineStateMessage}>
-            Check your connection and try again.
-          </Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.retryBtn,
-              pressed && styles.retryBtnPressed,
-            ]}
-            onPress={() => void fetchAuctions(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading auctions"
-          >
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </Pressable>
-        </View>
+        <RetryState
+          message="Couldn't load auctions. Check your connection and try again."
+          onRetry={() => void fetchAuctions(false)}
+        />
       );
     }
     const emptyConfig: Record<SellerTab, { title: string; message: string; cta?: string }> = {
@@ -606,7 +600,7 @@ export default function SellerAuctionCentreScreen() {
             accessibilityLabel={cfg.cta}
           >
             <Text style={styles.inlineCtaText}>{cfg.cta}</Text>
-            <Ionicons name="add" size={15} color={Colors.brand} style={styles.inlineCtaIcon} />
+            <Ionicons name="add" size={15} color={colors.brand} style={styles.inlineCtaIcon} />
           </Pressable>
         )}
       </View>
@@ -674,7 +668,7 @@ export default function SellerAuctionCentreScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={Colors.background}
+        backgroundColor={colors.background}
       />
 
       {/* Header — native, deliberate, 44pt touch targets, no filled icon backgrounds */}
@@ -690,7 +684,7 @@ export default function SellerAuctionCentreScreen() {
               pressed && styles.headerIconPressed,
             ]}
           >
-            <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
+            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
           </Pressable>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle} numberOfLines={1}>Seller Centre</Text>
@@ -708,7 +702,7 @@ export default function SellerAuctionCentreScreen() {
               pressed && styles.headerIconPressed,
             ]}
           >
-            <Ionicons name="add" size={26} color={Colors.textPrimary} />
+            <Ionicons name="add" size={26} color={colors.textPrimary} />
           </Pressable>
         </View>
       </View>
@@ -736,9 +730,9 @@ export default function SellerAuctionCentreScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.brand}
-            colors={[Colors.brand]}
-            progressBackgroundColor={Colors.surfaceAlt}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.surfaceAlt}
           />
         }
         renderSectionFooter={() =>
@@ -757,7 +751,7 @@ export default function SellerAuctionCentreScreen() {
                   <Text style={styles.loadMoreText}>Loading…</Text>
                 ) : (
                   <>
-                    <Ionicons name="chevron-down" size={14} color={Colors.brand} />
+                    <Ionicons name="chevron-down" size={14} color={colors.brand} />
                     <Text style={styles.loadMoreText}>Load more</Text>
                   </>
                 )}
@@ -786,10 +780,11 @@ export default function SellerAuctionCentreScreen() {
 
 const ROW_IMAGE_SIZE = 96;
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   // ── Header ──
   header: {
@@ -800,11 +795,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    minHeight: 44,
+    minHeight: Control.hit,
   },
   headerIconBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -817,16 +812,16 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: 26,
-    color: Colors.textPrimary,
+    fontSize: Type.priceLarge.size - 2,
+    color: colors.textPrimary,
     letterSpacing: -0.6,
-    lineHeight: 30,
+    lineHeight: Type.priceLarge.size - 2 + 4,
   },
   headerSubtitle: {
     fontFamily: Typography.family.regular,
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 1,
+    fontSize: Type.captionElevated.size,
+    color: colors.textSecondary,
+    marginTop: Space.xs / 4,
     letterSpacing: -0.1,
   },
   // ── Seller summary — one integrated surface ──
@@ -839,7 +834,7 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -847,8 +842,8 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   summaryContextText: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.1,
@@ -857,22 +852,22 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   summaryPrimaryValue: {
-    fontSize: 32,
+    fontSize: Type.display.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.8,
     fontVariant: ['tabular-nums'],
-    lineHeight: 34,
+    lineHeight: Type.display.size + 2,
   },
   summaryPrimaryLabel: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    marginTop: 3,
+    marginTop: Space.xs / 2 + 1,
     letterSpacing: 0.1,
   },
   summaryPrimaryDivider: {
     width: StyleSheet.hairlineWidth,
-    height: 36,
-    backgroundColor: Colors.border,
+    height: Space.xl + Space.xl + 4,
+    backgroundColor: colors.border,
   },
   summarySecondary: {
     flex: 1,
@@ -885,69 +880,69 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summarySecondaryValue: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
   },
   summarySecondaryLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
+    fontSize: Type.meta.size - 1,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    marginTop: 3,
+    marginTop: Space.xs / 2 + 1,
     letterSpacing: 0.1,
   },
   // ── Tab bar — text-first, underline indicator, sticky container ──
   tabBarContainer: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   tabBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     gap: Space.md,
-    height: 44,
+    height: Control.hit,
     alignItems: 'center',
   },
   tab: {
-    height: 44,
+    height: Control.hit,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 2,
+    gap: Space.xs / 2 + 1,
+    paddingHorizontal: Space.xs / 2,
     position: 'relative',
   },
   tabPressed: {
     opacity: 0.5,
   },
   tabText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontSize: Type.body.size,
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
   },
   tabTextActive: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
   },
   tabCount: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
   },
   tabCountActive: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   tabIndicator: {
     position: 'absolute',
-    bottom: -1,
-    left: 2,
-    right: 2,
-    height: 2,
-    backgroundColor: Colors.textPrimary,
-    borderRadius: 1,
+    bottom: -Stroke.hairline,
+    left: Space.xs / 2,
+    right: Space.xs / 2,
+    height: Stroke.emphasis,
+    backgroundColor: colors.textPrimary,
+    borderRadius: Stroke.hairline,
   },
   // ── List ──
   listContent: {
@@ -977,21 +972,21 @@ const styles = StyleSheet.create({
   rowImagePlaceholder: {
     width: ROW_IMAGE_SIZE,
     height: ROW_IMAGE_SIZE,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Radius.md,
   },
   rowLiveDot: {
     position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.danger,
-    borderWidth: 1.5,
-    borderColor: Colors.background,
+    top: Space.xs + 2,
+    left: Space.xs + 2,
+    width: Space.xs / 2 + 2,
+    height: Space.xs / 2 + 2,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.danger,
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.background,
   },
   rowBody: {
     flex: 1,
@@ -1006,27 +1001,27 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     flex: 1,
-    fontSize: 15,
-    color: Colors.textPrimary,
+    fontSize: Type.bodyEmphasis.size,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    lineHeight: 19,
+    lineHeight: Type.bodyEmphasis.size + 4,
     letterSpacing: -0.2,
   },
   rowStateText: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
-    paddingTop: 3,
+    paddingTop: Space.xs / 2 + 1,
   },
   rowBrand: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   rowHairline: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginVertical: Space.sm - 2,
   },
   rowOperational: {
@@ -1037,68 +1032,68 @@ const styles = StyleSheet.create({
   },
   rowValueCol: {
     flex: 1,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   rowIze: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.4,
-    lineHeight: 21,
+    lineHeight: Type.subtitle.size - 3,
   },
   rowValuePrefix: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
     letterSpacing: 0.1,
   },
   rowLocal: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.1,
   },
   rowActionCol: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 1,
-    paddingBottom: 1,
+    gap: Space.xs / 4,
+    paddingBottom: Space.xs / 4,
   },
   rowActionLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
+    fontSize: Type.caption.size,
+    color: colors.textSecondary,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
   rowActionChevron: {
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
   rowLeadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   rowLeading: {
     flex: 1,
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.1,
   },
   rowBidCount: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
   },
   rowSeparator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginHorizontal: Space.md,
   },
   // ── Loading ──
@@ -1125,7 +1120,7 @@ const styles = StyleSheet.create({
   },
   loadingHairline: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginVertical: Space.xs,
   },
   // ── Inline empty / error states ──
@@ -1135,58 +1130,40 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   inlineStateTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.3,
   },
   inlineStateMessage: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontSize: Type.body.size,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    marginTop: 6,
-    lineHeight: 20,
-  },
-  retryBtn: {
-    marginTop: Space.md,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  retryBtnPressed: {
-    opacity: 0.6,
-  },
-  retryBtnText: {
-    fontSize: 14,
-    fontFamily: Typography.family.semibold,
-    color: Colors.textPrimary,
+    marginTop: Space.xs + 2,
+    lineHeight: Type.body.lineHeight,
   },
   inlineCtaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     marginTop: Space.md,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.brand,
-    minHeight: 44,
+    borderColor: colors.brand,
+    minHeight: Control.hit,
   },
   inlineCtaPressed: {
     opacity: 0.6,
   },
   inlineCtaText: {
-    fontSize: 14,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: Colors.brand,
+    color: colors.brand,
   },
   inlineCtaIcon: {
-    marginTop: 1,
+    marginTop: Space.xs / 4,
   },
   // ── Load more ──
   loadMoreWrap: {
@@ -1196,17 +1173,17 @@ const styles = StyleSheet.create({
   loadMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.lg,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   loadMoreText: {
-    fontSize: 14,
-    color: Colors.brand,
+    fontSize: Type.body.size,
+    color: colors.brand,
     fontFamily: Typography.family.semibold,
   },
   // ── Floating CTA ──
@@ -1216,7 +1193,7 @@ const styles = StyleSheet.create({
     right: Space.md,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.shadow,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.12,
         shadowRadius: 12,
@@ -1226,4 +1203,5 @@ const styles = StyleSheet.create({
       },
     }),
   },
-});
+  });
+}

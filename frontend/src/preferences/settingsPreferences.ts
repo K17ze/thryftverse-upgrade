@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { Ionicons } from '@expo/vector-icons';
 
 export const SETTINGS_PREF_STORAGE_KEY = 'thryftverse:settings-pref:v1';
 export const PUSH_NOTIF_PREF_STORAGE_KEY = 'thryftverse:push-notif-pref:v1';
@@ -28,20 +29,26 @@ export interface SettingsPreferences {
   quietHours: QuietHoursSettings;
   mySizes: string[];
   filterPresets: FilterPreset[];
+  /**
+   * When true, all in-house analytics/telemetry events are suppressed.
+   * No event is dispatched to a handler or transmitted to the backend.
+   * Defaults to false (analytics enabled) to preserve prior behaviour.
+   */
+  analyticsOptOut: boolean;
 }
 
 export interface PushNotificationDefinition {
   key: string;
   label: string;
   subtitle: string;
-  icon?: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
   iconColor?: string;
   group?: 'orders' | 'social' | 'news';
 }
 
 export const PUSH_NOTIFICATION_DEFINITIONS: PushNotificationDefinition[] = [
   { key: 'orderUpdates', label: 'Order updates', subtitle: 'Shipping and delivery status changes', icon: 'cube-outline', group: 'orders' },
-  { key: 'offers', label: 'Offers received', subtitle: 'When buyers make an offer on your item', icon: 'tag-outline', group: 'orders' },
+  { key: 'offers', label: 'Offers received', subtitle: 'When buyers make an offer on your item', icon: 'pricetags-outline', group: 'orders' },
   { key: 'priceDrops', label: 'Price drops', subtitle: 'For items on your wishlist', icon: 'pricetag-outline', group: 'orders' },
   { key: 'messages', label: 'New messages', subtitle: 'When someone sends you a message', icon: 'chatbubble-outline', group: 'social' },
   { key: 'followers', label: 'New followers', subtitle: 'When someone starts following you', icon: 'person-add-outline', group: 'social' },
@@ -86,6 +93,7 @@ export const DEFAULT_SETTINGS_PREFERENCES: SettingsPreferences = {
   quietHours: DEFAULT_QUIET_HOURS,
   mySizes: [],
   filterPresets: [],
+  analyticsOptOut: false,
 };
 
 export function buildDefaultPushNotificationToggles(keys: readonly string[]): PushNotificationToggles {
@@ -144,6 +152,10 @@ export async function getStoredSettingsPreferences(): Promise<SettingsPreference
               typeof p.name === 'string'
           )
         : [],
+      analyticsOptOut:
+        typeof parsed.analyticsOptOut === 'boolean'
+          ? parsed.analyticsOptOut
+          : DEFAULT_SETTINGS_PREFERENCES.analyticsOptOut,
     };
   } catch {
     return DEFAULT_SETTINGS_PREFERENCES;

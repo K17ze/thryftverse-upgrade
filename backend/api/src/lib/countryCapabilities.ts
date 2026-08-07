@@ -1,4 +1,5 @@
 import { countryToJurisdictionGroups, normalizeCountryCode } from './compliance.js';
+import { logger } from './logger.js';
 
 export type CapabilityCountryCluster =
   | 'IN'
@@ -354,7 +355,7 @@ function warnGatewayFallbackOnce(
   }
 
   warnedGatewayFallbacks.add(fallbackKey);
-  console.warn(
+  logger.warn(
     `[countryCapabilities] gateway fallback applied for ${context.cluster}/${context.channel ?? 'unknown'}: ${originalPrimary} -> ${resolvedPrimary}`
   );
 }

@@ -9,11 +9,23 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
-import { Colors } from '../constants/colors';
+import { useHaptic } from '../hooks/useHaptic';
+
+const BG_PRESETS = [
+  { label: 'Black', type: 'color' as const, value: '#000000' },
+  { label: 'Dark', type: 'color' as const, value: '#1a1a1a' },
+  { label: 'White', type: 'color' as const, value: '#ffffff' },
+  { label: 'Gold', type: 'color' as const, value: '#C9A46A' },
+  { label: 'Gold Fade', type: 'gradient' as const, value: '#1a1a1a', secondaryValue: '#C9A46A' },
+  { label: 'Sunset', type: 'gradient' as const, value: '#9b0202', secondaryValue: '#F5D547' },
+  { label: 'Ocean', type: 'gradient' as const, value: '#06489A', secondaryValue: '#215634' },
+  { label: 'Plum', type: 'gradient' as const, value: '#2d1b3d', secondaryValue: '#7B68EE' },
+];
 
 export interface CreatorSettingsSheetProps {
   visible: boolean;
@@ -23,9 +35,12 @@ export interface CreatorSettingsSheetProps {
 export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetProps) {
   const { document, updateMetadata, updateCanvas, saveDraft, isDirty, autosaveStatus, retryAutosave } = useCreator();
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [title, setTitle] = useState(document.metadata.title || '');
   const [caption, setCaption] = useState(document.metadata.caption || '');
   const [accessibilityDesc, setAccessibilityDesc] = useState(document.metadata.accessibilityDescription || '');
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const isLook = document.type === 'look';
 
@@ -41,6 +56,11 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
     updateMetadata({ accessibilityDescription: accessibilityDesc });
   }, [accessibilityDesc, updateMetadata]);
 
+  const inputStyle = (field: string) => [
+    styles.input,
+    focusedField === field && styles.inputFocused,
+  ];
+
   return (
     <SheetContainer visible={visible} onClose={onClose} maxHeight={0.8}>
         <View style={styles.header}>
@@ -54,12 +74,13 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
           {/* Shared: Title */}
           <Text style={styles.sectionLabel}>Title</Text>
           <TextInput
-            style={styles.input}
+            style={inputStyle('title')}
             value={title}
             onChangeText={setTitle}
-            onBlur={handleSaveTitle}
+            onFocus={() => setFocusedField('title')}
+            onBlur={() => { setFocusedField(null); handleSaveTitle(); }}
             placeholder="Untitled"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             accessibilityLabel="Document title"
           />
 
@@ -71,12 +92,13 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             </Text>
           </View>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[inputStyle('caption'), styles.textArea]}
             value={caption}
             onChangeText={setCaption}
-            onBlur={handleSaveCaption}
+            onFocus={() => setFocusedField('caption')}
+            onBlur={() => { setFocusedField(null); handleSaveCaption(); }}
             placeholder="Add a caption..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={2200}
             accessibilityLabel="Caption"
@@ -85,12 +107,13 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
           {/* Shared: Accessibility description */}
           <Text style={styles.sectionLabel}>Accessibility Description</Text>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[inputStyle('accessibility'), styles.textArea]}
             value={accessibilityDesc}
             onChangeText={setAccessibilityDesc}
-            onBlur={handleSaveAccessibility}
+            onFocus={() => setFocusedField('accessibility')}
+            onBlur={() => { setFocusedField(null); handleSaveAccessibility(); }}
             placeholder="Describe this content for screen readers..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             accessibilityLabel="Accessibility description"
           />
@@ -100,7 +123,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             <>
               <Text style={styles.sectionLabel}>Remix Attribution</Text>
               <View style={styles.attributionBox}>
-                <Ionicons name="git-branch-outline" size={16} color={Colors.textSecondary} />
+                <Ionicons name="git-branch-outline" size={16} color={colors.textSecondary} />
                 <View style={styles.attributionContent}>
                   <Text style={styles.attributionText}>
                     Remixed from another {document.type}
@@ -127,7 +150,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.visibility === 'public'}
                   onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Public visibility"
                 />
               </View>
@@ -138,7 +161,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.allowRemix ?? false}
                   onValueChange={(v) => updateMetadata({ allowRemix: v })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Allow remix"
                 />
               </View>
@@ -154,7 +177,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.visibility === 'public'}
                   onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Public audience"
                 />
               </View>
@@ -165,7 +188,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.allowReplies ?? true}
                   onValueChange={(v) => updateMetadata({ allowReplies: v })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Allow replies"
                 />
               </View>
@@ -176,24 +199,85 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 <Switch
                   value={document.metadata.allowReactions ?? true}
                   onValueChange={(v) => updateMetadata({ allowReactions: v })}
-                  trackColor={{ false: Colors.border, true: Colors.brand }}
+                  trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Allow reactions"
                 />
               </View>
 
               <Text style={styles.sectionLabel}>Expiry (hours)</Text>
               <TextInput
-                style={styles.input}
+                style={inputStyle('expiry')}
                 value={String(document.metadata.expiresInHours ?? 24)}
                 onChangeText={(v) => {
                   const num = parseInt(v, 10);
                   if (!isNaN(num) && num > 0) updateMetadata({ expiresInHours: num });
                 }}
+                onFocus={() => setFocusedField('expiry')}
+                onBlur={() => setFocusedField(null)}
                 keyboardType="numeric"
                 accessibilityLabel="Expiry in hours"
               />
             </>
           )}
+
+          {/* Shared: Canvas background */}
+          <Text style={styles.sectionLabel}>Background</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.bgScroll}
+            contentContainerStyle={styles.bgScrollContent}
+          >
+            {BG_PRESETS.map((bg) => {
+              const isActive = document.canvas.background.type === bg.type &&
+                document.canvas.background.value === bg.value &&
+                (bg.secondaryValue ? document.canvas.background.secondaryValue === bg.secondaryValue : true);
+              return (
+                <Pressable
+                  key={bg.label}
+                  onPress={() => {
+                    haptic.selection();
+                    updateCanvas({ background: { type: bg.type, value: bg.value, secondaryValue: bg.secondaryValue } });
+                  }}
+                  style={styles.bgTileWrap}
+                  accessibilityLabel={`Background ${bg.label}${isActive ? ', selected' : ''}`}
+                  accessibilityRole="button"
+                >
+                  <View
+                    style={[
+                      styles.bgTile,
+                      { borderColor: isActive ? colors.brand : 'transparent' },
+                    ]}
+                  >
+                    {bg.type === 'color' ? (
+                      <View style={[styles.bgTileFill, { backgroundColor: bg.value }]} />
+                    ) : (
+                      <LinearGradient
+                        colors={[bg.value, bg.secondaryValue!]}
+                        style={styles.bgTileFill}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                      />
+                    )}
+                    {isActive && (
+                      <View style={styles.bgCheckOverlay}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.surface} />
+                      </View>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.bgTileLabel,
+                      { color: isActive ? colors.brand : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {bg.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
 
           {/* Shared: Canvas ratio */}
           <Text style={styles.sectionLabel}>Canvas Ratio</Text>
@@ -236,7 +320,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
               accessibilityLabel="Save draft manually"
               accessibilityRole="button"
             >
-              <Ionicons name="save-outline" size={16} color={Colors.surface} />
+              <Ionicons name="save-outline" size={16} color={colors.surface} />
               <Text style={styles.saveBtnText}>Save Draft</Text>
             </Pressable>
           </View>
@@ -247,6 +331,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
 
 function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio: number; current: number; onSelect: (r: number) => void }) {
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isActive = Math.abs(current - ratio) < 0.01;
   // Visual preview: a rectangle showing the aspect ratio shape
   // Max dimensions: 32x40 box
@@ -271,7 +356,8 @@ function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -300,21 +386,25 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: Space.sm,
-    marginBottom: 4,
+    marginBottom: Space.xs,
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
+  },
+  inputFocused: {
+    borderColor: colors.brand,
+    borderWidth: 1.5,
   },
   textArea: {
     minHeight: 80,
@@ -329,7 +419,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   ratioRow: {
     flexDirection: 'row',
@@ -348,7 +438,7 @@ const styles = StyleSheet.create({
     minHeight: 72,
   },
   ratioPreview: {
-    borderRadius: 4,
+    borderRadius: Radius.sm,
   },
   ratioBtnText: {
     fontFamily: Typography.family.medium,
@@ -360,7 +450,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   charCount: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   draftSection: {
@@ -375,35 +465,43 @@ const styles = StyleSheet.create({
   autosaveLabel: {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   retryBtn: {
     paddingHorizontal: Space.sm,
-    paddingVertical: 4,
+    paddingVertical: Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   retryText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.caption.size,
-    color: Colors.brand,
+    color: colors.brand,
   },
   saveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.md,
     borderRadius: Radius.md,
-    backgroundColor: Colors.brand,
+    backgroundColor: colors.brand,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   saveBtnDisabled: {
     opacity: 0.4,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   saveBtnText: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
-    color: Colors.surface,
+    color: colors.surface,
   },
   attributionBox: {
     flexDirection: 'row',
@@ -412,9 +510,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   attributionContent: {
     flex: 1,
@@ -423,11 +520,51 @@ const styles = StyleSheet.create({
   attributionText: {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   attributionDetail: {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size - 2,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+  // ── Background picker ──
+  bgScroll: {
+    marginHorizontal: -Space.md,
+  },
+  bgScrollContent: {
+    paddingHorizontal: Space.md,
+    gap: 10,
+  },
+  bgTileWrap: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  bgTile: {
+    width: 64,
+    height: 80,
+    borderRadius: Radius.lg,
+    borderWidth: 2,
+    overflow: 'hidden',
+  },
+  bgTileFill: {
+    width: '100%',
+    height: '100%',
+  },
+  bgCheckOverlay: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.brand,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bgTileLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    letterSpacing: 0.1,
+  },
+  });
+}
