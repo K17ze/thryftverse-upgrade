@@ -1097,8 +1097,6 @@ export default function HomeScreen() {
                     }
                     ctaLabel={followingFeed.hasFollowing ? 'Refresh' : 'Discover sellers'}
                     onCtaPress={followingFeed.hasFollowing ? () => void handleRefresh() : () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-                    secondaryCtaLabel={followingFeed.hasFollowing ? 'Explore all' : undefined}
-                    onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
                   />
                 </Reanimated.View>
               ) : (
@@ -1113,8 +1111,6 @@ export default function HomeScreen() {
                     subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
                     ctaLabel="Browse all"
                     onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-                    secondaryCtaLabel="Refresh"
-                    onSecondaryCtaPress={() => void handleRefresh()}
                   />
                 </Reanimated.View>
               )

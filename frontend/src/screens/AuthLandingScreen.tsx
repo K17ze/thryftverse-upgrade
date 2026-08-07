@@ -15,7 +15,6 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
@@ -226,13 +225,6 @@ export default function AuthLandingScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Premium dark gradient background */}
-      <LinearGradient
-        colors={['rgba(9,9,9,0.15)', 'rgba(9,9,9,0.50)', 'rgba(9,9,9,0.92)', '#090909']}
-        locations={[0, 0.4, 0.7, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-
       <SafeAreaView style={styles.safeArea}>
         {/* Top - animated brand wordmark */}
         <Reanimated.View
@@ -346,18 +338,22 @@ export default function AuthLandingScreen() {
                 <Ionicons name="logo-apple" size={20} color="#fff" />
               )}
             </AnimatedPressable>
-            <AnimatedPressable
-              style={[styles.socialBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
-              activeOpacity={0.8}
-              onPress={handleGoogleSignIn}
-              disabled={!!socialLoading || isMagicLinkLoading}
-            >
-              {socialLoading === 'google' ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Ionicons name="logo-google" size={18} color="#fff" />
-              )}
-            </AnimatedPressable>
+            {hasGoogleOAuth ? (
+              <AnimatedPressable
+                style={[styles.socialBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
+                activeOpacity={0.8}
+                onPress={handleGoogleSignIn}
+                disabled={!!socialLoading || isMagicLinkLoading}
+                accessibilityRole="button"
+                accessibilityLabel="Sign in with Google"
+              >
+                {socialLoading === 'google' ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Ionicons name="logo-google" size={18} color="#fff" />
+                )}
+              </AnimatedPressable>
+            ) : null}
           </View>
 
           {isMagicLinkLoading && (

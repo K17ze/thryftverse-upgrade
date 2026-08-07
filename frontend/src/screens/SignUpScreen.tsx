@@ -32,20 +32,22 @@ export default function SignUpScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const canSubmit = username.trim().length > 0 && email.trim().length > 0 && password.length > 0 && !isSubmitting;
 
-  const shakeOffset = useSharedValue(0);
+  const errorPulse = useSharedValue(1);
 
-  const shake = () => {
-    shakeOffset.value = withSequence(
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withTiming(0, { duration: 80 })
+  const triggerErrorFeedback = () => {
+    if (reducedMotionEnabled) {
+      // WCAG 2.2 §2.3.3 — no motion animation when Reduce Motion is on
+      errorPulse.value = 1;
+      return;
+    }
+    errorPulse.value = withSequence(
+      withTiming(0.95, { duration: 120 }),
+      withTiming(1, { duration: 180 })
     );
   };
 
-  const shakeStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shakeOffset.value }]
+  const errorPulseStyle = useAnimatedStyle(() => ({
+    opacity: errorPulse.value
   }));
 
   const statusEnterAnimation = reducedMotionEnabled
@@ -67,28 +69,28 @@ export default function SignUpScreen() {
       setUsernameError(!normalizedUsername ? 'Username is required.' : '');
       setEmailError(!normalizedEmail ? 'Email is required.' : '');
       setPasswordError(!password ? 'Password is required.' : '');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     if (normalizedUsername.length < 3) {
       setErrorMsg('Username must be at least 3 characters.');
       setUsernameError('Username must be at least 3 characters.');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address.');
       setEmailError('Enter a valid email address.');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     if (password.length < 8) {
       setErrorMsg('Password must be at least 8 characters.');
       setPasswordError('Password must be at least 8 characters.');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -110,7 +112,7 @@ export default function SignUpScreen() {
       navigation.replace('MainTabs');
     } catch (error) {
       setErrorMsg((error as Error).message || 'Unable to create account right now.');
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsSubmitting(false);
     }
@@ -207,7 +209,7 @@ export default function SignUpScreen() {
               </Reanimated.Text>
             )}
 
-            <Reanimated.View style={shakeStyle} layout={layoutAnimation}>
+            <Reanimated.View style={errorPulseStyle} layout={layoutAnimation}>
               <AppButton
                 title={isSubmitting ? 'Creating account...' : 'Create Account'}
                 variant="primary"

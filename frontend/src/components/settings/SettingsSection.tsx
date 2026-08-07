@@ -37,7 +37,7 @@ export function SettingsSection({
             <Ionicons name={icon} size={20} color={colors.textPrimary} />
           </View>
         ) : null}
-        <Text style={[noCard ? styles.titleFlat : styles.title, { color: colors.textPrimary }]}>
+        <Text style={[noCard ? styles.titleFlat : styles.title, { color: noCard ? colors.textPrimary : colors.textSecondary }]}>
           {title}
         </Text>
       </View>
@@ -86,7 +86,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     lineHeight: Type.meta.lineHeight,
-    opacity: 0.7,
   },
   titleFlat: {
     fontSize: Type.subtitle.size,

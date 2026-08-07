@@ -47,12 +47,13 @@ export default function BotDirectoryScreen({ navigation }: Props) {
   // "Assistant unavailable" when nothing is wired. The product must
   // never market heuristic baselines as trained ML.
   const [aiCapability, setAiCapability] = useState<AiCapabilitySummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   useEffect(() => {
     fetchAiCapability().then(setAiCapability).catch(() => undefined);
   }, []);
 
   useEffect(() => {
-    void loadBotsFromApi();
+    void loadBotsFromApi().finally(() => setIsLoading(false));
   }, [loadBotsFromApi]);
 
   const publishedCount = customAgents.filter(
@@ -97,7 +98,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                 : 'Create a specialist agent'
             }
           >
-            <Ionicons name="add" size={23} color={colors.textPrimary} />
+            <Ionicons name="add" size={22} color={colors.textPrimary} />
           </AnimatedPressable>
         }
       />
@@ -162,7 +163,19 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           </ScrollView>
         </View>
 
-        {filteredAgents.length === 0 ? (
+        {isLoading && filteredAgents.length === 0 ? (
+          <View style={styles.list}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={styles.skeletonRow}>
+                <View style={styles.skeletonIcon} />
+                <View style={styles.skeletonCopy}>
+                  <View style={styles.skeletonLine} />
+                  <View style={[styles.skeletonLine, { width: '70%' }]} />
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : filteredAgents.length === 0 ? (
           <EmptyState
             icon="chatbubble-ellipses-outline"
             title="No agents here yet"
@@ -365,6 +378,28 @@ function createStyles(colors: ThemeColors) {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
     marginLeft: Control.hit,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.sm + 4,
+    minHeight: Space.xxl + Space.xxl + Space.sm,
+  },
+  skeletonIcon: {
+    width: Control.chromeCompact,
+    height: Control.hit,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceAlt,
+  },
+  skeletonCopy: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceAlt,
   },
   });
 }

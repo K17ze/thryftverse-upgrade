@@ -801,11 +801,11 @@ export default function NotificationsScreen() {
             <View style={styles.notificationSkeletonList} accessibilityLabel="Loading notifications">
               {[0, 1, 2, 3, 4].map((index) => (
                 <View key={index} style={styles.notificationSkeletonRow}>
-                  <SkeletonLoader width={52} height={52} borderRadius={10} />
+                  <SkeletonLoader width={52} height={52} borderRadius={Radius.md} />
                   <View style={styles.notificationSkeletonCopy}>
-                    <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={6} />
-                    <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={5} style={{ marginTop: Space.sm }} />
-                    <SkeletonLoader width="30%" height={9} borderRadius={4} style={{ marginTop: Space.sm }} />
+                    <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={Radius.sm} />
+                    <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+                    <SkeletonLoader width="30%" height={9} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
                   </View>
                 </View>
               ))}

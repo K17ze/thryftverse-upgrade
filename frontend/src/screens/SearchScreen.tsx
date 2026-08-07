@@ -471,10 +471,6 @@ export default function SearchScreen() {
                 subtitle="New items are uploaded every day. Check back soon or browse categories."
                 ctaLabel="Browse Categories"
                 onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
-                suggestedActions={[
-                  { label: 'Search', onPress: () => navigation.navigate('GlobalSearch') },
-                  { label: 'Visual Search', onPress: () => navigation.navigate('VisualSearch') },
-                ]}
               />
             </Reanimated.View>
           ) : (

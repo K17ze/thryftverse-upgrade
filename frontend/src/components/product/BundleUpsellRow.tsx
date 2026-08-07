@@ -29,8 +29,9 @@ export interface BundleUpsellRowProps {
  * message. Only renders when there are 2+ items from the same seller, making the
  * shipping savings claim truthful (combining shipments from one seller).
  *
- * Visual language matches ProductCommerceSummary — surface card, semibold
- * section title, Ionicons, rounded thumbnails with press feedback.
+ * Per AGENTS.md §4 (surface budget): flat canvas with hairline separator —
+ * no card surface, no background fill, no border radius. Spacing and a
+ * hairline top border delineate this section from the one above.
  */
 function BundleUpsellRowComponent({
   items,
@@ -137,10 +138,10 @@ function createStyles(colors: ThemeColors) {
   container: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   headerRow: {
     flexDirection: 'row',

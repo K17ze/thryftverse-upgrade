@@ -49,25 +49,22 @@ export default function LoginScreen() {
   const canRequestOtp = email.trim().length > 0 && !isSubmitting && !isOtpSending;
   const canVerifyOtp = !!otpChallengeId && otpCode.trim().length >= 4 && !isOtpVerifying && !isSubmitting;
 
-  const shakeOffset = useSharedValue(0);
+  const errorPulse = useSharedValue(1);
 
-  const shake = () => {
+  const triggerErrorFeedback = () => {
     if (reducedMotionEnabled) {
-      // WCAG 2.2 §2.3.3 — no shake animation when Reduce Motion is on
-      shakeOffset.value = 0;
+      // WCAG 2.2 §2.3.3 — no motion animation when Reduce Motion is on
+      errorPulse.value = 1;
       return;
     }
-    shakeOffset.value = withSequence(
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withTiming(0, { duration: 80 })
+    errorPulse.value = withSequence(
+      withTiming(0.95, { duration: 120 }),
+      withTiming(1, { duration: 180 })
     );
   };
 
-  const shakeStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shakeOffset.value }]
+  const errorPulseStyle = useAnimatedStyle(() => ({
+    opacity: errorPulse.value
   }));
 
   const statusEnterAnimation = reducedMotionEnabled
@@ -88,7 +85,7 @@ export default function LoginScreen() {
       setEmailError(!normalizedEmail ? 'Email is required.' : '');
       setPasswordError(!password ? 'Password is required.' : '');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -96,7 +93,7 @@ export default function LoginScreen() {
       setErrorMsg('Enter a valid email address.');
       setEmailError('Enter a valid email address.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -104,7 +101,7 @@ export default function LoginScreen() {
       setErrorMsg('Password must be at least 6 characters.');
       setPasswordError('Password must be at least 6 characters.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -141,7 +138,7 @@ export default function LoginScreen() {
         setInfoMsg('Enter your authenticator code (or a recovery code) to continue.');
       }
       setErrorMsg(authError.message || 'Unable to log in right now.');
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsSubmitting(false);
     }
@@ -156,14 +153,14 @@ export default function LoginScreen() {
     if (!normalizedEmail) {
       setErrorMsg('Enter your email first to receive an OTP code.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address before requesting OTP.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -184,7 +181,7 @@ export default function LoginScreen() {
     } catch (error) {
       setErrorMsg((error as Error).message || 'Unable to send OTP right now.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsOtpSending(false);
     }
@@ -199,14 +196,14 @@ export default function LoginScreen() {
     if (!normalizedEmail) {
       setErrorMsg('Enter your email first to request a magic link.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address before requesting a magic link.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -224,7 +221,7 @@ export default function LoginScreen() {
     } catch (error) {
       setErrorMsg((error as Error).message || 'Unable to send magic link right now.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsMagicSending(false);
     }
@@ -239,7 +236,7 @@ export default function LoginScreen() {
     if (normalizedCode.length < 4) {
       setErrorMsg('Enter the OTP code from your email.');
       setInfoMsg('');
-      shake();
+      triggerErrorFeedback();
       return;
     }
 
@@ -268,7 +265,7 @@ export default function LoginScreen() {
       } else {
         setErrorMsg(baseMessage);
       }
-      shake();
+      triggerErrorFeedback();
     } finally {
       setIsOtpVerifying(false);
     }
@@ -496,7 +493,7 @@ export default function LoginScreen() {
               </Reanimated.Text>
             )}
 
-            <Reanimated.View style={shakeStyle} layout={layoutAnimation}>
+            <Reanimated.View style={errorPulseStyle} layout={layoutAnimation}>
               <AppButton
                 title={isSubmitting ? 'Signing in...' : 'Log In'}
                 style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}

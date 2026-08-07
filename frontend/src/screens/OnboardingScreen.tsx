@@ -188,16 +188,14 @@ export default function OnboardingScreen() {
           exiting={reducedMotion ? FadeOutDown.duration(0) : FadeOutDown.duration(220)}
           style={styles.slideContent}
         >
-          {/* Icon medallion — the dominant visual anchor for each slide.
-              One contained surface, no card-on-card. */}
-          <View
-            style={[
-              styles.iconMedallion,
-              { backgroundColor: resolveAccent(slide.iconBackground) },
-            ]}
-          >
-            <Ionicons name={slide.icon} size={56} color={colors.background} />
-          </View>
+          {/* Icon — the dominant visual anchor for each slide.
+              Rendered directly at 56pt with semantic color; no background circle. */}
+          <Ionicons
+            name={slide.icon}
+            size={56}
+            color={resolveAccent(slide.iconBackground)}
+            style={styles.icon}
+          />
 
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             {slide.title}
@@ -284,12 +282,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
-  iconMedallion: {
-    width: Space.xxl + Space.xxl + Space.xl + Space.xs,
-    height: Space.xxl + Space.xxl + Space.xl + Space.xs,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+  icon: {
     marginBottom: Space.xl,
   },
   title: {

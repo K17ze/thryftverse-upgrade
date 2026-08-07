@@ -28,6 +28,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { Space, Radius, Type, Control, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
+import { LIVE_SHOPPING_DEMO_MODE } from '../services/liveShoppingApi';
 
 type SellerPhase = 'setup' | 'live' | 'summary';
 
@@ -53,9 +54,10 @@ export function LiveStreamSellerScreen() {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const isDemo = LIVE_SHOPPING_DEMO_MODE;
   const [phase, setPhase] = useState<SellerPhase>('setup');
   const [title, setTitle] = useState('');
-  const [lots, setLots] = useState<LotItem[]>(DEMO_LOTS);
+  const [lots, setLots] = useState<LotItem[]>(isDemo ? DEMO_LOTS : []);
   const [viewerCount, setViewerCount] = useState(0);
   const [currentLotIndex, setCurrentLotIndex] = useState(0);
   const [liveDuration, setLiveDuration] = useState(0);
@@ -110,6 +112,14 @@ export function LiveStreamSellerScreen() {
           </View>
 
           <ScrollView style={styles.setupScroll} contentContainerStyle={styles.setupContent}>
+            {/* Demo banner */}
+            {isDemo && (
+              <View style={[styles.demoBanner, { backgroundColor: colors.warning + '18' }]} accessibilityRole="header">
+                <Ionicons name="flask-outline" size={16} color={colors.warning} />
+                <Text style={[styles.demoBannerText, { color: colors.warning }]}>Demo Mode — sample lots loaded</Text>
+              </View>
+            )}
+
             {/* Camera preview placeholder */}
             <View style={[styles.cameraPreview, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="videocam-outline" size={40} color={colors.textMuted} />
@@ -135,30 +145,40 @@ export function LiveStreamSellerScreen() {
             {/* Lot selection */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Lots ({lots.length})</Text>
-              <FlatList
-                data={lots}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <View style={[styles.lotRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Image source={{ uri: item.imageUri }} style={styles.lotImage} />
-                    <View style={styles.lotInfo}>
-                      <Text style={[styles.lotTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-                      <Text style={[styles.lotPrice, { color: colors.textSecondary }]}>Start: £{item.startingPrice}</Text>
+              {lots.length > 0 ? (
+                <FlatList
+                  data={lots}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <View style={[styles.lotRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <Image source={{ uri: item.imageUri }} style={styles.lotImage} />
+                      <View style={styles.lotInfo}>
+                        <Text style={[styles.lotTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+                        <Text style={[styles.lotPrice, { color: colors.textSecondary }]}>Start: £{item.startingPrice}</Text>
+                      </View>
+                      <Ionicons name="reorder-three-outline" size={20} color={colors.textMuted} />
                     </View>
-                    <Ionicons name="reorder-three-outline" size={20} color={colors.textMuted} />
-                  </View>
-                )}
-                scrollEnabled={false}
-              />
+                  )}
+                  scrollEnabled={false}
+                />
+              ) : (
+                <View style={[styles.emptyLots, { borderColor: colors.border }]}>
+                  <Ionicons name="pricetags-outline" size={28} color={colors.textMuted} />
+                  <Text style={[styles.emptyLotsText, { color: colors.textSecondary }]}>No lots added yet</Text>
+                  <Text style={[styles.emptyLotsSubtext, { color: colors.textMuted }]}>Add listings to your stream before going live</Text>
+                </View>
+              )}
             </View>
           </ScrollView>
 
           <View style={[styles.setupFooter, { paddingBottom: insets.bottom || Space.md }]}>
             <Pressable
               onPress={handleGoLive}
-              style={({ pressed }) => [styles.goLiveBtn, pressed && { opacity: 0.85 }]}
+              disabled={lots.length === 0}
+              style={({ pressed }) => [styles.goLiveBtn, lots.length === 0 && styles.goLiveBtnDisabled, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
               accessibilityLabel="Go live now"
+              accessibilityState={{ disabled: lots.length === 0 }}
             >
               <View style={styles.liveDot} />
               <Text style={styles.goLiveBtnText}>Go Live Now</Text>
@@ -390,6 +410,36 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
+  demoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+  },
+  demoBannerText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+  },
+  emptyLots: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.xl,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.hairline,
+    borderStyle: 'dashed',
+  },
+  emptyLotsText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.medium,
+  },
+  emptyLotsSubtext: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    textAlign: 'center',
+  },
   setupFooter: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
@@ -403,6 +453,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.xxl,
     backgroundColor: colors.danger,
     minHeight: Control.hit + 4,
+  },
+  goLiveBtnDisabled: {
+    opacity: 0.4,
   },
   goLiveBtnText: {
     fontSize: Type.bodyLarge.size,

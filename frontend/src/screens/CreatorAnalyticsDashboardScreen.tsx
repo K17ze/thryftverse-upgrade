@@ -379,8 +379,7 @@ export default function CreatorAnalyticsDashboardScreen() {
         <EmptyState
           icon="bar-chart-outline"
           title="No analytics data yet"
-          subtitle="Publish content to see insights."
-          hint="Views, engagement and profile visits will appear here once your content is live."
+          subtitle="Publish content to see insights. Views, engagement and profile visits will appear here once your content is live."
           ctaLabel="Create content"
           onCtaPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
         />

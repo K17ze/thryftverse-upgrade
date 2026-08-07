@@ -1485,13 +1485,22 @@ export const useStore = create<StoreState>()(
   isMutedConversation: (id) => get().mutedConversationIds.includes(id),
   readReceiptsEnabled: true,
   setReadReceiptsEnabled: (v) => {
+    const previous = get().readReceiptsEnabled;
     set({ readReceiptsEnabled: v });
-    void updateChatPrivacy({ readReceiptsEnabled: v }).catch(() => {});
+    void updateChatPrivacy({ readReceiptsEnabled: v }).catch(() => {
+      // Revert optimistic state so the UI tells the truth (§11): the setting
+      // did not persist server-side. The toggle will visually snap back.
+      set({ readReceiptsEnabled: previous });
+    });
   },
   allowMessagesFrom: 'everyone',
   setAllowMessagesFrom: (v) => {
+    const previous = get().allowMessagesFrom;
     set({ allowMessagesFrom: v });
-    void updateChatPrivacy({ allowMessagesFrom: v }).catch(() => {});
+    void updateChatPrivacy({ allowMessagesFrom: v }).catch(() => {
+      // Revert optimistic state so the UI tells the truth (§11).
+      set({ allowMessagesFrom: previous });
+    });
   },
   archivedConversationIds: [],
   toggleArchivedConversation: (id) =>

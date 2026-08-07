@@ -150,7 +150,21 @@ export default function CustomBotsScreen({ navigation }: Props) {
           </Section>
         )}
 
-        {customBots.length === 0 && (
+        {isLoading && customBots.length === 0 && (
+          <View style={styles.loadingContainer}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.skeletonRow}>
+                <View style={styles.skeletonIcon} />
+                <View style={styles.skeletonCopy}>
+                  <View style={styles.skeletonLine} />
+                  <View style={[styles.skeletonLine, { width: '60%' }]} />
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {!isLoading && customBots.length === 0 && (
           <View style={styles.empty}>
             <View style={styles.emptyMark}>
               <Ionicons name="chatbubble-ellipses-outline" size={25} color={colors.textPrimary} />
@@ -181,12 +195,20 @@ export default function CustomBotsScreen({ navigation }: Props) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const items = React.Children.toArray(children);
   return (
     <View style={styles.section}>
       <Meta color={colors.textMuted} style={styles.sectionLabel}>
         {title}
       </Meta>
-      <View style={styles.card}>{children}</View>
+      <View>
+        {items.map((child, index) => (
+          <React.Fragment key={index}>
+            {child}
+            {index < items.length - 1 ? <View style={styles.rowDivider} /> : null}
+          </React.Fragment>
+        ))}
+      </View>
     </View>
   );
 }
@@ -295,11 +317,41 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.background,
     gap: Space.xs / 4,
   },
+  rowDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginLeft: Space.xl + Space.xs + Space.sm,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.sm + 2,
     gap: Space.sm,
+  },
+  loadingContainer: {
+    gap: Space.md,
+    paddingTop: Space.md,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+  },
+  skeletonIcon: {
+    width: Space.xl + Space.xs,
+    height: Space.xl + Space.xs,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceAlt,
+  },
+  skeletonCopy: {
+    flex: 1,
+    gap: Space.xs,
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceAlt,
   },
   iconWrap: {
     width: Space.xl + Space.xs,

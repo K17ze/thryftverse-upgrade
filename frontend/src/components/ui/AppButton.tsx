@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { AccessibilityRole, ActivityIndicator, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Type, Typography, Radius, Space } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -43,7 +43,6 @@ type VariantTokens = {
   borderColor: string;
   titleColor: string;
   subtitleColor: string;
-  iconBackgroundColor: string;
 };
 
 function resolveVariantTokens(variant: AppButtonVariant, colors: any): VariantTokens {
@@ -54,7 +53,6 @@ function resolveVariantTokens(variant: AppButtonVariant, colors: any): VariantTo
         borderColor: colors.border,
         titleColor: colors.textPrimary,
         subtitleColor: colors.textSecondary,
-        iconBackgroundColor: 'transparent',
       };
     case 'ghost':
       return {
@@ -62,7 +60,6 @@ function resolveVariantTokens(variant: AppButtonVariant, colors: any): VariantTo
         borderColor: 'transparent',
         titleColor: colors.textPrimary,
         subtitleColor: colors.textSecondary,
-        iconBackgroundColor: 'transparent',
       };
     case 'danger':
       return {
@@ -70,7 +67,6 @@ function resolveVariantTokens(variant: AppButtonVariant, colors: any): VariantTo
         borderColor: colors.danger,
         titleColor: colors.background,
         subtitleColor: colors.background,
-        iconBackgroundColor: 'rgba(0,0,0,0.15)',
       };
     case 'primary':
     default:
@@ -79,7 +75,6 @@ function resolveVariantTokens(variant: AppButtonVariant, colors: any): VariantTo
         borderColor: colors.brand,
         titleColor: colors.background,
         subtitleColor: colors.background,
-        iconBackgroundColor: 'rgba(0,0,0,0.15)',
       };
   }
 }
@@ -152,15 +147,7 @@ export function AppButton({
         ) : (
           <>
             {icon ? (
-              <View
-                style={[
-                  styles.iconWrap,
-                  {
-                    backgroundColor: tokens.iconBackgroundColor,
-                  },
-                  iconContainerStyle,
-                ]}
-              >
+              <View style={[styles.iconWrap, iconContainerStyle]}>
                 {icon}
               </View>
             ) : null}
@@ -171,15 +158,7 @@ export function AppButton({
               ) : null}
             </View>
             {trailingIcon ? (
-              <View
-                style={[
-                  styles.iconWrap,
-                  {
-                    backgroundColor: tokens.iconBackgroundColor,
-                  },
-                  trailingIconContainerStyle,
-                ]}
-              >
+              <View style={[styles.iconWrap, trailingIconContainerStyle]}>
                 {trailingIcon}
               </View>
             ) : null}
@@ -226,10 +205,10 @@ const styles = StyleSheet.create({
   contentCentered: {
     justifyContent: 'center',
   },
+  // Icon wrapper — transparent centering only. Per AGENTS.md section 4, do not
+  // render a visible grey circle around the glyph; the icon renders directly
+  // with transparent background. The 44pt hit target is the button itself.
   iconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -48,6 +48,7 @@ import {
   clearComposerStateOnApi,
 } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
+import { acceptListingOfferOnApi, declineListingOfferOnApi } from "../services/listingOffersApi";
 
 import { useToast } from "../context/ToastContext";
 
@@ -732,6 +733,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [isOffline, setIsOffline] = useState(false);
 
   const [composerSending, setComposerSending] = useState(false);
+  // Ref guard prevents double-tap send before state update propagates (§13).
+  const composerSendingRef = useRef(false);
 
   const [isTyping, setIsTyping] = useState(false);
 
@@ -1132,6 +1135,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     const trimmed = input.trim();
 
     if (!trimmed || !conversationId) return;
+    // Ref guard: prevents double-tap before setComposerSending propagates (§13).
+    if (composerSendingRef.current) return;
+    composerSendingRef.current = true;
 
     haptic.light();
 
@@ -1206,7 +1212,10 @@ export default function ChatScreen({ navigation, route }: Props) {
         show("Message failed to send. Tap to retry.", "error");
       })
 
-      .finally(() => setComposerSending(false));
+      .finally(() => {
+        composerSendingRef.current = false;
+        setComposerSending(false);
+      });
 
     setInput("");
 
@@ -1245,9 +1254,18 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleAcceptOffer = (msgId: string) => {
+  const handleAcceptOffer = async (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    const offerId = msg?.offer?.offerId;
+    if (!offerId) {
+      show("Cannot accept this offer — missing offer reference.", "error");
+      return;
+    }
+
     haptic.medium();
 
+    // Optimistic update — revert on API failure so UI tells the truth (§11).
+    const prevStatus = msg?.offer?.status;
     setMessages((prev) =>
       prev.map((m) =>
         m.id === msgId && m.offer
@@ -1256,18 +1274,39 @@ export default function ChatScreen({ navigation, route }: Props) {
       ),
     );
 
-    const linkedItemId = routeItemId || conversation?.itemId;
-
-    if (linkedItemId) {
-      navigation.navigate("Checkout", { itemId: linkedItemId });
-    } else {
-      show("Offer accepted. Checkout requires a linked listing.", "info");
+    try {
+      await acceptListingOfferOnApi(offerId);
+      const linkedItemId = routeItemId || conversation?.itemId;
+      if (linkedItemId) {
+        navigation.navigate("Checkout", { itemId: linkedItemId });
+      } else {
+        show("Offer accepted. Checkout requires a linked listing.", "info");
+      }
+    } catch {
+      // Revert optimistic state — the offer was NOT accepted server-side.
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId && m.offer
+            ? { ...m, offer: { ...m.offer, status: prevStatus ?? "pending" } }
+            : m,
+        ),
+      );
+      show("Could not accept offer. Please try again.", "error");
     }
   };
 
-  const handleDeclineOffer = (msgId: string) => {
+  const handleDeclineOffer = async (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    const offerId = msg?.offer?.offerId;
+    if (!offerId) {
+      show("Cannot decline this offer — missing offer reference.", "error");
+      return;
+    }
+
     haptic.light();
 
+    // Optimistic update — revert on API failure so UI tells the truth (§11).
+    const prevStatus = msg?.offer?.status;
     setMessages((prev) =>
       prev.map((m) =>
         m.id === msgId && m.offer
@@ -1275,6 +1314,20 @@ export default function ChatScreen({ navigation, route }: Props) {
           : m,
       ),
     );
+
+    try {
+      await declineListingOfferOnApi(offerId);
+    } catch {
+      // Revert optimistic state — the offer was NOT declined server-side.
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId && m.offer
+            ? { ...m, offer: { ...m.offer, status: prevStatus ?? "pending" } }
+            : m,
+        ),
+      );
+      show("Could not decline offer. Please try again.", "error");
+    }
   };
 
   const handleCounterOffer = (msgId: string, offerPrice?: number, originalPrice?: number) => {

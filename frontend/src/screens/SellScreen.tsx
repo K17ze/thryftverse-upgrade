@@ -6,6 +6,7 @@ import {
   TextInput,
   Pressable,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -133,11 +134,8 @@ export default function SellScreen() {
     fieldValid: { color: colors.success },
     fieldRequiredHint: { color: colors.textMuted },
     charCountWarn: { color: colors.warning },
-    qualityBar: { backgroundColor: colors.surface, borderTopColor: colors.border },
     qualityBarLabel: { color: colors.textPrimary },
-    qualityBarScore: { color: colors.textPrimary },
     qualityBarTier: { color: colors.textSecondary },
-    qualityTipsRow: { backgroundColor: colors.surfaceAlt },
     qualityTipsText: { color: colors.textSecondary },
     qualityTipsLabel: { color: colors.brand },
   }), [colors]);
@@ -177,6 +175,8 @@ export default function SellScreen() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPublishing, setIsPublishing] = useState(false);
+  // Ref guard prevents double-tap publish before state update propagates (§13).
+  const isPublishingRef = useRef(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [publicationStage, setPublicationStage] = useState<'idle' | 'uploading_media' | 'creating_listing' | 'attaching_media' | 'completed' | 'failed_recoverable'>('idle');
   const publishedListingIdRef = useRef<string | null>(null);
@@ -655,6 +655,7 @@ export default function SellScreen() {
         setErrorMsg(msg);
         haptics.error();
       } finally {
+        isPublishingRef.current = false;
         setIsPublishing(false);
       }
       return;
@@ -666,7 +667,8 @@ export default function SellScreen() {
       return;
     }
 
-    if (isPublishing) return;
+    if (isPublishing || isPublishingRef.current) return;
+    isPublishingRef.current = true;
     setIsPublishing(true);
     setErrorMsg(null);
     setPublicationStage('uploading_media');
@@ -783,6 +785,7 @@ export default function SellScreen() {
       setErrorMsg(hasListing ? `${msg} -- your listing was created. Tap Publish to retry attaching media.` : hasMedia ? `${msg} -- some media uploaded. Tap Publish to retry.` : msg);
       haptics.error();
     } finally {
+      isPublishingRef.current = false;
       setIsPublishing(false);
     }
   }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline]);
@@ -875,6 +878,14 @@ export default function SellScreen() {
     listingMode,
     startingBid,
   }), [photos, title, brand, category, size, condition, desc, price, originalPrice, tags, shippingMethod, shippingPayer, listingMode, startingBid]);
+
+  // Color-coded quality level: green (excellent), yellow (good), red (basic).
+  // Communicates quality through color, not panel chrome (per §4 surface budget).
+  const qualityColor = qualityResult.tier === 'excellent'
+    ? colors.success
+    : qualityResult.tier === 'good'
+    ? colors.warning
+    : colors.danger;
 
   return (
     <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
@@ -1497,7 +1508,19 @@ export default function SellScreen() {
               <View style={styles.authPhotoRow}>
                 {authPhotos.map((uri, i) => (
                   <View key={`auth_${i}_${uri}`} style={[styles.authThumb, t.authThumb]}>
-                    <View style={styles.authThumbImage} />
+                    <Image source={{ uri }} style={styles.authThumbImage} resizeMode="cover" />
+                    <Pressable
+                      style={[styles.authThumbRemove, { backgroundColor: colors.background }]}
+                      onPress={() => {
+                        setAuthPhotos((prev) => prev.filter((_, idx) => idx !== i));
+                        haptics.tap();
+                      }}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove authentication photo"
+                    >
+                      <Ionicons name="close-circle" size={18} color={colors.textPrimary} />
+                    </Pressable>
                   </View>
                 ))}
                 {authPhotos.length < 2 && (
@@ -1526,36 +1549,28 @@ export default function SellScreen() {
         </KeyboardAwareScrollView>
 
       {/* -- 8b. COMPACT LISTING QUALITY METER (fixed above publish footer) -- */}
-      <View style={[styles.qualityBar, t.qualityBar]}>
+      {/* Inline indicator: color-coded dot + text. No panel chrome (§4 surface budget). */}
+      <View style={styles.qualityBar}>
         <View style={styles.qualityBarRow}>
           <View style={styles.qualityBarLeft}>
-            <Ionicons
-              name={qualityResult.tier === 'excellent' ? 'star' : qualityResult.tier === 'good' ? 'star-half-outline' : 'ellipse-outline'}
-              size={14}
-              color={colors.textSecondary}
-            />
+            <View style={[styles.qualityDot, { backgroundColor: qualityColor }]} />
             <Text style={[styles.qualityBarLabel, t.qualityBarLabel]}>Listing quality</Text>
-          </View>
-          <View style={styles.qualityBarRight}>
-            <Text style={[styles.qualityBarScore, t.qualityBarScore]}>{qualityResult.score}%</Text>
+            <Text style={[styles.qualityBarScore, { color: qualityColor }]}>{qualityResult.score}%</Text>
             <Text style={[styles.qualityBarTier, t.qualityBarTier]}>{qualityResult.tierLabel}</Text>
-            <Pressable
-              hitSlop={8}
-              onPress={() => setQualityTipsExpanded((v) => !v)}
-              style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.6 }]}
-              accessibilityRole="button"
-              accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
-            >
-              <Text style={[styles.qualityTipsLabel, t.qualityTipsLabel]}>Tips to improve</Text>
-              <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} />
-            </Pressable>
           </View>
-        </View>
-        <View style={styles.qualityBarTrack}>
-          <View style={[styles.qualityBarFill, { width: `${qualityResult.score}%`, backgroundColor: colors.brand }]} />
+          <Pressable
+            hitSlop={8}
+            onPress={() => setQualityTipsExpanded((v) => !v)}
+            style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
+          >
+            <Text style={[styles.qualityTipsLabel, t.qualityTipsLabel]}>Tips to improve</Text>
+            <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} />
+          </Pressable>
         </View>
         {qualityTipsExpanded && qualityResult.missingItems.length > 0 && (
-          <View style={[styles.qualityTipsRow, t.qualityTipsRow]}>
+          <View style={styles.qualityTipsRow}>
             {qualityResult.missingItems.slice(0, 6).map((item) => (
               <View key={item.key} style={styles.qualityTipChip}>
                 <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={11} color={colors.textMuted} />
@@ -1889,6 +1904,16 @@ const styles = StyleSheet.create({
     width: Space.xxl + Space.xs,
     height: Space.xxl + Space.xs,
   },
+  authThumbRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+  },
   authAddBtn: {
     width: Space.xxl + Space.xs,
     height: Space.xxl + Space.xs,
@@ -1971,8 +1996,8 @@ const styles = StyleSheet.create({
   },
 
   /* -- compact quality bar (fixed above footer) -- */
+  /* Flat inline indicator — no surface, no border, no border radius (§4). */
   qualityBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
@@ -1988,14 +2013,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs + 2,
   },
+  qualityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   qualityBarLabel: {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-  },
-  qualityBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
   },
   qualityBarScore: {
     fontSize: Type.bodyEmphasis.size,
@@ -2014,23 +2039,11 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
   },
-  qualityBarTrack: {
-    height: Stroke.emphasis,
-    borderRadius: Radius.sm,
-    backgroundColor: 'transparent',
-    overflow: 'hidden',
-  },
-  qualityBarFill: {
-    height: '100%',
-    borderRadius: Radius.sm,
-  },
   qualityTipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.xs + 1,
     paddingVertical: Space.xs,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.sm,
     marginTop: Space.xs,
   },
   qualityTipChip: {

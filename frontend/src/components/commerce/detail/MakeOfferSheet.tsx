@@ -60,9 +60,11 @@ export interface MakeOfferSheetProps {
   onDismiss: () => void;
   listing: MakeOfferSheetListing | null;
   sellerId: string | null;
-  /** Fired with the created offer + chat navigation payload. */
+  /** Fired with the created offer + chat navigation payload.
+   *  `conversationId` is null when the backend created the offer but did not
+   *  provision a conversation — callers must not navigate to Chat in that case. */
   onSent: (payload: {
-    conversationId: string;
+    conversationId: string | null;
     partnerUserId: string;
     focusQuery: string;
     offerPayload: {
@@ -280,7 +282,10 @@ export function MakeOfferSheet({
 
       const focusQuery = `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${listing.title}. Valid for ${DEFAULT_EXPIRY_HOURS}h.`;
       onSent({
-        conversationId: `offer_${sellerId}_${listing.id}`,
+        // Use the real conversation ID from the API response — never fabricate
+        // an ID (§11). Null means the backend created the offer but did not
+        // provision a conversation; callers must not navigate to Chat then.
+        conversationId: offer.conversationId,
         partnerUserId: sellerId,
         focusQuery,
         offerPayload: {

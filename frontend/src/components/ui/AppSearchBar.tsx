@@ -79,17 +79,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'transparent',
     paddingHorizontal: Space.sm + Space.xs,
     paddingVertical: Space.sm,
     gap: Space.xs + Space.xs,
   },
   containerFocused: {
     borderColor: colors.textSecondary,
-    backgroundColor: colors.surfaceAlt,
   },
   input: {
     flex: 1,

@@ -518,8 +518,6 @@ export default function LiveShoppingHomeScreen() {
               subtitle="Check back soon or start your own."
               ctaLabel="Go to Seller Hub"
               onCtaPress={() => navigation.navigate('MyListings')}
-              secondaryCtaLabel="Refresh"
-              onSecondaryCtaPress={handleRetry}
             />
           </View>
         )}

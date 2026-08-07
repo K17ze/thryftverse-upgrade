@@ -575,11 +575,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
   },
   optionTextActive: { color: colors.textInverse, fontFamily: Typography.family.semibold },
-  choiceList: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+  choiceList: {},
   choiceRow: { minHeight: Control.hit + Space.lg, flexDirection: 'row', alignItems: 'center', gap: Space.md },
   choiceCopy: { flex: 1, gap: Space.xs - 2 },
   choiceTitle: {
@@ -625,11 +621,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     lineHeight: Type.captionElevated.lineHeight - 1,
   },
-  permissionList: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+  permissionList: {},
   permissionRow: { minHeight: Space.xxl + Space.lg, flexDirection: 'row', alignItems: 'center', gap: Space.md },
   permissionCopy: { flex: 1, gap: Space.xs - 1 },
   permissionTitle: {

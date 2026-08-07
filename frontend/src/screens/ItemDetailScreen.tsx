@@ -848,7 +848,7 @@ export default function ItemDetailScreen() {
             no empty state, no fabricated listings. Uses ProductCardV2
             inside HorizontalRail so the cards match discovery surfaces. */}
         {moreFromSellerRailItems.length >= 2 ? (
-          <View style={styles.moreFromSellerRailWrap}>
+          <View style={[styles.moreFromSellerRailWrap, { borderBottomColor: colors.borderSubtle }]}>
             <Text style={[styles.moreFromSellerRailTitle, { color: colors.textPrimary }]} numberOfLines={1}>
               More from {seller?.username ?? 'this seller'}
             </Text>
@@ -1531,10 +1531,15 @@ export default function ItemDetailScreen() {
         onSent={(payload) => {
           setMakeOfferVisible(false);
           show('Offer sent', 'success');
-          navigation.navigate('Chat', {
-            conversationId: payload.conversationId,
-            partnerUserId: payload.partnerUserId,
-          });
+          // Only navigate to Chat if the backend provisioned a real conversation.
+          // If conversationId is null, the offer was created but no conversation
+          // exists — stay on the detail screen rather than navigating to a dead route.
+          if (payload.conversationId) {
+            navigation.navigate('Chat', {
+              conversationId: payload.conversationId,
+              partnerUserId: payload.partnerUserId,
+            });
+          }
         }}
       />
 
@@ -1684,11 +1689,9 @@ const styles = StyleSheet.create({
   // gives proper breathing room for avatar + name + rating + actions.
   // The hairline top border separates it from the identity chapter
   // without adding a card surface (per AGENTS.md surface budget).
-  // Tight rhythm: paddingVertical Space.sm + xs (12px) keeps the
-  // seller row connected to the identity chapter above.
+  // No padding here — SellerInfoCard handles its own internal padding.
+  // This avoids double-padding that would push content inward.
   sellerRowWrap: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'transparent', // overridden inline with theme color
   },
@@ -1701,9 +1704,13 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   // ── More from this seller rail ──
+  // Bottom hairline closes the seller section before the purchase
+  // details section below (per §4 surface budget — flat canvas + hairlines).
   moreFromSellerRailWrap: {
     paddingTop: Space.sm,
     paddingBottom: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'transparent', // overridden inline with theme color
   },
   moreFromSellerRailTitle: {
     fontSize: Type.subtitle.size,
