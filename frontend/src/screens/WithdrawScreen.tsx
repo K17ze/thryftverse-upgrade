@@ -495,6 +495,15 @@ export default function WithdrawScreen() {
         <View style={{ width: 44 }} />
       </View>
 
+      {isOffline && (
+        <View style={[styles.offlineBanner, { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border }]}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
+          <Text style={[styles.offlineBannerText, { color: colors.textPrimary }]}>
+            You are offline. Withdrawals cannot be submitted until connection returns.
+          </Text>
+        </View>
+      )}
+
       <KeyboardAwareScrollView
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -631,6 +640,20 @@ function createStyles(colors: ThemeColors) {
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, height: Space.xl + Space.xl + 8, borderBottomWidth: Stroke.standard, borderBottomColor: colors.border },
   backBtn: { width: Control.hit, height: Control.hit, justifyContent: 'center', alignItems: 'flex-start' },
   headerTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: Stroke.standard,
+  },
+  offlineBannerText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    lineHeight: Type.caption.lineHeight,
+  },
 
   heroCard: {
     borderRadius: Radius.lg,

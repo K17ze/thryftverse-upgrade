@@ -239,7 +239,7 @@ export default function MyBidsScreen() {
           <View style={styles.activityBody}>
             <BodyEmphasis style={styles.activityTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
             <View style={styles.activityStateRow}>
-              <Ionicons name={stateInfo.icon} size={12} color={stateInfo.color} />
+              <Ionicons name={stateInfo.icon} size={14} color={stateInfo.color} />
               <Text style={[styles.activityState, { color: stateInfo.color }]}>
                 {stateInfo.label}
               </Text>
@@ -283,7 +283,7 @@ export default function MyBidsScreen() {
               )}
               <View style={styles.activityNextRow}>
                 <Text style={styles.activityNextText}>{stateInfo.nextAction}</Text>
-                <Ionicons name="chevron-forward" size={11} color={colors.brand} />
+                <Ionicons name="chevron-forward" size={14} color={colors.brand} />
               </View>
             </View>
           </View>
@@ -351,7 +351,7 @@ export default function MyBidsScreen() {
                 accessibilityLabel={endingSoonest ? 'Stop sorting by ending soonest' : 'Sort by ending soonest'}
                 accessibilityState={{ checked: endingSoonest }}
               >
-                <Ionicons name="time-outline" size={13} color={endingSoonest ? colors.textInverse : colors.textMuted} />
+                <Ionicons name="time-outline" size={14} color={endingSoonest ? colors.textInverse : colors.textMuted} />
                 <Text style={[styles.stateRailText, endingSoonest && styles.stateRailTextActive]}>
                   Ending soonest
                 </Text>

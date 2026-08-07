@@ -197,7 +197,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           </View>
                         </View>
                         <Pressable
-                          style={styles.deleteButton}
+                          style={({ pressed }) => [styles.deleteButton, pressed && { opacity: 0.5 }]}
                           onPress={() => { haptic.light(); handleDelete(alert); }}
                           accessibilityRole="button"
                           accessibilityLabel="Delete alert"

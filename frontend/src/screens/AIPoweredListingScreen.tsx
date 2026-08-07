@@ -453,6 +453,15 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         <View style={styles.iconBtnPlaceholder} />
       </View>
 
+      {SMART_SELL_DEMO_MODE && (
+        <View style={[styles.demoBanner, { backgroundColor: `${colors.warning}15`, borderBottomColor: `${colors.warning}30` }]}>
+          <Ionicons name="flask-outline" size={16} color={colors.warning} />
+          <Text style={[styles.demoBannerText, { color: colors.textPrimary }]}>
+            Demo Mode — AI suggestions are illustrative and not sent to a backend.
+          </Text>
+        </View>
+      )}
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -1265,6 +1274,20 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    demoBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderBottomWidth: Stroke.standard,
+    },
+    demoBannerText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      lineHeight: Type.caption.lineHeight,
     },
     iconBtn: {
       width: Control.hit,
