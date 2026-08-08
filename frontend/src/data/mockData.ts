@@ -110,14 +110,14 @@ export interface Message {
   text?: string;
   offerPrice?: number;
   originalPrice?: number;
-  offerStatus?: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired';
+  offerStatus?: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled';
   isSystem?: boolean;
   systemTitle?: string;
   timestamp: string;
   itemImage?: string;
   type?: 'text' | 'offer' | 'system' | 'commerce_state';
   sender?: 'me' | 'other' | 'system';
-  offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired'; expiresAt?: string; counterRound?: number };
+  offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled'; expiresAt?: string; counterRound?: number };
   reactions?: MessageReaction[];
   replyToMessageId?: string;
   mediaUri?: string;
@@ -648,6 +648,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     id: 'c2',
     type: 'dm',
     sellerId: 'u3',
+    participantProfiles: [
+      { id: 'u3', username: 'dankdunksuk', displayName: null, avatar: null, emailVerified: true },
+    ],
     itemId: 'l6',
     lastMessage: 'Shout if you want more pics or questio...',
     lastMessageTime: 'a day ago',
@@ -660,6 +663,11 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     title: 'Thryft Snipers',
     ownerId: 'me',
     participantIds: ['me', 'u1', 'u3'],
+    participantProfiles: [
+      { id: 'me', username: 'thryftuser', displayName: null, avatar: null, emailVerified: true },
+      { id: 'u1', username: 'mariefullery', displayName: null, avatar: null, emailVerified: true },
+      { id: 'u3', username: 'dankdunksuk', displayName: null, avatar: null, emailVerified: true },
+    ],
     botIds: ['bot_trade'],
     lastMessage: 'TradeOps Bot: New auction watchlist for tonight is live.',
     lastMessageTime: '20m ago',

@@ -164,7 +164,7 @@ export function CreatorCropSheet({
       onCropComplete(result.uri, result.width, result.height);
       onClose();
     } catch {
-      show('Crop failed. Please try again.', 'error');
+      show('Crop failed. Try again.', 'error');
     } finally {
       setIsProcessing(false);
     }

@@ -218,7 +218,7 @@ export default function ItemDetailScreen() {
       }
     } catch {
       setPriceAlertEnabled(!next);
-      show('Could not update price alert. Please try again.', 'error');
+      show('Could not update price alert. Try again.', 'error');
     } finally {
       setPriceAlertLoading(false);
     }
@@ -800,7 +800,7 @@ export default function ItemDetailScreen() {
                     show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
                   },
                   onError: () => {
-                    show('Could not follow seller. Please try again.', 'error');
+                    show('Could not follow seller. Try again.', 'error');
                   },
                 });
               }}
@@ -823,7 +823,7 @@ export default function ItemDetailScreen() {
                     partnerUserId: seller.id,
                   });
                 } catch {
-                  show('Could not start conversation. Please try again.', 'error');
+                  show('Could not start conversation. Try again.', 'error');
                 } finally {
                   setIsResolvingConversation(false);
                 }
@@ -1196,7 +1196,7 @@ export default function ItemDetailScreen() {
               <RelatedItemsRail
                 items={railItems.slice(0, 10)}
                 onPressItem={handlePressRecommendation}
-                headerLabel={item.brand ? `More from ${item.brand}` : 'You may also like'}
+                headerLabel={item.brand ? `More from ${item.brand}` : 'More like this'}
               />
             </Reanimated.View>
           );

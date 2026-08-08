@@ -424,7 +424,7 @@ export default function GalleriaScreen() {
       setEditorials(eds);
       setFeaturedAssets(assets);
     } catch (e) {
-      setError('We couldn\u2019t load the Galleria. Please try again.');
+      setError('We couldn\u2019t load the Galleria. Try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);

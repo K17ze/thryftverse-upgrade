@@ -103,7 +103,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
 
   const handlePickEvidence = useCallback(async () => {
     if (evidenceUris.length >= 3) {
-      show('You can attach up to 3 photos.', 'info');
+      show('Attach up to 3 photos.', 'info');
       return;
     }
     haptic.light();
@@ -129,7 +129,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       setEvidenceUris((prev) => [...prev, ...uploaded]);
       show(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} attached.`, 'success');
     } catch {
-      show('Unable to upload photo(s). Please try again.', 'error');
+      show('Unable to upload photo(s). Try again.', 'error');
     } finally {
       setIsUploadingEvidence(false);
     }
@@ -158,7 +158,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       setIsSubmitting(false);
       setIsSubmitted(true);
       setSubmittedTicketId(ticketId);
-      show('Support request submitted. We will review and respond as soon as possible.', 'success');
+      show('Support request submitted. We\'ll review and respond as soon as possible.', 'success');
     } catch (err) {
       setIsSubmitting(false);
       const parsed = parseApiError(err);
@@ -277,12 +277,12 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             if (!topic) return null;
             const isEscrowHeld = orderStatus === 'paid' || orderStatus === 'shipped' || orderStatus === 'in transit' || orderStatus === 'out for delivery';
             const guidance: Record<string, string> = {
-              not_received: 'We will contact the seller to confirm dispatch and tracking. If the item cannot be located, you may be eligible for a full refund from escrow.',
-              not_as_described: 'Provide photos showing the discrepancy. We will compare against the listing and mediate a partial or full refund from escrow.',
-              damaged: 'Attach photos of the damage and original packaging. We will assess liability and arrange a refund from escrow or a seller remedy.',
-              wrong_item: 'Attach photos of the received item. We will arrange a return label and refund from escrow once the item is returned.',
-              return: 'We will review your return eligibility. If approved, you will receive a return label and a refund from escrow once the item is received by the seller.',
-              payment_issue: 'We will investigate the payment and billing discrepancy and correct any erroneous charges.',
+              not_received: 'We\'ll contact the seller to confirm dispatch and tracking. If the item cannot be located, you could be eligible for a full refund from escrow.',
+              not_as_described: 'Provide photos showing the discrepancy. We\'ll compare against the listing and mediate a partial or full refund from escrow.',
+              damaged: 'Attach photos of the damage and original packaging. We\'ll assess liability and arrange a refund from escrow or a seller remedy.',
+              wrong_item: 'Attach photos of the received item. We\'ll arrange a return label and refund from escrow once the item is returned.',
+              return: 'We\'ll review your return eligibility. If approved, you\'ll receive a return label and a refund from escrow once the item is received by the seller.',
+              payment_issue: 'We\'ll investigate the payment and billing discrepancy and correct any erroneous charges.',
               other: 'Describe the issue in detail below. Our support team will review and respond.',
             };
             return (

@@ -510,10 +510,10 @@ export default function SellScreen() {
     const nextErrors: Record<string, string> = {};
 
     if (photos.length === 0) nextErrors.photos = 'Add at least one photo before publishing.';
-    if (!trimmedTitle) nextErrors.title = 'Please provide a title.';
-    if (!category) nextErrors.category = 'Please select a category.';
-    if (!size) nextErrors.size = 'Please choose a size.';
-    if (!condition) nextErrors.condition = 'Please choose a condition.';
+    if (!trimmedTitle) nextErrors.title = 'Add a title.';
+    if (!category) nextErrors.category = 'Select a category.';
+    if (!size) nextErrors.size = 'Choose a size.';
+    if (!condition) nextErrors.condition = 'Choose a condition.';
     if (!trimmedDescription || trimmedDescription.length < 10) nextErrors.description = 'Add a description with at least 10 characters.';
     if (!Number.isFinite(numericPrice) || numericPrice <= 0) nextErrors.price = 'Enter a valid price greater than 0.';
 
@@ -532,7 +532,7 @@ export default function SellScreen() {
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      setErrorMsg('Please fix the errors above before publishing.');
+      setErrorMsg('Fix the errors above before publishing.');
       haptics.error();
       return;
     }
@@ -651,7 +651,7 @@ export default function SellScreen() {
         performance.mark('listing:create:complete');
         navigation.replace('CreateAuction', { listingId });
       } catch (e: unknown) {
-        const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Please try again.';
+        const msg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to prepare auction. Try again.';
         setErrorMsg(msg);
         haptics.error();
       } finally {
@@ -777,7 +777,7 @@ export default function SellScreen() {
       });
     } catch (e: unknown) {
       const isNetworkError = isOffline || (typeof e === 'object' && e !== null && 'code' in e && (e as { code?: string }).code === 'NETWORK_ERROR');
-      const rawMsg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Please try again.';
+      const rawMsg = typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Failed to publish. Try again.';
       const msg = isNetworkError ? 'You appear to be offline. Check your connection and try again.' : rawMsg;
       const hasListing = !!publishedListingIdRef.current;
       const hasMedia = mediaDraftItems.some((m) => m.status === 'uploaded');

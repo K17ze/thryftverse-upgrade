@@ -110,7 +110,7 @@ export default function CollectionDetailScreen() {
                 show('Collection deleted', 'info');
                 handleGoBack();
               } catch {
-                show('Unable to delete collection. Please try again.', 'error');
+                show('Unable to delete collection. Try again.', 'error');
               }
             }
           },

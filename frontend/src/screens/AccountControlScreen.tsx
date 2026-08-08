@@ -51,7 +51,7 @@ export default function AccountControlScreen({ navigation }: Props) {
 
   const handleDownloadData = useCallback(async () => {
     if (!currentUser?.id) {
-      show('Please sign in before requesting a data export.', 'error');
+      show('Sign in before requesting a data export.', 'error');
       return;
     }
     setIsExporting(true);
@@ -70,7 +70,7 @@ export default function AccountControlScreen({ navigation }: Props) {
 
   const confirmDeleteAccount = useCallback(async () => {
     if (!currentUser?.id) {
-      show('Please sign in before deleting your account.', 'error');
+      show('Sign in before deleting your account.', 'error');
       return;
     }
     setIsDeleting(true);
@@ -106,7 +106,7 @@ export default function AccountControlScreen({ navigation }: Props) {
             <View style={styles.heroText}>
               <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Account control</Text>
               <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                Manage your data and account lifecycle
+                Data and account control
               </Text>
             </View>
           </View>
@@ -128,7 +128,7 @@ export default function AccountControlScreen({ navigation }: Props) {
           </View>
         </View>
         <Text style={[styles.optionBody, { color: colors.textSecondary }]}>
-          We will generate a data export covering your addresses, payment methods, orders, bids, co-own holdings and consent records. A request ID is issued for tracking.
+          We'll generate a data export covering your addresses, payment methods, orders, bids, co-own holdings and consent records. A request ID is issued for tracking.
         </Text>
         <AnimatedPressable
           style={[styles.optionBtn, { borderColor: colors.border }]}
@@ -204,14 +204,14 @@ export default function AccountControlScreen({ navigation }: Props) {
         <ConsequenceRow icon="location-outline" text="All saved delivery addresses are removed." />
         <ConsequenceRow icon="card-outline" text="Saved payment methods and bank details are removed." />
         <ConsequenceRow icon="wallet-outline" text="Wallet history and payout records are deleted." />
-        <ConsequenceRow icon="cube-outline" text="Active listings remain visible to buyers until they expire, but you will no longer manage them from this account." />
+        <ConsequenceRow icon="cube-outline" text="Active listings remain visible to buyers until they expire, but you'll no longer manage them from this account." />
         <ConsequenceRow icon="alert-circle-outline" text="Pending payouts, open disputes or active orders may need to be resolved before full erasure. Contact support if you have outstanding obligations." isLast />
       </View>
       </Reanimated.View>
 
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
       <Text style={[styles.consequenceFootnote, { color: colors.textMuted }]}>
-        If you have unresolved orders or payouts, we recommend resolving them before deletion. You can also contact support for help.
+        If you have unresolved orders or payouts, we recommend resolving them before deletion. Contact support for help too.
       </Text>
 
       <View style={styles.deleteInfoActions}>

@@ -99,7 +99,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
       show(`${bot.name} connected`, 'success');
       navigation.goBack();
     } catch {
-      show('Failed to connect agent. Please try again.', 'error');
+      show('Failed to connect agent. Try again.', 'error');
     } finally {
       setIsDeploying(false);
     }
@@ -121,7 +121,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
             show(`${bot.name} removed`, 'info');
             navigation.goBack();
           } catch {
-            show('Failed to remove agent. Please try again.', 'error');
+            show('Failed to remove agent. Try again.', 'error');
           } finally {
             setIsDeploying(false);
           }

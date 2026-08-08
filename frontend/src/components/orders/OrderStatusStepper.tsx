@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
+import { formatShortDateTime } from '../../utils/dateFormat';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

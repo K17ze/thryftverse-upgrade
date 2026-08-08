@@ -156,11 +156,11 @@ export default function VerificationScreen({ navigation }: Props) {
 
   const handleSubmitKyc = async () => {
     if (!kycFullName.trim() || !kycDob.trim() || !kycAddressLine.trim() || !kycCity.trim() || !kycPostcode.trim()) {
-      show('Please fill in all fields', 'error');
+      show('Fill in all fields', 'error');
       return;
     }
     if (!currentUser?.id) {
-      show('Please log in to verify your identity', 'error');
+      show('Log in to verify your identity', 'error');
       return;
     }
     setIsSubmittingKyc(true);
@@ -182,10 +182,10 @@ export default function VerificationScreen({ navigation }: Props) {
         if (canOpen) {
           await Linking.openURL(result.session.verificationUrl);
         }
-        show('Complete verification in your browser. We will review within 24 hours.', 'success');
+        show('Complete verification in your browser. We\'ll review within 24 hours.', 'success');
       } else {
         // Provider not configured — submission is recorded as pending
-        show('Identity verification submitted. We will review your documents within 24 hours.', 'success');
+        show('Identity verification submitted. We\'ll review your documents within 24 hours.', 'success');
       }
 
       // Refresh backend status
@@ -208,15 +208,15 @@ export default function VerificationScreen({ navigation }: Props) {
 
   const handleSubmitDac7 = async () => {
     if (!dac7Tin.trim()) {
-      show('Please enter your tax identification number', 'error');
+      show('Enter your tax identification number', 'error');
       return;
     }
     if (!dac7SelfDeclared) {
-      show('Please confirm the self-declaration checkbox', 'error');
+      show('Confirm the self-declaration checkbox', 'error');
       return;
     }
     if (!currentUser?.id) {
-      show('Please log in to save tax information', 'error');
+      show('Log in to save tax information', 'error');
       return;
     }
     setIsSubmittingDac7(true);

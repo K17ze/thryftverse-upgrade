@@ -40,7 +40,7 @@ export default function ChangePasswordScreen() {
 
   const handleUpdate = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      show('Please fill in all fields', 'error');
+      show('Fill in all fields', 'error');
       return;
     }
     if (newPassword.length < 8) {
@@ -60,8 +60,8 @@ export default function ChangePasswordScreen() {
       await changePassword({ currentPassword, newPassword });
       show('Password updated successfully', 'success');
       navigation.goBack();
-    } catch (error: any) {
-      show(error.message || 'Unable to change password', 'error');
+    } catch (error: unknown) {
+      show(error instanceof Error ? error.message : 'Unable to change password', 'error');
     } finally {
       setIsUpdating(false);
     }

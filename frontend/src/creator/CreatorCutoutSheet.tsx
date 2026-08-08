@@ -178,7 +178,7 @@ export function CreatorCutoutSheet({
       onCutoutComplete(result.uri);
       onClose();
     } catch {
-      show('Cutout failed. Please try again.', 'error');
+      show('Cutout failed. Try again.', 'error');
     } finally {
       setIsProcessing(false);
     }

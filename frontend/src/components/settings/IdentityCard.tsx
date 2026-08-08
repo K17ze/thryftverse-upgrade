@@ -49,7 +49,7 @@ export function IdentityCard({ user, onPress, variant = 'default' }: IdentityCar
           {reputationLabel ? (
             <Text style={[styles.meta, { color: colors.textSecondary }]}>{reputationLabel}</Text>
           ) : (
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>{isCommanding ? 'Tap to edit your profile' : 'Manage your account details, privacy and security'}</Text>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>{isCommanding ? 'Tap to edit your profile' : 'Account details, privacy and security'}</Text>
           )}
           {user?.isVerified && (
             <View style={[styles.verifiedRow, { backgroundColor: `${colors.success}18` }]}>

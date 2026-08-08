@@ -269,7 +269,7 @@ export default function PaymentsScreen({ navigation }: Props) {
         header={
           <FlagshipHeader
             title="Payment Centre"
-            subtitle="Manage your payment methods"
+            subtitle="Payment methods"
             onBack={() => navigation.goBack()}
           />
         }
@@ -289,7 +289,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Payment Centre"
-          subtitle="Manage your payment methods"
+          subtitle="Payment methods"
           onBack={() => navigation.goBack()}
           rightAction={
             <AnimatedPressable

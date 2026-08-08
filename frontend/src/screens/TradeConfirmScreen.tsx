@@ -174,7 +174,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         // by the backend's own idempotency dedup; keep the key so a user retry
         // after fixing the cause (e.g. re-authenticating) still dedupes correctly.
       } else {
-        show('Trading engine unavailable. Please retry once connection is restored.', 'error');
+        show('Trading engine unavailable. Retry once connection is restored.', 'error');
         // Network error: the request may or may not have reached the server.
         // Keep the same key so retry is a safe no-op/duplicate-return, not a new order.
       }

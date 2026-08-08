@@ -80,7 +80,7 @@ export function EditProfilePreview({
 
         {/* Edit cover button — primary control on the preview */}
         <Pressable
-          style={[styles.editCoverBtn, !coverUri && styles.editCoverBtnEmpty]}
+          style={({ pressed }) => [styles.editCoverBtn, !coverUri && styles.editCoverBtnEmpty, pressed && { opacity: 0.6 }]}
           onPress={onEditCover}
           accessibilityRole="button"
           accessibilityLabel="Change cover photo"
@@ -112,7 +112,7 @@ export function EditProfilePreview({
 
           {/* Edit avatar button — primary control on the preview */}
           <Pressable
-            style={styles.editAvatarBtn}
+            style={({ pressed }) => [styles.editAvatarBtn, pressed && { opacity: 0.6 }]}
             onPress={onEditAvatar}
             accessibilityRole="button"
             accessibilityLabel="Change avatar photo"

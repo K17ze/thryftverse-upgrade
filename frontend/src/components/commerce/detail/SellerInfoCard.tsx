@@ -180,7 +180,7 @@ export function SellerInfoCard({
             <Pressable
               onPress={() => handleAction(onMessage)}
               hitSlop={8}
-              style={styles.actionHitTarget}
+              style={({ pressed }) => [styles.actionHitTarget, pressed && { opacity: 0.6 }]}
               accessibilityLabel={`Message ${seller.username}`}
               accessibilityRole="button"
               accessibilityHint="Starts a chat with the seller"
@@ -195,7 +195,7 @@ export function SellerInfoCard({
               onPress={() => handleAction(onFollow)}
               disabled={isFollowPending}
               hitSlop={8}
-              style={styles.actionHitTarget}
+              style={({ pressed }) => [styles.actionHitTarget, pressed && { opacity: 0.6 }]}
               accessibilityRole="button"
               accessibilityState={{ selected: isFollowing, busy: isFollowPending }}
               accessibilityLabel={isFollowing ? `Unfollow ${seller.username}` : `Follow ${seller.username}`}

@@ -106,8 +106,8 @@ export async function uploadAllLocalMedia(
           cache.set(ref.currentUri, remoteUri);
           lastError = null;
           break;
-        } catch (err: any) {
-          lastError = err;
+        } catch (err: unknown) {
+          lastError = err instanceof Error ? err : new Error(String(err));
           if (attempt < MAX_RETRIES) {
             await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
           }

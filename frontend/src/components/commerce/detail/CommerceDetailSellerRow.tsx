@@ -143,7 +143,7 @@ export function CommerceDetailSellerRow({
             <Pressable
               onPress={() => handleAction(secondaryAction.onPress)}
               hitSlop={8}
-              style={styles.actionHitTarget}
+              style={({ pressed }) => [styles.actionHitTarget, pressed && { opacity: 0.6 }]}
               accessibilityLabel={secondaryAction.label}
               accessibilityRole="button"
             >
@@ -156,7 +156,7 @@ export function CommerceDetailSellerRow({
             <Pressable
               onPress={() => handleAction(primaryAction.onPress)}
               hitSlop={8}
-              style={styles.actionHitTarget}
+              style={({ pressed }) => [styles.actionHitTarget, pressed && { opacity: 0.6 }]}
               accessibilityLabel={primaryAction.label}
               accessibilityRole="button"
             >

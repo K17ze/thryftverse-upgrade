@@ -195,7 +195,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
         </Reanimated.View>
 
         <Text style={styles.introText}>
-          Set up recurring purchases to automatically buy units on a schedule. You can cancel at any time.
+          Set up recurring purchases to automatically buy units on a schedule. Cancel at any time.
         </Text>
 
         {error ? (

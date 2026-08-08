@@ -83,7 +83,7 @@ export default function WriteReviewScreen() {
 
   const handlePickPhotos = useCallback(async () => {
     if (photoUris.length >= 4) {
-      show('You can attach up to 4 photos.', 'info');
+      show('Attach up to 4 photos.', 'info');
       return;
     }
     haptic.light();
@@ -109,7 +109,7 @@ export default function WriteReviewScreen() {
       setPhotoUris((prev) => [...prev, ...uploaded]);
       show(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} attached.`, 'success');
     } catch {
-      show('Unable to upload photo(s). Please try again.', 'error');
+      show('Unable to upload photo(s). Try again.', 'error');
     } finally {
       setIsUploadingPhotos(false);
     }

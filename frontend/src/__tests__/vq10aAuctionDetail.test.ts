@@ -739,7 +739,7 @@ describe('PASS 5: transactionSheetLogic — mapApiErrorToTransactionError', () =
     expect(result.kind).toBe('auth_required');
     expect(result.transactionPossible).toBe(false);
     expect(result.isAmbiguous).toBe(false);
-    expect(result.message).toContain('session has expired');
+    expect(result.message.toLowerCase()).toContain('session expired');
   });
 
   it('maps AML_BLOCKED code as definitive', () => {

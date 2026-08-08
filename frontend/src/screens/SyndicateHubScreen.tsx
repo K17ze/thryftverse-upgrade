@@ -767,7 +767,7 @@ export default function CoOwnHubScreen() {
         <CoOwnStateCanvas
           variant="empty"
           title="No items yet"
-          subtitle="When issuers list items for shared ownership, you will find them here."
+          subtitle="When issuers list items for shared ownership, you'll find them here."
           actionLabel="Issue a Co-Own"
           onAction={() => {
             navigation.navigate('CreateCoOwn');

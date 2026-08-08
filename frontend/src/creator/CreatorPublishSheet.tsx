@@ -11,12 +11,23 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  useReducedMotion,
+  Easing,
+  runOnJS,
+} from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { useMotionConfig } from '../hooks/useMotionConfig';
 import { createLookOnApi, updateLookOnApi } from '../services/looksApi';
 import { createPosterStory, scheduleCreatorDocument } from '../services/postersApi';
 import { CreatorAnalytics } from './creatorAnalytics';
@@ -39,6 +50,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const reduceMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
   const [stage, setStage] = useState<'review' | 'uploading' | 'publishing' | 'success' | 'error'>('review');
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
@@ -48,6 +61,12 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
   const [uploadTotal, setUploadTotal] = useState(0);
   const publishGuardRef = useRef(new PublishGuard());
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const progressWidth = useSharedValue(0);
+
+  const progressAnimatedStyle = useAnimatedStyle(() => ({
+    width: `${Math.round(progressWidth.value * 100)}%`,
+  }));
 
   // Haptic feedback when entering the success state
   useEffect(() => {
@@ -65,9 +84,10 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
     setUploadFraction(0);
     setUploadCompleted(0);
     setUploadTotal(0);
+    progressWidth.value = 0;
     publishGuardRef.current.reset();
     onClose();
-  }, [stage, haptic, onClose]);
+  }, [stage, haptic, onClose, progressWidth]);
 
   const handlePublish = useCallback(async () => {
     // Prevent duplicate submissions
@@ -91,10 +111,12 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
         setStage('uploading');
         workingDoc = await uploadAllLocalMedia(document, (progress) => {
           if (progress.total > 0) {
+            const fraction = (progress.completed + 1) / progress.total;
             setUploadProgress(`Uploading media ${progress.completed + 1} of ${progress.total}`);
             setUploadTotal(progress.total);
             setUploadCompleted(progress.completed + 1);
-            setUploadFraction((progress.completed + 1) / progress.total);
+            setUploadFraction(fraction);
+            progressWidth.value = reduceMotion ? fraction : withTiming(fraction, { duration: 300, easing: Easing.out(Easing.ease) });
           }
         });
       }
@@ -153,11 +175,12 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
         setStage('success');
         CreatorAnalytics.publishSuccess('poster', result.storyId);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       publishGuardRef.current.fail();
-      setErrorMessage(err?.message ?? 'Publishing failed');
+      const errorMessage = err instanceof Error ? err.message : 'Publishing failed';
+      setErrorMessage(errorMessage);
       setStage('error');
-      CreatorAnalytics.publishError(document.type, err?.message ?? 'Unknown error');
+      CreatorAnalytics.publishError(document.type, err instanceof Error ? err.message : 'Unknown error');
     }
   }, [document, editingLookId]);
 
@@ -185,7 +208,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
                 : uploadProgress || 'Uploading media...'}
             </Text>
             <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: `${Math.round(uploadFraction * 100)}%` }]} />
+              <Reanimated.View style={[styles.progressBarFill, progressAnimatedStyle]} />
             </View>
           </View>
         )}
@@ -198,41 +221,24 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
         )}
 
         {stage === 'success' && (
-          <View style={styles.centerState}>
-            <View style={styles.successCircle}>
-              <Ionicons name="checkmark" size={32} color="#fff" />
-            </View>
-            <Text style={styles.successTitle}>Published!</Text>
-            <Text style={styles.centerStateText}>Your content is now live</Text>
-            <Pressable
-              onPress={() => {
-                haptic.selection();
-                onClose();
-                setStage('review');
-                if (document.type === 'look') {
-                  navigation.replace('LookDetail', { lookId: publishedId });
-                } else {
-                  navigation.replace('PosterViewer', { storyId: publishedId });
-                }
-              }}
-              style={styles.viewBtn}
-              accessibilityLabel="View published content"
-              accessibilityRole="button"
-              hitSlop={16}
-            >
-              <Text style={styles.viewBtnText}>View</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => { haptic.selection(); }}
-              style={styles.shareBtn}
-              accessibilityLabel="Share published content"
-              accessibilityRole="button"
-              hitSlop={16}
-            >
-              <Ionicons name="share-outline" size={18} color={colors.brand} />
-              <Text style={styles.shareBtnText}>Share</Text>
-            </Pressable>
-          </View>
+          <CelebrationSuccess
+            colors={colors}
+            reduceMotion={reduceMotion}
+            springCfg={spring.success}
+            publishedId={publishedId}
+            documentType={document.type}
+            onView={() => {
+              haptic.selection();
+              onClose();
+              setStage('review');
+              if (document.type === 'look') {
+                navigation.replace('LookDetail', { lookId: publishedId });
+              } else {
+                navigation.replace('PosterViewer', { storyId: publishedId });
+              }
+            }}
+            onShare={() => { haptic.selection(); }}
+          />
         )}
 
         {stage === 'error' && (
@@ -241,17 +247,160 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
             <Text style={styles.centerStateTitle}>Publishing failed</Text>
             <Text style={styles.centerStateText}>{errorMessage}</Text>
             <Pressable
-              onPress={() => { haptic.light(); setStage('review'); }}
-              style={styles.retryBtn}
-              accessibilityLabel="Try again"
+              onPress={() => { haptic.medium(); setStage('review'); }}
+              style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.85 }]}
+              accessibilityLabel="Retry publish"
               accessibilityRole="button"
               hitSlop={16}
             >
-              <Text style={styles.retryBtnText}>Try again</Text>
+              <Ionicons name="refresh-outline" size={16} color={colors.textInverse} style={{ marginRight: 6 }} />
+              <Text style={styles.retryBtnText}>Retry</Text>
             </Pressable>
           </View>
         )}
     </SheetContainer>
+  );
+}
+
+interface CelebrationSuccessProps {
+  colors: ThemeColors;
+  reduceMotion: boolean;
+  springCfg: { damping: number; stiffness: number; mass: number };
+  publishedId: string;
+  documentType: 'look' | 'poster';
+  onView: () => void;
+  onShare: () => void;
+}
+
+const CONFETTI_COLORS = ['#F4F0E8', '#C9A46A', '#B85566', '#4A7AC4', '#215634', '#9A6B7A', '#8A6A3F'];
+const CONFETTI_COUNT = 10;
+
+function CelebrationSuccess({
+  colors,
+  reduceMotion,
+  springCfg,
+  onView,
+  onShare,
+}: CelebrationSuccessProps) {
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const checkScale = useSharedValue(0);
+  const titleOpacity = useSharedValue(0);
+  const titleTranslateY = useSharedValue(8);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      checkScale.value = 1;
+      titleOpacity.value = 1;
+      titleTranslateY.value = 0;
+    } else {
+      checkScale.value = withSpring(1.2, springCfg, () => {
+        checkScale.value = withSpring(1.0, springCfg);
+      });
+      titleOpacity.value = withDelay(200, withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) }));
+      titleTranslateY.value = withDelay(200, withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) }));
+    }
+  }, [reduceMotion, springCfg, checkScale, titleOpacity, titleTranslateY]);
+
+  const checkStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: checkScale.value }],
+  }));
+
+  const titleStyle = useAnimatedStyle(() => ({
+    opacity: titleOpacity.value,
+    transform: [{ translateY: titleTranslateY.value }],
+  }));
+
+  return (
+    <View style={styles.centerState}>
+      <View style={styles.successContainer}>
+        <Reanimated.View style={[styles.successCircle, checkStyle]}>
+          <Ionicons name="checkmark" size={32} color={colors.textInverse} />
+        </Reanimated.View>
+        {!reduceMotion && (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {Array.from({ length: CONFETTI_COUNT }).map((_, i) => (
+              <ConfettiParticle key={i} index={i} colors={colors} />
+            ))}
+          </View>
+        )}
+      </View>
+      <Reanimated.View style={titleStyle}>
+        <Text style={styles.successTitle}>Published!</Text>
+      </Reanimated.View>
+      <Text style={styles.centerStateText}>Your content is now live</Text>
+      <Pressable
+        onPress={onView}
+        style={({ pressed }) => [styles.viewBtn, pressed && { opacity: 0.9 }]}
+        accessibilityLabel="View published content"
+        accessibilityRole="button"
+        hitSlop={16}
+      >
+        <Text style={styles.viewBtnText}>View</Text>
+      </Pressable>
+      <Pressable
+        onPress={onShare}
+        style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.85 }]}
+        accessibilityLabel="Share published content"
+        accessibilityRole="button"
+        hitSlop={16}
+      >
+        <Ionicons name="share-outline" size={18} color={colors.brand} />
+        <Text style={styles.shareBtnText}>Share</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function ConfettiParticle({ index, colors }: { index: number; colors: ThemeColors }) {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0);
+  const rotate = useSharedValue(0);
+
+  const color = CONFETTI_COLORS[index % CONFETTI_COLORS.length];
+  const angle = (index / CONFETTI_COUNT) * Math.PI * 2;
+  const distance = 60 + (index % 3) * 20;
+  const targetX = Math.cos(angle) * distance;
+  const targetY = Math.sin(angle) * distance - 20;
+  const size = 6 + (index % 3) * 2;
+
+  useEffect(() => {
+    opacity.value = withDelay(100 + index * 30, withTiming(1, { duration: 100 }));
+    scale.value = withDelay(100 + index * 30, withSpring(1, { damping: 12, stiffness: 160, mass: 0.8 }));
+    translateX.value = withDelay(100 + index * 30, withSpring(targetX, { damping: 14, stiffness: 120, mass: 0.9 }));
+    translateY.value = withDelay(100 + index * 30, withSpring(targetY + 80, { damping: 10, stiffness: 80, mass: 1.2 }));
+    rotate.value = withDelay(100 + index * 30, withSpring((index % 2 ? 1 : -1) * 180, { damping: 14, stiffness: 100, mass: 1.0 }));
+    opacity.value = withDelay(900 + index * 30, withTiming(0, { duration: 400 }));
+  }, [index, targetX, targetY, opacity, scale, translateX, translateY, rotate]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+      { rotate: `${rotate.value}deg` },
+    ],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Reanimated.View
+      style={[
+        {
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          width: size,
+          height: size,
+          marginLeft: -size / 2,
+          marginTop: -size / 2,
+          borderRadius: size / 2,
+          backgroundColor: color,
+        },
+        animatedStyle,
+      ]}
+    />
   );
 }
 
@@ -771,6 +920,12 @@ function createStyles(colors: ThemeColors) {
       height: 72,
       borderRadius: Radius.full,
       backgroundColor: colors.success,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    successContainer: {
+      width: 72,
+      height: 72,
       justifyContent: 'center',
       alignItems: 'center',
     },

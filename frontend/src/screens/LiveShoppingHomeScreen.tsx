@@ -502,7 +502,7 @@ export default function LiveShoppingHomeScreen() {
             <EmptyState
               icon="cloud-offline-outline"
               title="Couldn't load live sessions"
-              subtitle={error ?? 'Please check your connection and try again.'}
+              subtitle={error ?? 'Check your connection and try again.'}
               ctaLabel="Retry"
               onCtaPress={handleRetry}
             />

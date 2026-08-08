@@ -75,6 +75,7 @@ export function CoOwnOrderBook({
           <Pressable
             style={[styles.rfqBtn, { backgroundColor: colors.brand }]}
             onPress={() => onSelectLevel?.('ask', 0)}
+            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Request quote"
           >
@@ -247,6 +248,7 @@ function BookSide({
             key={`${side}-${level.price}-${i}`}
             onPress={() => onSelectLevel?.(side, level.price)}
             disabled={!onSelectLevel}
+            hitSlop={4}
             accessibilityRole={onSelectLevel ? 'button' : undefined}
             accessibilityLabel={`${side === 'bid' ? 'Bid' : 'Ask'} ${level.price.toFixed(2)}, size ${level.size}`}
           >

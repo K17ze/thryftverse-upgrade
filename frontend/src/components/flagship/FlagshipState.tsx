@@ -23,8 +23,8 @@ const DEFAULT_TITLES: Record<string, string> = {
 };
 
 const DEFAULT_SUBTITLES: Record<string, string> = {
-  loading: 'Please wait a moment.',
-  empty: 'When content appears, you will see it here.',
+  loading: 'One moment.',
+  empty: 'When content appears, you\'ll see it here.',
   error: 'We could not load this. Tap below to try again.',
   offline: 'Check your connection and try again.',
   unavailable: 'This feature is not available right now.',

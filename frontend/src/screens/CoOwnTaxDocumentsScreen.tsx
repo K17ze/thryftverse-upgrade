@@ -255,7 +255,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                 <View style={styles.disclaimerTextWrap}>
                   <Text style={styles.disclaimerTitle}>For information only</Text>
                   <Text style={styles.disclaimerText}>
-                    This statement does not constitute tax advice. Please consult a qualified tax professional for guidance on your specific circumstances.
+                    This statement does not constitute tax advice. Consult a qualified tax professional for guidance on your specific circumstances.
                   </Text>
                 </View>
               </View>

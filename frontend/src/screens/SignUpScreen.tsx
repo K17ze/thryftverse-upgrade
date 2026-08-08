@@ -65,7 +65,7 @@ export default function SignUpScreen() {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedUsername || !normalizedEmail || !password) {
-      setErrorMsg('Please fill in all details.');
+      setErrorMsg('Fill in all details.');
       setUsernameError(!normalizedUsername ? 'Username is required.' : '');
       setEmailError(!normalizedEmail ? 'Email is required.' : '');
       setPasswordError(!password ? 'Password is required.' : '');

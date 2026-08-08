@@ -993,7 +993,7 @@ export default function AuctionHomeScreen() {
             ListEmptyComponent={
               searchState.status === 'loading' ? renderLoadingState() : (
                 searchState.status === 'error' ? (
-                  <EmptyState icon="cloud-offline-outline" title="Search failed" subtitle="Please try again" ctaLabel="Retry" onCtaPress={handleRefresh} />
+                  <EmptyState icon="cloud-offline-outline" title="Search failed" subtitle="Try again" ctaLabel="Retry" onCtaPress={handleRefresh} />
                 ) : (
                   <EmptyState icon="search-outline" title="No results" subtitle="Try a different search term" />
                 )
@@ -1074,7 +1074,7 @@ export default function AuctionHomeScreen() {
 
         {filterResult.status === 'loading' ? renderLoadingState() :
          filterResult.status === 'error' ? (
-          <EmptyState icon="cloud-offline-outline" title="Filter failed" subtitle="Please try again" ctaLabel="Retry" onCtaPress={() => setFilterRefreshTick((t) => t + 1)} />
+          <EmptyState icon="cloud-offline-outline" title="Filter failed" subtitle="Try again" ctaLabel="Retry" onCtaPress={() => setFilterRefreshTick((t) => t + 1)} />
          ) : filterResult.status === 'empty' ? (
           <EmptyState icon="filter-outline" title="No matches" subtitle="Try adjusting your filters" />
          ) : (

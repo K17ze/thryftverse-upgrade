@@ -163,7 +163,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       await updateNotificationPreferences({ [key]: nextEnabled });
     } catch {
       setPushNotificationToggle(key, !nextEnabled);
-      show('Failed to update push preference. Please try again.', 'error');
+      show('Failed to update push preference. Try again.', 'error');
       return;
     }
     const nextCount = nextEnabled ? enabledCount + 1 : enabledCount - 1;
@@ -189,7 +189,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       for (const [key, value] of Object.entries(previousToggles)) {
         setPushNotificationToggle(key, value);
       }
-      show('Failed to update push preferences. Please try again.', 'error');
+      show('Failed to update push preferences. Try again.', 'error');
       return;
     }
     if (shouldEnableAll && !isDeviceRegistered) {
@@ -396,7 +396,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       </SettingsSection>
 
       <Text style={styles.footerNote}>
-        You can also manage push notifications from your device Settings app.
+        Manage push notifications from your device Settings app too.
       </Text>
     </FlagshipScreen>
   );

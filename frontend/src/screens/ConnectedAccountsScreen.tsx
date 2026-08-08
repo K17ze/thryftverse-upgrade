@@ -88,7 +88,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
     const meta = PROVIDER_META[account.provider] ?? { label: account.provider };
     Alert.alert(
       `Unlink ${meta.label}?`,
-      `You'll no longer be able to sign in with ${meta.label}. Make sure you have another way to access your account.`,
+      `You'll no longer be able to sign in with ${meta.label}. Ensure you have another way to access your account.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -152,7 +152,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         </Reanimated.View>
 
         <Text style={styles.introText}>
-          Manage the third-party accounts you use to sign in. You can unlink an account as long as you have another way to access your ThryftVerse account.
+          Manage the third-party accounts you use to sign in. Unlink an account as long as you have another way to access your ThryftVerse account.
         </Text>
 
         {error ? (
@@ -230,7 +230,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
             <View style={styles.securityTextWrap}>
               <Text style={styles.securityTitle}>Account safety</Text>
               <Text style={styles.securityNoteText}>
-                For your security, you must keep at least one way to sign in. If you unlink your only connected account, make sure you have a password set.
+                For your security, you must keep at least one way to sign in. If you unlink your only connected account, ensure you have a password set.
               </Text>
             </View>
           </View>

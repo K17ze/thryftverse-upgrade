@@ -13,6 +13,7 @@ import {
   getNextActionHint,
   type OrderRole,
 } from './orderCapabilities';
+import { formatShortDate } from '../../utils/dateFormat';
 
 export interface OrderViewModel {
   id: string;
@@ -28,11 +29,6 @@ export interface OrderViewModel {
   counterpartyUsername: string | null;
 }
 
-function formatDate(iso: string): string {
-  const timestamp = Date.parse(iso);
-  if (!Number.isFinite(timestamp)) return '';
-  return new Date(timestamp).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
 
 interface OrderLedgerRowProps {
   order: OrderViewModel;
@@ -48,7 +44,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
   const statusColor = getStatusColor(order.status, colors.textMuted);
   const cancelled = isCancelledStatus(order.status);
   const terminal = isTerminalStatus(order.status);
-  const dateLabel = formatDate(order.createdAt);
+  const dateLabel = formatShortDate(order.createdAt);
   const nextAction = getNextActionHint(order.status, order.role);
 
   const contextVerb = order.role === 'buyer' ? 'Bought' : 'Sold';

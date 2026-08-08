@@ -4,7 +4,6 @@ import {
   Text,
   SectionList,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
   Pressable,
   ScrollView,
@@ -840,8 +839,17 @@ export default function NotificationsScreen() {
         }
         ListFooterComponent={
           isLoadingMore ? (
-            <View style={styles.loadingState}>
-              <ActivityIndicator color={colors.brand} size="small" />
+            <View accessibilityLabel="Loading more notifications">
+              {[0, 1].map((index) => (
+                <View key={index} style={styles.notificationSkeletonRow}>
+                  <SkeletonLoader width={52} height={52} borderRadius={Radius.md} />
+                  <View style={styles.notificationSkeletonCopy}>
+                    <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={Radius.sm} />
+                    <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+                    <SkeletonLoader width="30%" height={9} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+                  </View>
+                </View>
+              ))}
             </View>
           ) : null
         }
@@ -1197,18 +1205,6 @@ function createStyles(colors: ThemeColors) {
   },
   notificationSkeletonCopy: {
     flex: 1,
-  },
-
-  loadingState: {
-    marginTop: Space.xl + Space.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm + 2,
-  },
-  loadingText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
   },
   });
 }

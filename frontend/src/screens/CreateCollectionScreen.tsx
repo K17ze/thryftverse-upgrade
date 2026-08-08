@@ -56,7 +56,7 @@ export default function CreateCollectionScreen() {
       navigation.replace('CollectionDetail', { collectionId: newId });
     } catch {
       setIsSubmitting(false);
-      show('Unable to create collection. Please check your connection and try again.', 'error');
+      show('Unable to create collection. Check your connection and try again.', 'error');
     }
   }, [canSubmit, haptic, name, description, isPrivate, createCollectionOnApi, show, navigation]);
 

@@ -6,6 +6,7 @@ import { Space, Typography, Type, Radius } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
+import { formatActivityTimestamp } from '../../utils/dateFormat';
 
 function resolveIdentity(conversation: Conversation, currentUserId?: string) {
   if (conversation.type === 'group') {
@@ -30,24 +31,6 @@ function resolveIdentity(conversation: Conversation, currentUserId?: string) {
   };
 }
 
-function formatActivity(value?: string) {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-
-  const now = new Date();
-  if (parsed.toDateString() === now.toDateString()) {
-    return parsed.toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }
-
-  return parsed.toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-  });
-}
 
 export function ConversationManagementRow({
   conversation,
@@ -113,7 +96,7 @@ export function ConversationManagementRow({
               {identity.title}
             </Text>
             <Text style={[styles.time, { color: colors.textMuted }]} numberOfLines={1}>
-              {formatActivity(conversation.lastMessageTime)}
+              {formatActivityTimestamp(conversation.lastMessageTime)}
             </Text>
           </View>
           <Text style={[styles.preview, { color: colors.textMuted }]} numberOfLines={1}>

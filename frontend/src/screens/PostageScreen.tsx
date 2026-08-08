@@ -212,7 +212,7 @@ export default function PostageScreen({ navigation }: Props) {
       {/* Footer note */}
       <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
         <Text style={styles.footerNote}>
-          These are your default settings. You can override postage for individual items when
+          These are your default settings. Override postage for individual items when
           listing.
         </Text>
       </Reanimated.View>

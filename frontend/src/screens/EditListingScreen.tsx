@@ -348,11 +348,11 @@ export default function EditListingScreen() {
     const trimmedDesc = description.trim();
     const numericPrice = Number(sanitizeDecimalInput(price));
 
-    if (!trimmedTitle) return 'Please provide a title.';
-    if (!category) return 'Please select a category.';
-    if (!brand) return 'Please select a brand.';
-    if (!size) return 'Please select a size.';
-    if (!condition) return 'Please select a condition.';
+    if (!trimmedTitle) return 'Add a title.';
+    if (!category) return 'Select a category.';
+    if (!brand) return 'Select a brand.';
+    if (!size) return 'Select a size.';
+    if (!condition) return 'Select a condition.';
     if (!trimmedDesc || trimmedDesc.length < 10) return 'Add a description with at least 10 characters.';
     if (!Number.isFinite(numericPrice) || numericPrice <= 0) return 'Enter a valid price greater than 0.';
     if (mediaItems.length === 0) return 'Add at least one photo.';
@@ -468,8 +468,8 @@ export default function EditListingScreen() {
       navigation.goBack();
     } catch (e) {
       setSaveStage('failed_recoverable');
-      setErrorMsg('Failed to update listing. Please try again.');
-      showToast('Failed to update listing. Please try again.', 'error');
+      setErrorMsg('Failed to update listing. Try again.');
+      showToast('Failed to update listing. Try again.', 'error');
     } finally {
       setIsSaving(false);
     }

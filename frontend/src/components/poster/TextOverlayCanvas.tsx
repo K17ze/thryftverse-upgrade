@@ -12,15 +12,27 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Radius, Stroke } from '../../theme/designTokens';
+import { Radius, Stroke, Typography } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 export type TextAlignment = 'left' | 'center' | 'right';
 export type FontFamily = 'bold' | 'classic' | 'modern' | 'typewriter';
+export type TextAnimation = 'none' | 'fade' | 'slide' | 'typewriter';
 
 export interface TextLayer {
   id: string;
@@ -33,6 +45,8 @@ export interface TextLayer {
   backgroundColor?: string;
   alignment: TextAlignment;
   rotation: number;
+  animation?: TextAnimation;
+  shadow?: boolean;
 }
 
 interface TextOverlayCanvasProps {
@@ -56,26 +70,33 @@ const FONT_OPTIONS: { key: FontFamily; label: string }[] = [
   { key: 'typewriter', label: 'Mono' },
 ];
 
-const COLOR_OPTIONS = [
-  '#ffffff', '#000000', '#9b0202', '#8A6A3F', '#C9A46A',
-  '#215634', '#06489A', '#4A7AC4', '#6B3245', '#7B0E1E',
-  '#e2d5c2', '#d4b896', '#b8d4c0', '#d4b8c0', '#c7c7cc',
+const ANIMATION_OPTIONS: { key: TextAnimation; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'none', label: 'None', icon: 'remove-outline' },
+  { key: 'fade', label: 'Fade', icon: 'eye-outline' },
+  { key: 'slide', label: 'Slide', icon: 'arrow-up-outline' },
+  { key: 'typewriter', label: 'Type', icon: 'create-outline' },
 ];
 
-const BG_OPTIONS = [
-  undefined,
-  'rgba(0,0,0,0.6)',
-  'rgba(255,255,255,0.8)',
-  '#9b0202',
-  '#06489A',
-  '#215634',
-  '#8A6A3F',
-  '#6B3245',
-  '#7B0E1E',
-];
+const PASTEL_OPTIONS = ['#e2d5c2', '#d4b896', '#b8d4c0', '#d4b8c0'];
+
+function isLightColor(hex: string): boolean {
+  if (!hex || hex.startsWith('rgba')) return false;
+  let c = hex.replace('#', '');
+  if (c.length === 3) {
+    c = c.split('').map((x) => x + x).join('');
+  }
+  const r = parseInt(c.substring(0, 2), 16) || 0;
+  const g = parseInt(c.substring(2, 4), 16) || 0;
+  const b = parseInt(c.substring(4, 6), 16) || 0;
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6;
+}
 
 export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, isActive }: TextOverlayCanvasProps) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
+  const { isEnabled } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
@@ -85,6 +106,30 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
   const lastTapRef = React.useRef<number>(0);
 
   const activeLayer = layers.find((l) => l.id === editingId);
+
+  const COLOR_OPTIONS = React.useMemo(
+    () => [
+      colors.textPrimary, colors.textInverse, colors.danger, colors.bronze, colors.antiqueGold,
+      colors.success, colors.commerceTrust, colors.social, colors.discovery, colors.coownDown,
+      ...PASTEL_OPTIONS, colors.textMuted,
+    ],
+    [colors]
+  );
+
+  const BG_OPTIONS = React.useMemo<(string | undefined)[]>(
+    () => [
+      undefined,
+      'rgba(0,0,0,0.6)',
+      'rgba(255,255,255,0.8)',
+      colors.danger,
+      colors.commerceTrust,
+      colors.success,
+      colors.bronze,
+      colors.social,
+      colors.discovery,
+    ],
+    [colors]
+  );
 
   const updateLayer = (id: string, patch: Partial<TextLayer>) => {
     onLayersChange(layers.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -168,16 +213,19 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
     const newLayer: TextLayer = {
       id: `text_${Date.now()}`,
       text: 'Tap twice to edit',
-      color: '#ffffff',
+      color: colors.textPrimary,
       fontFamily: 'bold',
       fontSize: 24,
       x: Math.max(0, canvasSize.width / 2 - 80),
       y: Math.max(0, canvasSize.height / 2 - 20),
       alignment: 'center',
       rotation: 0,
+      animation: 'none',
+      shadow: true,
     };
     onLayersChange([...layers, newLayer]);
     setSelectedId(newLayer.id);
+    haptic.light();
   };
 
   const removeLayer = (id: string) => {
@@ -211,7 +259,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                 left: layer.x,
                 top: layer.y,
                 backgroundColor: layer.backgroundColor,
-                borderColor: isEditing ? '#fff' : isSelected ? 'rgba(255,255,255,0.6)' : 'transparent',
+                borderColor: isEditing ? colors.textPrimary : isSelected ? colors.borderSubtle : 'transparent',
                 borderWidth: isEditing ? Stroke.emphasis : isSelected ? Stroke.standard : 0,
                 borderStyle: isSelected && !isEditing ? 'dashed' : 'solid',
                 transform: [{ rotate: `${layer.rotation}deg` }],
@@ -230,6 +278,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                     fontSize: layer.fontSize,
                     textAlign: layer.alignment,
                   },
+                  layer.shadow !== false && styles.textShadow,
                 ]}
                 value={layer.text}
                 onChangeText={(t) => updateLayer(layer.id, { text: t })}
@@ -239,19 +288,12 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                 scrollEnabled={false}
               />
             ) : (
-              <Text
-                style={[
-                  styles.layerText,
-                  {
-                    color: layer.color,
-                    fontFamily: FONT_MAP[layer.fontFamily],
-                    fontSize: layer.fontSize,
-                    textAlign: layer.alignment,
-                  },
-                ]}
-              >
-                {layer.text || ' '}
-              </Text>
+              <AnimatedTextDisplay
+                layer={layer}
+                reducedMotion={reducedMotion || !isEnabled}
+                colors={colors}
+                styles={styles}
+              />
             )}
 
             {(isSelected || isEditing) && (
@@ -262,7 +304,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                 accessibilityLabel="Delete text layer"
                 accessibilityRole="button"
               >
-                <Ionicons name="close" size={14} color="#fff" />
+                <Ionicons name="close" size={14} color={colors.textInverse} />
               </Pressable>
             )}
           </View>
@@ -281,7 +323,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
           accessibilityLabel="Add text layer"
           accessibilityHint="Adds a new text overlay to the poster"
         >
-          <Ionicons name="add" size={18} color="#fff" />
+          <Ionicons name="add" size={18} color={colors.textPrimary} />
           <Text style={styles.addTextLabel}>Add Text</Text>
         </AnimatedPressable>
       )}
@@ -338,7 +380,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                     <Ionicons
                       name="checkmark"
                       size={14}
-                      color={c === '#ffffff' || c === '#c7c7cc' || c === '#e2d5c2' || c === '#d4b896' || c === '#b8d4c0' || c === '#d4b8c0' ? '#000' : '#fff'}
+                      color={isLightColor(c) ? '#000' : '#fff'}
                     />
                   )}
                 </AnimatedPressable>
@@ -352,7 +394,7 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                   key={i}
                   style={[
                     styles.bgOrb,
-                    { backgroundColor: c || 'transparent', borderColor: c ? 'transparent' : 'rgba(255,255,255,0.25)' },
+                    { backgroundColor: c || 'transparent', borderColor: c ? 'transparent' : colors.borderSubtle },
                     activeLayer.backgroundColor === c && styles.bgOrbActive,
                   ]}
                   onPress={() => updateLayer(activeLayer.id, { backgroundColor: c })}
@@ -363,10 +405,68 @@ export default function TextOverlayCanvas({ layers, onLayersChange, canvasSize, 
                   accessibilityRole="button"
                   accessibilityState={{ selected: activeLayer.backgroundColor === c }}
                 >
-                  {!c && <Ionicons name="close" size={12} color="rgba(255,255,255,0.6)" />}
+                  {!c && <Ionicons name="close" size={12} color={colors.textSecondary} />}
                 </AnimatedPressable>
               ))}
             </ScrollView>
+
+            {/* Animation effects — row of animation pills */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.fontRow}>
+              {ANIMATION_OPTIONS.map((a) => (
+                <AnimatedPressable
+                  key={a.key}
+                  style={[styles.fontPill, (activeLayer.animation ?? 'none') === a.key && styles.fontPillActive]}
+                  onPress={() => {
+                    updateLayer(activeLayer.id, { animation: a.key });
+                    haptic.selection();
+                  }}
+                  scaleValue={0.94}
+                  activeOpacity={0.8}
+                  hapticFeedback="selection"
+                  accessibilityLabel={`${a.label} animation`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: (activeLayer.animation ?? 'none') === a.key }}
+                >
+                  <Ionicons
+                    name={a.icon}
+                    size={14}
+                    color={(activeLayer.animation ?? 'none') === a.key ? colors.textPrimary : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.fontPillText,
+                      (activeLayer.animation ?? 'none') === a.key && styles.fontPillTextActive,
+                    ]}
+                  >
+                    {a.label}
+                  </Text>
+                </AnimatedPressable>
+              ))}
+            </ScrollView>
+
+            {/* Shadow toggle */}
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>Text Shadow</Text>
+              <AnimatedPressable
+                style={[styles.toggleBtn, (activeLayer.shadow ?? true) && styles.toggleBtnActive]}
+                onPress={() => {
+                  updateLayer(activeLayer.id, { shadow: !(activeLayer.shadow ?? true) });
+                  haptic.selection();
+                }}
+                scaleValue={0.92}
+                activeOpacity={0.8}
+                hapticFeedback="selection"
+                accessibilityLabel="Toggle text shadow"
+                accessibilityRole="switch"
+                accessibilityState={{ checked: activeLayer.shadow ?? true }}
+              >
+                <Ionicons
+                  name={(activeLayer.shadow ?? true) ? 'checkmark' : 'close'}
+                  size={16}
+                  color={(activeLayer.shadow ?? true) ? colors.textPrimary : colors.textSecondary}
+                />
+              </AnimatedPressable>
+            </View>
 
             {/* Size + Alignment — combined row */}
             <View style={styles.toolRow}>
@@ -455,18 +555,16 @@ function createStyles(colors: any) {
     maxWidth: SCREEN_W - 40,
     alignItems: 'center',
   },
-  layerText: {
+  textShadow: {
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowRadius: 6,
     textShadowOffset: { width: 0, height: 1 },
   },
+  layerText: {},
   layerInput: {
     minWidth: 80,
     minHeight: 28,
     padding: 0,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowRadius: 6,
-    textShadowOffset: { width: 0, height: 1 },
   },
   deleteLayerBtn: {
     position: 'absolute',
@@ -486,15 +584,15 @@ function createStyles(colors: any) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
   addTextLabel: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   controlsWrap: {
     position: 'absolute',
@@ -503,7 +601,7 @@ function createStyles(colors: any) {
     right: 0,
   },
   controlsPanel: {
-    backgroundColor: 'rgba(0,0,0,0.88)',
+    backgroundColor: colors.overlay,
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
     paddingHorizontal: 16,
@@ -511,7 +609,7 @@ function createStyles(colors: any) {
     paddingBottom: 28,
     gap: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: colors.glassBorder,
   },
   fontRow: {
     flexDirection: 'row',
@@ -519,20 +617,23 @@ function createStyles(colors: any) {
     paddingBottom: 2,
   },
   fontPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.glassBg,
   },
   fontPillActive: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: colors.surfaceAlt,
   },
   fontPillText: {
-    color: 'rgba(255,255,255,0.65)',
+    color: colors.textSecondary,
     fontSize: 14,
   },
   fontPillTextActive: {
-    color: '#fff',
+    color: colors.textPrimary,
   },
   colorRow: {
     flexDirection: 'row',
@@ -545,13 +646,13 @@ function createStyles(colors: any) {
     height: 32,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: colors.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
   colorOrbActive: {
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.textPrimary,
     transform: [{ scale: 1.08 }],
   },
   bgOrb: {
@@ -564,8 +665,30 @@ function createStyles(colors: any) {
   },
   bgOrbActive: {
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.textPrimary,
     transform: [{ scale: 1.08 }],
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  toggleLabel: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontFamily: Typography.family.medium,
+  },
+  toggleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: colors.glassBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleBtnActive: {
+    backgroundColor: colors.surfaceAlt,
   },
   toolRow: {
     flexDirection: 'row',
@@ -582,25 +705,25 @@ function createStyles(colors: any) {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.glassBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   alignBtnActive: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: colors.surfaceAlt,
   },
   alignBtnText: {
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textSecondary,
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   alignBtnTextActive: {
-    color: '#fff',
+    color: colors.textPrimary,
   },
   toolDivider: {
     width: 1,
     height: 24,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.borderSubtle,
   },
   sizeGroup: {
     flexDirection: 'row',
@@ -610,19 +733,19 @@ function createStyles(colors: any) {
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.glassBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sizeBtnTextSmall: {
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     fontSize: 13,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: Typography.family.semibold,
   },
   sizeBtnTextLarge: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
   doneBtn: {
     alignSelf: 'center',
@@ -635,7 +758,102 @@ function createStyles(colors: any) {
   doneBtnText: {
     color: colors.textInverse,
     fontSize: 15,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: Typography.family.bold,
   },
 });
+}
+
+interface AnimatedTextDisplayProps {
+  layer: TextLayer;
+  reducedMotion: boolean;
+  colors: any;
+  styles: ReturnType<typeof createStyles>;
+}
+
+function AnimatedTextDisplay({ layer, reducedMotion, colors, styles }: AnimatedTextDisplayProps) {
+  const animation = layer.animation ?? 'none';
+  const opacity = useSharedValue(1);
+  const translateY = useSharedValue(0);
+  const [visibleCount, setVisibleCount] = React.useState(layer.text.length);
+
+  React.useEffect(() => {
+    if (animation !== 'typewriter' || reducedMotion) {
+      setVisibleCount(layer.text.length);
+      return;
+    }
+    setVisibleCount(0);
+    let i = 0;
+    const full = layer.text;
+    const interval = setInterval(() => {
+      i += 1;
+      setVisibleCount(i);
+      if (i >= full.length) {
+        clearInterval(interval);
+        setTimeout(() => {
+          i = 0;
+          setVisibleCount(0);
+        }, 1400);
+      }
+    }, 90);
+    return () => clearInterval(interval);
+  }, [animation, layer.text, reducedMotion]);
+
+  React.useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      translateY.value = 0;
+      return;
+    }
+    if (animation === 'fade') {
+      opacity.value = withRepeat(
+        withSequence(
+          withTiming(0, { duration: Motion.duration.slow }),
+          withTiming(1, { duration: Motion.duration.slow })
+        ),
+        -1,
+        false
+      );
+    } else {
+      opacity.value = 1;
+    }
+    if (animation === 'slide') {
+      translateY.value = withRepeat(
+        withSequence(
+          withTiming(20, { duration: Motion.duration.slow }),
+          withTiming(0, { duration: Motion.duration.slow })
+        ),
+        -1,
+        false
+      );
+    } else {
+      translateY.value = 0;
+    }
+  }, [animation, reducedMotion, opacity, translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const textContent =
+    animation === 'typewriter' && !reducedMotion ? layer.text.slice(0, visibleCount) || ' ' : layer.text || ' ';
+
+  return (
+    <Reanimated.View style={animatedStyle}>
+      <Text
+        style={[
+          styles.layerText,
+          {
+            color: layer.color,
+            fontFamily: FONT_MAP[layer.fontFamily],
+            fontSize: layer.fontSize,
+            textAlign: layer.alignment,
+          },
+          layer.shadow !== false && styles.textShadow,
+        ]}
+      >
+        {textContent}
+      </Text>
+    </Reanimated.View>
+  );
 }

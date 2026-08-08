@@ -37,7 +37,7 @@ export default function ForgotPasswordScreen() {
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
-      setErrorMsg('Please enter your email address.');
+      setErrorMsg('Enter your email address.');
       return;
     }
 
@@ -100,7 +100,7 @@ export default function ForgotPasswordScreen() {
             style={styles.form}
             entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)}
           >
-            <Text style={styles.subtitle}>Enter your email address and we will send you a link to reset your password.</Text>
+            <Text style={styles.subtitle}>Enter your email address and we'll send you a link to reset your password.</Text>
             <AppInput
               label="Email"
               placeholder="Enter your email"

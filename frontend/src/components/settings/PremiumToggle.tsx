@@ -52,7 +52,7 @@ export function PremiumToggle({ value, onValueChange, disabled = false }: Premiu
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
       accessibilityLabel={value ? 'Toggle on' : 'Toggle off'}
-      style={{ opacity: disabled ? 0.5 : 1 }}
+      style={({ pressed }) => [{ opacity: disabled ? 0.5 : 1 }, pressed && { opacity: 0.6 }]}
     >
       <Reanimated.View style={[styles.track, trackStyle]}>
         <Reanimated.View style={[styles.thumb, thumbStyle]} />

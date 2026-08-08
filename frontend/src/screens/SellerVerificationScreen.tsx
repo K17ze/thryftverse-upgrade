@@ -295,7 +295,7 @@ export default function SellerVerificationScreen() {
           <FlagshipState
             variant="empty"
             title="No verification requests"
-            subtitle="When unit holders request proof of authenticity, possession, or condition, you will see them here."
+            subtitle="When unit holders request proof of authenticity, possession, or condition, you'll see them here."
             icon="shield-checkmark-outline"
           />
         ) : (

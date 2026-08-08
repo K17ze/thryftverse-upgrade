@@ -144,7 +144,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     } catch (error) {
       const parsed = parseApiError(
         error,
-        'Unable to open card entry right now. Please try again.'
+        'Unable to open card entry right now. Try again.'
       );
       await Haptics.notificationAsync(
         Haptics.NotificationFeedbackType.Error

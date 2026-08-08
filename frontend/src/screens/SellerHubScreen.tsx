@@ -128,30 +128,30 @@ export default function SellerHubScreen() {
     {
       icon: 'trophy-outline',
       label: 'Auctions',
-      subtitle: 'Manage auction listings',
+      subtitle: 'Auction listings',
       onPress: () => navigation.navigate('SellerAuctionCentre'),
-      accessibilityLabel: 'Manage your auctions',
+      accessibilityLabel: 'Auctions',
     },
     {
       icon: 'receipt-outline',
       label: 'Orders',
       subtitle: 'View and fulfil orders',
       onPress: () => navigation.navigate('MyOrders'),
-      accessibilityLabel: 'View your orders',
+      accessibilityLabel: 'Orders',
     },
     {
       icon: 'wallet-outline',
       label: 'Payouts',
       subtitle: 'Withdraw your earnings',
       onPress: () => navigation.navigate('Wallet'),
-      accessibilityLabel: 'View your wallet and payouts',
+      accessibilityLabel: 'Wallet and payouts',
     },
     {
       icon: 'shield-checkmark-outline',
       label: 'Verification',
       subtitle: 'ID, phone and seller standards',
       onPress: () => navigation.navigate('Verification'),
-      accessibilityLabel: 'Manage your verification status',
+      accessibilityLabel: 'Verification status',
     },
   ], [navigation]);
 
@@ -253,7 +253,7 @@ export default function SellerHubScreen() {
         {/* Quick actions */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick actions</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Seller tools</Text>
           </View>
           <View style={styles.actionsList}>
             {actions.map((action) => (

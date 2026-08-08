@@ -840,7 +840,7 @@ export default function OrderDetailScreen() {
             haptics.heavyPress();
             Alert.alert(
               'Mark as shipped?',
-              'The order will be marked as shipped without tracking details. You can add tracking information later.',
+              'The order will be marked as shipped without tracking details. Add tracking later.',
               [
                 { text: 'Not yet', style: 'cancel' },
                 { text: 'Mark shipped', style: 'destructive', onPress: handleShip },

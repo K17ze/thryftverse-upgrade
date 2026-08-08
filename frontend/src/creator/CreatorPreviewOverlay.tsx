@@ -60,7 +60,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: '#000' }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" />
 
       {/* Full-screen canonical composition render */}
@@ -81,13 +81,13 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
           style={styles.topBtn}
           accessibilityLabel="Close preview"
         >
-          <Ionicons name="close" size={28} color="#fff" />
+          <Ionicons name="close" size={28} color={colors.textInverse} />
         </PressScale>
 
         <View style={styles.topCenter}>
-          <Text style={styles.topLabel}>Preview</Text>
+          <Text style={[styles.topLabel, { color: colors.textInverse }]}>Preview</Text>
           {pageCount > 1 && (
-            <Text style={styles.pageIndicator}>
+            <Text style={[styles.pageIndicator, { color: colors.textInverse + 'B3' }]}>
               {pageIndex + 1} / {pageCount}
             </Text>
           )}
@@ -95,11 +95,11 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
 
         <PressScale
           onPress={onPublish}
-          style={styles.publishBtn}
+          style={[styles.publishBtn, { backgroundColor: colors.textInverse + 'F2' }]}
           accessibilityLabel="Publish"
           scale={0.97}
         >
-          <Text style={styles.publishBtnText}>Publish</Text>
+          <Text style={[styles.publishBtnText, { color: colors.textPrimary }]}>Publish</Text>
         </PressScale>
       </SafeAreaView>
 
@@ -111,13 +111,13 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
             style={styles.pageNavBtn}
             accessibilityLabel="Previous page"
           >
-            <Ionicons name="chevron-back" size={24} color="#fff" />
+            <Ionicons name="chevron-back" size={24} color={colors.textInverse} />
           </PressScale>
           <View style={styles.pageDots}>
             {document.pages.map((p, i) => (
               <View
                 key={p.id}
-                style={[styles.pageDot, i === pageIndex && styles.pageDotActive]}
+                style={[styles.pageDot, { backgroundColor: colors.textInverse + '66' }, i === pageIndex && { backgroundColor: colors.textInverse }]}
               />
             ))}
           </View>
@@ -126,7 +126,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
             style={styles.pageNavBtn}
             accessibilityLabel="Next page"
           >
-            <Ionicons name="chevron-forward" size={24} color="#fff" />
+            <Ionicons name="chevron-forward" size={24} color={colors.textInverse} />
           </PressScale>
         </View>
       )}

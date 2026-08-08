@@ -133,7 +133,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.full,
     backgroundColor: colors.danger,
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(0,0,0,0.35)',
+    borderColor: colors.overlay,
   },
   personalMarker: {
     position: 'absolute',
@@ -143,13 +143,13 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: `${colors.border}40`,
   },
   personalMarkerOutbid: {
-    backgroundColor: 'rgba(220,38,38,0.92)',
+    backgroundColor: colors.danger,
   },
   personalMarkerLeading: {
-    backgroundColor: 'rgba(22,163,74,0.92)',
+    backgroundColor: colors.success,
   },
   personalMarkerText: {
     fontFamily: Typography.family.semibold,

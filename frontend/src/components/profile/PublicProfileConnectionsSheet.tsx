@@ -157,7 +157,7 @@ export function PublicProfileConnectionsSheet({
           />
         ) : hasError ? (
           <Pressable
-            style={styles.stateWrap}
+            style={({ pressed }) => [styles.stateWrap, pressed && { opacity: 0.6 }]}
             onPress={() => activeQuery.refetch()}
             accessibilityRole="button"
             accessibilityLabel="Retry loading connections"

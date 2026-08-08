@@ -110,7 +110,7 @@ export default function CoOwnOnboardingScreen() {
           {/* Welcome badge — shown only on the first slide */}
           {index === 0 && (
             <View style={[styles.welcomeBadge, { backgroundColor: `${colors.brand}15` }]}>
-              <Text style={[styles.welcomeBadgeText, { color: colors.brand }]}>Welcome to Co-Own</Text>
+              <Text style={[styles.welcomeBadgeText, { color: colors.brand }]}>Co-Own investing</Text>
             </View>
           )}
 

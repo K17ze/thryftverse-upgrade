@@ -66,7 +66,7 @@ export function SellerResponseComposer({
       animationType="slide"
       onRequestClose={handleClose}
     >
-      <Pressable style={styles.backdrop} onPress={handleClose}>
+      <Pressable style={({ pressed }) => [styles.backdrop, pressed && { opacity: 0.6 }]} onPress={handleClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.handle} />
 
@@ -90,6 +90,7 @@ export function SellerResponseComposer({
               disabled={isSubmitting}
               accessibilityRole="button"
               accessibilityLabel="Close response composer"
+              style={({ pressed }) => pressed && { opacity: 0.5 }}
             >
               <Ionicons name="close" size={22} color={colors.textMuted} />
             </Pressable>

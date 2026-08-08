@@ -126,30 +126,20 @@ export function CreatorToolDock({
   const secondaryIconSize = 22;
   const toolGap = isSelectionMode ? Space.xs : Space.sm;
 
-  // Floating (glass) dock keeps its own translucent palette.
-  const labelColor = floating ? 'rgba(255,255,255,0.7)' : colors.textMuted;
-  const dangerIconColor = floating ? '#E06666' : colors.danger;
-  const dangerLabelColor = floating ? 'rgba(224,102,102,0.85)' : colors.danger;
+  const labelColor = colors.textMuted;
+  const dangerIconColor = colors.danger;
+  const dangerLabelColor = colors.danger;
 
   const getToolBg = (tool: RailTool): string => {
-    if (floating) {
-      if (tool.danger) return 'transparent';
-      // Active (primary) tools get a filled white tint; secondary tools stay transparent.
-      return tool.primary ? 'rgba(255,255,255,0.18)' : 'transparent';
-    }
     if (tool.danger) return 'transparent';
     if (isSelectionMode) return colors.surface;
-    return tool.primary ? colors.brand : colors.surfaceAlt;
+    return tool.primary ? colors.brand : 'transparent';
   };
 
   const getToolIconColor = (tool: RailTool): string => {
     if (tool.danger) return dangerIconColor;
-    if (floating) {
-      // Primary (active) tools render solid white; secondary tools render at 85%.
-      return tool.primary ? '#fff' : 'rgba(255,255,255,0.85)';
-    }
     if (isSelectionMode) return colors.textPrimary;
-    return tool.primary ? colors.textInverse : colors.textPrimary;
+    return tool.primary ? colors.textInverse : colors.textSecondary;
   };
 
   const getToolIconSize = (tool: RailTool): number => {
@@ -160,9 +150,7 @@ export function CreatorToolDock({
   // Render a single tool button — shared by both dock variants.
   const renderTool = (tool: RailTool) => {
     const size = typeof toolSize === 'function' ? toolSize(tool) : toolSize;
-    // Only primary tools show a caption label (Instagram pattern); secondary
-    // tools are icon-only to keep the dock minimal and contextual.
-    const showLabel = tool.primary || isSelectionMode;
+    const isActive = tool.primary && !isSelectionMode && !tool.danger;
     return (
       <PressScale
         key={tool.label}
@@ -182,6 +170,7 @@ export function CreatorToolDock({
               borderRadius: toolRadius,
               backgroundColor: getToolBg(tool),
             },
+            isActive && styles.toolIconActive,
           ]}
         >
           <Ionicons
@@ -190,18 +179,16 @@ export function CreatorToolDock({
             color={getToolIconColor(tool)}
           />
         </View>
-        {showLabel ? (
-          <Text
-            style={[
-              styles.toolLabel,
-              { color: tool.danger ? dangerLabelColor : labelColor },
-              tool.primary && styles.toolLabelPrimary,
-            ]}
-            numberOfLines={1}
-          >
-            {tool.label}
-          </Text>
-        ) : null}
+        <Text
+          style={[
+            styles.toolLabel,
+            { color: tool.danger ? dangerLabelColor : labelColor },
+            tool.primary && styles.toolLabelPrimary,
+          ]}
+          numberOfLines={1}
+        >
+          {tool.label}
+        </Text>
       </PressScale>
     );
   };
@@ -241,8 +228,8 @@ export function CreatorToolDock({
             styles.blurPill,
             {
               borderWidth: StyleSheet.hairlineWidth,
-              borderColor: 'rgba(255,255,255,0.15)',
-              shadowColor: '#000',
+              borderColor: colors.glassBorder,
+              shadowColor: colors.shadow,
               shadowOpacity: 0.3,
               shadowRadius: 20,
               shadowOffset: { width: 0, height: 8 },
@@ -279,14 +266,14 @@ export function CreatorToolDock({
       )}
 
       {/* Primary action — separated from editing tools */}
-      <View style={[styles.actions, { borderLeftColor: floating ? 'rgba(255,255,255,0.15)' : colors.border }]}>
+      <View style={[styles.actions, { borderLeftColor: floating ? colors.glassBorder : colors.border }]}>
         <PressScale
           onPress={handleMore}
           style={styles.actionBtn}
           accessibilityLabel="More options"
           hitSlop={12}
         >
-          <Ionicons name="ellipsis-horizontal" size={24} color={floating ? '#fff' : colors.textSecondary} />
+          <Ionicons name="ellipsis-horizontal" size={24} color={floating ? colors.textInverse : colors.textSecondary} />
         </PressScale>
         {/* Publish button — always visible, floating or solid */}
         <PressScale
@@ -509,6 +496,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  toolIconActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 3,
+  },
   // Thin vertical divider between primary and secondary tool groups.
   groupDivider: {
     width: 1,
@@ -520,7 +514,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
     marginTop: 2,
-    color: 'rgba(255,255,255,0.7)',
   },
   toolLabelPrimary: {
     fontFamily: Typography.family.semibold,

@@ -9,7 +9,7 @@ import { CommerceStateCard, CommerceStateType } from './CommerceStateCard';
 interface OfferData {
   price: number;
   originalPrice: number;
-  status?: 'pending' | 'declined' | 'countered' | 'accepted' | 'expired';
+  status?: 'pending' | 'declined' | 'countered' | 'accepted' | 'expired' | 'cancelled';
   /** ISO date string when the offer expires */
   expiresAt?: string;
   /** Counter-offer chain depth (0 = initial offer, 1 = first counter, etc.) */

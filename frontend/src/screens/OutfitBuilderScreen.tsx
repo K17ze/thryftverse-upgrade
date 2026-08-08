@@ -295,7 +295,7 @@ export default function OutfitBuilderScreen() {
       id: l.id,
       title: l.title,
       category: l.category,
-      subcategory: l.subcategory,
+      subcategory: l.subcategory ?? undefined,
       brand: l.brand,
       color: l.color ?? 'black',
       condition: l.condition,

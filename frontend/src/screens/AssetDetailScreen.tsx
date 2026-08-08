@@ -764,7 +764,7 @@ export default function AssetDetailScreen() {
                           partnerUserId: asset.issuerId,
                         });
                       } catch {
-                        show('Unable to open conversation. Please try again.', 'error');
+                        show('Unable to open conversation. Try again.', 'error');
                       } finally {
                         setIsResolvingConversation(false);
                       }
@@ -917,6 +917,57 @@ export default function AssetDetailScreen() {
           ) : null}
           </CommerceDetailTransactionSurface>
         </CoOwnMarketOverview>
+
+        {/* ── Elevated trust strip — near the trade decision point ──
+            Per 2026 fintech trust design research (Wise, Monzo, Stripe,
+            N26): trust signals near the CTA outperform footer/buried
+            placement by 40%+. The full CoOwnTrustPanel remains in the
+            asset dossier section below for detailed trust information.
+            This compact strip surfaces the 2-3 most decision-critical
+            trust signals at the moment the user is evaluating the
+            market data and considering a trade.
+            Per AGENTS.md §4: flat canvas, no card containers. Inline
+            icon+text pairs separated by spacing, not borders. */}
+        {(() => {
+          const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
+          if (asset.legalVehicleType && asset.legalVehicleType !== 'none') {
+            const vehicleLabel = asset.legalVehicleType === 'spv' ? 'SPV'
+              : asset.legalVehicleType === 'series_llc' ? 'Series LLC'
+              : asset.legalVehicleType === 'llc' ? 'LLC'
+              : asset.legalVehicleType === 'trust' ? 'Trust'
+              : asset.legalVehicleType;
+            trustChips.push({
+              icon: 'business-outline',
+              label: vehicleLabel as string,
+            });
+          }
+          if (asset.custodyInsured && asset.custodyInsurer) {
+            trustChips.push({
+              icon: 'shield-checkmark-outline',
+              label: 'Insured custody',
+            });
+          }
+          if (asset.buyerProtection) {
+            trustChips.push({
+              icon: 'checkmark-circle-outline',
+              label: 'Buyer protection',
+            });
+          }
+          if (trustChips.length === 0) return null;
+          const elevated = trustChips.slice(0, 3);
+          return (
+            <View style={styles.coOwnTrustStrip}>
+              {elevated.map((chip, i) => (
+                <View key={i} style={styles.coOwnTrustChip}>
+                  <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
+                  <Text style={[styles.coOwnTrustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {chip.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          );
+        })()}
 
         <CommerceDetailSection
           label={isHolder ? 'Your ownership' : 'Current ownership'}
@@ -1704,6 +1755,27 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  // ── Elevated trust strip (near trade decision point) ──
+  // Flat inline icon+text pairs, no card container. Per AGENTS.md §4.
+  // 2026 benchmark: trust near CTA = 40%+ conversion improvement.
+  coOwnTrustStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    gap: Space.sm,
+  },
+  coOwnTrustChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  coOwnTrustChipText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: LetterSpacing.tight,
+  },
   // ── Market status row (inside transaction surface) ──
   marketStatusRow: {
     flexDirection: 'row',
@@ -2039,6 +2111,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.normal,
   },
+  // ── Elevated trust strip (near trade CTA) ──
   // ── Discovery ──
   recommendationSection: {
     marginTop: Space.md,

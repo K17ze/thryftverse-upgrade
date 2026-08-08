@@ -9,10 +9,14 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Typography, Radius, Space, Type, Control, Stroke } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -121,14 +125,26 @@ const COUNTDOWN_PRESETS = [
   { label: '1 Week', hours: 168 },
 ];
 
+const RECENT_STICKERS_KEY = '@thryftverse_recent_stickers';
+const MAX_RECENT = 8;
+
+interface RecentSticker {
+  type: StickerItem['type'];
+  content: string;
+  emoji?: string;
+}
+
 export default function StickerPicker({ visible, onClose, onStickerSelect }: StickerPickerProps) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [tab, setTab] = React.useState<'emoji' | 'text' | 'shapes' | 'poll' | 'quiz' | 'question' | 'countdown'>('emoji');
   const [mentionInput, setMentionInput] = React.useState('');
   const [hashtagInput, setHashtagInput] = React.useState('');
   const translateY = React.useRef(new Animated.Value(DRAWER_HEIGHT)).current;
   const backdropOpacity = React.useRef(new Animated.Value(0)).current;
+  const [recentStickers, setRecentStickers] = React.useState<RecentSticker[]>([]);
 
   // Poll creation state
   const [pollQuestion, setPollQuestion] = React.useState('');
@@ -171,37 +187,82 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     }
   }, [visible]);
 
+  React.useEffect(() => {
+    if (visible) {
+      AsyncStorage.getItem(RECENT_STICKERS_KEY)
+        .then((raw) => {
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw) as RecentSticker[];
+              setRecentStickers(parsed.slice(0, MAX_RECENT));
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    }
+  }, [visible]);
+
+  const recordRecentSticker = React.useCallback((sticker: StickerItem) => {
+    const entry: RecentSticker = {
+      type: sticker.type,
+      content: sticker.content,
+      emoji: sticker.type === 'emoji' ? sticker.content : undefined,
+    };
+    setRecentStickers((prev) => {
+      const filtered = prev.filter(
+        (r) => !(r.type === entry.type && r.content === entry.content)
+      );
+      const next = [entry, ...filtered].slice(0, MAX_RECENT);
+      AsyncStorage.setItem(RECENT_STICKERS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const handleStickerSelect = React.useCallback(
+    (sticker: StickerItem) => {
+      haptic.light();
+      recordRecentSticker(sticker);
+      onStickerSelect(sticker);
+      onClose();
+    },
+    [haptic, recordRecentSticker, onStickerSelect, onClose]
+  );
+
+  const handleTabChange = React.useCallback(
+    (t: typeof tab) => {
+      haptic.selection();
+      setTab(t);
+    },
+    [haptic]
+  );
+
+  const tabEnter = reducedMotion ? undefined : FadeIn.duration(Motion.duration.normal);
+
   const handleMentionSubmit = () => {
     const text = mentionInput.trim().replace(/^@/, '');
     if (text) {
-      // `color` is sticker payload data persisted with the sticker and rendered
-      // over media, so it stays hardcoded (not a theme token) — white text on
-      // imagery must remain white in both themes.
-      onStickerSelect({ id: `mention_${Date.now()}`, type: 'mention', content: `@${text}`, color: '#fff' });
+      handleStickerSelect({ id: `mention_${Date.now()}`, type: 'mention', content: `@${text}`, color: '#fff' });
       setMentionInput('');
-      onClose();
     }
   };
 
   const handleHashtagSubmit = () => {
     const text = hashtagInput.trim().replace(/^#/, '');
     if (text) {
-      onStickerSelect({ id: `hashtag_${Date.now()}`, type: 'hashtag', content: `#${text}`, color: '#06489A' });
+      handleStickerSelect({ id: `hashtag_${Date.now()}`, type: 'hashtag', content: `#${text}`, color: '#06489A' });
       setHashtagInput('');
-      onClose();
     }
   };
 
   const handleCountdownSelect = (hours: number) => {
     const target = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-    onStickerSelect({
+    handleStickerSelect({
       id: `countdown_${Date.now()}`,
       type: 'countdown',
       content: `${hours}h left`,
       color: '#9b0202',
       targetDate: target,
     });
-    onClose();
   };
 
   const handlePollSubmit = () => {
@@ -209,7 +270,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     const o1 = pollOption1.trim();
     const o2 = pollOption2.trim();
     if (!q || !o1 || !o2) return;
-    onStickerSelect({
+    handleStickerSelect({
       id: `poll_${Date.now()}`,
       type: 'poll',
       content: q,
@@ -219,14 +280,13 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     setPollQuestion('');
     setPollOption1('');
     setPollOption2('');
-    onClose();
   };
 
   const handleQuizSubmit = () => {
     const q = quizQuestion.trim();
     const opts = quizOptions.map((o) => o.trim()).filter((o) => o.length > 0);
     if (!q || opts.length < 2) return;
-    onStickerSelect({
+    handleStickerSelect({
       id: `quiz_${Date.now()}`,
       type: 'quiz',
       content: q,
@@ -237,7 +297,6 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     setQuizQuestion('');
     setQuizOptions(['', '']);
     setQuizCorrectIndex(0);
-    onClose();
   };
 
   const handleQuizAddOption = () => {
@@ -265,13 +324,12 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
   const handleQuestionSubmit = () => {
     const q = questionText.trim();
     if (!q) return;
-    onStickerSelect({
+    handleStickerSelect({
       id: `question_${Date.now()}`,
       type: 'question',
       content: q,
     });
     setQuestionText('');
-    onClose();
   };
 
   const handleCountdownSubmit = () => {
@@ -279,7 +337,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     if (!label || !countdownDate) return;
     const time = countdownTime.trim() || '00:00';
     const target = new Date(`${countdownDate}T${time}:00`).toISOString();
-    onStickerSelect({
+    handleStickerSelect({
       id: `countdown_${Date.now()}`,
       type: 'countdown',
       content: label,
@@ -291,7 +349,6 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     setCountdownDate('');
     setCountdownTime('');
     setCountdownEndLabel('');
-    onClose();
   };
 
   return (
@@ -345,10 +402,10 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
               <AnimatedPressable
                 key={t}
                 style={[styles.tab, tab === t && styles.tabActive]}
-                onPress={() => setTab(t)}
+                onPress={() => handleTabChange(t)}
                 scaleValue={0.96}
                 activeOpacity={0.8}
-                hapticFeedback="light"
+                hapticFeedback="selection"
                 accessibilityLabel={`${t} sticker tab`}
                 accessibilityRole="tab"
                 accessibilityHint={`Switches to ${tabLabel} stickers`}
@@ -363,32 +420,61 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
 
         {/* Content */}
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <Reanimated.View key={tab} entering={tabEnter}>
           {tab === 'emoji' && (
-            <View style={styles.emojiGrid}>
-              {filteredEmojis.length > 0 ? (
-                filteredEmojis.map((emoji, idx) => (
-                  <AnimatedPressable
-                    key={`${emoji}_${idx}`}
-                    style={styles.emojiBtn}
-                    onPress={() => {
-                      onStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
-                      onClose();
-                    }}
-                    scaleValue={0.9}
-                    activeOpacity={0.7}
-                    hapticFeedback="light"
-                    accessibilityLabel={`Emoji ${emoji}`}
-                    accessibilityHint="Adds this emoji sticker to the frame"
-                  >
-                    <Text style={styles.emojiText}>{emoji}</Text>
-                  </AnimatedPressable>
-                ))
-              ) : (
-                <View style={styles.emptyState}>
-                  <Ionicons name="search-outline" size={28} color={colors.textMuted} />
-                  <Text style={styles.emptyStateText}>No stickers found</Text>
+            <View>
+              {recentStickers.length > 0 && (
+                <View style={styles.recentSection}>
+                  <Text style={styles.recentLabel}>Recent</Text>
+                  <View style={styles.emojiGrid}>
+                    {recentStickers.map((r, idx) => (
+                      <AnimatedPressable
+                        key={`recent_${idx}`}
+                        style={styles.emojiBtn}
+                        onPress={() => {
+                          handleStickerSelect({
+                            id: `${r.type}_${Date.now()}`,
+                            type: r.type,
+                            content: r.content,
+                          });
+                        }}
+                        scaleValue={0.9}
+                        activeOpacity={0.7}
+                        hapticFeedback="light"
+                        accessibilityLabel={`Recent sticker ${r.content}`}
+                        accessibilityHint="Adds this recent sticker to the frame"
+                      >
+                        <Text style={styles.emojiText}>{r.emoji ?? r.content}</Text>
+                      </AnimatedPressable>
+                    ))}
+                  </View>
                 </View>
               )}
+              <View style={styles.emojiGrid}>
+                {filteredEmojis.length > 0 ? (
+                  filteredEmojis.map((emoji, idx) => (
+                    <AnimatedPressable
+                      key={`${emoji}_${idx}`}
+                      style={styles.emojiBtn}
+                      onPress={() => {
+                        handleStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
+                      }}
+                      scaleValue={0.9}
+                      activeOpacity={0.7}
+                      hapticFeedback="light"
+                      accessibilityLabel={`Emoji ${emoji}`}
+                      accessibilityHint="Adds this emoji sticker to the frame"
+                    >
+                      <Text style={styles.emojiText}>{emoji}</Text>
+                    </AnimatedPressable>
+                  ))
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="search-outline" size={28} color={colors.textMuted} />
+                    <Text style={styles.emptyStateText}>No stickers found</Text>
+                  </View>
+                )}
+              </View>
             </View>
           )}
 
@@ -931,6 +1017,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
               </AnimatedPressable>
             </View>
           )}
+          </Reanimated.View>
         </ScrollView>
       </Animated.View>
     </View>
@@ -1018,6 +1105,17 @@ function createStyles(colors: any) {
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
+  },
+  recentSection: {
+    marginBottom: Space.md,
+  },
+  recentLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: Space.xs,
   },
   emojiGrid: {
     flexDirection: 'row',

@@ -113,7 +113,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       return;
     }
     if (numericOfferGbp > price * 2) {
-      setErrorMsg('Offer seems too high. Please review the amount.');
+      setErrorMsg('Offer seems too high. Review the amount.');
       return;
     }
     // Check against seller's minimum offer floor (if set on the listing)
@@ -123,7 +123,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       return;
     }
     if (!listing?.sellerId) {
-      setErrorMsg('Could not load seller info. Please try again.');
+      setErrorMsg('Could not load seller info. Try again.');
       return;
     }
 
@@ -178,7 +178,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         ? 'You appear to be offline. Check your connection and try again.'
         : err instanceof Error ? err.message : 'Could not submit offer.';
       setErrorMsg(message);
-      show('Could not submit offer. Please try again.', 'error');
+      show('Could not submit offer. Try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }

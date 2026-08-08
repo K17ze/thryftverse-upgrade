@@ -245,7 +245,7 @@ export default function WalletScreen({ navigation }: Props) {
       return;
     }
     if (!currentUser?.id) {
-      show('Please sign in to load 1ZE.', 'error');
+      show('Sign in to load 1ZE.', 'error');
       navigation.navigate('AuthLanding');
       return;
     }
@@ -334,7 +334,7 @@ export default function WalletScreen({ navigation }: Props) {
       );
       loadBalance();
     } catch (error) {
-      const parsed = parseApiError(error, 'Unable to load 1ZE right now. Please try again shortly.');
+      const parsed = parseApiError(error, 'Unable to load 1ZE right now. Try again shortly.');
       show(parsed.message, 'error');
     } finally {
       setIsProcessing(false);
@@ -786,7 +786,7 @@ export default function WalletScreen({ navigation }: Props) {
                   accessibilityHint="Enter the fiat amount to buy 1ZE."
                 />
                 <SummaryRow
-                  label="You will receive"
+                  label="You'll receive"
                   value={<CoOwnNumericText value={buyIzeAmount} unit="1ZE" size="priceList" align="right" />}
                   colors={colors}
                 />

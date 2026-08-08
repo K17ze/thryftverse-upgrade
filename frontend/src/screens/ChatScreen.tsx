@@ -161,7 +161,7 @@ interface Message {
     offerId?: string;
     price: number;
     originalPrice: number;
-    status?: "pending" | "declined" | "countered" | "accepted" | "expired";
+    status?: "pending" | "declined" | "countered" | "accepted" | "expired" | "cancelled";
     /** ISO date string when the offer expires */
     expiresAt?: string;
     /** Counter-offer chain depth (0 = initial, 1 = first counter, etc.) */
@@ -584,7 +584,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
             originalPrice: entry.originalPrice,
 
-            status: entry.offerStatus,
+            status: entry.offerStatus as "pending" | "declined" | "countered" | "accepted" | "expired" | "cancelled" | undefined,
           },
 
           text: entry.text,
@@ -1291,7 +1291,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             : m,
         ),
       );
-      show("Could not accept offer. Please try again.", "error");
+      show("Could not accept offer. Try again.", "error");
     }
   };
 
@@ -1326,7 +1326,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             : m,
         ),
       );
-      show("Could not decline offer. Please try again.", "error");
+      show("Could not decline offer. Try again.", "error");
     }
   };
 

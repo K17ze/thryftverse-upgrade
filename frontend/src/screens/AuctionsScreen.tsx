@@ -611,7 +611,7 @@ export default function AuctionsScreen() {
             onPress={() => navigation.navigate('MyBids')}
             accessibilityRole="button"
             accessibilityLabel="My Bids"
-            accessibilityHint="View your active bids"
+            accessibilityHint="Active bids"
           >
             <Ionicons name="list-outline" size={15} color={colors.brand} />
             <Meta style={styles.myBidsBtnText}>My Bids</Meta>

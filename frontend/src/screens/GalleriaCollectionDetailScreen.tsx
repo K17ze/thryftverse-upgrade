@@ -198,7 +198,7 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
         const result = await fetchCollectionDetail(collectionId);
         setDetail(result);
       } catch (e) {
-        setError('We couldn\u2019t load this collection. Please try again.');
+        setError('We couldn\u2019t load this collection. Try again.');
       } finally {
         setLoading(false);
         setRefreshing(false);

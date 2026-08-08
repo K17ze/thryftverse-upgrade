@@ -23,6 +23,7 @@ import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import { CommerceDetailMetricRow } from './CommerceDetailMetricRow';
 import type { ListingCommerceContext } from '../../../platform/product';
 import type { SupportedCurrencyCode } from '../../../constants/currencies';
+import { formatShortDate } from '../../../utils/dateFormat';
 
 export interface ShippingReturnsInfoProps {
   commerce: ListingCommerceContext;
@@ -63,7 +64,7 @@ export function ShippingReturnsInfo({
     const start = commerce.estimatedDeliveryStart;
     const end = commerce.estimatedDeliveryEnd;
     if (!start && !end) return null;
-    const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const fmt = (iso: string) => formatShortDate(iso);
     if (start && end) return `${fmt(start)}–${fmt(end)}`;
     return fmt(start ?? end!);
   })();

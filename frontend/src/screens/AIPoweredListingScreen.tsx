@@ -10,6 +10,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -180,7 +182,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       }));
       setPhotos((prev) => [...prev, ...assets].slice(0, 8));
     } catch {
-      showError('Pick failed', 'Could not pick photos. Please try again.');
+      showError('Pick failed', 'Could not pick photos. Try again.');
     }
   }, [showError]);
 
@@ -205,7 +207,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         [...prev, { uri: asset.uri, width: asset.width, height: asset.height }].slice(0, 8),
       );
     } catch {
-      showError('Capture failed', 'Could not take a photo. Please try again.');
+      showError('Capture failed', 'Could not take a photo. Try again.');
     }
   }, [showError]);
 
@@ -380,7 +382,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       const rawMsg =
         typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string'
           ? (e as Error).message
-          : 'Failed to publish. Please try again.';
+          : 'Failed to publish. Try again.';
       setPublishError(isNetwork ? 'You appear to be offline. Check your connection and try again.' : rawMsg);
       haptics.error();
     } finally {
@@ -537,7 +539,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 <Ionicons name="sparkles" size={16} color={colors.brand} />
                 <View style={styles.confidenceTextWrap}>
                   <Text style={[styles.confidenceTitle, { color: colors.brand }]}>
-                    AI suggestions — please review
+                    AI suggestions — review before publishing
                   </Text>
                   <Text style={[styles.confidenceSub, { color: colors.textSecondary }]}>
                     Confidence {confidencePct}% · heuristic preview, not image recognition
@@ -1120,7 +1122,7 @@ function EmptyState({
       </Text>
       <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
         Add photos above and AI will suggest a title, description, price and
-        category. You can edit everything before publishing.
+        category. Edit everything before publishing.
       </Text>
     </Reanimated.View>
   );
@@ -1176,7 +1178,7 @@ interface AIBadgeFieldProps {
   label: string;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }
 

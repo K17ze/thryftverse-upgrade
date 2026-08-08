@@ -506,7 +506,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
       </View>
 
       <Text style={[styles.recoveryWarning, { color: colors.textMuted }]}>
-        Each code can only be used once. You will not see these again.
+        Each code can only be used once. You won't see these again.
       </Text>
     </>
   );

@@ -12,6 +12,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { getWalletLedger, type WalletLedgerItem } from '../../services/walletApi';
+import { formatRelativeTime, formatDayLabel } from '../../utils/dateFormat';
 import { useStore } from '../../store/useStore';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { EmptyState } from '../EmptyState';
@@ -37,32 +38,11 @@ const KIND_LABELS: Record<string, { label: string; icon: keyof typeof Ionicons.g
   TRANSFER_RECEIVED: { label: 'Transfer received', icon: 'arrow-back-outline' },
 };
 
-function formatRelativeTime(iso: string): string {
-  const date = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHr = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHr / 24);
-
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHr < 24) return `${diffHr}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
 function groupByDate(items: WalletLedgerItem[]): { title: string; data: WalletLedgerItem[] }[] {
   const groups: Record<string, WalletLedgerItem[]> = {};
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
 
   for (const item of items) {
-    const date = new Date(item.createdAt);
-    const isToday = date.toDateString() === today.toDateString();
-    const isYesterday = date.toDateString() === yesterday.toDateString();
-    const key = isToday ? 'Today' : isYesterday ? 'Yesterday' : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const key = formatDayLabel(item.createdAt);
 
     if (!groups[key]) groups[key] = [];
     groups[key].push(item);

@@ -226,7 +226,7 @@ export default function BulkListingScreen({ navigation }: Props) {
         setItems((prev) => prev.filter((it) => !successTempIds.has(it.tempId)));
       }
     } catch {
-      show('Publishing failed. Please try again.', 'error');
+      show('Publishing failed. Try again.', 'error');
       haptics.error();
     } finally {
       setIsPublishing(false);

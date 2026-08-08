@@ -502,7 +502,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         setActiveThemeId(mb.theme);
       }
     } catch {
-      setError('We couldn\u2019t load the moodboard editor. Please try again.');
+      setError('We couldn\u2019t load the moodboard editor. Try again.');
     } finally {
       setLoading(false);
     }

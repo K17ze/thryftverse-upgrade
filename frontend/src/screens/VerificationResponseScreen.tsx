@@ -99,7 +99,7 @@ export default function VerificationResponseScreen() {
 
   const handlePickPhotos = useCallback(async () => {
     if (evidencePhotos.length >= 6) {
-      show('You can attach up to 6 photos.', 'info');
+      show('Attach up to 6 photos.', 'info');
       return;
     }
     haptic.light();
@@ -125,7 +125,7 @@ export default function VerificationResponseScreen() {
       setEvidencePhotos((prev) => [...prev, ...uploaded]);
       show(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} attached.`, 'success');
     } catch {
-      show('Unable to upload photo(s). Please try again.', 'error');
+      show('Unable to upload photo(s). Try again.', 'error');
     } finally {
       setIsUploading(false);
     }
@@ -133,7 +133,7 @@ export default function VerificationResponseScreen() {
 
   const handleTakePhoto = useCallback(async () => {
     if (evidencePhotos.length >= 6) {
-      show('You can attach up to 6 photos.', 'info');
+      show('Attach up to 6 photos.', 'info');
       return;
     }
     haptic.light();
@@ -155,7 +155,7 @@ export default function VerificationResponseScreen() {
       setEvidencePhotos((prev) => [...prev, uploadedMedia.publicUrl]);
       show('Photo attached.', 'success');
     } catch {
-      show('Unable to upload photo. Please try again.', 'error');
+      show('Unable to upload photo. Try again.', 'error');
     } finally {
       setIsUploading(false);
     }
@@ -246,7 +246,7 @@ export default function VerificationResponseScreen() {
             Evidence submitted
           </Text>
           <Text style={[styles.respondedSub, { color: colors.textSecondary }]}>
-            The buyer has been notified. You will be informed of the platform's verdict.
+            The buyer has been notified. You'll be informed of the platform's verdict.
           </Text>
           {demand.evidenceUrl && (
             <View style={[styles.evidencePreview, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>

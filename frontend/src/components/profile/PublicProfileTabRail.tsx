@@ -25,7 +25,7 @@ export function PublicProfileTabRail({ tabs, activeKey, onChange }: PublicProfil
         return (
           <Pressable
             key={tab.key}
-            style={styles.tab}
+            style={({ pressed }) => [styles.tab, pressed && { opacity: 0.6 }]}
             onPress={() => onChange(tab.key)}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}

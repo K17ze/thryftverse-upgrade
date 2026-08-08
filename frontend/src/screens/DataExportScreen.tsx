@@ -51,7 +51,7 @@ export default function DataExportScreen({ navigation }: Props) {
 
   const handleRequestExport = useCallback(async () => {
     if (!currentUser?.id) {
-      show('Please sign in before requesting a data export.', 'error');
+      show('Sign in before requesting a data export.', 'error');
       return;
     }
     setExportState('loading');
@@ -191,8 +191,7 @@ export default function DataExportScreen({ navigation }: Props) {
               </View>
             ) : null}
             <Text style={[styles.successFootnote, { color: colors.textSecondary }]}>
-              A copy of your export has been sent to your registered email address. You can also
-              request a new export at any time.
+              A copy of your export has been sent to your registered email address. Request a new export at any time too.
             </Text>
           </View>
         ) : null}

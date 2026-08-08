@@ -78,7 +78,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
     haptic.heavy();
     Alert.alert(
       'Close this request?',
-      'You can reopen it later if the issue is not resolved.',
+      'Reopen it later if the issue is not resolved.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

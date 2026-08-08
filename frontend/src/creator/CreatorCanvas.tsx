@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, type ViewStyle, type TextStyle } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -869,7 +869,7 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
   };
 
   // Text effect styles (Instagram 2025-2026)
-  const effectStyle: any = {};
+  const effectStyle: TextStyle = {};
   if (payload.textEffect === 'shadow') {
     effectStyle.textShadowColor = 'rgba(0,0,0,0.6)';
     effectStyle.textShadowOffset = { width: 2, height: 2 };
@@ -1594,7 +1594,7 @@ function SelectionHandles({
     [layerLocked, rotationSV, startRotation, onRotationChange, onCommit]
   );
 
-  const handleBase: any = {
+  const handleBase: ViewStyle = {
     position: 'absolute',
     width: 20,
     height: 20,
@@ -1610,7 +1610,7 @@ function SelectionHandles({
   };
 
   // Invisible hit zone — 44pt for touch compliance
-  const hitZone: any = {
+  const hitZone: ViewStyle = {
     position: 'absolute',
     width: 44,
     height: 44,

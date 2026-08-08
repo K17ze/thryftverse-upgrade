@@ -5,6 +5,7 @@ import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
 import type { SellerReviewItem, SellerReviewSummary } from '../../services/sellerReviewsApi';
+import { formatFullDate, formatShortDate } from '../../utils/dateFormat';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -94,7 +95,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const reviewerName = item.reviewer.displayName || item.reviewer.username || 'Anonymous';
   const dateText = item.createdAt
-    ? new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    ? formatFullDate(item.createdAt)
     : '';
   const canOpenReviewer = Boolean(item.reviewer.id && onOpenReviewer);
   const canOpenListing = Boolean(item.listing?.id && onOpenListing);
@@ -102,14 +103,14 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   const photos = item.photoUrls ?? [];
   const sellerResponse = item.sellerResponse ?? null;
   const responseDate = sellerResponse?.createdAt
-    ? new Date(sellerResponse.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    ? formatShortDate(sellerResponse.createdAt)
     : '';
 
   return (
     <View style={styles.reviewRow}>
       {/* Reviewer identity + rating */}
       <Pressable
-        style={styles.reviewHeader}
+        style={({ pressed }) => [styles.reviewHeader, pressed && { opacity: 0.6 }]}
         onPress={() => canOpenReviewer && onOpenReviewer!(item.reviewer.id!)}
         disabled={!canOpenReviewer}
         accessibilityRole={canOpenReviewer ? 'button' : undefined}
@@ -162,6 +163,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
               disabled={!onOpenPhoto}
               accessibilityRole={onOpenPhoto ? 'button' : undefined}
               accessibilityLabel={onOpenPhoto ? `View review photo ${idx + 1}` : undefined}
+              style={({ pressed }) => pressed && { opacity: 0.6 }}
             >
               <CachedImage
                 uri={uri}
@@ -194,7 +196,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
       {/* Respond button — only for own profile and when no response exists */}
       {onRespond && !sellerResponse && (
         <Pressable
-          style={styles.respondBtn}
+          style={({ pressed }) => [styles.respondBtn, pressed && { opacity: 0.6 }]}
           onPress={() => onRespond(item.id, reviewerName, item.rating)}
           accessibilityRole="button"
           accessibilityLabel="Respond to this review"

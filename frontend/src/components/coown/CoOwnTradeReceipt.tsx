@@ -237,7 +237,7 @@ export function CoOwnTradeReceipt({
         <View style={[styles.plainLanguageCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.plainLanguageHeader, { color: colors.textMuted }]}>Plain language</Text>
           <Text style={[styles.plainLanguageText, { color: colors.textSecondary }]}>
-            You will {isBuy ? 'own' : 'hold'} {postTradeUnits} units
+            You'll {isBuy ? 'own' : 'hold'} {postTradeUnits} units
             {postTradeOwnershipPct != null && ` (${postTradeOwnershipPct.toFixed(2)}% of outstanding)`}
             {postTradeOutstanding != null && ` of ${postTradeOutstanding.toLocaleString('en-GB')}`}
             {vehicleName ? `, settled in 1ZE. This is a beneficial interest in ${vehicleName}, not title to the underlying asset.` : '.'}

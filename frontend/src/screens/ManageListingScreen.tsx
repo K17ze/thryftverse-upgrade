@@ -217,7 +217,7 @@ export default function ManageListingScreen() {
       setBoostSheetVisible(false);
       show(`Listing boosted for ${tier.label}. Increased visibility active.`, 'success');
     } catch {
-      show('Failed to apply boost. Please try again.', 'error');
+      show('Failed to apply boost. Try again.', 'error');
     }
   };
 

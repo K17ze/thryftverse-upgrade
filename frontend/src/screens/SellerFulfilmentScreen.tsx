@@ -359,7 +359,7 @@ export default function SellerFulfilmentScreen() {
         )}
 
         <Text style={styles.hintText}>
-          You can mark the order as shipped without tracking details and add them later.
+          Mark the order as shipped without tracking details and add them later.
         </Text>
 
         {!canShip && (
@@ -383,7 +383,7 @@ export default function SellerFulfilmentScreen() {
                 'Mark as shipped?',
                 trackingNumber.trim()
                   ? `The order will be marked as shipped with tracking number ${trackingNumber.trim()}.`
-                  : 'The order will be marked as shipped without tracking details. You can add tracking information later.',
+                  : 'The order will be marked as shipped without tracking details. Add tracking later.',
                 [
                   { text: 'Not yet', style: 'cancel' },
                   { text: 'Mark shipped', style: 'destructive', onPress: handleShip },

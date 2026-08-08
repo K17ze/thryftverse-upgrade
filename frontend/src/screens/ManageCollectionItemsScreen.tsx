@@ -71,7 +71,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
             } catch {
               // Rollback: re-add the item since API call failed
               addToCollection(collectionId, itemId);
-              show('Failed to remove item. Please try again.', 'error');
+              show('Failed to remove item. Try again.', 'error');
             } finally {
               setRemovingIds((prev) => {
                 const next = new Set(prev);

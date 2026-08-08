@@ -84,7 +84,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Data & Privacy"
-          subtitle="Control your data and privacy"
+          subtitle="Privacy settings"
           onBack={() => navigation.goBack()}
         />
       }

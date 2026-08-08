@@ -6,6 +6,7 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withSequence,
   runOnJS,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
@@ -15,6 +16,7 @@ import type { PosterSticker as ApiPosterSticker } from '../../services/postersAp
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { formatFullDate } from '../../utils/dateFormat';
 
 interface PosterStickerLayerProps {
   stickers: ApiPosterSticker[];
@@ -66,6 +68,24 @@ export function PosterStickerLayer({
   style,
 }: PosterStickerLayerProps) {
   const reducedMotion = useReducedMotion();
+  const knownIdsRef = React.useRef<Set<string>>(new Set());
+  const mountedRef = React.useRef(false);
+
+  const isFirstRender = !mountedRef.current;
+  const spawnSet = React.useMemo(() => {
+    const set = new Set<string>();
+    if (isFirstRender) return set;
+    for (const s of stickers) {
+      if (!knownIdsRef.current.has(s.id)) set.add(s.id);
+    }
+    return set;
+  }, [stickers, isFirstRender]);
+
+  useEffect(() => {
+    stickers.forEach((s) => knownIdsRef.current.add(s.id));
+    mountedRef.current = true;
+  }, [stickers]);
+
   return (
     <View style={[StyleSheet.absoluteFill, style]} pointerEvents="box-none">
       {stickers.map((sticker) => (
@@ -81,6 +101,7 @@ export function PosterStickerLayer({
           onTransformChange={onStickerTransformChange}
           onDelete={onDeleteSticker}
           reducedMotion={reducedMotion}
+          shouldSpawn={spawnSet.has(sticker.id)}
         />
       ))}
     </View>
@@ -98,6 +119,7 @@ interface DraggableStickerProps {
   onTransformChange?: (id: string, updates: { scale?: number; rotation?: number }) => void;
   onDelete?: (id: string) => void;
   reducedMotion?: boolean;
+  shouldSpawn?: boolean;
 }
 
 const SCALE_MIN = 0.4;
@@ -114,6 +136,7 @@ function DraggableSticker({
   onTransformChange,
   onDelete,
   reducedMotion = false,
+  shouldSpawn = false,
 }: DraggableStickerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -122,20 +145,31 @@ function DraggableSticker({
   const translateY = useSharedValue(sticker.y * containerHeight);
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
-  // Scale and rotation shared values for pinch/rotate gestures
   const scale = useSharedValue(sticker.scale);
   const rotation = useSharedValue(sticker.rotation);
   const startScale = useSharedValue(sticker.scale);
   const startRotation = useSharedValue(sticker.rotation);
 
-  // Selection appearance — spring-animated opacity for the border and
-  // spring-animated scale for the corner handle.
   const selectionOpacity = useSharedValue(0);
   const handleScale = useSharedValue(0);
 
-  // Stable haptic triggers for use inside gesture worklets (runOnJS).
   const hapticLight = useCallback(() => haptic.light(), [haptic]);
   const hapticSelection = useCallback(() => haptic.selection(), [haptic]);
+  const hapticMedium = useCallback(() => haptic.medium(), [haptic]);
+
+  useEffect(() => {
+    if (shouldSpawn) {
+      if (reducedMotion) {
+        scale.value = sticker.scale;
+      } else {
+        scale.value = 0;
+        scale.value = withSequence(
+          withSpring(sticker.scale * 1.1, Motion.spring.success),
+          withSpring(sticker.scale, Motion.spring.entrance)
+        );
+      }
+    }
+  }, [shouldSpawn, reducedMotion, scale, sticker.scale]);
 
   useEffect(() => {
     if (reducedMotion) {
@@ -149,9 +183,10 @@ function DraggableSticker({
       handleScale.value = withSpring(0, Motion.spring.entrance);
     }
     if (isSelected) {
+      hapticSelection();
       AccessibilityInfo.announceForAccessibility('Sticker selected');
     }
-  }, [isSelected, reducedMotion, selectionOpacity, handleScale]);
+  }, [isSelected, reducedMotion, selectionOpacity, handleScale, hapticSelection]);
 
   const selectionBorderStyle = useAnimatedStyle(() => ({
     opacity: selectionOpacity.value,
@@ -295,16 +330,16 @@ function DraggableSticker({
           </View>
           {isSelected && (
             <>
-              {/* Spring-animated selection border overlay */}
               <Reanimated.View
                 style={[StyleSheet.absoluteFill, styles.selectedWrap, selectionBorderStyle]}
                 pointerEvents="none"
               />
-              {/* Spring scale-in corner handle */}
-              <Reanimated.View style={[styles.selectionHandle, handleAnimatedStyle]} pointerEvents="none">
+              <Reanimated.View style={[styles.selectionHandle, styles.handleTopRight, handleAnimatedStyle]} pointerEvents="none">
                 <View style={styles.handleDot} />
               </Reanimated.View>
-              {/* Delete button — medium haptic (delete is a meaningful action) */}
+              <Reanimated.View style={[styles.selectionHandle, styles.handleBottomLeft, handleAnimatedStyle]} pointerEvents="none">
+                <View style={styles.handleDot} />
+              </Reanimated.View>
               {onDelete && (
                 <AnimatedPressable
                   style={styles.deleteButton}
@@ -312,6 +347,7 @@ function DraggableSticker({
                   activeOpacity={0.85}
                   hapticFeedback="medium"
                   onPress={() => {
+                    hapticMedium();
                     onDelete(sticker.id);
                     AccessibilityInfo.announceForAccessibility('Sticker deleted');
                   }}
@@ -319,9 +355,14 @@ function DraggableSticker({
                   accessibilityHint="Removes this sticker from the frame"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close-circle" size={Control.iconCompact} color="#fff" />
+                  <Ionicons name="close" size={Control.iconCompact} color={colors.textInverse} />
                 </AnimatedPressable>
               )}
+              <Reanimated.View style={[styles.rotateHandle, handleAnimatedStyle]} pointerEvents="none">
+                <View style={styles.rotateHandleDot}>
+                  <Ionicons name="refresh" size={10} color={colors.textInverse} />
+                </View>
+              </Reanimated.View>
             </>
           )}
         </Reanimated.View>
@@ -476,7 +517,7 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
           <Text style={styles.countdownLabel}>{sticker.payload.endLabel ?? 'Countdown'}</Text>
           {sticker.payload.targetDate && (
             <Text style={styles.countdownTime}>
-              {new Date(sticker.payload.targetDate).toLocaleDateString()}
+              {formatFullDate(sticker.payload.targetDate)}
             </Text>
           )}
         </View>
@@ -508,27 +549,31 @@ function createStyles(colors: any) {
     borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.9)',
     borderRadius: Radius.sm,
+    borderStyle: 'dashed',
   },
   selectionHandle: {
     position: 'absolute',
-    top: -8,
-    right: -8,
     width: 16,
     height: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  handleTopRight: {
+    top: -8,
+    right: -8,
+  },
+  handleBottomLeft: {
+    bottom: -8,
+    left: -8,
   },
   handleDot: {
     width: HANDLE_SIZE,
     height: HANDLE_SIZE,
     borderRadius: HANDLE_SIZE / 2,
     backgroundColor: '#fff',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.2)',
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
   },
-  // Delete button — positioned at the top-left corner of the selection,
-  // opposite the selection handle (top-right). Uses Space.xs padding and
-  // Control.iconCompact for the glyph.
   deleteButton: {
     position: 'absolute',
     top: -8,
@@ -540,6 +585,30 @@ function createStyles(colors: any) {
     justifyContent: 'center',
     alignItems: 'center',
     padding: Space.xs,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  rotateHandle: {
+    position: 'absolute',
+    bottom: -10,
+    right: -10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rotateHandleDot: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,

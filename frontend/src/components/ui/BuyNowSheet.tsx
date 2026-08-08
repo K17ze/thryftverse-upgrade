@@ -151,7 +151,7 @@ export function BuyNowSheet({
         if (expectedPrice !== serverPrice) {
           setError({
             kind: 'buy_now_price_changed',
-            message: 'The Buy Now price has changed. Please review the updated price.',
+            message: 'The Buy Now price has changed. Review the updated price.',
             currentBuyNowPriceGbp: serverPrice,
             canRetry: true,
             transactionPossible: true,
@@ -180,7 +180,7 @@ export function BuyNowSheet({
       const result = await onSubmitBuyNow(transactionAmount, idempotencyKeyRef.current);
       // PASS 4: Verify the response explicitly confirms Buy Now
       if (!result.isBuyNow) {
-        throw new Error('The response did not confirm the Buy Now winning bid. Please try again.');
+        throw new Error('The response did not confirm the Buy Now winning bid. Try again.');
       }
       setStage('success');
       haptics.success();

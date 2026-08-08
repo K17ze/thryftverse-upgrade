@@ -7,6 +7,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
 import { Meta, BodyEmphasis, Body } from '../ui/Text';
+import { formatShortDateTime } from '../../utils/dateFormat';
 
 export type OrderSide = 'buy' | 'sell';
 // Use the canonical OrderStatus from coOwnModels (12-state machine per spec 10 §2.1-2.2)
@@ -33,18 +34,6 @@ function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status;
 }
 
-function formatOrderTimestamp(value: string): string {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return value;
-
-  const now = new Date();
-  const sameYear = date.getFullYear() === now.getFullYear();
-  const dayLabel = date.toLocaleDateString(undefined, sameYear
-    ? { day: 'numeric', month: 'short' }
-    : { day: 'numeric', month: 'short', year: '2-digit' });
-  const timeLabel = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  return `${dayLabel} · ${timeLabel}`;
-}
 
 interface OrderHistoryRowProps {
   id: string;
@@ -160,7 +149,7 @@ export function OrderHistoryRow({
               ? `${filledQuantity} of ${quantity} filled`
               : `${quantity} units`}
           </Meta>
-          <Meta style={styles.timestamp} numberOfLines={1}>{formatOrderTimestamp(timestamp)}</Meta>
+          <Meta style={styles.timestamp} numberOfLines={1}>{formatShortDateTime(timestamp)}</Meta>
         </View>
 
         <View style={styles.priceRow}>

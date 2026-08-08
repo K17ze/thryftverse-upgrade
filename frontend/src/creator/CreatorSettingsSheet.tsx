@@ -16,6 +16,11 @@ import { useCreator } from './CreatorContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 
+// Decorative palette — intentionally hardcoded.
+// These are user-facing canvas background swatches (solid colors and
+// gradients) that the creator picks from. They are persisted as canvas
+// background values and rendered over media, so they must remain stable
+// literal colors rather than theme tokens that shift with light/dark mode.
 const BG_PRESETS = [
   { label: 'Black', type: 'color' as const, value: '#000000' },
   { label: 'Dark', type: 'color' as const, value: '#1a1a1a' },

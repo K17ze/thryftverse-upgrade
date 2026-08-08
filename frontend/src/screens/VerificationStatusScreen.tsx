@@ -290,7 +290,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
                 Verification declined
               </Text>
               <Text style={[styles.panelBody, { color: colors.textSecondary }]}>
-                Your submission could not be verified. This can happen if the document was unclear, the selfie did not match, or details did not match our records. Please review and resubmit.
+                Your submission could not be verified. This can happen if the document was unclear, the selfie did not match, or details did not match our records. Review and resubmit.
               </Text>
               <AnimatedPressable
                 style={styles.primaryBtn}
@@ -406,7 +406,7 @@ const STATUS_HERO_CONFIG: Record<
   },
   rejected: {
     title: 'Verification declined',
-    subtitle: 'Your submission could not be verified. You can resubmit.',
+    subtitle: 'Your submission could not be verified. Resubmit to try again.',
     icon: 'close-circle-outline',
     accent: 'danger',
   },

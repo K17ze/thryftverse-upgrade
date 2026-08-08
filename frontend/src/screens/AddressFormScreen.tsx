@@ -398,7 +398,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
   const handleRemove = useCallback(() => {
     Alert.alert(
       'Remove delivery address?',
-      'You will need to add an address again before using it at checkout.',
+      'You\'ll need to add an address again before using it at checkout.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -486,7 +486,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             <Text style={styles.introBody}>
               {isEditing
                 ? 'Update your saved delivery address. Used at checkout and for delivery.'
-                : 'Add a delivery address for faster checkout. You can save multiple addresses.'}
+                : 'Add a delivery address for faster checkout. Save multiple addresses.'}
             </Text>
           </Reanimated.View>
 

@@ -689,7 +689,7 @@ export default function SellerAuctionCentreScreen() {
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle} numberOfLines={1}>Seller Centre</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {stats.total > 0 ? `${stats.total} auctions` : 'Manage your auctions'}
+              {stats.total > 0 ? `${stats.total} auctions` : 'Auction listings'}
             </Text>
           </View>
           <Pressable

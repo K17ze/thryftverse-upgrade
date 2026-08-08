@@ -829,7 +829,7 @@ export default function CheckoutScreen() {
 
       if (settlementStatus === 'pending') {
         setStage('payment_pending');
-        showInfo('Payment processing', 'We will update your order shortly.');
+        showInfo('Payment processing', 'We\'ll update your order shortly.');
         isSubmittingRef.current = false;
         handleSettlementNavigation('pending', orderId, attemptId);
         return;
@@ -838,9 +838,9 @@ export default function CheckoutScreen() {
       // Failed
       setStage('payment_failed');
       pendingIntentIdRef.current = null;
-      setOrderError('Payment could not be completed. Please try again.');
-      showError('Payment failed', 'Payment could not be completed. Please try again.');
-    } catch (error: any) {
+      setOrderError('Payment could not be completed. Try again.');
+      showError('Payment failed', 'Payment could not be completed. Try again.');
+    } catch (error: unknown) {
       if (
         !isMountedRef.current
         || paymentAttemptRef.current !== attemptId
@@ -849,10 +849,11 @@ export default function CheckoutScreen() {
       }
 
       setStage('payment_failed');
-      const isNetworkError = isOffline || error?.code === 'NETWORK_ERROR' || error?.code === 'ECONNABORTED';
+      const errorCode = (error as { code?: string })?.code;
+      const isNetworkError = isOffline || errorCode === 'NETWORK_ERROR' || errorCode === 'ECONNABORTED';
       const message = isNetworkError
         ? 'You appear to be offline. Check your connection and try again.'
-        : error?.message ?? 'Payment could not be completed. Please try again.';
+        : (error instanceof Error ? error.message : 'Payment could not be completed. Try again.');
       setOrderError(message);
       showError('Payment failed', message);
     } finally {

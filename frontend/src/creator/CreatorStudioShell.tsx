@@ -181,7 +181,7 @@ function CreatorStudioInner() {
               await saveDraft();
               navigation.goBack();
             } catch {
-              Alert.alert('Could not save draft', 'Please try again.');
+              Alert.alert('Could not save draft', 'Try again.');
             }
           },
         },
@@ -536,6 +536,8 @@ function CreatorStudioInner() {
         <Pressable
           style={styles.overflowBackdrop}
           onPress={() => setShowOverflow(false)}
+          accessibilityLabel="Close menu"
+          accessibilityRole="button"
         >
           <View
             style={[
@@ -868,7 +870,8 @@ function PageOptionsSheet({
               <Pressable
                 key={d.ms}
                 onPress={() => { haptic.selection(); onSetDuration(d.ms); }}
-                style={[styles.pageSheetDurationBtn, isActive && { backgroundColor: colors.brand }]}
+                style={({ pressed }) => [styles.pageSheetDurationBtn, isActive && { backgroundColor: colors.brand }, pressed && { opacity: 0.7 }]}
+                hitSlop={4}
                 accessibilityLabel={`Set duration to ${d.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
@@ -887,7 +890,8 @@ function PageOptionsSheet({
           <Pressable
             onPress={() => { if (canMoveLeft) { haptic.selection(); onMoveLeft(); } }}
             disabled={!canMoveLeft}
-            style={[styles.pageSheetActionBtn, !canMoveLeft && { opacity: 0.35 }]}
+            style={({ pressed }) => [styles.pageSheetActionBtn, !canMoveLeft && { opacity: 0.35 }, pressed && canMoveLeft && { opacity: 0.6 }]}
+            hitSlop={8}
             accessibilityLabel="Move page left"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canMoveLeft }}
@@ -898,7 +902,8 @@ function PageOptionsSheet({
           <Pressable
             onPress={() => { if (canMoveRight) { haptic.selection(); onMoveRight(); } }}
             disabled={!canMoveRight}
-            style={[styles.pageSheetActionBtn, !canMoveRight && { opacity: 0.35 }]}
+            style={({ pressed }) => [styles.pageSheetActionBtn, !canMoveRight && { opacity: 0.35 }, pressed && canMoveRight && { opacity: 0.6 }]}
+            hitSlop={8}
             accessibilityLabel="Move page right"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canMoveRight }}
@@ -912,7 +917,8 @@ function PageOptionsSheet({
         <View style={styles.pageSheetActions}>
           <Pressable
             onPress={() => { haptic.medium(); onDuplicate(); }}
-            style={styles.pageSheetActionBtn}
+            style={({ pressed }) => [styles.pageSheetActionBtn, pressed && { opacity: 0.6 }]}
+            hitSlop={8}
             accessibilityLabel="Duplicate page"
             accessibilityRole="button"
           >
@@ -922,7 +928,8 @@ function PageOptionsSheet({
           <Pressable
             onPress={() => { if (canDelete) { haptic.medium(); onDelete(); } }}
             disabled={!canDelete}
-            style={[styles.pageSheetActionBtn, !canDelete && { opacity: 0.35 }]}
+            style={({ pressed }) => [styles.pageSheetActionBtn, !canDelete && { opacity: 0.35 }, pressed && canDelete && { opacity: 0.6 }]}
+            hitSlop={8}
             accessibilityLabel="Delete page"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canDelete }}

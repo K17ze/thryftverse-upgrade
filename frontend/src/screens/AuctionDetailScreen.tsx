@@ -350,7 +350,7 @@ export default function AuctionDetailScreen() {
       });
       // Verify the response explicitly confirms Buy Now
       if (!result.isBuyNow) {
-        throw new Error('The response did not confirm the Buy Now winning bid. Please try again.');
+        throw new Error('The response did not confirm the Buy Now winning bid. Try again.');
       }
       // Post-success refresh — do not convert to error if refresh fails
       try {
@@ -820,6 +820,33 @@ export default function AuctionDetailScreen() {
                     </Text>
                   )}
                 </View>
+                {/* ── Progressive reserve guidance (2026 Catawiki benchmark) ──
+                    Show how close the current bid is to the reserve price.
+                    Catawiki case study: progressive reserve transparency
+                    increased winning bids and platform profitability.
+                    Only shown when reserve is not met and current bid is
+                    at least 70% of the reserve. */}
+                {reserveStatus === 'not-met' && isLive && auction.reservePriceGbp && auction.currentBidGbp > 0 && (() => {
+                  const ratio = auction.currentBidGbp / auction.reservePriceGbp;
+                  if (ratio < 0.7) return null;
+                  const remaining = auction.reservePriceGbp - auction.currentBidGbp;
+                  const remainingText = formatFromFiat(remaining, 'GBP');
+                  const guidance = ratio >= 0.9
+                    ? `Just ${remainingText} away from the reserve`
+                    : ratio >= 0.8
+                      ? `Close to the reserve — ${remainingText} more to meet it`
+                      : `Almost at reserve — ${remainingText} more needed`;
+                  return (
+                    <Text
+                      style={[styles.transactionReserveProgress, { color: colors.warning }]}
+                      numberOfLines={2}
+                      accessibilityRole="text"
+                      accessibilityLabel={guidance}
+                    >
+                      {guidance}
+                    </Text>
+                  );
+                })()}
               </View>
             ) : undefined}
           >
@@ -955,7 +982,7 @@ export default function AuctionDetailScreen() {
                           partnerUserId: auction.seller.id,
                         });
                       } catch {
-                        show('Could not start conversation. Please try again.', 'error');
+                        show('Could not start conversation. Try again.', 'error');
                       } finally {
                         setIsResolvingConversation(false);
                       }
@@ -977,7 +1004,7 @@ export default function AuctionDetailScreen() {
                           show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
                         },
                         onError: () => {
-                          show('Could not follow seller. Please try again.', 'error');
+                          show('Could not follow seller. Try again.', 'error');
                         },
                       });
                     },
@@ -1172,7 +1199,7 @@ export default function AuctionDetailScreen() {
               : {
                   label: 'View purchases',
                   onPress: () => navigation.navigate('MyOrders'),
-                  accessibilityLabel: 'View your purchases',
+                  accessibilityLabel: 'Purchases',
                 };
           } else if (viewerState === 'lost' || (isSeller && auction.bidCount === 0)) {
             terminalAction = {
@@ -1831,6 +1858,14 @@ const styles = StyleSheet.create({
     fontSize: Type.metaElevated.size,
     lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    flexShrink: 1,
+  },
+  // Progressive reserve guidance — 2026 Catawiki benchmark pattern.
+  // Flat text, no card. Warning color signals "close but not there yet."
+  transactionReserveProgress: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.medium,
     flexShrink: 1,
   },
   transactionStatusRow: {

@@ -86,7 +86,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
             undeployBotFromConversation(conversationId, botId);
             show(`${botName} removed`, 'info');
           } catch {
-            show('Failed to remove agent. Please try again.', 'error');
+            show('Failed to remove agent. Try again.', 'error');
           } finally {
             setPendingBotId(null);
           }
@@ -103,7 +103,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
       deployBotToConversation(conversationId, botId);
       show('Agent connected', 'success');
     } catch {
-      show('Failed to connect agent. Please try again.', 'error');
+      show('Failed to connect agent. Try again.', 'error');
     } finally {
       setPendingBotId(null);
     }

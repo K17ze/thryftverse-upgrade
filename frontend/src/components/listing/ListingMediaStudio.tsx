@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,25 @@ import {
   Dimensions,
   Image,
   Pressable,
-  ActivityIndicator,
 } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
+  withSequence,
+  withSpring,
+  cancelAnimation,
+  Easing,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Motion } from '../../theme/motionTokens';
 import { SortablePhotoStrip } from '../SortablePhotoStrip';
 import { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
 import { UploadQueueItem, UploadQueueItemState } from '../../services/mediaUploadQueue';
@@ -23,6 +36,22 @@ const COVER_H = Math.round(SCREEN_W * 10 / 16);
 const THUMB_SIZE = 80;
 
 type ItemStatus = 'draft' | 'pending' | 'preparing' | 'uploading' | 'uploaded' | 'failed' | 'cancelled';
+
+const ACTIVE_STATUSES: ItemStatus[] = ['pending', 'preparing', 'uploading'];
+
+function isActiveStatus(status: ItemStatus): boolean {
+  return ACTIVE_STATUSES.includes(status);
+}
+
+const STATUS_PROGRESS: Record<ItemStatus, number> = {
+  draft: 0,
+  pending: 0.1,
+  preparing: 0.3,
+  uploading: 0.65,
+  uploaded: 1,
+  failed: 0,
+  cancelled: 0,
+};
 
 interface ListingMediaStudioProps {
   items: ListingMediaDraftItem[];
@@ -59,36 +88,144 @@ function getDisplayUri(item: ListingMediaDraftItem): string {
   return item.publicUrl || item.uri;
 }
 
+function StatusLabel({ status, color }: { status: ItemStatus; color: string }) {
+  switch (status) {
+    case 'pending':
+      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Queued</Text>;
+    case 'preparing':
+      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Preparing…</Text>;
+    case 'uploading':
+      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Uploading…</Text>;
+    case 'uploaded':
+      return null;
+    case 'failed':
+      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Failed</Text>;
+    case 'cancelled':
+      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Cancelled</Text>;
+    default:
+      return null;
+  }
+}
+
 const statusLabelStyles = StyleSheet.create({
   statusLabelText: {
     fontSize: 9,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
-  },
-  statusLabelFailed: {
-    fontSize: 9,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
   },
 });
 
-function StatusLabel({ status }: { status: ItemStatus }) {
-  switch (status) {
-    case 'pending':
-      return <Text style={statusLabelStyles.statusLabelText}>Queued</Text>;
-    case 'preparing':
-      return <Text style={statusLabelStyles.statusLabelText}>Preparing…</Text>;
-    case 'uploading':
-      return <Text style={statusLabelStyles.statusLabelText}>Uploading…</Text>;
-    case 'uploaded':
-      return null;
-    case 'failed':
-      return <Text style={statusLabelStyles.statusLabelFailed}>Failed</Text>;
-    case 'cancelled':
-      return <Text style={statusLabelStyles.statusLabelText}>Cancelled</Text>;
-    default:
-      return null;
-  }
+function UploadProgressOverlay({
+  status,
+  trackWidth,
+  variant,
+  reducedMotion,
+  colors,
+  styles,
+}: {
+  status: ItemStatus;
+  trackWidth: number;
+  variant: 'thumb' | 'cover';
+  reducedMotion: boolean;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const progress = useSharedValue(STATUS_PROGRESS[status]);
+  const overlayOpacity = useSharedValue(isActiveStatus(status) ? 1 : 0);
+  const barOpacity = useSharedValue(isActiveStatus(status) ? 1 : 0);
+
+  useEffect(() => {
+    const active = isActiveStatus(status);
+    const target = STATUS_PROGRESS[status];
+    progress.value = withTiming(target, {
+      duration: reducedMotion ? 0 : Motion.duration.slow,
+      easing: Easing.out(Easing.cubic),
+    });
+    if (active) {
+      barOpacity.value = withTiming(1, { duration: reducedMotion ? 0 : Motion.duration.fast });
+      if (reducedMotion) {
+        overlayOpacity.value = 1;
+      } else {
+        overlayOpacity.value = 1;
+        overlayOpacity.value = withRepeat(
+          withTiming(0.7, { duration: Motion.duration.normal }),
+          -1,
+          true
+        );
+      }
+    } else {
+      cancelAnimation(overlayOpacity);
+      overlayOpacity.value = withTiming(0, { duration: reducedMotion ? 0 : Motion.duration.fast });
+      barOpacity.value = withTiming(0, { duration: reducedMotion ? 0 : Motion.duration.fast });
+    }
+  }, [status, reducedMotion, progress, overlayOpacity, barOpacity]);
+
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.value }));
+  const fillStyle = useAnimatedStyle(() => ({
+    width: trackWidth * progress.value,
+    opacity: barOpacity.value,
+  }));
+
+  if (!isActiveStatus(status)) return null;
+
+  const pct = Math.round((STATUS_PROGRESS[status] ?? 0) * 100);
+
+  return (
+    <Reanimated.View
+      style={[variant === 'thumb' ? styles.thumbStatusOverlay : styles.coverStatusOverlay, overlayStyle]}
+      pointerEvents="none"
+    >
+      <View style={variant === 'thumb' ? styles.thumbStatusLabel : styles.coverStatusLabel}>
+        <StatusLabel status={status} color={'#fff'} />
+        {variant === 'cover' && (
+          <Text style={styles.coverProgressPct}>{pct}%</Text>
+        )}
+      </View>
+      <View style={variant === 'thumb' ? styles.thumbProgressBarTrack : styles.coverProgressBarTrack}>
+        <Reanimated.View style={[styles.progressBarFill, fillStyle]} />
+      </View>
+    </Reanimated.View>
+  );
+}
+
+function UploadedCheckBadge({
+  variant,
+  reducedMotion,
+  spring,
+  colors,
+  styles,
+}: {
+  variant: 'thumb' | 'cover';
+  reducedMotion: boolean;
+  spring: ReturnType<typeof useMotionConfig>['spring'];
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const scale = useSharedValue(0);
+  useEffect(() => {
+    if (reducedMotion) {
+      scale.value = 1;
+    } else {
+      scale.value = withSequence(
+        withSpring(1.2, spring.success),
+        withSpring(1, spring.success)
+      );
+    }
+  }, [reducedMotion, spring, scale]);
+
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  return (
+    <Reanimated.View
+      style={[variant === 'thumb' ? styles.thumbUploadedBadge : styles.coverUploadedBadge, style]}
+      pointerEvents="none"
+    >
+      <Ionicons
+        name="checkmark-circle"
+        size={variant === 'thumb' ? 16 : 22}
+        color={colors.success}
+      />
+    </Reanimated.View>
+  );
 }
 
 export function ListingMediaStudio({
@@ -107,40 +244,85 @@ export function ListingMediaStudio({
   lockedNote,
 }: ListingMediaStudioProps) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  const handlePickLibrary = useCallback(() => {
+    haptic.light();
+    onPickFromLibrary();
+  }, [haptic, onPickFromLibrary]);
+
+  const handlePickCamera = useCallback(() => {
+    haptic.light();
+    onPickFromCamera();
+  }, [haptic, onPickFromCamera]);
+
+  const handleRemove = useCallback((itemId: string) => {
+    haptic.medium();
+    onRemoveItem(itemId);
+  }, [haptic, onRemoveItem]);
+
+  const handleReorder = useCallback((newOrderedIds: string[]) => {
+    haptic.selection();
+    onReorder(newOrderedIds);
+  }, [haptic, onReorder]);
+
+  const handleRetry = useCallback((itemId: string) => {
+    haptic.light();
+    onRetryItem(itemId);
+  }, [haptic, onRetryItem]);
+
+  const prevStatusMap = useRef<Record<string, ItemStatus>>({});
+  useEffect(() => {
+    const next: Record<string, ItemStatus> = {};
+    for (const item of items) {
+      const status = getItemStatus(item, queueItems);
+      next[item.id] = status;
+      const prev = prevStatusMap.current[item.id];
+      if (prev !== status) {
+        if (status === 'uploaded') {
+          haptic.success();
+        } else if (status === 'failed') {
+          haptic.warning();
+        }
+      }
+    }
+    prevStatusMap.current = next;
+  }, [items, queueItems, haptic]);
+
   if (items.length === 0) {
     return (
       <View style={styles.container}>
-        <View style={styles.emptyCanvas}>
-          <View style={styles.emptyIconWrap}>
-            <Ionicons name="images-outline" size={36} color={colors.textMuted} />
+        <Pressable
+          style={styles.emptyCanvas}
+          onPress={handlePickLibrary}
+          accessibilityRole="button"
+          accessibilityLabel="Add photos from library"
+        >
+          <View style={styles.emptyDashed}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="camera-outline" size={40} color={colors.textMuted} />
+            </View>
+            <Text style={styles.emptyTitle}>Add photos</Text>
+            <Text style={styles.emptySub}>Tap to upload</Text>
           </View>
-          <Text style={styles.emptyTitle}>Add photos or video</Text>
-          <Text style={styles.emptySub}>First photo becomes your cover</Text>
+        </Pressable>
 
-          <View style={styles.emptyActions}>
-            <Pressable
-              style={styles.emptyPrimaryBtn}
-              onPress={onPickFromLibrary}
-              accessibilityRole="button"
-              accessibilityLabel="Choose from library"
-            >
-              <Ionicons name="images-outline" size={18} color={colors.textInverse} style={{ marginRight: Space.sm }} />
-              <Text style={styles.emptyPrimaryText}>Choose from library</Text>
-            </Pressable>
-            <Pressable
-              style={styles.emptySecondaryBtn}
-              onPress={onPickFromCamera}
-              accessibilityRole="button"
-              accessibilityLabel="Take photo with camera"
-            >
-              <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.emptySecondaryText}>Camera</Text>
-            </Pressable>
-          </View>
-
+        <View style={styles.emptyActions}>
+          <Pressable
+            style={styles.emptySecondaryBtn}
+            onPress={handlePickCamera}
+            accessibilityRole="button"
+            accessibilityLabel="Take photo with camera"
+          >
+            <Ionicons name="camera-outline" size={18} color={colors.textPrimary} style={{ marginRight: Space.sm }} />
+            <Text style={styles.emptySecondaryText}>Camera</Text>
+          </Pressable>
           <Text style={styles.emptyCount}>0 / {maxCount}</Text>
         </View>
+
         {errorText ? (
           <Text style={styles.errorText}>{errorText}</Text>
         ) : null}
@@ -164,9 +346,10 @@ export function ListingMediaStudio({
     const status = getItemStatus(item, queueItems);
     const isVideo = isVideoUri(displayUri);
     const canRemove = canRemoveItem ? canRemoveItem(item.id) : true;
+    const isFailed = status === 'failed';
 
     return (
-      <View style={styles.thumbContent}>
+      <View style={[styles.thumbContent, isFailed && styles.thumbContentFailed]}>
         {isVideo ? (
           <View style={styles.thumbVideoTile}>
             <Ionicons name="videocam" size={22} color={colors.textMuted} />
@@ -177,7 +360,7 @@ export function ListingMediaStudio({
 
         {isVideo && (
           <View style={styles.thumbVideoBadge}>
-            <Ionicons name="videocam" size={10} color="#fff" />
+            <Ionicons name="videocam" size={10} color={'#fff'} />
           </View>
         )}
 
@@ -187,55 +370,61 @@ export function ListingMediaStudio({
           </View>
         )}
 
-        {/* Per-item status overlays */}
-        {(status === 'pending' || status === 'preparing' || status === 'uploading') && (
-          <View style={styles.thumbStatusOverlay}>
-            <ActivityIndicator size="small" color="#fff" />
-            <View style={styles.thumbStatusLabel}>
-              <StatusLabel status={status} />
-            </View>
-          </View>
-        )}
+        <View style={styles.thumbNumberBadge}>
+          <Text style={styles.thumbNumberText}>{index + 1}</Text>
+        </View>
+
+        <UploadProgressOverlay
+          status={status}
+          trackWidth={THUMB_SIZE}
+          variant="thumb"
+          reducedMotion={reducedMotion}
+          colors={colors}
+          styles={styles}
+        />
 
         {status === 'uploaded' && (
-          <View style={styles.thumbUploadedBadge}>
-            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-          </View>
+          <UploadedCheckBadge
+            variant="thumb"
+            reducedMotion={reducedMotion}
+            spring={spring}
+            colors={colors}
+            styles={styles}
+          />
         )}
 
-        {status === 'failed' && (
-          <View style={styles.thumbFailedOverlay}>
-            <Ionicons name="warning" size={14} color="#fff" />
-            <Pressable
-              style={styles.thumbRetryBtn}
-              onPress={() => onRetryItem(item.id)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel={`Retry upload for ${isVideo ? 'video' : 'photo'} ${index + 1}`}
-            >
-              <Ionicons name="refresh" size={12} color="#fff" />
-              <Text style={styles.thumbRetryText}>Retry</Text>
-            </Pressable>
-          </View>
+        {isFailed && (
+          <Pressable
+            style={styles.thumbFailedOverlay}
+            onPress={() => handleRetry(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Retry upload for ${isVideo ? 'video' : 'photo'} ${index + 1}`}
+          >
+            <Ionicons name="warning" size={14} color={'#fff'} />
+            <Text style={styles.thumbRetryText}>Tap to retry</Text>
+            <View style={styles.thumbRetryBtn}>
+              <Ionicons name="refresh" size={12} color={'#fff'} />
+              <Text style={styles.thumbRetryBtnText}>Retry</Text>
+            </View>
+          </Pressable>
         )}
 
         {status === 'cancelled' && (
           <View style={styles.thumbCancelledOverlay}>
-            <Ionicons name="ban" size={14} color="#fff" />
+            <Ionicons name="ban" size={14} color={'#fff'} />
             <Text style={styles.thumbCancelledText}>Cancelled</Text>
           </View>
         )}
 
-        {/* Remove button — only for removable items */}
         {canRemove && (
           <Pressable
             style={styles.thumbRemoveBtn}
-            onPress={() => onRemoveItem(item.id)}
+            onPress={() => handleRemove(item.id)}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel={`${removeLabel} ${isVideo ? 'video' : 'photo'} ${index + 1}`}
           >
-            <Ionicons name="close" size={12} color="#fff" />
+            <Ionicons name="close" size={12} color={'#fff'} />
           </Pressable>
         )}
       </View>
@@ -271,7 +460,7 @@ export function ListingMediaStudio({
         {/* Video indicator */}
         {isCoverVideo && (
           <View style={styles.videoIndicator}>
-            <Ionicons name="videocam" size={14} color="#fff" />
+            <Ionicons name="videocam" size={14} color={'#fff'} />
             <Text style={styles.videoText}>VIDEO</Text>
           </View>
         )}
@@ -285,38 +474,48 @@ export function ListingMediaStudio({
         {coverCanRemove && (
           <Pressable
             style={styles.coverRemoveBtn}
-            onPress={() => onRemoveItem(coverItem.id)}
+            onPress={() => handleRemove(coverItem.id)}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             accessibilityRole="button"
             accessibilityLabel={`${removeLabel} cover ${isCoverVideo ? 'video' : 'photo'}`}
           >
-            <Ionicons name="close-circle" size={22} color="#fff" />
+            <Ionicons name="close-circle" size={22} color={'#fff'} />
           </Pressable>
         )}
 
-        {/* Cover upload status overlay */}
-        {(coverStatus === 'pending' || coverStatus === 'preparing' || coverStatus === 'uploading') && (
-          <View style={styles.coverStatusOverlay}>
-            <ActivityIndicator size="small" color="#fff" />
-            <View style={styles.coverStatusLabel}>
-              <StatusLabel status={coverStatus} />
-            </View>
-          </View>
+        {/* Cover upload progress overlay */}
+        <UploadProgressOverlay
+          status={coverStatus}
+          trackWidth={SCREEN_W}
+          variant="cover"
+          reducedMotion={reducedMotion}
+          colors={colors}
+          styles={styles}
+        />
+
+        {coverStatus === 'uploaded' && (
+          <UploadedCheckBadge
+            variant="cover"
+            reducedMotion={reducedMotion}
+            spring={spring}
+            colors={colors}
+            styles={styles}
+          />
         )}
 
         {/* Cover failed overlay with Retry + Remove */}
         {coverStatus === 'failed' && (
           <View style={styles.coverFailedOverlay}>
-            <Ionicons name="warning" size={16} color="#fff" />
+            <Ionicons name="warning" size={16} color={'#fff'} />
             <Text style={styles.coverFailedText}>Upload failed</Text>
             <Pressable
               style={styles.coverRetryBtn}
-              onPress={() => onRetryItem(coverItem.id)}
+              onPress={() => handleRetry(coverItem.id)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
               accessibilityLabel={`Retry upload for cover ${isCoverVideo ? 'video' : 'photo'}`}
             >
-              <Ionicons name="refresh" size={14} color="#fff" />
+              <Ionicons name="refresh" size={14} color={'#fff'} />
               <Text style={styles.coverRetryText}>Retry</Text>
             </Pressable>
           </View>
@@ -325,7 +524,7 @@ export function ListingMediaStudio({
         {/* Cover cancelled overlay */}
         {coverStatus === 'cancelled' && (
           <View style={styles.coverCancelledOverlay}>
-            <Ionicons name="ban" size={16} color="#fff" />
+            <Ionicons name="ban" size={16} color={'#fff'} />
             <Text style={styles.coverCancelledText}>Cancelled</Text>
           </View>
         )}
@@ -335,7 +534,7 @@ export function ListingMediaStudio({
       <SortablePhotoStrip
         photos={photoUris}
         itemIds={itemIds}
-        onReorder={onReorder}
+        onReorder={handleReorder}
         renderItem={renderThumbItem}
         showAddButton={false}
         reorderEnabled={reorderEnabled}
@@ -351,7 +550,7 @@ export function ListingMediaStudio({
         {items.length < maxCount && (
           <Pressable
             style={styles.studioActionBtn}
-            onPress={onPickFromLibrary}
+            onPress={handlePickLibrary}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
             accessibilityLabel="Add more photos from library"
@@ -362,7 +561,7 @@ export function ListingMediaStudio({
         )}
         <Pressable
           style={styles.studioActionBtn}
-          onPress={onPickFromCamera}
+          onPress={handlePickCamera}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
           accessibilityLabel="Take photo with camera"
@@ -387,11 +586,19 @@ function createStyles(colors: ThemeColors) {
   },
   emptyCanvas: {
     width: SCREEN_W,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.lg,
+    alignItems: 'center',
+  },
+  emptyDashed: {
+    width: '100%',
     height: COVER_H,
-    backgroundColor: colors.surfaceAlt,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.xl,
   },
   emptyIconWrap: {
     width: 64,
@@ -412,30 +619,17 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginBottom: Space.lg,
   },
   emptyActions: {
     flexDirection: 'row',
-    gap: Space.sm,
     alignItems: 'center',
-  },
-  emptyPrimaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.lg,
-    paddingVertical: 12,
-    borderRadius: Radius.xxl,
-    backgroundColor: colors.brand,
-  },
-  emptyPrimaryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
+    justifyContent: 'space-between',
+    width: SCREEN_W - Space.md * 2,
+    marginTop: Space.md,
   },
   emptySecondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     paddingHorizontal: Space.md,
     paddingVertical: 12,
     borderRadius: Radius.xxl,
@@ -452,7 +646,6 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: Space.md,
   },
   coverWrap: {
     width: SCREEN_W,
@@ -469,7 +662,7 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     top: Space.sm,
     left: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
@@ -487,7 +680,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
@@ -501,7 +694,7 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     bottom: Space.sm,
     left: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
@@ -518,24 +711,43 @@ function createStyles(colors: ThemeColors) {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
   coverStatusOverlay: {
     position: 'absolute',
-    bottom: Space.sm,
-    right: Space.sm,
-    flexDirection: 'row',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.md,
+    justifyContent: 'center',
   },
   coverStatusLabel: {
-    justifyContent: 'center',
+    position: 'absolute',
+    bottom: Space.lg,
+    alignItems: 'center',
+    gap: 2,
+  },
+  coverProgressPct: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.bold,
+    color: '#fff',
+  },
+  coverProgressBarTrack: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  coverUploadedBadge: {
+    position: 'absolute',
+    bottom: Space.sm,
+    right: Space.sm,
   },
   coverFailedOverlay: {
     position: 'absolute',
@@ -544,7 +756,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,59,48,0.85)',
+    backgroundColor: colors.danger,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: Radius.md,
@@ -575,7 +787,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
@@ -589,20 +801,26 @@ function createStyles(colors: ThemeColors) {
   thumbContent: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  thumbContentFailed: {
+    borderColor: colors.danger,
+    borderWidth: 2,
   },
   thumbImage: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.md,
   },
   thumbVideoTile: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.md,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -614,22 +832,39 @@ function createStyles(colors: ThemeColors) {
     width: 18,
     height: 18,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
   thumbCoverBadge: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    top: 4,
+    left: 4,
     backgroundColor: colors.brand,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    alignItems: 'center',
+    borderRadius: Radius.sm,
   },
   thumbCoverText: {
     color: colors.background,
-    fontSize: 9,
+    fontSize: 8,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.3,
+  },
+  thumbNumberBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbNumberText: {
+    color: colors.background,
+    fontSize: 10,
     fontFamily: Typography.family.bold,
   },
   thumbStatusOverlay: {
@@ -644,8 +879,20 @@ function createStyles(colors: ThemeColors) {
   },
   thumbStatusLabel: {
     position: 'absolute',
-    bottom: 4,
+    bottom: 8,
     alignItems: 'center',
+  },
+  thumbProgressBarTrack: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  progressBarFill: {
+    height: 3,
+    backgroundColor: colors.brand,
   },
   thumbUploadedBadge: {
     position: 'absolute',
@@ -658,10 +905,15 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255,59,48,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
+  },
+  thumbRetryText: {
+    fontSize: 9,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
   },
   thumbRetryBtn: {
     flexDirection: 'row',
@@ -670,9 +922,9 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: colors.danger,
   },
-  thumbRetryText: {
+  thumbRetryBtnText: {
     fontSize: 10,
     fontFamily: Typography.family.bold,
     color: '#fff',
@@ -696,11 +948,11 @@ function createStyles(colors: ThemeColors) {
   thumbRemoveBtn: {
     position: 'absolute',
     top: 4,
-    left: 4,
+    right: 4,
     width: 20,
     height: 20,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
   },

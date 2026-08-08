@@ -17,7 +17,7 @@ export interface CoOwnRiskDisclosureProps {
 }
 
 const DEFAULT_RISKS = [
-  'Co-Own units are not guaranteed to increase in value. You may receive less than you paid.',
+  'Co-Own units are not guaranteed to increase in value. You could receive less than you paid.',
   'Liquidity is not guaranteed. Selling units depends on buyer demand.',
   'You own units in a shared asset, not the physical item itself.',
   'Buyout of the full asset is not currently supported.',

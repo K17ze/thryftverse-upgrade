@@ -244,7 +244,7 @@ function buildSuggestedTitle(
     const catLower = category.toLowerCase();
     parts.push(catLower);
   }
-  if (parts.length === 0) return 'Untitled item';
+  if (parts.length === 0) return 'New item';
   // e.g. "Vintage Nike black & white sportswear item"
   return `${parts.join(' ')} item`;
 }
@@ -273,7 +273,7 @@ function buildSuggestedDescription(
   if (style) attrFragments.push(`Style: ${style}`);
   if (season) attrFragments.push(`Season: ${season}`);
   if (attrFragments.length > 0) lines.push(attrFragments.join(' · '));
-  lines.push('Please review all details before publishing — AI suggestions may be inaccurate.');
+  lines.push('AI suggestions — review before publishing.');
   return lines.join('\n');
 }
 

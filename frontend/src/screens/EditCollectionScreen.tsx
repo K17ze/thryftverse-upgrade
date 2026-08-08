@@ -74,7 +74,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
       navigation.goBack();
     } catch {
       setIsSaving(false);
-      show('Unable to update collection. Please check your connection.', 'error');
+      show('Unable to update collection. Check your connection.', 'error');
     }
   }, [canSave, collectionId, haptic, name, description, isPrivate, updateCollectionOnApi, show, navigation]);
 
@@ -95,7 +95,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
                 show('Collection deleted', 'info');
                 navigation.navigate('Closet');
               } catch {
-                show('Unable to delete collection. Please try again.', 'error');
+                show('Unable to delete collection. Try again.', 'error');
               }
             }
           },

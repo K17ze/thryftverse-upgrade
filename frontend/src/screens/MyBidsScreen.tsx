@@ -388,7 +388,7 @@ export default function MyBidsScreen() {
             <EmptyState
               icon="hammer-outline"
               title={filter === 'won' ? 'No wins yet' : filter === 'lost' ? 'No lost bids' : filter === 'leading' ? 'Not leading any bids' : filter === 'outbid' ? 'No outbid bids' : filter === 'watching' ? 'Not watching anything' : 'No activity yet'}
-              subtitle={filter === 'won' ? 'Auctions you win will appear here.' : filter === 'lost' ? 'Bids you did not win will appear here.' : filter === 'leading' ? 'Auctions where you have the top bid will appear here.' : filter === 'outbid' ? 'Auctions where someone outbid you will appear here.' : filter === 'watching' ? 'Auctions you watch will appear here.' : 'Bids you place on auctions will appear here.'}
+              subtitle={filter === 'won' ? 'Auctions you win appear here.' : filter === 'lost' ? "Bids you didn't win appear here." : filter === 'leading' ? 'Auctions where you have the top bid appear here.' : filter === 'outbid' ? 'Auctions where someone outbid you appear here.' : filter === 'watching' ? 'Auctions you watch appear here.' : 'Bids you place appear here.'}
             />
           )
         }

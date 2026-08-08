@@ -315,7 +315,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
             variant="empty"
             icon="location-outline"
             title="No saved addresses"
-            subtitle="Add a delivery address for faster checkout. You can add multiple addresses and choose a default."
+            subtitle="Add a delivery address for faster checkout. Add multiple addresses and choose a default."
             actionLabel="Add address"
             onAction={handleAdd}
           />

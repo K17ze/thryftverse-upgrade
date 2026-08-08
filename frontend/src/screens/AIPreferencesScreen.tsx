@@ -89,7 +89,7 @@ export default function AIPreferencesScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="AI Preferences"
-          subtitle="Control your AI-powered features"
+          subtitle="AI settings"
           onBack={() => navigation.goBack()}
         />
       }

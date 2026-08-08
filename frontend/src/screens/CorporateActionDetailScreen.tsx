@@ -352,7 +352,7 @@ export default function CorporateActionDetailScreen() {
                 <View style={styles.voteHeaderText}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 2 }]}>Cast your vote</Text>
                   <Text style={[styles.voteHeaderSubtitle, { color: colors.textSecondary }]}>
-                    {myVote ? 'You can change your vote while open' : 'Your voting power is proportional to your holdings'}
+                    {myVote ? 'Change your vote while the poll is open' : 'Your voting power is proportional to your holdings'}
                   </Text>
                 </View>
               </View>

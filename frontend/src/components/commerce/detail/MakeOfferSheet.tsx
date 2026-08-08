@@ -256,11 +256,11 @@ export function MakeOfferSheet({
       return;
     }
     if (numericOfferGbp > askingPriceGbp * 2) {
-      setErrorMsg('Offer seems too high. Please review the amount.');
+      setErrorMsg('Offer seems too high. Review the amount.');
       return;
     }
     if (!sellerId) {
-      setErrorMsg('Could not load seller info. Please try again.');
+      setErrorMsg('Could not load seller info. Try again.');
       return;
     }
 
@@ -326,7 +326,7 @@ export function MakeOfferSheet({
         </View>
         <Pressable
           onPress={onDismiss}
-          style={styles.closeTarget}
+          style={({ pressed }) => [styles.closeTarget, pressed && { opacity: 0.5 }]}
           accessibilityLabel="Close make an offer"
           accessibilityRole="button"
           accessibilityHint="Dismisses the offer sheet"

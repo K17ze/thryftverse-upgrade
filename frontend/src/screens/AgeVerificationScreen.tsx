@@ -140,13 +140,13 @@ export default function AgeVerificationScreen({ navigation }: Props) {
             style={[styles.title, { color: colors.textPrimary }]}
             accessibilityRole="header"
           >
-            Welcome to ThryftVerse
+            Get started
           </Reanimated.Text>
           <Reanimated.Text
             entering={enterSubtitle}
             style={[styles.subtitle, { color: colors.textSecondary }]}
           >
-            ThryftVerse is a marketplace for adults. Please confirm you are at least 18 years old.
+            ThryftVerse is a marketplace for adults. Confirm you are at least 18 years old.
           </Reanimated.Text>
 
           <Reanimated.View entering={enterButtons} style={styles.actions}>

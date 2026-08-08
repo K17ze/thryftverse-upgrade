@@ -489,7 +489,7 @@ export function getCommands(navigation: CommandNavigation): Command[] {
     {
       id: 'search-saved',
       label: 'Saved searches',
-      subtitle: 'Manage your search alerts',
+      subtitle: 'Search alerts',
       category: 'search',
       icon: 'bookmark-outline',
       keywords: ['saved', 'alerts', 'search alerts'],

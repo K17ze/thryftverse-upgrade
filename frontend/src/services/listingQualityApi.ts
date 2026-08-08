@@ -25,6 +25,8 @@
  */
 
 import type { Listing } from './listingsApi';
+import { formatFiatAmount } from '../utils/currency';
+import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 // ---------------------------------------------------------------------------
 // Demo-mode flag — single source of truth
@@ -405,7 +407,7 @@ export function scorePricing(
     suggestions.push(
       makeSuggestion(
         'pricing',
-        `£${price.toFixed(2)} is below the suggested range (£${min}–£${max}). Buyers may question quality.`,
+        `${formatFiatAmount(price, DEFAULT_CURRENCY_CODE, 2)} is below the suggested range (${formatFiatAmount(min, DEFAULT_CURRENCY_CODE, 0)}–${formatFiatAmount(max, DEFAULT_CURRENCY_CODE, 0)}). Buyers may question quality.`,
         'warning',
       ),
     );
@@ -414,7 +416,7 @@ export function scorePricing(
     suggestions.push(
       makeSuggestion(
         'pricing',
-        `£${price.toFixed(2)} is above the suggested range (£${min}–£${max}). Consider lowering to attract offers.`,
+        `${formatFiatAmount(price, DEFAULT_CURRENCY_CODE, 2)} is above the suggested range (${formatFiatAmount(min, DEFAULT_CURRENCY_CODE, 0)}–${formatFiatAmount(max, DEFAULT_CURRENCY_CODE, 0)}). Consider lowering to attract offers.`,
         'warning',
       ),
     );

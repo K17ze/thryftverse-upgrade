@@ -223,7 +223,7 @@ export default function SettingsScreen({ navigation }: Props) {
           const granted = await requestPushPermissionWithContext('settings');
           setPushPermissionGranted(granted);
           show(
-            granted ? 'Push notifications enabled' : 'Push notifications were denied. You can enable them in device settings.',
+            granted ? 'Push notifications enabled' : 'Push notifications were denied. Enable them in device settings.',
             granted ? 'success' : 'info',
           );
         } catch {
@@ -488,6 +488,25 @@ export default function SettingsScreen({ navigation }: Props) {
           title="Data & Privacy"
           subtitle="Download, delete, privacy controls"
           onPress={() => navigation.navigate('DataPrivacy')}
+        />
+        <SettingsRow
+          icon="shield-outline"
+          title="Account control"
+          subtitle="Security, sessions, password"
+          onPress={() => navigation.navigate('AccountControl')}
+        />
+        <SettingsRow
+          icon="download-outline"
+          title="Download my data"
+          subtitle="Export a copy of your account data"
+          onPress={() => navigation.navigate('DataExport')}
+        />
+        <SettingsRow
+          icon="trash-outline"
+          title="Delete account"
+          subtitle="Permanently erase your account and data"
+          danger
+          onPress={() => navigation.navigate('DeleteAccount')}
           isLast
         />
       </SettingsSection>
@@ -593,7 +612,7 @@ export default function SettingsScreen({ navigation }: Props) {
         <SettingsRow
           icon="sparkles-outline"
           title="Your Algorithm"
-          subtitle="Manage your recommendations"
+          subtitle="Your feed preferences"
           onPress={() => navigation.navigate('YourAlgorithm')}
         />
         <SettingsRow
@@ -654,7 +673,7 @@ export default function SettingsScreen({ navigation }: Props) {
         <SettingsRow
           icon="person-circle-outline"
           title="My Agents"
-          subtitle="Manage your created AI agents"
+          subtitle="Your custom agents"
           onPress={() => navigation.navigate('CustomBots')}
         />
         <SettingsRow
@@ -686,37 +705,6 @@ export default function SettingsScreen({ navigation }: Props) {
           title="Tax documents"
           subtitle="Annual statements & P&L"
           onPress={() => navigation.navigate('CoOwnTaxDocuments')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── ACCOUNT CONTROL ── */}
-      <SettingsSection title="Account control" icon="shield-outline" noCard>
-        <SettingsRow
-          icon="shield-outline"
-          title="Account control"
-          subtitle="Download data, delete account"
-          onPress={() => navigation.navigate('AccountControl')}
-          isFirst
-        />
-        <SettingsRow
-          icon="download-outline"
-          title="Download my data"
-          subtitle="Export a copy of your account data"
-          onPress={() => navigation.navigate('DataExport')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── DANGER ZONE ── */}
-      <SettingsSection title="Danger zone" icon="warning-outline" noCard>
-        <SettingsRow
-          icon="trash-outline"
-          title="Delete account"
-          subtitle="Permanently erase your account and data"
-          danger
-          onPress={() => navigation.navigate('DeleteAccount')}
-          isFirst
           isLast
         />
       </SettingsSection>

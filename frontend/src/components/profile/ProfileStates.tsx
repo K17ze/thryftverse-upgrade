@@ -39,7 +39,7 @@ export function ProfileErrorState({ onRetry, onBack, coverHeight = COVER_HEIGHT 
         </View>
       </View>
       <Pressable
-        style={styles.stateContainer}
+        style={({ pressed }) => [styles.stateContainer, pressed && { opacity: 0.6 }]}
         onPress={onRetry}
         accessibilityRole="button"
         accessibilityLabel="Retry loading profile"

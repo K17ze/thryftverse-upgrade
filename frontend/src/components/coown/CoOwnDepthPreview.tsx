@@ -42,7 +42,12 @@ export function CoOwnDepthPreview({
 
   if (slippageBeyondDepth) {
     return (
-      <View style={styles.container}>
+      <View
+        style={styles.container}
+        accessible
+        accessibilityRole="summary"
+        accessibilityLabel="Depth impact: slippage beyond visible depth, use limit order"
+      >
         <Text style={[styles.header, { color: colors.textMuted }]}>
           Depth impact
         </Text>
@@ -57,7 +62,12 @@ export function CoOwnDepthPreview({
   }
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      accessible
+      accessibilityRole="summary"
+      accessibilityLabel={`Depth impact: ${consumePct}% of available depth consumed`}
+    >
       <Text style={[styles.header, { color: colors.textMuted }]}>
         Depth impact
       </Text>

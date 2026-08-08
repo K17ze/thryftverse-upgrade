@@ -92,7 +92,7 @@ export function ProductCommerceSummary({
         title: 'Return policy',
         body: commerce.returnPolicy.accepted
           ? `This seller accepts returns${commerce.returnPolicy.windowDays ? ` within ${commerce.returnPolicy.windowDays} days` : ''}.${commerce.returnPolicy.conditions ? `\n\n${commerce.returnPolicy.conditions}` : ''}`
-          : 'This seller does not accept returns. Please check the item description carefully before purchasing.',
+          : 'This seller does not accept returns. Check the item description carefully before purchasing.',
       },
     });
   }

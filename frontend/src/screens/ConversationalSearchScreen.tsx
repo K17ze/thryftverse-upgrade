@@ -149,7 +149,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           setConversation({ ...conversation, messages: [...conversation.messages] });
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+        setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
       } finally {
         setIsProcessing(false);
       }

@@ -22,6 +22,16 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useMotionConfig } from '../hooks/useMotionConfig';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  withDelay,
+  Easing,
+} from 'react-native-reanimated';
 
 // ── CreatorCamera — Flagship 2026 Elevation ────────────────────────
 // Snapchat 2026 / TikTok / BeReal-grade camera component with:
@@ -79,6 +89,7 @@ export default function CreatorCamera({
   const { show } = useToast();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const cameraRef = useRef<CameraView>(null);
@@ -88,9 +99,9 @@ export default function CreatorCamera({
   const [zoomIndex, setZoomIndex] = useState<ZoomLevel>(1);
   const [timerOption, setTimerOption] = useState<TimerOption>(0);
   const [showGrid, setShowGrid] = useState(false);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const shutterScale = useSharedValue(1);
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
-  const focusAnim = useRef(new Animated.Value(0)).current;
+  const focusAnim = useSharedValue(0);
   const [lastImageUri, setLastImageUri] = useState<string | null>(null);
   const [recentImages, setRecentImages] = useState<string[]>([]);
   const [showRecentCarousel, setShowRecentCarousel] = useState(false);
@@ -98,7 +109,7 @@ export default function CreatorCamera({
   const [countdown, setCountdown] = useState<number | null>(null);
   const reviewOpacity = useRef(new Animated.Value(0)).current;
   const countdownAnim = useRef(new Animated.Value(0)).current;
-  const captureFlash = useRef(new Animated.Value(0)).current;
+  const captureFlash = useSharedValue(0);
   // ── Multi-capture mode (Instagram Layout-style sequential captures) ──
   const [multiCaptureMode, setMultiCaptureMode] = useState(false);
   const [multiCaptures, setMultiCaptures] = useState<string[]>([]);
@@ -107,6 +118,13 @@ export default function CreatorCamera({
   const isVisualSearch = mode === 'visual-search';
   const modeLabel = isVisualSearch ? 'Search' : isPoster ? 'Story' : 'Look';
   const zoom = ZOOM_LEVELS[zoomIndex];
+
+  const captureFlashStyle = useAnimatedStyle(() => ({ opacity: captureFlash.value }));
+  const focusReticleStyle = useAnimatedStyle(() => ({
+    opacity: focusAnim.value,
+    transform: [{ scale: 1.4 - 0.4 * focusAnim.value }],
+  }));
+  const shutterStyle = useAnimatedStyle(() => ({ transform: [{ scale: shutterScale.value }] }));
 
   // ── Permission ──
   useEffect(() => {
@@ -150,7 +168,7 @@ export default function CreatorCamera({
   }, [haptic]);
 
   const toggleFacing = useCallback(() => {
-    haptic.light();
+    haptic.selection();
     setFacing((p) => (p === 'back' ? 'front' : 'back'));
   }, [haptic]);
 
@@ -257,14 +275,12 @@ export default function CreatorCamera({
       });
       if (photo?.uri) {
         haptic.medium();
-        // Capture flash — subtle white overlay (Snapchat pattern)
+        // Capture flash — white overlay 0→0.8→0 over 200ms (Snapchat pattern)
         if (!reducedMotion) {
-          captureFlash.setValue(1);
-          Animated.timing(captureFlash, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: false,
-          }).start();
+          captureFlash.value = withSequence(
+            withTiming(0.8, { duration: 80, easing: Easing.out(Easing.cubic) }),
+            withTiming(0, { duration: 120, easing: Easing.in(Easing.cubic) })
+          );
         }
         setCapturedUri(photo.uri);
       }
@@ -274,12 +290,12 @@ export default function CreatorCamera({
   }, [cameraRef, countdown, haptic, reducedMotion, show, timerOption, countdownAnim]);
 
   const handleShutterPress = useCallback(() => {
-    Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.85, duration: 80, useNativeDriver: false }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: false }),
-    ]).start();
+    if (!reducedMotion) {
+      shutterScale.value = withSpring(0.92, spring.press);
+      shutterScale.value = withSpring(1, spring.press);
+    }
     takePhoto();
-  }, [scaleAnim, takePhoto]);
+  }, [shutterScale, takePhoto, reducedMotion, spring]);
 
   // ── Quick-review flow ──
   useEffect(() => {
@@ -368,13 +384,15 @@ export default function CreatorCamera({
 
   const handleTapFocus = useCallback((evt: GestureResponderEvent) => {
     const { locationX, locationY } = evt.nativeEvent;
+    haptic.light();
     setFocusPoint({ x: locationX, y: locationY });
-    focusAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(focusAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
-      Animated.timing(focusAnim, { toValue: 0, duration: 200, useNativeDriver: false, delay: 400 }),
-    ]).start(() => setFocusPoint(null));
-  }, [focusAnim]);
+    focusAnim.value = 0;
+    focusAnim.value = withSequence(
+      withSpring(1, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press),
+      withDelay(reducedMotion ? 0 : 400, withTiming(0, { duration: reducedMotion ? 0 : 200, easing: Easing.in(Easing.cubic) }))
+    );
+    setTimeout(() => setFocusPoint(null), reducedMotion ? 0 : 700);
+  }, [focusAnim, haptic, reducedMotion, spring]);
 
   const handleOpenSettings = useCallback(() => Linking.openSettings(), []);
 
@@ -471,8 +489,8 @@ export default function CreatorCamera({
       </Pressable>
 
       {/* Capture flash — subtle white overlay on capture (Snapchat pattern) */}
-      <Animated.View
-        style={[styles.captureFlash, { opacity: captureFlash }]}
+      <Reanimated.View
+        style={[styles.captureFlash, captureFlashStyle]}
         pointerEvents="none"
       />
 
@@ -500,17 +518,14 @@ export default function CreatorCamera({
 
       {/* Focus reticle */}
       {focusPoint && (
-        <Animated.View
+        <Reanimated.View
           style={[
             styles.focusReticle,
             {
               left: focusPoint.x - 30,
               top: focusPoint.y - 30,
-              opacity: focusAnim,
-              transform: [
-                { scale: focusAnim.interpolate({ inputRange: [0, 1], outputRange: [1.4, 1] }) },
-              ],
             },
+            focusReticleStyle,
           ]}
         />
       )}
@@ -744,9 +759,9 @@ export default function CreatorCamera({
           accessibilityRole="button"
           disabled={countdown !== null}
         >
-          <Animated.View style={[styles.shutterOuter, { transform: [{ scale: scaleAnim }] }]}>
+          <Reanimated.View style={[styles.shutterOuter, shutterStyle]}>
             <View style={styles.shutterInner} />
-          </Animated.View>
+          </Reanimated.View>
         </Pressable>
 
         {/* Spacer — flip is in the right rail, this keeps the shutter centered */}

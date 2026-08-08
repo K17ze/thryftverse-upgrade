@@ -23,7 +23,7 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { ToastContainer } from './src/components/Toast';
-import { AppErrorBoundary, initSentry, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
+import { AppErrorBoundary, initSentry, installGlobalErrorHandler, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
 import { registerAppNavigationRef } from './src/platform/monitoring/appNavigation';
 import { KeyboardProvider } from './src/platform/keyboard';
 import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
@@ -53,6 +53,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 initSentry();
+
+// Wrap React Native's default global JS error handler so uncaught errors are
+// logged and forwarded to Sentry, while preserving the dev redbox and native
+// crash reporting behaviour. Idempotent — safe to call once at startup.
+installGlobalErrorHandler();
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 

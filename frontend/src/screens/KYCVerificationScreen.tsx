@@ -206,7 +206,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       return;
     }
     if (!currentUser?.id) {
-      show('Please log in to submit verification.', 'error');
+      show('Log in to submit verification.', 'error');
       return;
     }
     haptic.medium();
@@ -232,7 +232,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       }
 
       setSubmitted(true);
-      show('Verification submitted. We will review within 24 hours.', 'success');
+      show('Verification submitted. We\'ll review within 24 hours.', 'success');
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
       const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
@@ -256,7 +256,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
           </View>
           <Text style={styles.submittedTitle}>Verification in review</Text>
           <Text style={styles.submittedBody}>
-            We have received your submission and are reviewing your identity. This typically takes within 24 hours. You will be notified once the review is complete.
+            We have received your submission and are reviewing your identity. This typically takes within 24 hours. You'll be notified once the review is complete.
           </Text>
           <View style={[styles.submittedTimeline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <SubmittedStep icon="checkmark-circle" label="Identity details" status="complete" colors={colors} styles={styles} />
@@ -632,7 +632,7 @@ function StepDocument({
       <View style={[styles.qualityNote, { backgroundColor: colors.surfaceAlt }]}>
         <Ionicons name="sunny-outline" size={14} color={colors.warning} />
         <Text style={styles.qualityNoteText}>
-          Make sure the document is well-lit and all text is readable.
+          Ensure the document is well-lit and all text is readable.
         </Text>
       </View>
 
@@ -687,7 +687,7 @@ function StepSelfie({
     <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Selfie verification</Text>
       <Text style={styles.stepSubtitle}>
-        We will verify your identity by comparing your selfie to your document photo.
+        We'll verify your identity by comparing your selfie to your document photo.
       </Text>
 
       <View style={[styles.livenessNote, { backgroundColor: colors.surfaceAlt }]}>
@@ -816,7 +816,7 @@ function StepBusiness({
         <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
           <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
           <Text style={styles.trustNoteText}>
-            You can add business details later if your selling activity changes.
+            Add business details later if your selling activity changes.
           </Text>
         </View>
       )}
@@ -871,7 +871,7 @@ function StepReview({
     <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Review & submit</Text>
       <Text style={styles.stepSubtitle}>
-        Please confirm the information below before submitting.
+        Confirm the information below before submitting.
       </Text>
 
       {/* Summary — read-only */}
@@ -940,7 +940,7 @@ function StepReview({
       <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
         <Ionicons name="time-outline" size={14} color={colors.warning} />
         <Text style={styles.trustNoteText}>
-          Review typically takes within 24 hours. We will notify you when it is complete.
+          Review typically takes within 24 hours. We'll notify you when it is complete.
         </Text>
       </View>
     </Reanimated.View>

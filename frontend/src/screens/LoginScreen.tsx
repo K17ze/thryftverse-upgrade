@@ -81,7 +81,7 @@ export default function LoginScreen() {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail || !password) {
-      setErrorMsg('Please fill in both email and password.');
+      setErrorMsg('Fill in both email and password.');
       setEmailError(!normalizedEmail ? 'Email is required.' : '');
       setPasswordError(!password ? 'Password is required.' : '');
       setInfoMsg('');

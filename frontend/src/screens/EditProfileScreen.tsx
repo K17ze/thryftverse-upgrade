@@ -147,8 +147,8 @@ export default function EditProfileScreen() {
       }
       show('Profile updated', 'success');
       navigation.goBack();
-    } catch (err: any) {
-      const message = err?.message || 'Failed to save profile. Please try again.';
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save profile. Try again.';
       show(message, 'error');
     } finally {
       setIsSaving(false);

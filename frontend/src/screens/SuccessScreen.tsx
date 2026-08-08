@@ -94,7 +94,7 @@ export default function SuccessScreen() {
               {isLoading
                 ? 'Fetching order details...'
                 : hasError
-                  ? 'Order confirmation received. You can view details from My Orders.'
+                  ? 'Order confirmation received. View details from My Orders.'
                   : `Order #${orderId.slice(-8).toUpperCase()} confirmed. The seller will prepare your item for dispatch.`}
             </Text>
           </Reanimated.View>

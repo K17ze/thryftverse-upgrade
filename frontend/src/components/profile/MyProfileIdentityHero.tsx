@@ -77,7 +77,7 @@ export function MyProfileIdentityHero({
             </View>
           )}
           <Pressable
-            style={styles.editAvatarHit}
+            style={({ pressed }) => [styles.editAvatarHit, pressed && { opacity: 0.6 }]}
             onPress={onEditAvatar}
             accessibilityLabel="Edit profile photo"
             accessibilityRole="button"

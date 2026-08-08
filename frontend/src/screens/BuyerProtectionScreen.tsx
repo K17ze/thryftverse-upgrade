@@ -94,11 +94,11 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
   const handleSubmitClaim = async () => {
     if (reason.trim().length < 2) {
-      show('Please enter a reason', 'error');
+      show('Enter a reason', 'error');
       return;
     }
     if (description.trim().length < 10) {
-      show('Please describe the issue (at least 10 characters)', 'error');
+      show('Describe the issue (at least 10 characters)', 'error');
       return;
     }
 

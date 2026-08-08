@@ -55,7 +55,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
     haptic.light();
     const currentlySaved = isSavedProduct(itemId);
     toggleSavedProduct(itemId);
-    show(currentlySaved ? 'Removed from saved' : 'Saved to items', 'success');
+    show(currentlySaved ? 'Removed from Saved' : 'Saved', 'success');
   }, [haptic, isSavedProduct, itemId, show, toggleSavedProduct]);
 
   const handleToggleCollection = useCallback(async (collection: Collection) => {
@@ -85,7 +85,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
       } else {
         removeFromCollection(collection.id, itemId);
       }
-      show('Action failed. Please try again.', 'error');
+      show('Failed — try again.', 'error');
     }
   }, [addToCollection, addToCollectionOnApi, haptic, isInCollection, itemId, removeFromCollection, removeFromCollectionOnApi, show]);
 
@@ -103,14 +103,14 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
         addToCollection(newId, itemId);
       } catch {
         // Collection created but item add failed; user can retry manually
-        show('Collection created. Adding item failed.', 'info');
+        show('Collection created. Couldn\'t add item.', 'info');
       }
       setNewCollectionName('');
       setShowCreateInput(false);
       Keyboard.dismiss();
-      show('Created and added to collection', 'success');
+      show('Added to new collection', 'success');
     } catch {
-      show('Unable to create collection. Please try again.', 'error');
+      show('Couldn\'t create collection.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -136,7 +136,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
     const cover = getCollectionCover(collection);
     return (
       <Pressable
-        style={styles.collectionRow}
+        style={({ pressed }) => [styles.collectionRow, pressed && { opacity: 0.6 }]}
         onPress={() => handleToggleCollection(collection)}
         accessibilityRole="button"
         accessibilityState={{ selected }}
@@ -188,6 +188,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
               hitSlop={12}
               accessibilityLabel="Close save modal"
               accessibilityRole="button"
+              style={({ pressed }) => pressed && { opacity: 0.5 }}
             >
               <Ionicons name="close" size={24} color={colors.textPrimary} />
             </Pressable>
@@ -213,7 +214,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
           {/* Saved Toggle — flat row with hairline separator, not a bordered card.
               Selection state communicated by icon fill, not border color. */}
           <Pressable
-            style={[styles.savedRow, { borderBottomColor: colors.borderSubtle }]}
+            style={({ pressed }) => [styles.savedRow, { borderBottomColor: colors.borderSubtle }, pressed && { opacity: 0.6 }]}
             onPress={handleToggleSaved}
             accessibilityRole="button"
             accessibilityState={{ selected: saved }}
@@ -257,7 +258,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             ListEmptyComponent={(
               <View style={styles.emptyWrap}>
                 <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                  No collections yet. Create one below.
+                  No collections yet.
                 </Text>
               </View>
             )}
@@ -288,7 +289,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             </View>
           ) : (
             <Pressable
-              style={[styles.createTrigger, { borderTopColor: colors.borderSubtle }]}
+              style={({ pressed }) => [styles.createTrigger, { borderTopColor: colors.borderSubtle }, pressed && { opacity: 0.6 }]}
               onPress={() => setShowCreateInput(true)}
               accessibilityRole="button"
               accessibilityLabel="Create new collection"

@@ -181,7 +181,7 @@ export function ProfileHero({
             <View style={styles.seamSpacer} />
             <View style={styles.seamStats}>
               <Pressable
-                style={styles.seamStat}
+                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.6 }]}
                 onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('forsale'); }}
                 accessibilityRole="button"
                 accessibilityLabel={`${activeCount} for sale — view shop`}
@@ -190,7 +190,7 @@ export function ProfileHero({
                 <Text style={styles.seamStatLabel} numberOfLines={1}>For sale</Text>
               </Pressable>
               <Pressable
-                style={styles.seamStat}
+                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.6 }]}
                 onPress={() => onOpenConnections('followers')}
                 accessibilityRole="button"
                 accessibilityLabel={`${followerCount} followers — view followers`}
@@ -199,7 +199,7 @@ export function ProfileHero({
                 <Text style={styles.seamStatLabel} numberOfLines={1}>Followers</Text>
               </Pressable>
               <Pressable
-                style={styles.seamStat}
+                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.6 }]}
                 onPress={() => onOpenConnections('following')}
                 accessibilityRole="button"
                 accessibilityLabel={`${followingCount} following — view following`}
@@ -242,7 +242,7 @@ export function ProfileHero({
           {/* Website — separate intentional link */}
           {targetProfile?.website ? (
             <Pressable
-              style={styles.websiteLink}
+              style={({ pressed }) => [styles.websiteLink, pressed && { opacity: 0.6 }]}
               onPress={() => openWebsite(targetProfile.website!)}
               accessibilityRole="link"
               accessibilityLabel={`Open website ${targetProfile.website}`}
@@ -259,6 +259,7 @@ export function ProfileHero({
                   onPress={() => onTabSelect('Reviews')}
                   accessibilityRole="button"
                   accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
                 >
                   <Text style={styles.trustLink}>{ratingValue!.toFixed(1)} ★</Text>
                 </Pressable>
@@ -269,6 +270,7 @@ export function ProfileHero({
                   onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('sold'); }}
                   accessibilityRole="button"
                   accessibilityLabel={`${soldCount} sold — view sold items`}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
                 >
                   <Text style={styles.trustLink}>{soldCount} sold</Text>
                 </Pressable>

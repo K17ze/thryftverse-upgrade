@@ -40,7 +40,7 @@ function getStageColors(colors: ReturnType<typeof useAppTheme>['colors']): Recor
   return {
     upcoming: { text: colors.brand, icon: colors.brand, bar: colors.brand },
     plenty: { text: colors.textPrimary, icon: colors.textMuted, bar: colors.textMuted },
-    moderate: { text: colors.textPrimary, icon: '#E8A93C', bar: '#E8A93C' },
+    moderate: { text: colors.textPrimary, icon: colors.warning, bar: colors.warning },
     urgent: { text: colors.danger, icon: colors.danger, bar: colors.danger },
     final: { text: colors.danger, icon: colors.danger, bar: colors.danger },
     ended: { text: colors.textMuted, icon: colors.textMuted, bar: colors.border },
@@ -59,7 +59,12 @@ export function AuctionCountdown({ text, urgent, compact, progress, stage, showP
   const isFinalOrUrgent = resolvedStage === 'final' || resolvedStage === 'urgent';
 
   return (
-    <View style={styles.container} accessible={false}>
+    <View
+      style={styles.container}
+      accessible
+      accessibilityRole="timer"
+      accessibilityLabel={`${text}${stageLabel ? `, ${stageLabel}` : ''}`}
+    >
       <View style={styles.row}>
         <Ionicons
           name={resolvedStage === 'ended' ? 'checkmark-done-outline' : 'time-outline'}

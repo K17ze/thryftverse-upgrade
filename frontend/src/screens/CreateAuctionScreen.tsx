@@ -14,6 +14,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { toFiat, toIze, formatIzeAmount } from '../utils/currency';
 import { useBackendData } from '../context/BackendDataContext';
+import type { Listing } from '../data/mockData';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
@@ -193,13 +194,13 @@ export default function CreateAuctionScreen() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
       void queryClient.invalidateQueries({ queryKey: ['auctions', 'home'] });
     } catch (e) {
-      show('Failed to launch auction. Please try again.', 'error');
+      show('Failed to launch auction. Try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const renderListingCard = ({ item }: { item: any }) => {
+  const renderListingCard = ({ item }: { item: Listing }) => {
     const selected = item.id === selectedListingId;
     return (
       <AnimatedPressable

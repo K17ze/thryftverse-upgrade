@@ -98,7 +98,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const handleLeaveGroup = () => {
     Alert.alert(
       'Leave group?',
-      'This removes the group from your inbox on this device. You can rejoin if you receive a new invite.',
+      'This removes the group from your inbox on this device. Rejoin if you receive a new invite.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

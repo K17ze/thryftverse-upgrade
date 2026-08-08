@@ -43,8 +43,8 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
     Alert.alert(
       'Sign Out',
       username
-        ? `You will be signed out of @${username} on this device.`
-        : 'You will be signed out of your account on this device.',
+        ? `You'll be signed out of @${username} on this device.`
+        : 'You\'ll be signed out of your account on this device.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

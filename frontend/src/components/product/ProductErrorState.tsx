@@ -18,7 +18,7 @@ export function ProductErrorState({ onRetry, message }: ProductErrorStateProps) 
       <Ionicons name="alert-circle-outline" size={56} color={colors.danger} />
       <Text style={[styles.title, { color: colors.textPrimary }]}>Something went wrong</Text>
       <Text style={[styles.message, { color: colors.textMuted }]}>
-        {message ?? 'We could not load this listing. Please try again.'}
+        {message ?? 'We could not load this listing. Try again.'}
       </Text>
       {onRetry && (
         <AnimatedPressable

@@ -44,12 +44,13 @@ export function CommerceDetailFreshnessBanner({
     return (
       <Pressable
         onPress={onRetry}
-        style={[
+        style={({ pressed }) => [
           styles.container,
           {
             backgroundColor: colors.danger + '12',
             borderColor: colors.danger + '30',
           },
+          pressed && { opacity: 0.6 },
         ]}
         accessibilityRole="button"
         accessibilityLabel="Couldn't refresh. Tap to retry."

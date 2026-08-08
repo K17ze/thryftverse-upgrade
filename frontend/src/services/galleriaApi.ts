@@ -243,7 +243,7 @@ const MOCK_EDITORIALS: GalleriaEditorial[] = [
       'For decades, sculpture was the overlooked category in collectibles. Two-dimensional art dominated the market, and three-dimensional craft was relegated to design fairs and museum shops.',
       'That is changing. A new generation of collectors, raised in a visual culture that values objects as much as images, is driving demand for sculptural work. Ceramics, bronzes, and carved objects are appreciating faster than any other category in the Galleria.',
       'The reason is tactile. Sculpture is the only collectible category that demands physical interaction to be fully appreciated. You must hold it, turn it, feel its weight. This creates a deeper connection than a painting on a wall ever can.',
-      'Co-Own makes sculptural collecting accessible. You can build a portfolio of significant three-dimensional works without the storage and display challenges that have historically gated this category.',
+      'Co-Own makes sculptural collecting accessible. Build a portfolio of significant three-dimensional works without the storage and display challenges that have historically gated this category.',
     ],
     isDemo: true,
   },

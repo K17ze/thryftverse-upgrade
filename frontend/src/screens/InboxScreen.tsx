@@ -596,7 +596,7 @@ export default function InboxScreen() {
 
     Alert.alert(
 
-      'Quick actions',
+      'Conversation',
 
       undefined,
 
@@ -660,7 +660,7 @@ export default function InboxScreen() {
         </Text>
         {(item.botIds?.length ?? 0) > 0 && (
           <View style={[styles.botIndicator, t.botIndicator]}>
-            <Ionicons name="hardware-chip-outline" size={10} color={colors.brand} />
+            <Ionicons name="hardware-chip-outline" size={14} color={colors.brand} />
           </View>
         )}
       </View>
@@ -1032,7 +1032,7 @@ export default function InboxScreen() {
             ref={listRef}
             data={visibleConversations}
 
-            keyExtractor={(c: any) => c.id}
+            keyExtractor={(c: Conversation) => c.id}
 
             showsVerticalScrollIndicator={false}
 

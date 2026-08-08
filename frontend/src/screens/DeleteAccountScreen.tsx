@@ -106,7 +106,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
   const onSubmit = useCallback(
     async (values: DeleteFormValues) => {
       if (!currentUser?.id) {
-        show('Please sign in before deleting your account.', 'error');
+        show('Sign in before deleting your account.', 'error');
         return;
       }
       setIsDeleting(true);
@@ -143,7 +143,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
       { icon: 'location-outline' as const, text: 'All saved delivery addresses are removed.' },
       { icon: 'card-outline' as const, text: 'Saved payment methods and bank details are removed.' },
       { icon: 'wallet-outline' as const, text: 'Wallet history and payout records are deleted.' },
-      { icon: 'cube-outline' as const, text: 'Active listings remain visible to buyers until they expire, but you will no longer manage them.' },
+      { icon: 'cube-outline' as const, text: 'Active listings remain visible to buyers until they expire, but you\'ll no longer manage them.' },
       { icon: 'alert-circle-outline' as const, text: 'Pending payouts, open disputes or active orders may need to be resolved before full erasure.' },
     ],
     [],

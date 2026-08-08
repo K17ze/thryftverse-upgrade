@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,23 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  runOnJS,
+  Easing,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CreatorDraftService, type DraftMeta } from './drafts';
 import { createStableId } from '../utils/createStableId';
 import { CreatorCanvas } from './CreatorCanvas';
+import { SwipeableRow } from '../components/SwipeableRow';
+import { useHaptic } from '../hooks/useHaptic';
+import { useMotionConfig } from '../hooks/useMotionConfig';
 import type { CreatorDocument } from './composition';
 
 type SortBy = 'recent' | 'name' | 'type';
@@ -28,6 +40,8 @@ const SORT_OPTIONS: { key: SortBy; label: string }[] = [
 
 export function CreatorDraftListScreen() {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const { spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const [drafts, setDrafts] = useState<DraftMeta[]>([]);
@@ -35,6 +49,21 @@ export function CreatorDraftListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('recent');
+  const [undoDraft, setUndoDraft] = useState<{ meta: DraftMeta; doc: CreatorDocument | null } | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toastTranslateY = useSharedValue(100);
+  const toastOpacity = useSharedValue(0);
+
+  const showToast = useCallback(() => {
+    toastTranslateY.value = withSpring(0, spring.entrance);
+    toastOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+  }, [toastTranslateY, toastOpacity, spring.entrance]);
+
+  const hideToast = useCallback(() => {
+    toastTranslateY.value = withTiming(100, { duration: 180, easing: Easing.in(Easing.ease) });
+    toastOpacity.value = withTiming(0, { duration: 180 });
+  }, [toastTranslateY, toastOpacity]);
 
   const loadDrafts = useCallback(async () => {
     const items = await CreatorDraftService.listDrafts();
@@ -51,6 +80,14 @@ export function CreatorDraftListScreen() {
   useEffect(() => {
     loadDrafts();
   }, [loadDrafts]);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) {
+        clearTimeout(undoTimerRef.current);
+      }
+    };
+  }, []);
 
   const sortedDrafts = useMemo(() => {
     const copy = [...drafts];
@@ -70,11 +107,12 @@ export function CreatorDraftListScreen() {
   }, [drafts, sortBy]);
 
   const handleOpenDraft = useCallback((draft: DraftMeta) => {
+    haptic.light();
     navigation.navigate('CreatorStudio', {
       type: draft.type,
       draftId: draft.id,
     });
-  }, [navigation]);
+  }, [navigation, haptic]);
 
   const handleDeleteDraft = useCallback((draft: DraftMeta) => {
     Alert.alert(
@@ -93,6 +131,41 @@ export function CreatorDraftListScreen() {
       ],
     );
   }, []);
+
+  const handleSwipeDelete = useCallback(async (draft: DraftMeta) => {
+    haptic.medium();
+    const doc = draftDocs[draft.id] ?? null;
+    setUndoDraft({ meta: draft, doc });
+    setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+    await CreatorDraftService.deleteDraft(draft.id);
+    showToast();
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+    }
+    undoTimerRef.current = setTimeout(() => {
+      hideToast();
+      setUndoDraft(null);
+    }, 5000);
+  }, [haptic, draftDocs, showToast, hideToast]);
+
+  const handleUndoDelete = useCallback(async () => {
+    if (!undoDraft) return;
+    haptic.light();
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+    }
+    if (undoDraft.doc) {
+      await CreatorDraftService.saveDraft(undoDraft.doc);
+    }
+    setDrafts((prev) => {
+      const restored = [...prev, undoDraft.meta];
+      restored.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      return restored;
+    });
+    setUndoDraft(null);
+    hideToast();
+    loadDrafts();
+  }, [undoDraft, haptic, hideToast, loadDrafts]);
 
   const handleDuplicateDraft = useCallback(async (draft: DraftMeta) => {
     const doc = await CreatorDraftService.loadDraft(draft.id);
@@ -132,64 +205,72 @@ export function CreatorDraftListScreen() {
     const finalThumbW = isPortrait ? 80 : thumbW;
     const finalThumbH = isPortrait ? Math.min(100, Math.floor(finalThumbW / (doc?.canvas.aspectRatio ?? 0.8))) : thumbH;
     return (
-    <Pressable
-      onPress={() => handleOpenDraft(item)}
-      style={({ pressed }) => [styles.draftRow, pressed && styles.draftRowPressed]}
+    <SwipeableRow
       accessibilityLabel={`Open draft ${item.title}`}
-      accessibilityRole="button"
+      accessibilityHint="Swipe left to delete"
+      onPress={() => handleOpenDraft(item)}
+      rightAction={{
+        icon: 'trash-outline',
+        label: 'Delete',
+        onPress: () => handleSwipeDelete(item),
+        color: colors.danger,
+      }}
+      swipeThreshold={88}
     >
-      {doc ? (
-        <View style={[styles.draftThumb, { width: finalThumbW, height: finalThumbH }]}>
-          <CreatorCanvas
-            document={doc}
-            page={doc.pages[0]}
-            canvasWidth={finalThumbW}
-            canvasHeight={finalThumbH}
-            mode="view"
-          />
-        </View>
-      ) : (
-        <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discovery + '20' : colors.bronze + '20' }]}>
-          <Ionicons
-            name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
-            size={28}
-            color={item.type === 'look' ? colors.discovery : colors.bronze}
-          />
-        </View>
-      )}
-      <View style={styles.draftInfo}>
-        <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.draftMeta} numberOfLines={1}>
-          {item.type === 'look' ? 'Look' : 'Poster'} · {new Date(item.updatedAt).toLocaleDateString()}
-        </Text>
-        <View style={styles.statusRow}>
-          <View style={[styles.typeBadge, item.type === 'look' ? styles.typeBadgeLook : styles.typeBadgePoster]}>
-            <Text style={styles.typeBadgeText}>{item.type === 'look' ? 'Look' : 'Poster'}</Text>
+      <View style={styles.draftRow}>
+        {doc ? (
+          <View style={[styles.draftThumb, { width: finalThumbW, height: finalThumbH }]}>
+            <CreatorCanvas
+              document={doc}
+              page={doc.pages[0]}
+              canvasWidth={finalThumbW}
+              canvasHeight={finalThumbH}
+              mode="view"
+            />
+          </View>
+        ) : (
+          <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discovery + '20' : colors.bronze + '20' }]}>
+            <Ionicons
+              name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
+              size={28}
+              color={item.type === 'look' ? colors.discovery : colors.bronze}
+            />
+          </View>
+        )}
+        <View style={styles.draftInfo}>
+          <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={styles.draftMeta} numberOfLines={1}>
+            {item.type === 'look' ? 'Look' : 'Poster'} · {new Date(item.updatedAt).toLocaleDateString()}
+          </Text>
+          <View style={styles.statusRow}>
+            <View style={[styles.typeBadge, item.type === 'look' ? styles.typeBadgeLook : styles.typeBadgePoster]}>
+              <Text style={styles.typeBadgeText}>{item.type === 'look' ? 'Look' : 'Poster'}</Text>
+            </View>
           </View>
         </View>
+        <View style={styles.actions}>
+          <Pressable
+            onPress={() => handleDuplicateDraft(item)}
+            style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={`Duplicate draft ${item.title}`}
+            accessibilityRole="button"
+          >
+            <Ionicons name="copy-outline" size={18} color={colors.textSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={() => handleDeleteDraft(item)}
+            style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={`Delete draft ${item.title}`}
+            accessibilityRole="button"
+          >
+            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          </Pressable>
+        </View>
       </View>
-      <View style={styles.actions}>
-        <Pressable
-          onPress={() => handleDuplicateDraft(item)}
-          style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel={`Duplicate draft ${item.title}`}
-          accessibilityRole="button"
-        >
-          <Ionicons name="copy-outline" size={18} color={colors.textSecondary} />
-        </Pressable>
-        <Pressable
-          onPress={() => handleDeleteDraft(item)}
-          style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel={`Delete draft ${item.title}`}
-          accessibilityRole="button"
-        >
-          <Ionicons name="trash-outline" size={18} color={colors.danger} />
-        </Pressable>
-      </View>
-    </Pressable>
-  ); }, [handleOpenDraft, handleDeleteDraft, handleDuplicateDraft, draftDocs, styles, colors]);
+    </SwipeableRow>
+  ); }, [handleOpenDraft, handleDeleteDraft, handleSwipeDelete, handleDuplicateDraft, draftDocs, styles, colors]);
 
   if (loading) {
     return (
@@ -262,7 +343,126 @@ export function CreatorDraftListScreen() {
           </View>
         }
       />
+
+      <UndoToast
+        visible={!!undoDraft}
+        title={undoDraft?.meta.title ?? ''}
+        colors={colors}
+        toastTranslateY={toastTranslateY}
+        toastOpacity={toastOpacity}
+        onUndo={handleUndoDelete}
+        onDismiss={hideToast}
+      />
     </View>
+  );
+}
+
+interface UndoToastProps {
+  visible: boolean;
+  title: string;
+  colors: ThemeColors;
+  toastTranslateY: SharedValue<number>;
+  toastOpacity: SharedValue<number>;
+  onUndo: () => void;
+  onDismiss: () => void;
+}
+
+function UndoToast({
+  visible,
+  title,
+  colors,
+  toastTranslateY,
+  toastOpacity,
+  onUndo,
+  onDismiss,
+}: UndoToastProps) {
+  const toastStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: toastTranslateY.value }],
+    opacity: toastOpacity.value,
+  }));
+
+  if (!visible) return null;
+
+  return (
+    <Reanimated.View
+      style={[
+        {
+          position: 'absolute',
+          bottom: Space.lg,
+          left: Space.md,
+          right: Space.md,
+          backgroundColor: colors.surfaceElevated,
+          borderRadius: Radius.lg,
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.md,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: Space.sm,
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.18,
+          shadowRadius: 12,
+          elevation: 8,
+        },
+        toastStyle,
+      ]}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text
+          style={{
+            fontFamily: Typography.family.medium,
+            fontSize: Type.body.size,
+            color: colors.textPrimary,
+          }}
+          numberOfLines={1}
+        >
+          Draft deleted
+        </Text>
+        <Text
+          style={{
+            fontFamily: Typography.family.regular,
+            fontSize: Type.caption.size,
+            color: colors.textSecondary,
+          }}
+          numberOfLines={1}
+        >
+          {title}
+        </Text>
+      </View>
+      <Pressable
+        onPress={onUndo}
+        style={({ pressed }) => [
+          {
+            paddingHorizontal: Space.md,
+            paddingVertical: Space.sm,
+            borderRadius: Radius.md,
+            backgroundColor: pressed ? colors.brandPressed : colors.brand,
+          },
+        ]}
+        accessibilityLabel="Undo delete"
+        accessibilityRole="button"
+      >
+        <Text
+          style={{
+            fontFamily: Typography.family.semibold,
+            fontSize: Type.body.size,
+            color: colors.textInverse,
+          }}
+        >
+          Undo
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={onDismiss}
+        style={{ width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}
+        accessibilityLabel="Dismiss"
+        accessibilityRole="button"
+        hitSlop={8}
+      >
+        <Ionicons name="close" size={18} color={colors.textSecondary} />
+      </Pressable>
+    </Reanimated.View>
   );
 }
 
@@ -338,7 +538,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
     borderRadius: Radius.xl,
     backgroundColor: colors.surface,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOpacity: 0.05,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
@@ -351,7 +551,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
@@ -361,7 +561,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },

@@ -201,7 +201,7 @@ export function FeedExplanationSheet({
               Couldn't load this explanation
             </Text>
             <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>
-              We couldn't determine why this item appeared. Please try again.
+              We couldn't determine why this item appeared. Try again.
             </Text>
           </View>
         )}

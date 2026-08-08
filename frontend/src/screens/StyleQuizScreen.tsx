@@ -81,7 +81,7 @@ export default function StyleQuizScreen() {
   const handleNext = () => {
     haptic.medium();
     if (step === 0 && !selectedGender) {
-      show('Please select a preference', 'info');
+      show('Select a preference', 'info');
       return;
     }
     if (step < 3) {

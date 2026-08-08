@@ -6,6 +6,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from '../ui/AppButton';
 import { haptics } from '../../utils/haptics';
+import { formatFullDate } from '../../utils/dateFormat';
 
 export interface BoostTier {
   id: string;
@@ -73,7 +74,7 @@ export function BoostListingSheet({
           <View style={[styles.activeBoostBanner, { backgroundColor: `${colors.brand}12` }]}>
             <Ionicons name="rocket-outline" size={16} color={colors.brand} />
             <Text style={[styles.activeBoostText, { color: colors.brand }]}>
-              Currently boosted until {new Date(currentBoostedUntil!).toLocaleDateString()}
+              Currently boosted until {formatFullDate(currentBoostedUntil!)}
             </Text>
           </View>
         )}

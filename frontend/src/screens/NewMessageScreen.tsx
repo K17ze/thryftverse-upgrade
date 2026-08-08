@@ -303,7 +303,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
           navigation.navigate('Chat', { conversationId: conversation.id, partnerUserId: preselectedUserId });
         })
         .catch(() => {
-          show(`Could not start a conversation with ${preselectedDisplayName}. Please try again.`, 'error');
+          show(`Could not start a conversation with ${preselectedDisplayName}. Try again.`, 'error');
         });
     }
   }, [preselectedUserId, preselectedDisplayName, recentContacts, navigation, show]);
@@ -321,7 +321,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       });
       navigation.navigate('Chat', { conversationId: conversation.id, partnerUserId: contact.userId });
     } catch {
-      show('Could not start conversation. Please try again.', 'error');
+      show('Could not start conversation. Try again.', 'error');
     }
   };
 

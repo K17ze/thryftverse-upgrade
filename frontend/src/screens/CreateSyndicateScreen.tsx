@@ -224,7 +224,7 @@ export default function CreateCoOwnScreen() {
       // Move to the recourse agreement signing stage
       setStage('recourse');
     } catch (err) {
-      show('Failed to issue co-own. Please try again.', 'error');
+      show('Failed to issue co-own. Try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }

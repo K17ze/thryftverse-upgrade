@@ -319,7 +319,7 @@ export default function MoodboardHomeScreen() {
       setUserMoodboards(userMbs);
       setPublicMoodboards(publicMbs);
     } catch (e) {
-      setError('We couldn\u2019t load moodboards. Please try again.');
+      setError('We couldn\u2019t load moodboards. Try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);

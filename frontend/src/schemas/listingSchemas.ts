@@ -15,17 +15,17 @@ export const sellListingSchema = z.object({
     .min(1, 'Add at least one photo before publishing.'),
   title: z
     .string()
-    .min(1, 'Please provide a title.')
+    .min(1, 'Add a title.')
     .transform((v) => v.trim()),
   category: z
     .string()
-    .min(1, 'Please select a category.'),
+    .min(1, 'Select a category.'),
   size: z
     .string()
-    .min(1, 'Please choose a size.'),
+    .min(1, 'Choose a size.'),
   condition: z
     .string()
-    .min(1, 'Please choose a condition.'),
+    .min(1, 'Choose a condition.'),
   description: z
     .string()
     .min(10, 'Add a description with at least 10 characters.')
