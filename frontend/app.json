@@ -7,8 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "jsEngine": "hermes",
     "ios": {
       "bundleIdentifier": "com.thryftverse.app",
       "supportsTablet": true,
@@ -26,8 +24,6 @@
     },
     "android": {
       "package": "com.thryftverse.app",
-      "targetSdkVersion": 36,
-      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -38,26 +34,32 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": {
-            "scheme": "https",
-            "domain": "thryftverse.com"
-          },
+          "data": [
+            {
+              "scheme": "https",
+              "host": "thryftverse.com"
+            }
+          ],
           "category": ["BROWSABLE", "DEFAULT"]
         },
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": {
-            "scheme": "https",
-            "domain": "www.thryftverse.com"
-          },
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.thryftverse.com"
+            }
+          ],
           "category": ["BROWSABLE", "DEFAULT"]
         },
         {
           "action": "VIEW",
-          "data": {
-            "scheme": "thryftverse"
-          },
+          "data": [
+            {
+              "scheme": "thryftverse"
+            }
+          ],
           "category": ["BROWSABLE", "DEFAULT"]
         }
       ],

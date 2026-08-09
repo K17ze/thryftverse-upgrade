@@ -1,5 +1,3 @@
-const appJson = require('./app.json');
-
 /**
  * Env-var gating for EAS build profiles.
  *
@@ -26,7 +24,7 @@ function readEnv(name) {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-module.exports = function () {
+module.exports = function ({ config }) {
   const buildProfile = process.env.EAS_BUILD_PROFILE;
   const isDevBuild =
     buildProfile === 'development' || buildProfile === 'development-simulator';
@@ -42,7 +40,7 @@ module.exports = function () {
     process.env.EXPO_PUBLIC_STRIPE_APPLE_MERCHANT_IDENTIFIER?.trim();
   const stripeGooglePayEnabled =
     process.env.EXPO_PUBLIC_STRIPE_GOOGLE_PAY_ENABLED === 'true';
-  const configuredPlugins = appJson.expo.plugins.filter((plugin) => {
+  const configuredPlugins = config.plugins.filter((plugin) => {
     const pluginName = Array.isArray(plugin) ? plugin[0] : plugin;
     return pluginName !== '@stripe/stripe-react-native'
       && pluginName !== '@sentry/react-native/expo';
@@ -67,6 +65,16 @@ module.exports = function () {
         enableGooglePay: stripeGooglePayEnabled,
       },
     ],
+    // expo-build-properties — targetSdkVersion moved here from app.json
+    // (app.json no longer accepts targetSdkVersion directly in SDK 56).
+    [
+      'expo-build-properties',
+      {
+        android: {
+          targetSdkVersion: 36,
+        },
+      },
+    ],
   ];
 
   if (hasSentryConfig) {
@@ -82,30 +90,27 @@ module.exports = function () {
   }
 
   return {
-    ...appJson,
-    expo: {
-      ...appJson.expo,
-      plugins,
-      updates: {
-        ...appJson.expo.updates,
-        // EAS development builds should always load from Metro, never from a
-        // published update. Otherwise a stale update on the development channel
-        // overrides local changes and real-time iteration breaks.
-        ...(isDevBuild ? { enabled: false } : {}),
-        // EAS Update code signing — generate keys outside the repo:
-        //   eas update:configure-code-signing --key-output-directory ../keys
-        // Then uncomment the codeSigningCertificate/codeSigningMetadata lines below.
-        // codeSigningCertificate: 'certs/update-certificate.pem',
-        // codeSigningMetadata: { keyid: 'main', alg: 'rsa-v1_5-sha256' },
-      },
-      extra: {
-        ...appJson.expo.extra,
-        // Public runtime config — readable via Constants.expoConfig.extra.
-        // These are NOT secrets; secrets live in EAS secrets, never in the repo.
-        apiUrl,
-        sentryDsn,
-        environment,
-      },
+    ...config,
+    plugins,
+    updates: {
+      ...config.updates,
+      // EAS development builds should always load from Metro, never from a
+      // published update. Otherwise a stale update on the development channel
+      // overrides local changes and real-time iteration breaks.
+      ...(isDevBuild ? { enabled: false } : {}),
+      // EAS Update code signing — generate keys outside the repo:
+      //   eas update:configure-code-signing --key-output-directory ../keys
+      // Then uncomment the codeSigningCertificate/codeSigningMetadata lines below.
+      // codeSigningCertificate: 'certs/update-certificate.pem',
+      // codeSigningMetadata: { keyid: 'main', alg: 'rsa-v1_5-sha256' },
+    },
+    extra: {
+      ...config.extra,
+      // Public runtime config — readable via Constants.expoConfig.extra.
+      // These are NOT secrets; secrets live in EAS secrets, never in the repo.
+      apiUrl,
+      sentryDsn,
+      environment,
     },
   };
 };
