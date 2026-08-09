@@ -1,3 +1,5 @@
+import type { PosterStickerType } from '../services/postersApi';
+
 export interface CreatorStoryCreateFrame {
   id: string;
   mediaType: 'image' | 'video' | 'text';
@@ -7,7 +9,7 @@ export interface CreatorStoryCreateFrame {
   sortOrder?: number;
   stickers: Array<{
     id: string;
-    type: 'text' | 'mention' | 'listing' | 'look' | 'style_vote';
+    type: PosterStickerType;
     x: number;
     y: number;
     scale?: number;

@@ -12,11 +12,20 @@ import {
 import Reanimated, {
   useAnimatedScrollHandler,
   useSharedValue,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
   withTiming,
+  withSpring,
   withSequence,
+  runOnJS,
   FadeInDown,
+  type SharedValue,
 } from 'react-native-reanimated';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -30,6 +39,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useMotionConfig } from '../hooks/useMotionConfig';
 import { enablePriceAlert, disablePriceAlert, getPriceAlertStatus } from '../services/priceAlertsApi';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
@@ -102,15 +112,117 @@ import { trackTelemetryEvent } from '../lib/telemetry';
 import { Space, Type, Typography, Radius, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
 import { t } from '../i18n';
 
+type ItemDetailRoute = RouteProp<RootStackParamList, 'ItemDetail'>;
+type ItemDetailNav = NativeStackNavigationProp<RootStackParamList>;
+
+// ───────────────────────────────────────────────────────────────────────────
+// Image pagination dots — iOS Photos pattern.
+// A row of dots below the carousel; the active dot stretches into a pill.
+// A single spring-driven SharedValue (activeIndex) interpolates each dot's
+// width so the pill stretch feels physical, not snapped.
+// ───────────────────────────────────────────────────────────────────────────
+const DOT_INACTIVE = 6;
+const DOT_ACTIVE = 20;
+const DOT_HEIGHT = 6;
+
+function PaginationDot({
+  index,
+  activeIndex,
+  color,
+}: {
+  index: number;
+  activeIndex: SharedValue<number>;
+  color: string;
+}) {
+  const style = useAnimatedStyle(() => {
+    const width = interpolate(
+      activeIndex.value,
+      [index - 0.5, index, index + 0.5],
+      [DOT_INACTIVE, DOT_ACTIVE, DOT_INACTIVE],
+      Extrapolation.CLAMP,
+    );
+    return {
+      width,
+      opacity: interpolate(
+        activeIndex.value,
+        [index - 0.5, index, index + 0.5],
+        [0.35, 1, 0.35],
+        Extrapolation.CLAMP,
+      ),
+    };
+  });
+  return (
+    <Reanimated.View
+      style={[paginationStyles.dot, { backgroundColor: color }, style]}
+    />
+  );
+}
+
+function PaginationDots({
+  count,
+  activeIndex,
+  counterText,
+  color,
+}: {
+  count: number;
+  activeIndex: SharedValue<number>;
+  counterText: string;
+  color: string;
+}) {
+  return (
+    <View style={paginationStyles.wrap}>
+      <View style={paginationStyles.dotRow}>
+        {Array.from({ length: count }, (_, i) => (
+          <PaginationDot
+            key={i}
+            index={i}
+            activeIndex={activeIndex}
+            color={color}
+          />
+        ))}
+      </View>
+      <Text style={[paginationStyles.counter, { color }]} numberOfLines={1}>
+        {counterText}
+      </Text>
+    </View>
+  );
+}
+
+const paginationStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+  },
+  dotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  dot: {
+    height: DOT_HEIGHT,
+    borderRadius: DOT_HEIGHT / 2,
+  },
+  counter: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: LetterSpacing.wide,
+    fontVariant: ['tabular-nums'],
+  },
+});
+
 export default function ItemDetailScreen() {
   const { isDark, colors } = useAppTheme();
-  const route = useRoute<any>();
-  const navigation = useNavigation<any>();
+  const route = useRoute<ItemDetailRoute>();
+  const navigation = useNavigation<ItemDetailNav>();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isCompactScreen = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [priceAlertEnabled, setPriceAlertEnabled] = useState(false);
@@ -229,6 +341,122 @@ export default function ItemDetailScreen() {
     scrollY.value = event.contentOffset.y;
   });
 
+  // ── Image pagination ──
+  // Spring-driven active index. The integer page comes from the media
+  // stage's onViewableItemsChanged; we spring the float so each dot's
+  // width interpolates smoothly (iOS Photos pill-stretch pattern).
+  const paginationIndex = useSharedValue(0);
+
+  // ── Swipe-to-dismiss ──
+  // Vertical drag down (from the top of the scroll content) scales the
+  // scene and fades chrome. Releasing past 50% of screen height dismisses;
+  // otherwise the scene springs back. Reduced-motion users keep the back
+  // button — the gesture still dismisses but without the scale/translate.
+  const dragY = useSharedValue(0);
+  const dismissScale = useSharedValue(1);
+  const chromeOpacity = useSharedValue(1);
+  const isDismissing = useSharedValue(0);
+  // Track the initial touch position so manualActivation can decide
+  // direction from the delta, not the absolute coordinate.
+  const panStartX = useSharedValue(0);
+  const panStartY = useSharedValue(0);
+
+  const goBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
+
+  const dismissPan = useMemo(
+    () =>
+      Gesture.Pan()
+        .manualActivation(true)
+        .onTouchesDown((event) => {
+          'worklet';
+          const touch = event.changedTouches[0];
+          if (touch) {
+            panStartX.value = touch.x;
+            panStartY.value = touch.y;
+          }
+        })
+        .onTouchesMove((event, stateManager) => {
+          'worklet';
+          // Only activate on a downward drag from the top of the content
+          // (scrollY <= 0). Horizontal movement yields to the image
+          // carousel; upward / mid-scroll movement yields to the
+          // ScrollView so existing scroll behaviour is preserved.
+          if (scrollY.value > 1) {
+            stateManager.fail();
+            return;
+          }
+          const touch = event.changedTouches[0];
+          if (!touch) {
+            stateManager.fail();
+            return;
+          }
+          const dx = touch.x - panStartX.value;
+          const dy = touch.y - panStartY.value;
+          if (dy > 12 && Math.abs(dx) < 24) {
+            stateManager.activate();
+          } else if (Math.abs(dx) > 24 || dy < -12) {
+            stateManager.fail();
+          }
+        })
+        .onUpdate((e) => {
+          'worklet';
+          const raw = Math.max(0, e.translationY);
+          dragY.value = raw;
+          const progress = raw / screenHeight;
+          dismissScale.value = interpolate(
+            progress,
+            [0, 1],
+            [1, 0.85],
+            Extrapolation.CLAMP,
+          );
+          chromeOpacity.value = interpolate(
+            progress,
+            [0, 0.5],
+            [1, 0],
+            Extrapolation.CLAMP,
+          );
+        })
+        .onEnd((e) => {
+          'worklet';
+          const threshold = screenHeight * 0.5;
+          const fastDismiss = e.velocityY > 800;
+          if (dragY.value > threshold || fastDismiss) {
+            isDismissing.value = 1;
+            dragY.value = withTiming(screenHeight, { duration: 220 });
+            dismissScale.value = withTiming(0.85, { duration: 220 });
+            chromeOpacity.value = withTiming(0, { duration: 160 });
+            runOnJS(goBack)();
+          } else {
+            dragY.value = withSpring(0, spring.tap);
+            dismissScale.value = withSpring(1, spring.tap);
+            chromeOpacity.value = withSpring(1, spring.tap);
+          }
+        }),
+    [scrollY, dragY, dismissScale, chromeOpacity, isDismissing, panStartX, panStartY, screenHeight, spring, goBack],
+  );
+
+  const dismissContainerStyle = useAnimatedStyle(() => {
+    'worklet';
+    if (reducedMotion) {
+      // Reduced motion: no scale/translate, only a gentle opacity fade so
+      // the dismiss still reads as a transition without travel.
+      return {
+        opacity: chromeOpacity.value,
+        transform: [{ translateY: 0 }, { scale: 1 }],
+      };
+    }
+    return {
+      transform: [{ translateY: dragY.value }, { scale: dismissScale.value }],
+    };
+  });
+
+  const dismissChromeStyle = useAnimatedStyle(() => {
+    'worklet';
+    return { opacity: chromeOpacity.value };
+  });
+
   const bigHeartScale = useSharedValue(0);
   const bigHeartOpacity = useSharedValue(0);
 
@@ -307,7 +535,7 @@ export default function ItemDetailScreen() {
   void exploreHasNextPage;
   void exploreFetching;
 
-  // NOTE: exploreItems useMemo must run BEFORE any conditional return so the
+  // NOTE: All useMemo hooks must run BEFORE any conditional return so the
   // hook count stays stable across loading → loaded (Rules of Hooks).
   // Per spec 04_DIRECT §4: "Continue exploring" items are prefetched via
   // the useContinueExploring hook but not rendered as a fourth discovery
@@ -319,6 +547,47 @@ export default function ItemDetailScreen() {
   // frontend must not fabricate question counts. listingEngagement is
   // null until the backend exposes questionCount.
   const listingEngagement = item?.engagement ?? null;
+
+  // Seller trust summary — moved before conditional returns so the
+  // sustainabilityScore useMemo can reference it (Rules of Hooks).
+  const seller = sellerTrustData
+    ? sellerTrustData
+    : item
+      ? buildSellerTrustSummary(item.seller)
+      : null;
+
+  // Sustainability score — moved before conditional returns to satisfy
+  // Rules of Hooks. Returns null when item is not yet loaded.
+  const sustainabilityScore = useMemo(
+    () =>
+      item
+        ? computeSustainabilityScore({
+            condition: item.condition,
+            category: item.category,
+            subcategory: item.subcategory,
+            brand: item.brand,
+            sellerLocation: seller?.location ?? item.seller?.location ?? null,
+          })
+        : null,
+    [item?.condition, item?.category, item?.subcategory, item?.brand, seller?.location, item?.seller?.location],
+  );
+
+  // "More from this seller" browse rail — moved before conditional returns.
+  const moreFromSellerRailItems: Listing[] = useMemo(
+    () =>
+      item
+        ? backendListings
+            .filter(
+              (l) =>
+                l.id !== item.id &&
+                !l.isSold &&
+                item.sellerId != null &&
+                l.sellerId === item.sellerId,
+            )
+            .slice(0, 6)
+        : [],
+    [backendListings, item?.id, item?.sellerId],
+  );
 
   if (queryLoading && !item) {
     return (
@@ -387,25 +656,6 @@ export default function ItemDetailScreen() {
     returnPolicy: serverCommerce.returnPolicy,
     authenticity: serverCommerce.authenticity,
   } : undefined);
-  const seller = sellerTrustData
-    ? sellerTrustData
-    : buildSellerTrustSummary(item.seller);
-
-  // Sustainability score — heuristic, client-side estimate from listing
-  // attributes (condition, category, brand, seller location). Truthfully
-  // labeled as "Estimated impact" per AGENTS.md §11.
-  const sustainabilityScore = useMemo(
-    () =>
-      computeSustainabilityScore({
-        condition: item.condition,
-        category: item.category,
-        subcategory: item.subcategory,
-        brand: item.brand,
-        sellerLocation: seller?.location ?? item.seller?.location ?? null,
-      }),
-    [item.condition, item.category, item.subcategory, item.brand, seller?.location, item.seller?.location],
-  );
-
   const recommendationSections = recommendationsData?.sections ?? [];
   const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
   const railSections = recommendationSections.filter(
@@ -419,23 +669,6 @@ export default function ItemDetailScreen() {
         (i): i is DisplayReadyListing => !isRecommendationLook(i)
       )
     : [];
-
-  // "More from this seller" browse rail — real listings from the same
-  // seller, excluding the current item and sold items. Only rendered when
-  // there are at least 2 items so the rail is never an empty shell.
-  const moreFromSellerRailItems: Listing[] = useMemo(
-    () =>
-      backendListings
-        .filter(
-          (l) =>
-            l.id !== item.id &&
-            !l.isSold &&
-            item.sellerId != null &&
-            l.sellerId === item.sellerId,
-        )
-        .slice(0, 6),
-    [backendListings, item.id, item.sellerId],
-  );
 
   const handlePressRecommendation = (recItem: Listing) => {
     navigation.push('ItemDetail', { itemId: recItem.id });
@@ -548,12 +781,16 @@ export default function ItemDetailScreen() {
   ].filter(Boolean).join(' · ');
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <GestureDetector gesture={dismissPan}>
+    <Reanimated.View style={[styles.container, { backgroundColor: colors.background }, dismissContainerStyle]}>
       <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* ── Collapsed scrolling header ──
           Quiet glyph hit targets, no large rounded-square containers.
-          Spec 02 shape system: separate hit area from visible shape. */}
+          Spec 02 shape system: separate hit area from visible shape.
+          Wrapped in a chrome-fade layer so the header recedes as the
+          swipe-to-dismiss drag progresses. */}
+      <Reanimated.View style={dismissChromeStyle}>
       <CommerceDetailHeader
         scrollY={scrollY}
         title={displayTitle}
@@ -564,6 +801,7 @@ export default function ItemDetailScreen() {
           onPress: handleShare,
         }}
       />
+      </Reanimated.View>
 
       <Reanimated.ScrollView
         showsVerticalScrollIndicator={false}
@@ -604,7 +842,12 @@ export default function ItemDetailScreen() {
           onOpenFullscreen={handleOpenFullscreen}
           heightFraction={isCompactScreen ? 0.54 : 0.58}
           initialIndex={fullscreenIndex}
-          onActiveIndexChange={setFullscreenIndex}
+          onActiveIndexChange={(index) => {
+            setFullscreenIndex(index);
+            paginationIndex.value = reducedMotion
+              ? index
+              : withSpring(index, spring.tap);
+          }}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
           showDefaultControls={false}
@@ -638,6 +881,20 @@ export default function ItemDetailScreen() {
           onOverflow={() => setOverflowVisible(true)}
           showOverflow
         />
+
+        {/* ── Image pagination — iOS Photos pattern ──
+            A row of dots below the carousel; the active dot stretches
+            into a pill (6pt → 20pt) driven by a single spring. A "1 of N"
+            counter sits beside the dots for precise orientation. Only
+            rendered when there is more than one image. */}
+        {item.images && item.images.length > 1 && (
+          <PaginationDots
+            count={item.images.length}
+            activeIndex={paginationIndex}
+            counterText={`${fullscreenIndex + 1} of ${item.images.length}`}
+            color={colors.textSecondary}
+          />
+        )}
 
         {/* ── Offline banner ──
             Per spec 05 §14: offline state must be designed, not a blank
@@ -990,9 +1247,9 @@ export default function ItemDetailScreen() {
             accessibilityState={{ expanded: sustainabilityExpanded }}
             style={styles.sustainabilityRow}
           >
-            <SustainabilityBadge score={sustainabilityScore} variant="compact" />
+            <SustainabilityBadge score={sustainabilityScore!} variant="compact" />
             <Text style={[styles.sustainabilitySummary, { color: colors.textSecondary }]} numberOfLines={2}>
-              {sustainabilityScore.summary}
+              {sustainabilityScore!.summary}
             </Text>
             <Ionicons
               name={sustainabilityExpanded ? 'chevron-up' : 'chevron-down'}
@@ -1003,8 +1260,8 @@ export default function ItemDetailScreen() {
 
           {sustainabilityExpanded ? (
             <View style={styles.sustainabilityDetailWrap}>
-              <SustainabilityBadge score={sustainabilityScore} variant="detailed" />
-              <SustainabilityImpact score={sustainabilityScore} />
+              <SustainabilityBadge score={sustainabilityScore!} variant="detailed" />
+              <SustainabilityImpact score={sustainabilityScore!} />
             </View>
           ) : null}
         </CommerceDetailSection>
@@ -1580,7 +1837,8 @@ export default function ItemDetailScreen() {
           </View>
         </View>
       </BottomSheet>
-    </View>
+    </Reanimated.View>
+    </GestureDetector>
   );
 }
 

@@ -281,8 +281,8 @@ export default function PosterViewerScreen() {
     // Animate: start from rotated position, spring back to center
     cubeRotate.value = direction * 45;
     cubeScale.value = 0.85;
-    cubeRotate.value = withSpring(0, { damping: 14, stiffness: 120, mass: 0.8 });
-    cubeScale.value = withSpring(1, { damping: 14, stiffness: 120, mass: 0.8 });
+    cubeRotate.value = withSpring(0, Motion.spring.lift);
+    cubeScale.value = withSpring(1, Motion.spring.lift);
   }, [storyIndex, cubeRotate, cubeScale]);
 
   const cubeAnimatedStyle = useAnimatedStyle(() => ({
@@ -1667,7 +1667,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',
-    gap: Space.sm + 4,
+    gap: Space.smMd,
     zIndex: 25,
   },
   mediaErrorText: {

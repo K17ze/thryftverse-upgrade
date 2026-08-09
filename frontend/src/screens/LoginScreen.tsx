@@ -552,7 +552,7 @@ function createStyles(colors: ThemeColors) {
   forgotText: { color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
   dividerRow: {
     marginTop: Space.md + 2,
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,

@@ -197,12 +197,12 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: 17,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   guidanceBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
+    gap: Space.xs + 2,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     backgroundColor: colors.surfaceAlt,
@@ -214,7 +214,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    lineHeight: 16,
+    lineHeight: Type.caption.lineHeight,
   },
   inputCard: {
     marginHorizontal: Space.md,

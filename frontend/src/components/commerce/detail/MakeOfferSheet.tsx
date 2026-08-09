@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   title: {
     fontSize: Type.subtitle.size,
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
   },
   listingText: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   listingTitle: {
     fontSize: Type.body.size,

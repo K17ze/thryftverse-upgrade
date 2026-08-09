@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
   buyBtn: {
     flex: 1,
     minHeight: 44,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
   sellBtn: {
     flex: 1,
     minHeight: 44,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',

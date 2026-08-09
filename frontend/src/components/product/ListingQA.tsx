@@ -374,7 +374,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
   },
   answerWrap: {
-    marginLeft: Space.sm + 4,
+    marginLeft: Space.smMd,
     paddingLeft: Space.sm,
     borderLeftWidth: 2,
     borderLeftColor: colors.success,

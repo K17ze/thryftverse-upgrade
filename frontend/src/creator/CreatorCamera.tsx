@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,17 +6,16 @@ import {
   Pressable,
   Image,
   ActivityIndicator,
-  Animated,
   GestureResponderEvent,
   Linking,
   ScrollView,
-  PanResponder,
 } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -26,12 +25,22 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedProps,
   withSpring,
   withTiming,
   withSequence,
   withDelay,
   Easing,
+  runOnJS,
+  interpolate,
+  Extrapolation,
 } from 'react-native-reanimated';
+import { FocusReticle } from './camera/FocusReticle';
+import { RecordingRing } from './camera/RecordingRing';
+import { ShutterButton } from './camera/ShutterButton';
+import { ControlsRail } from './camera/ControlsRail';
+import { GalleryCarousel } from './camera/GalleryCarousel';
+import { PermissionState } from './camera/PermissionState';
 
 // ── CreatorCamera — Flagship 2026 Elevation ────────────────────────
 // Snapchat 2026 / TikTok / BeReal-grade camera component with:
@@ -58,10 +67,23 @@ const GALLERY_THUMB_SIZE = 64;
 const CONTROL_RAIL_ICON = 22;
 const ZOOM_LEVELS = [0.5, 1, 2];
 const TIMER_OPTIONS = [0, 3, 5, 10] as const;
+const FOCUS_RETICLE_SIZE = 70;
+const RECORDING_MAX_DURATION = 15000; // 15s max for video/boomerang
+const BOOMERANG_DURATION = 2000; // 2s for boomerang
+const RECORDING_RING_SIZE = SHUTTER_SIZE + 12;
+const RECORDING_RING_STROKE = 4;
+const MODE_SWITCHER_HEIGHT = 36;
 
 type FlashMode = 'off' | 'on' | 'auto';
 type ZoomLevel = 0 | 1 | 2;
 type TimerOption = 0 | 3 | 5 | 10;
+type CameraMode = 'photo' | 'video' | 'boomerang';
+
+const CAMERA_MODES: { mode: CameraMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { mode: 'photo', label: 'Photo', icon: 'camera-outline' },
+  { mode: 'video', label: 'Video', icon: 'videocam-outline' },
+  { mode: 'boomerang', label: 'Boomerang', icon: 'repeat-outline' },
+];
 
 export interface CreatorCameraProps {
   /** Camera mode — determines framing guide + labels */
@@ -99,20 +121,41 @@ export default function CreatorCamera({
   const [zoomIndex, setZoomIndex] = useState<ZoomLevel>(1);
   const [timerOption, setTimerOption] = useState<TimerOption>(0);
   const [showGrid, setShowGrid] = useState(false);
-  const shutterScale = useSharedValue(1);
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
-  const focusAnim = useSharedValue(0);
   const [lastImageUri, setLastImageUri] = useState<string | null>(null);
   const [recentImages, setRecentImages] = useState<string[]>([]);
   const [showRecentCarousel, setShowRecentCarousel] = useState(false);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const reviewOpacity = useRef(new Animated.Value(0)).current;
-  const countdownAnim = useRef(new Animated.Value(0)).current;
+  const reviewOpacity = useSharedValue(0);
   const captureFlash = useSharedValue(0);
   // ── Multi-capture mode (Instagram Layout-style sequential captures) ──
   const [multiCaptureMode, setMultiCaptureMode] = useState(false);
   const [multiCaptures, setMultiCaptures] = useState<string[]>([]);
+
+  // ── Flagship upgrade shared values ──
+  // Flip animation (double-tap to switch camera)
+  const flipRotation = useSharedValue(0);
+  // Camera mode switcher
+  const [cameraMode, setCameraMode] = useState<CameraMode>('photo');
+  const modeSwitcherTranslate = useSharedValue(0);
+  const modeUnderlineScale = useSharedValue(1);
+  // Zoom indicator spring appearance
+  const zoomIndicatorOpacity = useSharedValue(0);
+  const zoomIndicatorScale = useSharedValue(0.8);
+  // Flash control spring scale
+  const flashScale = useSharedValue(1);
+  // Permission entrance animation
+  const permissionEntrance = useSharedValue(0);
+  // Recording state + ring progress
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
+  const recordingProgress = useSharedValue(0);
+  const recordingRingScale = useSharedValue(1);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Countdown Reanimated values (flagship spring)
+  const countdownScale = useSharedValue(1.5);
+  const countdownOpacity = useSharedValue(0);
 
   const isPoster = mode === 'poster';
   const isVisualSearch = mode === 'visual-search';
@@ -120,11 +163,36 @@ export default function CreatorCamera({
   const zoom = ZOOM_LEVELS[zoomIndex];
 
   const captureFlashStyle = useAnimatedStyle(() => ({ opacity: captureFlash.value }));
-  const focusReticleStyle = useAnimatedStyle(() => ({
-    opacity: focusAnim.value,
-    transform: [{ scale: 1.4 - 0.4 * focusAnim.value }],
+
+  // ── Quick-review overlay opacity ──
+  const reviewOpacityStyle = useAnimatedStyle(() => ({ opacity: reviewOpacity.value }));
+
+  // ── Flip rotation: rotateY 0→180→360 for double-tap camera switch ──
+  const cameraFlipStyle = useAnimatedStyle(() => ({
+    transform: [{ rotateY: `${flipRotation.value}deg` }],
   }));
-  const shutterStyle = useAnimatedStyle(() => ({ transform: [{ scale: shutterScale.value }] }));
+
+  // ── Zoom indicator: spring appearance ──
+  const zoomIndicatorStyle = useAnimatedStyle(() => ({
+    opacity: zoomIndicatorOpacity.value,
+    transform: [{ scale: zoomIndicatorScale.value }],
+  }));
+
+  // ── Flash control: spring scale on tap ──
+  const flashControlStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: flashScale.value }],
+  }));
+
+  // ── Countdown: spring scale (1.5→1.0 bouncy) + fade ──
+  const countdownTextStyle = useAnimatedStyle(() => ({
+    opacity: countdownOpacity.value,
+    transform: [{ scale: countdownScale.value }],
+  }));
+
+  // ── Mode switcher: underline scale ──
+  const modeUnderlineStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: modeUnderlineScale.value }],
+  }));
 
   // ── Permission ──
   useEffect(() => {
@@ -134,6 +202,21 @@ export default function CreatorCamera({
       });
     }
   }, [permission, requestPermission, show]);
+
+  // ── Permission entrance: spring slide-up + fade when denied ──
+  useEffect(() => {
+    if (permission && !permission.granted) {
+      permissionEntrance.value = 0;
+      if (!reducedMotion) {
+        permissionEntrance.value = withDelay(
+          100,
+          withSpring(1, spring.entrance),
+        );
+      } else {
+        permissionEntrance.value = 1;
+      }
+    }
+  }, [permission, reducedMotion, permissionEntrance]);
 
   // ── Load recent gallery photos for thumbnail + carousel ──
   useEffect(() => {
@@ -163,19 +246,49 @@ export default function CreatorCamera({
 
   // ── Camera controls ──
   const cycleFlash = useCallback(() => {
-    haptic.selection();
+    haptic.light();
+    // Spring scale pop on flash toggle
+    if (!reducedMotion) {
+      flashScale.value = withSequence(
+        withSpring(0.88, spring.tap),
+        withSpring(1, spring.entrance),
+      );
+    }
     setFlash((p) => p === 'off' ? 'on' : p === 'on' ? 'auto' : 'off');
-  }, [haptic]);
+  }, [haptic, reducedMotion, flashScale, spring]);
 
   const toggleFacing = useCallback(() => {
-    haptic.selection();
+    haptic.medium();
+    // Spring 3D flip animation: rotateY 0→180→360
+    if (!reducedMotion) {
+      flipRotation.value = withSequence(
+        withSpring(flipRotation.value + 180, spring.lift),
+      );
+    }
     setFacing((p) => (p === 'back' ? 'front' : 'back'));
-  }, [haptic]);
+  }, [haptic, reducedMotion, flipRotation, spring]);
+
+  // ── Double-tap to switch camera ──
+  const doubleTapGesture = useMemo(() => {
+    return Gesture.Tap()
+      .numberOfTaps(2)
+      .onEnd(() => {
+        'worklet';
+        runOnJS(toggleFacing)();
+      });
+  }, [toggleFacing]);
 
   const cycleZoom = useCallback(() => {
-    haptic.selection();
+    haptic.light();
     setZoomIndex((p) => ((p + 1) % 3) as ZoomLevel);
-  }, [haptic]);
+    // Show zoom indicator with spring appearance, auto-hide after 1.2s
+    if (!reducedMotion) {
+      zoomIndicatorOpacity.value = withSpring(1, spring.tap);
+      zoomIndicatorScale.value = withSpring(1, spring.lift);
+      zoomIndicatorOpacity.value = withDelay(1200, withTiming(0, { duration: 200 }));
+      zoomIndicatorScale.value = withDelay(1200, withSpring(0.8, spring.entrance));
+    }
+  }, [haptic, reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
 
   const cycleTimer = useCallback(() => {
     haptic.selection();
@@ -191,56 +304,53 @@ export default function CreatorCamera({
   }, [haptic]);
 
   // ── Pinch-to-zoom (Snapchat pattern) ──
-  // Tracks two-finger pinch distance and maps it to a smooth zoom factor.
+  // Tracks two-finger pinch scale and maps it to a smooth zoom factor.
   // The zoom factor is separate from the stepped zoomIndex — it provides
   // a continuous 1x–4x range that snaps to the nearest step on release.
-  const pinchBaseDist = useRef(0);
   const pinchStartZoom = useRef(1);
   const [pinchZoom, setPinchZoom] = useState(1);
 
-  const pinchResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_evt, gestureState) => gestureState.numberActiveTouches === 2,
-      onPanResponderGrant: (evt) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length >= 2) {
-          const dx = touches[0].pageX - touches[1].pageX;
-          const dy = touches[0].pageY - touches[1].pageY;
-          pinchBaseDist.current = Math.sqrt(dx * dx + dy * dy);
-          pinchStartZoom.current = zoom;
-        }
-      },
-      onPanResponderMove: (evt) => {
-        if (pinchBaseDist.current === 0) return;
-        const touches = evt.nativeEvent.touches;
-        if (touches.length < 2) return;
-        const dx = touches[0].pageX - touches[1].pageX;
-        const dy = touches[0].pageY - touches[1].pageY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const ratio = dist / pinchBaseDist.current;
-        const newZoom = Math.max(1, Math.min(4, pinchStartZoom.current * ratio));
-        setPinchZoom(newZoom);
-      },
-      onPanResponderRelease: () => {
-        // Snap to nearest zoom step on release
-        pinchBaseDist.current = 0;
-        setPinchZoom((currentZoom) => {
-          // Find nearest step
-          if (currentZoom < 0.75) setZoomIndex(0); // 0.5x
-          else if (currentZoom < 1.5) setZoomIndex(1); // 1x
-          else if (currentZoom < 2.5) setZoomIndex(2); // 2x
-          else setZoomIndex(2); // cap at 2x
-          return 1; // reset pinch zoom
-        });
-        haptic.selection();
-      },
-      onPanResponderTerminate: () => {
-        pinchBaseDist.current = 0;
-        setPinchZoom(1);
-      },
-    }),
-  ).current;
+  const showZoomIndicator = useCallback(() => {
+    if (!reducedMotion) {
+      zoomIndicatorOpacity.value = withSpring(1, spring.tap);
+      zoomIndicatorScale.value = withSpring(1, spring.lift);
+      zoomIndicatorOpacity.value = withDelay(1200, withTiming(0, { duration: 200 }));
+      zoomIndicatorScale.value = withDelay(1200, withSpring(0.8, spring.entrance));
+    }
+  }, [reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
+
+  const snapPinchToStep = useCallback((currentZoom: number) => {
+    // Find nearest step
+    if (currentZoom < 0.75) setZoomIndex(0); // 0.5x
+    else if (currentZoom < 1.5) setZoomIndex(1); // 1x
+    else if (currentZoom < 2.5) setZoomIndex(2); // 2x
+    else setZoomIndex(2); // cap at 2x
+  }, []);
+
+  const pinchGesture = useMemo(
+    () =>
+      Gesture.Pinch()
+        .onStart(() => {
+          'worklet';
+          runOnJS((z: number) => {
+            pinchStartZoom.current = z;
+          })(zoom);
+        })
+        .onUpdate((e) => {
+          'worklet';
+          const newZoom = Math.max(1, Math.min(4, pinchStartZoom.current * e.scale));
+          runOnJS(setPinchZoom)(newZoom);
+        })
+        .onEnd((e) => {
+          'worklet';
+          const finalZoom = Math.max(1, Math.min(4, pinchStartZoom.current * e.scale));
+          runOnJS(setPinchZoom)(1);
+          runOnJS(snapPinchToStep)(finalZoom);
+          runOnJS(haptic.light)();
+          runOnJS(showZoomIndicator)();
+        }),
+    [zoom, snapPinchToStep, haptic, showZoomIndicator],
+  );
 
   // Effective zoom = stepped zoom × pinch multiplier (clamped)
   const effectiveZoom = Math.max(0.5, Math.min(4, zoom * pinchZoom));
@@ -250,19 +360,24 @@ export default function CreatorCamera({
     if (!cameraRef.current || countdown !== null) return;
 
     if (timerOption > 0) {
-      haptic.light();
-      setCountdown(timerOption);
+      haptic.medium(); // medium on countdown start
       for (let i = timerOption; i > 0; i--) {
         setCountdown(i);
+        // Reanimated spring countdown: scale 1.5→1.0 bouncy + fade in/out
         if (!reducedMotion) {
-          countdownAnim.setValue(0);
-          Animated.spring(countdownAnim, {
-            toValue: 1,
-            friction: 8,
-            tension: 50,
-            useNativeDriver: false,
-          }).start();
+          countdownScale.value = 1.5;
+          countdownOpacity.value = 0;
+          countdownScale.value = withSpring(1, spring.lift);
+          countdownOpacity.value = withSequence(
+            withTiming(1, { duration: 100 }),
+            withDelay(700, withTiming(0, { duration: 200 })),
+          );
+        } else {
+          countdownScale.value = 1;
+          countdownOpacity.value = 1;
+          countdownOpacity.value = withDelay(800, withTiming(0, { duration: 0 }));
         }
+        haptic.light(); // tick on each number
         await new Promise((r) => setTimeout(r, 1000));
       }
       setCountdown(null);
@@ -287,46 +402,130 @@ export default function CreatorCamera({
     } catch {
       show('Failed to capture photo', 'error');
     }
-  }, [cameraRef, countdown, haptic, reducedMotion, show, timerOption, countdownAnim]);
+  }, [cameraRef, countdown, haptic, reducedMotion, show, timerOption, countdownScale, countdownOpacity, captureFlash, spring]);
+
+  // ── Recording: start/stop with ring progress + timer ──
+  const stopRecording = useCallback(() => {
+    if (!isRecording) return;
+    haptic.medium(); // medium on recording stop
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    recordingProgress.value = withSpring(0, spring.entrance);
+    // Stop actual recording
+    if (cameraMode === 'video') {
+      cameraRef.current?.stopRecording();
+    }
+  }, [isRecording, haptic, recordingProgress, cameraMode, spring]);
+
+  const startRecording = useCallback(() => {
+    if (!cameraRef.current || isRecording) return;
+    haptic.medium(); // medium on recording start
+    setIsRecording(true);
+    setRecordingElapsed(0);
+    recordingProgress.value = 0;
+    // Ring scale pulse on start
+    if (!reducedMotion) {
+      recordingRingScale.value = withSequence(
+        withSpring(1.15, spring.tap),
+        withSpring(1, spring.entrance),
+      );
+    }
+    const maxDuration = cameraMode === 'boomerang' ? BOOMERANG_DURATION : RECORDING_MAX_DURATION;
+    const startTime = Date.now();
+    recordingTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      setRecordingElapsed(elapsed);
+      recordingProgress.value = Math.min(1, elapsed / maxDuration);
+      if (elapsed >= maxDuration) {
+        // Auto-stop at max duration
+        stopRecording();
+      }
+    }, 50);
+    // Start actual video recording
+    if (cameraMode === 'boomerang') {
+      // Boomerang: record short clip then auto-stop
+      cameraRef.current?.recordAsync({ maxDuration: BOOMERANG_DURATION / 1000 })
+        .then((video) => {
+          if (video?.uri) {
+            setCapturedUri(video.uri);
+          }
+        })
+        .catch(() => {
+          show('Failed to record boomerang', 'error');
+        });
+    } else {
+      // Video mode — recording continues until user stops or max duration
+    }
+  }, [cameraRef, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, cameraMode, show, stopRecording, spring]);
+
+  // ── Cleanup recording timer on unmount ──
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleShutterPress = useCallback(() => {
-    if (!reducedMotion) {
-      shutterScale.value = withSpring(0.92, spring.press);
-      shutterScale.value = withSpring(1, spring.press);
+    // Press spring is handled internally by ShutterButton.
+    if (cameraMode === 'video' || cameraMode === 'boomerang') {
+      // Video/boomerang: toggle recording
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    } else {
+      takePhoto();
     }
-    takePhoto();
-  }, [shutterScale, takePhoto, reducedMotion, spring]);
+  }, [takePhoto, cameraMode, isRecording, startRecording, stopRecording]);
+
+  // ── Camera mode switcher: spring underline + translate ──
+  const handleModeSwitch = useCallback((newMode: CameraMode) => {
+    if (newMode === cameraMode) return;
+    haptic.light(); // light on mode change
+    const modeIndex = CAMERA_MODES.findIndex((m) => m.mode === newMode);
+    const modeWidth = 80; // approximate width per mode tab
+    // Spring translate to new position
+    if (!reducedMotion) {
+      modeSwitcherTranslate.value = withSpring(modeIndex * modeWidth, spring.entrance);
+      // Underline: shrink then grow for smooth transition
+      modeUnderlineScale.value = withSequence(
+        withSpring(0.3, spring.tap),
+        withSpring(1, spring.lift),
+      );
+    }
+    setCameraMode(newMode);
+  }, [cameraMode, haptic, reducedMotion, modeSwitcherTranslate, modeUnderlineScale, spring]);
 
   // ── Quick-review flow ──
   useEffect(() => {
     if (capturedUri) {
       if (reducedMotion) {
-        reviewOpacity.setValue(1);
+        reviewOpacity.value = 1;
       } else {
-        reviewOpacity.setValue(0);
-        Animated.spring(reviewOpacity, {
-          toValue: 1,
-          friction: 9,
-          tension: 60,
-          useNativeDriver: false,
-        }).start();
+        reviewOpacity.value = 0;
+        reviewOpacity.value = withSpring(1, spring.entrance);
       }
     }
-  }, [capturedUri, reducedMotion, reviewOpacity]);
+  }, [capturedUri, reducedMotion, reviewOpacity, spring]);
 
   const handleRetake = useCallback(() => {
     haptic.selection();
     if (!reducedMotion) {
-      Animated.spring(reviewOpacity, {
-        toValue: 0,
-        friction: 9,
-        tension: 60,
-        useNativeDriver: false,
-      }).start(() => setCapturedUri(null));
+      reviewOpacity.value = withSpring(0, spring.entrance, () => {
+        runOnJS(setCapturedUri)(null);
+      });
     } else {
+      reviewOpacity.value = 0;
       setCapturedUri(null);
     }
-  }, [haptic, reducedMotion, reviewOpacity]);
+  }, [haptic, reducedMotion, reviewOpacity, spring]);
 
   const handleConfirmCapture = useCallback(() => {
     if (!capturedUri) return;
@@ -384,15 +583,9 @@ export default function CreatorCamera({
 
   const handleTapFocus = useCallback((evt: GestureResponderEvent) => {
     const { locationX, locationY } = evt.nativeEvent;
-    haptic.light();
     setFocusPoint({ x: locationX, y: locationY });
-    focusAnim.value = 0;
-    focusAnim.value = withSequence(
-      withSpring(1, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press),
-      withDelay(reducedMotion ? 0 : 400, withTiming(0, { duration: reducedMotion ? 0 : 200, easing: Easing.in(Easing.cubic) }))
-    );
-    setTimeout(() => setFocusPoint(null), reducedMotion ? 0 : 700);
-  }, [focusAnim, haptic, reducedMotion, spring]);
+    // FocusReticle component handles its own spring animation + haptic + auto-dismiss
+  }, []);
 
   const handleOpenSettings = useCallback(() => Linking.openSettings(), []);
 
@@ -405,88 +598,42 @@ export default function CreatorCamera({
 
   // ── Permission: loading ──
   if (!permission) {
-    return (
-      <View style={styles.permissionOverlay}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+    return <PermissionState status="loading" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
   }
 
   // ── Permission: permanently denied ──
   if (!permission.granted && !permission.canAskAgain) {
-    return (
-      <View style={styles.permissionOverlay}>
-        <View style={styles.permissionContent}>
-          <View style={styles.permissionIconWrap}>
-            <Ionicons name="camera-outline" size={48} color="#fff" />
-          </View>
-          <Text style={styles.permissionTitle}>Camera access needed</Text>
-          <Text style={styles.permissionText}>
-            Enable camera permission in Settings to capture {isPoster ? 'your story' : 'your look'}.
-          </Text>
-          <Pressable
-            style={({ pressed }) => [styles.permissionBtn, pressed && styles.btnPressed]}
-            onPress={handleOpenSettings}
-          >
-            <Text style={styles.permissionBtnText}>Open Settings</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.galleryFallbackBtn, pressed && styles.btnPressed]}
-            onPress={onGallery}
-          >
-            <Ionicons name="images-outline" size={20} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.galleryFallbackText}>Use gallery instead</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
+    return <PermissionState status="denied" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
   }
 
   // ── Permission: undetermined — ask ──
   if (!permission.granted) {
-    return (
-      <View style={styles.permissionOverlay}>
-        <View style={styles.permissionContent}>
-          <View style={styles.permissionIconWrap}>
-            <Ionicons name="camera-outline" size={48} color="#fff" />
-          </View>
-          <Text style={styles.permissionTitle}>Access your camera</Text>
-          <Text style={styles.permissionText}>
-            Capture photos and videos directly for your {isPoster ? 'story' : 'look'}.
-          </Text>
-          <Pressable
-            style={({ pressed }) => [styles.permissionBtn, pressed && styles.btnPressed]}
-            onPress={() => requestPermission()}
-          >
-            <Text style={styles.permissionBtnText}>Allow camera</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.galleryFallbackBtn, pressed && styles.btnPressed]}
-            onPress={onGallery}
-          >
-            <Ionicons name="images-outline" size={20} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.galleryFallbackText}>Use gallery instead</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
+    return <PermissionState status="undetermined" isPoster={isPoster} entrance={permissionEntrance} onEnable={() => requestPermission()} onGallery={onGallery} />;
   }
 
   // ── Camera viewfinder ──
   return (
-    <View style={StyleSheet.absoluteFill} {...pinchResponder.panHandlers}>
-      {/* Full-screen camera feed with tap-to-focus */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={handleTapFocus}>
-        <CameraView
-          ref={cameraRef}
-          style={StyleSheet.absoluteFill}
-          facing={facing}
-          flash={flash}
-          mode="picture"
-          enableTorch={flash === 'on'}
-          zoom={effectiveZoom}
-        />
-      </Pressable>
+    <GestureDetector gesture={pinchGesture}>
+      <View style={StyleSheet.absoluteFill}>
+        {/* Double-tap gesture for camera flip (wrapped around camera feed) */}
+        <GestureDetector gesture={doubleTapGesture}>
+          <View style={StyleSheet.absoluteFill}>
+            {/* Full-screen camera feed with tap-to-focus + 3D flip rotation */}
+            <Pressable style={StyleSheet.absoluteFill} onPress={handleTapFocus}>
+              <Reanimated.View style={[StyleSheet.absoluteFill, cameraFlipStyle]}>
+                <CameraView
+                  ref={cameraRef}
+                  style={StyleSheet.absoluteFill}
+                  facing={facing}
+                  flash={flash}
+                  mode={cameraMode === 'video' ? 'video' : 'picture'}
+                  enableTorch={flash === 'on'}
+                  zoom={effectiveZoom}
+                />
+              </Reanimated.View>
+            </Pressable>
+          </View>
+        </GestureDetector>
 
       {/* Capture flash — subtle white overlay on capture (Snapchat pattern) */}
       <Reanimated.View
@@ -516,53 +663,28 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* Focus reticle */}
-      {focusPoint && (
-        <Reanimated.View
-          style={[
-            styles.focusReticle,
-            {
-              left: focusPoint.x - 30,
-              top: focusPoint.y - 30,
-            },
-            focusReticleStyle,
-          ]}
-        />
-      )}
+      {/* Focus reticle — extracted component with spring animation + color transition */}
+      <FocusReticle
+        focusPoint={focusPoint}
+        size={FOCUS_RETICLE_SIZE}
+        onDismiss={() => setFocusPoint(null)}
+      />
 
-      {/* Pinch zoom indicator — subtle pill at bottom center during pinch */}
-      {pinchZoom > 1.05 && (
-        <View style={styles.zoomIndicator} pointerEvents="none">
-          <Text style={styles.zoomIndicatorText}>
-            {effectiveZoom.toFixed(1)}×
-          </Text>
-        </View>
-      )}
+      {/* Zoom level indicator — spring appearance (0.5x/1x/2x/3x) */}
+      <Reanimated.View style={[styles.zoomIndicator, zoomIndicatorStyle]} pointerEvents="none">
+        <Text style={styles.zoomIndicatorText}>
+          {zoom === 0.5 ? '0.5' : zoom}×
+        </Text>
+      </Reanimated.View>
 
-      {/* Countdown overlay */}
+      {/* Countdown overlay — Reanimated spring scale + fade */}
       {countdown !== null && (
         <View style={styles.countdownOverlay} pointerEvents="none">
-          <Animated.Text
-            style={[
-              styles.countdownText,
-              {
-                opacity: countdownAnim.interpolate({
-                  inputRange: [0, 0.5, 1],
-                  outputRange: [1, 1, 0],
-                }),
-                transform: [
-                  {
-                    scale: countdownAnim.interpolate({
-                      inputRange: [0, 0.5, 1],
-                      outputRange: [1, 1.3, 1.6],
-                    }),
-                  },
-                ],
-              },
-            ]}
+          <Reanimated.Text
+            style={[styles.countdownText, countdownTextStyle]}
           >
             {countdown}
-          </Animated.Text>
+          </Reanimated.Text>
         </View>
       )}
 
@@ -604,6 +726,7 @@ export default function CreatorCamera({
 
         <View style={styles.topRightControls}>
           {renderTopRightAccessory?.()}
+          {/* Flash control — three states with distinct icons + spring scale on tap */}
           <Pressable
             style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed]}
             onPress={cycleFlash}
@@ -611,164 +734,101 @@ export default function CreatorCamera({
             accessibilityLabel={`Flash ${flash}`}
             accessibilityRole="button"
           >
-            <Ionicons
-              name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
-              size={22}
-              color={flash === 'off' ? '#fff' : colors.antiqueGold}
-            />
+            <Reanimated.View style={flashControlStyle}>
+              <Ionicons
+                name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
+                size={22}
+                color={flash === 'off' ? '#fff' : colors.antiqueGold}
+              />
+            </Reanimated.View>
           </Pressable>
         </View>
       </View>
 
       {/* Vertical controls rail — right side (TikTok pattern) */}
-      <View
-        style={[styles.controlsRail, { top: Math.max(insets.top, 16) + 60 }]}
-        pointerEvents="box-none"
-      >
-        {/* Flip */}
-        <Pressable
-          style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
-          onPress={toggleFacing}
-          hitSlop={12}
-          accessibilityLabel="Flip camera"
-          accessibilityRole="button"
-        >
-          <Ionicons name="camera-reverse-outline" size={CONTROL_RAIL_ICON} color="#fff" />
-          <Text style={styles.railLabel}>Flip</Text>
-        </Pressable>
-
-        {/* Zoom */}
-        <Pressable
-          style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
-          onPress={cycleZoom}
-          hitSlop={12}
-          accessibilityLabel={`Zoom ${zoom}x`}
-          accessibilityRole="button"
-        >
-          <Text style={styles.zoomLabel}>{zoom === 0.5 ? '½' : zoom}×</Text>
-          <Text style={styles.railLabel}>Zoom</Text>
-        </Pressable>
-
-        {/* Timer */}
-        <Pressable
-          style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
-          onPress={cycleTimer}
-          hitSlop={12}
-          accessibilityLabel={timerOption === 0 ? 'Timer off' : `Timer ${timerOption} seconds`}
-          accessibilityRole="button"
-        >
-          <Ionicons
-            name={timerOption === 0 ? 'timer-outline' : 'timer'}
-            size={CONTROL_RAIL_ICON}
-            color={timerOption > 0 ? colors.antiqueGold : '#fff'}
-          />
-          <Text style={styles.railLabel}>{timerOption === 0 ? 'Timer' : `${timerOption}s`}</Text>
-        </Pressable>
-
-        {/* Grid */}
-        <Pressable
-          style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
-          onPress={toggleGrid}
-          hitSlop={12}
-          accessibilityLabel={showGrid ? 'Grid on' : 'Grid off'}
-          accessibilityRole="button"
-        >
-          <Ionicons
-            name="grid-outline"
-            size={CONTROL_RAIL_ICON}
-            color={showGrid ? colors.antiqueGold : '#fff'}
-          />
-          <Text style={styles.railLabel}>Grid</Text>
-        </Pressable>
-
-        {/* Multi-capture (Instagram Layout-style sequential captures) */}
-        {!isVisualSearch && (
-          <Pressable
-            style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
-            onPress={toggleMultiCapture}
-            hitSlop={12}
-            accessibilityLabel={multiCaptureMode ? 'Multi-capture on' : 'Multi-capture off'}
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name={multiCaptureMode ? 'albums' : 'albums-outline'}
-              size={CONTROL_RAIL_ICON}
-              color={multiCaptureMode ? colors.antiqueGold : '#fff'}
-            />
-            <Text style={styles.railLabel}>
-              {multiCaptureMode ? `${multiCaptures.length + (capturedUri ? 1 : 0)} photos` : 'Multi'}
-            </Text>
-          </Pressable>
-        )}
-      </View>
-
-      {/* Recent photos carousel (long-press gallery) */}
-      {showRecentCarousel && recentImages.length > 1 && (
-        <View style={[styles.recentCarousel, { bottom: Math.max(insets.bottom, 16) + 140 }]} pointerEvents="box-none">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.recentCarouselContent}
-          >
-            {recentImages.map((uri, i) => (
-              <Pressable
-                key={`${uri}-${i}`}
-                style={({ pressed }) => [styles.recentThumbWrap, pressed && styles.btnPressed]}
-                onPress={() => {
-                  haptic.selection();
-                  setShowRecentCarousel(false);
-                  onGallery();
-                }}
-                hitSlop={12}
-                accessibilityLabel={`Recent photo ${i + 1}`}
-                accessibilityRole="button"
-              >
-                <Image source={{ uri }} style={styles.recentThumb} />
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+      <ControlsRail
+        top={Math.max(insets.top, 16) + 60}
+        isVisualSearch={isVisualSearch}
+        onFlip={toggleFacing}
+        onCycleZoom={cycleZoom}
+        zoom={zoom}
+        onCycleTimer={cycleTimer}
+        timerOption={timerOption}
+        onToggleGrid={toggleGrid}
+        showGrid={showGrid}
+        onToggleMultiCapture={toggleMultiCapture}
+        multiCaptureMode={multiCaptureMode}
+        multiCaptureCount={multiCaptures.length}
+        hasCapturedUri={!!capturedUri}
+        accentColor={colors.antiqueGold}
+      />
 
       {/* Bottom controls — gallery, shutter, flip */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]} pointerEvents="box-none">
-        {/* Gallery thumbnail — 64x64 with long-press for recent carousel */}
-        <Pressable
-          style={styles.galleryBtn}
-          onPress={onGallery}
+        {/* Gallery thumbnail + recent photos carousel */}
+        <GalleryCarousel
+          lastImageUri={lastImageUri}
+          recentImages={recentImages}
+          showRecentCarousel={showRecentCarousel}
+          carouselBottom={Math.max(insets.bottom, 16) + 140}
+          onGallery={onGallery}
           onLongPress={handleGalleryLongPress}
-          hitSlop={16}
-          accessibilityLabel="Choose photos from gallery"
-          accessibilityRole="button"
-        >
-          {lastImageUri ? (
-            <Image source={{ uri: lastImageUri }} style={styles.galleryThumb} />
-          ) : (
-            <View style={styles.galleryThumbPlaceholder}>
-              <Ionicons name="images-outline" size={24} color="rgba(255,255,255,0.6)" />
-            </View>
-          )}
-          <Text style={styles.bottomLabel}>Gallery</Text>
-        </Pressable>
+        />
 
-        {/* Shutter — the hero control */}
-        <Pressable
+        {/* Shutter — the hero control with recording ring */}
+        <ShutterButton
           onPress={handleShutterPress}
-          hitSlop={24}
-          accessibilityLabel="Take photo"
-          accessibilityRole="button"
+          isRecording={isRecording}
+          cameraMode={cameraMode}
           disabled={countdown !== null}
-        >
-          <Reanimated.View style={[styles.shutterOuter, shutterStyle]}>
-            <View style={styles.shutterInner} />
-          </Reanimated.View>
-        </Pressable>
+          recordingProgress={recordingProgress}
+          recordingRingScale={recordingRingScale}
+        />
 
         {/* Spacer — flip is in the right rail, this keeps the shutter centered */}
         <View style={styles.bottomSpacer} />
       </View>
 
-      {/* Mode indicator (only when no bottom overlay) */}
+      {/* Camera mode switcher — Photo / Video / Boomerang with spring underline */}
+      {!renderBottomOverlay && (
+        <View style={[styles.modeSwitcher, { bottom: Math.max(insets.bottom, 16) + 130 }]} pointerEvents="box-none">
+          {CAMERA_MODES.map((m) => {
+            const isActive = cameraMode === m.mode;
+            return (
+              <Pressable
+                key={m.mode}
+                style={styles.modeTab}
+                onPress={() => handleModeSwitch(m.mode)}
+                hitSlop={8}
+                accessibilityLabel={`${m.label} mode`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text style={[styles.modeTabText, isActive && styles.modeTabTextActive]}>
+                  {m.label}
+                </Text>
+                {isActive && (
+                  <Reanimated.View
+                    style={[styles.modeUnderline, modeUnderlineStyle, { backgroundColor: colors.antiqueGold }]}
+                  />
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Recording timer badge — shown while recording */}
+      {isRecording && (
+        <View style={[styles.recordingBadge, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
+          <View style={[styles.recordingDot, { backgroundColor: colors.danger }]} />
+          <Text style={styles.recordingTimerText}>
+            {Math.floor(recordingElapsed / 1000)}s
+          </Text>
+        </View>
+      )}
+
+      {/* Mode indicator (only when no bottom overlay and no mode switcher) */}
       {!renderBottomOverlay && (
         <View style={styles.modePill} pointerEvents="none">
           <Text style={styles.modeText}>{modeLabel}</Text>
@@ -780,10 +840,11 @@ export default function CreatorCamera({
 
       {/* ── Quick-review overlay ── */}
       {capturedUri && (
-        <Animated.View
+        <Reanimated.View
           style={[
             styles.reviewOverlay,
-            { opacity: reviewOpacity },
+            { backgroundColor: colors.background },
+            reviewOpacityStyle,
           ]}
         >
           <Image source={{ uri: capturedUri }} style={styles.reviewImage} />
@@ -806,14 +867,14 @@ export default function CreatorCamera({
 
                 {/* Multi-capture: Done — primary action */}
                 <Pressable
-                  style={({ pressed }) => [styles.reviewPrimaryBtn, pressed && styles.btnPressed]}
+                  style={({ pressed }) => [styles.reviewPrimaryBtn, { backgroundColor: colors.textPrimary }, pressed && styles.btnPressed]}
                   onPress={handleFinishMultiCapture}
                   hitSlop={16}
                   accessibilityLabel="Finish multi-capture and edit"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="checkmark" size={28} color="#000" />
-                  <Text style={styles.reviewPrimaryLabel}>
+                  <Ionicons name="checkmark" size={28} color={colors.background} />
+                  <Text style={[styles.reviewPrimaryLabel, { color: colors.background }]}>
                     Done ({multiCaptures.length + 1})
                   </Text>
                 </Pressable>
@@ -846,14 +907,14 @@ export default function CreatorCamera({
 
                 {/* Use — primary action */}
                 <Pressable
-                  style={({ pressed }) => [styles.reviewPrimaryBtn, pressed && styles.btnPressed]}
+                  style={({ pressed }) => [styles.reviewPrimaryBtn, { backgroundColor: colors.textPrimary }, pressed && styles.btnPressed]}
                   onPress={handleConfirmCapture}
                   hitSlop={16}
                   accessibilityLabel={isVisualSearch ? 'Search with this photo' : 'Edit in studio'}
                   accessibilityRole="button"
                 >
-                  <Ionicons name="arrow-forward" size={28} color="#000" />
-                  <Text style={styles.reviewPrimaryLabel}>
+                  <Ionicons name="arrow-forward" size={28} color={colors.background} />
+                  <Text style={[styles.reviewPrimaryLabel, { color: colors.background }]}>
                     {isVisualSearch ? 'Search' : 'Edit'}
                   </Text>
                 </Pressable>
@@ -872,16 +933,28 @@ export default function CreatorCamera({
               </>
             )}
           </View>
-        </Animated.View>
+        </Reanimated.View>
       )}
-    </View>
+      </View>
+    </GestureDetector>
   );
 }
 
 // ── Styles — Flagship 2026 ────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  // Permission states
+  // ── Camera-overlay whites ──────────────────────────────────────────
+  // The camera preview is always dark regardless of app theme, so overlay
+  // controls (brackets, crosshair, grid, labels, shutter ring, review
+  // secondary actions) intentionally use white / rgba(255,255,255,*) for
+  // high contrast. The theme has no `textOnMedia` token, and `textPrimary`
+  // resolves to black in light mode (invisible on dark preview), so these
+  // are kept as literal whites. Semantic colours (danger, antiqueGold) and
+  // non-overlay surfaces (review overlay, primary button) use theme tokens
+  // via inline overrides above.
+  // Permission states — superseded by the extracted PermissionState.tsx
+  // component. Retained for reference but not rendered here; live permission
+  // colours live in PermissionState.tsx (createStyles(colors) factory).
   permissionOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: '#000',
@@ -997,14 +1070,11 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
-  // Focus reticle
+  // Focus reticle — SvgCircle-based with spring scale + color transition
   focusReticle: {
     position: 'absolute',
-    width: 60,
-    height: 60,
-    borderWidth: 2,
-    borderColor: '#fff',
-    borderRadius: Radius.sm,
+    width: FOCUS_RETICLE_SIZE,
+    height: FOCUS_RETICLE_SIZE,
     pointerEvents: 'none',
   },
   // Pinch zoom indicator — subtle pill at bottom center
@@ -1239,7 +1309,9 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     color: 'rgba(255,255,255,0.85)',
   },
-  // Shutter
+  // Shutter — superseded by the extracted ShutterButton.tsx component.
+  // These styles are retained for reference but are not rendered here; the
+  // live shutter/recording colours live in ShutterButton.tsx + RecordingRing.tsx.
   shutterOuter: {
     width: SHUTTER_SIZE,
     height: SHUTTER_SIZE,
@@ -1256,10 +1328,82 @@ const styles = StyleSheet.create({
     borderRadius: SHUTTER_INNER / 2,
     backgroundColor: '#fff',
   },
+  shutterInnerRecording: {
+    width: SHUTTER_INNER * 0.6,
+    height: SHUTTER_INNER * 0.6,
+    borderRadius: Radius.sm,
+    // Superseded — live recording colour is colors.danger in ShutterButton.tsx
+  },
+  // Recording ring — wraps the shutter with SVG progress
+  recordingRingWrap: {
+    position: 'absolute',
+    top: -(RECORDING_RING_SIZE - SHUTTER_SIZE) / 2,
+    left: -(RECORDING_RING_SIZE - SHUTTER_SIZE) / 2,
+    width: RECORDING_RING_SIZE,
+    height: RECORDING_RING_SIZE,
+  },
+  // Camera mode switcher — Photo / Video / Boomerang
+  modeSwitcher: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Space.xl,
+    height: MODE_SWITCHER_HEIGHT,
+    alignItems: 'center',
+  },
+  modeTab: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.sm,
+    height: MODE_SWITCHER_HEIGHT,
+  },
+  modeTabText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  modeTabTextActive: {
+    color: '#fff',
+    fontFamily: Typography.family.semibold,
+  },
+  modeUnderline: {
+    position: 'absolute',
+    bottom: 2,
+    width: 24,
+    height: 3,
+    borderRadius: Radius.full,
+    // backgroundColor applied inline via colors.antiqueGold (theme token)
+  },
+  // Recording badge — timer + red dot at top
+  recordingBadge: {
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Space.md,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
+    // backgroundColor applied inline via colors.danger (theme token)
+  },
+  recordingTimerText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    color: '#fff',
+  },
   // Quick-review overlay
   reviewOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#000',
+    // backgroundColor applied inline via colors.background (theme token)
     zIndex: 100,
   },
   reviewImage: {
@@ -1290,7 +1434,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
+    // backgroundColor applied inline via colors.textPrimary (theme token)
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
@@ -1298,6 +1442,6 @@ const styles = StyleSheet.create({
   reviewPrimaryLabel: {
     fontFamily: Typography.family.bold,
     fontSize: Type.caption.size,
-    color: '#000',
+    // color applied inline via colors.background (theme token)
   },
 });

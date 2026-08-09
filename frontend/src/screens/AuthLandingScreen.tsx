@@ -404,7 +404,7 @@ function createStyles(colors: ThemeColors) {
   },
   topSection: {
     paddingHorizontal: Space.lg - 2,
-    paddingTop: Space.sm + 4,
+    paddingTop: Space.smMd,
   },
   logo: {
     fontSize: Type.meta.size,
@@ -423,7 +423,7 @@ function createStyles(colors: ThemeColors) {
     color: '#f6f2ea',
     lineHeight: FontSize.giant + 2,
     letterSpacing: -2,
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
   },
   subtitle: {
     fontSize: Type.captionElevated.size,
@@ -565,7 +565,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
   },
   devBypassBtn: {
-    marginTop: Space.sm + 4,
+    marginTop: Space.smMd,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,

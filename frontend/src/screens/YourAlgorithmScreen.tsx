@@ -1409,7 +1409,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     },
     retryBtn: {
       paddingHorizontal: Space.lg,
-      paddingVertical: Space.sm + 4,
+      paddingVertical: Space.smMd,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
     },

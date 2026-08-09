@@ -310,8 +310,8 @@ function createStyles(colors: ThemeColors) {
     minHeight: Space.xxl + Space.xxl + Space.xxl + 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm + 4,
-    gap: Space.sm + 4,
+    paddingVertical: Space.smMd,
+    gap: Space.smMd,
   },
   agentIcon: {
     width: Space.xl + Space.xs,

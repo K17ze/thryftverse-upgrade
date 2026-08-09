@@ -17,16 +17,9 @@ function buildReputationMetrics(seller: SellerTrustSummary | null): ReputationMe
   if (!seller) return [];
   const metrics: ReputationMetric[] = [];
 
-  const rating = seller.rating ?? null;
-  const reviewCount = seller.reviewCount ?? null;
-  if (rating !== null) {
-    metrics.push({
-      icon: 'star',
-      label: 'Seller rating',
-      value: reviewCount != null ? `${rating.toFixed(1)} (${reviewCount})` : rating.toFixed(1),
-      progress: rating > 0 ? Math.min(rating / 5, 1) : undefined,
-    });
-  }
+  // Seller rating — omitted because the ProfileHero trust line already
+  // shows "X.X ★" with a tap-through to reviews. Including it here would
+  // duplicate the same number in two adjacent surfaces.
 
   const responseRate = seller.responseRate ?? null;
   if (responseRate !== null) {
@@ -56,14 +49,8 @@ function buildReputationMetrics(seller: SellerTrustSummary | null): ReputationMe
     });
   }
 
-  const completedSales = seller.completedSales ?? null;
-  if (completedSales !== null) {
-    metrics.push({
-      icon: 'checkmark-done',
-      label: 'Completed sales',
-      value: `${completedSales}`,
-    });
-  }
+  // Completed sales — omitted because the ProfileHero trust line already
+  // shows "X sold". Including it here would duplicate the same number.
 
   return metrics;
 }

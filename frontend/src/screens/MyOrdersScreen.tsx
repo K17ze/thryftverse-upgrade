@@ -350,7 +350,7 @@ export default function MyOrdersScreen() {
         <EmptyState
           icon="bag-outline"
           title="No purchases yet"
-          subtitle="Your purchases will appear here."
+          subtitle="When you buy something, your orders will show up here."
           ctaLabel="Browse items"
           onCtaPress={() => navigation.navigate('MainTabs')}
         />
@@ -361,7 +361,7 @@ export default function MyOrdersScreen() {
       <EmptyState
         icon="pricetag-outline"
         title="No sales yet"
-        subtitle="Items you sell will appear here."
+        subtitle="When you sell something, your orders will show up here."
         ctaLabel="List an item"
         onCtaPress={() => navigation.navigate('Sell')}
       />

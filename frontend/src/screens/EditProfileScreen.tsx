@@ -863,7 +863,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     paddingHorizontal: Space.md - 2,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,

@@ -17,7 +17,7 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       paddingVertical: 14,
       paddingHorizontal: Space.md,
-      gap: Space.sm + 4,
+      gap: Space.smMd,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
     },

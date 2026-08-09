@@ -43,7 +43,7 @@ export default function MutedConversationsScreen() {
         <EmptyState
           icon="notifications-off-outline"
           title="No muted conversations"
-          subtitle="Chats you mute will appear here with their notification state."
+          subtitle="You haven't muted any chats. Muted conversations will appear here."
         />
       ) : (
         <View style={styles.list}>

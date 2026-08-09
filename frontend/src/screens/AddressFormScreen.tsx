@@ -835,7 +835,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 2,
     marginTop: Space.sm,
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     backgroundColor: `${colors.brand}08`,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,

@@ -282,7 +282,7 @@ function createStyles(colors: ThemeColors) {
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 4,
+    gap: Space.smMd,
   },
   toggleIconWrap: {
     width: Control.chrome,

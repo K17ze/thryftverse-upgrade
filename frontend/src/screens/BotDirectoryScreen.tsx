@@ -329,7 +329,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
   },
   agentCopy: {
     flex: 1,
@@ -383,7 +383,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     minHeight: Space.xxl + Space.xxl + Space.sm,
   },
   skeletonIcon: {

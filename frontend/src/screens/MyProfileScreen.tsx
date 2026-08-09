@@ -30,6 +30,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
+import { fetchFollowCounts } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -41,7 +42,7 @@ import { LookPreviewCard } from '../components/profile';
 import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
-import { useSellerTrust } from '../platform/product';
+import { useSellerTrust, VERIFICATION_TIERS } from '../platform/product';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
@@ -52,6 +53,31 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const COVER_HEIGHT = 152;
+
+/**
+ * Compact number formatting for social/stats counters.
+ *   999        → "999"
+ *   1200       → "1.2K"
+ *   12500      → "12.5K"
+ *   125000     → "125K"
+ *   1250000    → "1.2M"
+ *   12500000   → "12M"
+ */
+function formatCompact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 100000) {
+    const v = (n / 1000).toFixed(1).replace(/\.0$/, '');
+    return `${v}K`;
+  }
+  if (n < 1000000) {
+    return `${Math.round(n / 1000)}K`;
+  }
+  if (n < 10000000) {
+    const v = (n / 1000000).toFixed(1).replace(/\.0$/, '');
+    return `${v}M`;
+  }
+  return `${Math.round(n / 1000000)}M`;
+}
 
 export default function MyProfileScreen() {
   const { colors, isDark } = useAppTheme();
@@ -83,6 +109,24 @@ export default function MyProfileScreen() {
     coverEditVisible: { backgroundColor: `${colors.textPrimary}8C`, borderColor: `${colors.textInverse}3D` },
     coverFailure: { backgroundColor: `${colors.textPrimary}B8` },
     soldOverlay: { backgroundColor: `${colors.textPrimary}80` },
+    statsRow: { borderBottomColor: colors.borderSubtle, borderTopColor: colors.borderSubtle },
+    statValue: { color: colors.textPrimary },
+    statLabel: { color: colors.textMuted },
+    statDivider: { backgroundColor: colors.borderSubtle },
+    trustBadgeText: { color: colors.textSecondary },
+    trustBadgeVerified: { color: colors.success },
+    trustBadgeSep: { backgroundColor: colors.borderSubtle },
+    completionCard: { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
+    completionTrack: { backgroundColor: colors.borderSubtle },
+    completionFill: { backgroundColor: colors.brand },
+    completionTitle: { color: colors.textPrimary },
+    completionPercent: { color: colors.textMuted },
+    completionCta: { backgroundColor: colors.brand },
+    completionCtaText: { color: colors.textInverse },
+    portfolioPreview: { backgroundColor: colors.surfaceAlt },
+    portfolioLabel: { color: colors.textSecondary },
+    portfolioHoldingTitle: { color: colors.textPrimary },
+    portfolioHoldingUnits: { color: colors.textMuted },
   };
   const tMyProfile = {
     awayBanner: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
@@ -113,6 +157,17 @@ export default function MyProfileScreen() {
 
   // Seller trust summary — verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
+
+  // Follow counts — followers/following for the stats row
+  const [followCounts, setFollowCounts] = React.useState<{ followerCount: number; followingCount: number }>({ followerCount: 0, followingCount: 0 });
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    fetchFollowCounts(currentUser.id)
+      .then((counts) => { if (!cancelled) setFollowCounts(counts); })
+      .catch(() => { /* follow counts are non-critical */ });
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
 
   React.useEffect(() => {
     if (!currentUser?.id) return;
@@ -266,6 +321,42 @@ export default function MyProfileScreen() {
 
   const allOwnedListings = React.useMemo(() => listings.filter((item) => item.sellerId === profileUserId), [listings, profileUserId]);
 
+  // Profile completion — drives the progress prompt. Based on the presence of
+  // the core profile facets a buyer expects: bio, avatar, cover, listings, and
+  // an audience (followers). Each contributes equally to the percentage.
+  const completion = React.useMemo(() => {
+    const checks = [
+      Boolean(user.bio?.trim()),
+      Boolean(displayAvatar),
+      Boolean(displayCover),
+      allOwnedListings.length > 0,
+      followCounts.followerCount > 0,
+    ];
+    const done = checks.filter(Boolean).length;
+    return { percent: Math.round((done / checks.length) * 100), done, total: checks.length };
+  }, [user.bio, displayAvatar, displayCover, allOwnedListings.length, followCounts.followerCount]);
+
+  // First missing facet → the CTA label + EditProfile focus. When only the
+  // audience is missing, route to analytics (a truthful "grow audience" path).
+  const completionCta = React.useMemo<{ label: string; focus?: 'avatar' | 'cover'; dest: 'EditProfile' | 'CreatorAnalyticsDashboard' }>(() => {
+    if (!user.bio?.trim()) return { label: 'Add bio', dest: 'EditProfile' };
+    if (!displayAvatar) return { label: 'Add photo', focus: 'avatar', dest: 'EditProfile' };
+    if (!displayCover) return { label: 'Add cover', focus: 'cover', dest: 'EditProfile' };
+    if (allOwnedListings.length === 0) return { label: 'List an item', dest: 'EditProfile' };
+    return { label: 'Grow audience', dest: 'CreatorAnalyticsDashboard' };
+  }, [user.bio, displayAvatar, displayCover, allOwnedListings.length]);
+
+  const [completionDismissed, setCompletionDismissed] = React.useState(false);
+  // Re-show the prompt when completion improves so progress is celebrated once.
+  const prevPercentRef = React.useRef(completion.percent);
+  React.useEffect(() => {
+    if (completion.percent > prevPercentRef.current) {
+      setCompletionDismissed(false);
+    }
+    prevPercentRef.current = completion.percent;
+  }, [completion.percent]);
+  const showCompletionPrompt = !completionDismissed && completion.percent < 100;
+
   // Parallax scroll for cover
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -318,9 +409,14 @@ export default function MyProfileScreen() {
   });
 
   const handleShare = async () => {
+    haptic.light();
     try {
-      await Share.share({ message: `Check out @${user.username} on Thryftverse!` });
-    } catch { /* ignore */ }
+      await Share.share({
+        message: `Check out @${user.username} on Thryftverse! https://thryftverse.com/@${user.username}`,
+        url: `https://thryftverse.com/@${user.username}`,
+        title: `${user.displayName || user.username} on Thryftverse`,
+      });
+    } catch { /* user cancelled or share unavailable */ }
   };
 
   const wishlistCount = useStore((state) => state.wishlist.length);
@@ -395,12 +491,11 @@ export default function MyProfileScreen() {
         />
       </Reanimated.View>
 
-      {/* ── 2. FLOATING PERSONALISATION AND SETTINGS ── */}
+      {/* ── 2. FLOATING PERSONALISATION, SHARE AND SETTINGS ── */}
       <Reanimated.View pointerEvents="box-none" style={[styles.coverActionLayer, coverActionStyle]}>
         <Reanimated.View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}>
           <AnimatedPressable
             style={styles.topUtilityIconBtn}
-            activeOpacity={0.9}
             onPress={() => { haptic.light(); navigation.navigate('Personalisation'); }}
             accessibilityLabel="Open personalisation settings"
             accessibilityRole="button"
@@ -411,18 +506,31 @@ export default function MyProfileScreen() {
             </View>
           </AnimatedPressable>
 
-          <AnimatedPressable
-            style={styles.topUtilityIconBtn}
-            activeOpacity={0.9}
-            onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
-            accessibilityLabel="Open settings"
-            accessibilityRole="button"
-            accessibilityHint="Opens account and app settings"
-          >
-            <View style={styles.topUtilityVisible}>
-              <Ionicons name="settings-outline" size={19} color={colors.textInverse} />
-            </View>
-          </AnimatedPressable>
+          <View style={styles.topUtilityRight}>
+            <AnimatedPressable
+              style={styles.topUtilityIconBtn}
+              onPress={handleShare}
+              accessibilityLabel="Share profile"
+              accessibilityRole="button"
+              accessibilityHint="Opens the system share sheet to share your profile"
+            >
+              <View style={styles.topUtilityVisible}>
+                <Ionicons name="share-outline" size={18} color={colors.textInverse} />
+              </View>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={styles.topUtilityIconBtn}
+              onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
+              accessibilityLabel="Open settings"
+              accessibilityRole="button"
+              accessibilityHint="Opens account and app settings"
+            >
+              <View style={styles.topUtilityVisible}>
+                <Ionicons name="settings-outline" size={19} color={colors.textInverse} />
+              </View>
+            </AnimatedPressable>
+          </View>
         </Reanimated.View>
 
         {coverState.status === 'failed' ? (
@@ -436,8 +544,6 @@ export default function MyProfileScreen() {
             <AnimatedPressable
               style={styles.coverFailureAction}
               onPress={retryCover}
-              activeOpacity={0.75}
-              scaleValue={0.98}
               accessibilityRole="button"
               accessibilityLabel="Retry cover upload"
               hitSlop={5}
@@ -447,8 +553,6 @@ export default function MyProfileScreen() {
             <AnimatedPressable
               style={styles.coverFailureAction}
               onPress={revertCover}
-              activeOpacity={0.75}
-              scaleValue={0.98}
               accessibilityRole="button"
               accessibilityLabel="Cancel cover change"
               hitSlop={5}
@@ -460,8 +564,6 @@ export default function MyProfileScreen() {
           <AnimatedPressable
             style={styles.coverEditTarget}
             onPress={pickCover}
-            activeOpacity={0.8}
-            scaleValue={0.97}
             hapticFeedback="light"
             disabled={coverState.status === 'uploading'}
             accessibilityRole="button"
@@ -510,10 +612,56 @@ export default function MyProfileScreen() {
             lookCount={myLooks.length}
             sellerTrust={sellerTrust}
             emailVerified={user.emailVerified}
+            followerCount={followCounts.followerCount}
+            followingCount={followCounts.followingCount}
             onEditAvatar={pickAvatar}
             onEditProfile={() => navigation.navigate('EditProfile', {})}
             onShare={handleShare}
+            onPressListings={() => { haptic.light(); navigation.navigate('MyListings'); }}
+            onPressLooks={() => { haptic.light(); }}
+            onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
           />
+
+          {/* ── PROFILE COMPLETION PROMPT — progress + CTA ── */}
+          {showCompletionPrompt ? (
+            <View style={[styles.completionCard, t.completionCard]}>
+              <View style={styles.completionHead}>
+                <View style={styles.completionHeadText}>
+                  <Text style={[styles.completionTitle, t.completionTitle]}>Complete your profile</Text>
+                  <Text style={[styles.completionPercent, t.completionPercent]}>
+                    {completion.percent}% · {completion.done}/{completion.total}
+                  </Text>
+                </View>
+                <AnimatedPressable
+                  style={styles.completionDismiss}
+                  onPress={() => { haptic.light(); setCompletionDismissed(true); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss profile completion prompt"
+                >
+                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                </AnimatedPressable>
+              </View>
+              <View style={[styles.completionTrack, t.completionTrack]}>
+                <View style={[styles.completionFill, t.completionFill, { width: `${completion.percent}%` }]} />
+              </View>
+              <AnimatedPressable
+                style={[styles.completionCta, t.completionCta]}
+                onPress={() => {
+                  haptic.light();
+                  if (completionCta.dest === 'EditProfile') {
+                    navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
+                  } else {
+                    navigation.navigate('CreatorAnalyticsDashboard');
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={completionCta.label}
+              >
+                <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.textInverse} />
+              </AnimatedPressable>
+            </View>
+          ) : null}
 
           {/* Away-mode indicator — shown when holiday mode is enabled */}
           {holidayMode ? (
@@ -536,6 +684,45 @@ export default function MyProfileScreen() {
 
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
           <ProfileUtilityRail items={utilityItems} />
+
+          {/* ── 8b. CO-OWN PORTFOLIO PREVIEW ── */}
+          {coOwnHoldings.length > 0 ? (
+            <AnimatedPressable
+              style={[styles.portfolioPreview, t.portfolioPreview]}
+              onPress={() => { haptic.light(); navigation.navigate('CoOwnHub'); }}
+              accessibilityRole="button"
+              accessibilityLabel="View Co-Own portfolio"
+              accessibilityHint="Opens your Co-Own holdings hub"
+            >
+              <View style={styles.portfolioHeader}>
+                <Text style={[styles.portfolioLabel, t.portfolioLabel]}>CO-OWN PORTFOLIO</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </View>
+              <View style={styles.portfolioHoldings}>
+                {coOwnHoldings.slice(0, 3).map((h) => (
+                  <View key={h.id} style={styles.portfolioHoldingCard}>
+                    {h.image ? (
+                      <CachedImage
+                        uri={h.image}
+                        style={styles.portfolioHoldingImage}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={[styles.portfolioHoldingImage, { backgroundColor: colors.surfaceAlt }]} />
+                    )}
+                    <View style={styles.portfolioHoldingInfo}>
+                      <Text style={[styles.portfolioHoldingTitle, t.portfolioHoldingTitle]} numberOfLines={1}>
+                        {h.title}
+                      </Text>
+                      <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>
+                        {h.yourUnits} {h.yourUnits === 1 ? 'unit' : 'units'}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </AnimatedPressable>
+          ) : null}
 
           {/* ── 9. STICKY FLAT TAB RAIL ── */}
           <MyProfileTabRail
@@ -564,7 +751,6 @@ export default function MyProfileScreen() {
                 <AnimatedPressable
                   style={[styles.listingsEmptyCta, t.listingsEmptyCta]}
                   onPress={() => navigation.navigate('MainTabs')}
-                  activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel="Start selling"
                   hitSlop={1}
@@ -590,7 +776,6 @@ export default function MyProfileScreen() {
                     <AnimatedPressable
                       key={item.id}
                       style={[styles.gridCard, { width: CARD_WIDTH }]}
-                      activeOpacity={0.9}
                       onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
                       accessibilityRole="button"
                       accessibilityLabel={`Manage ${item.title}`}
@@ -669,84 +854,23 @@ export default function MyProfileScreen() {
         )}
 
         {/* ABOUT TAB — flat editorial layout */}
+        {/* Bio, location, and member-since are shown in the IdentityHero above.
+            The About tab shows only information NOT already visible: website,
+            and shop policies (the canonical home for dispatch/response details). */}
         {activeTab === 'about' && (
           <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
-            <View style={styles.aboutContainer}>
-              {user.bio ? (
-                <View style={[styles.aboutRow, t.aboutRow]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Bio</Text>
-                  <Text style={[styles.aboutValue, t.aboutValue]}>{user.bio}</Text>
-                </View>
-              ) : null}
-              {user.location ? (
-                <View style={[styles.aboutRow, t.aboutRow]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Location</Text>
-                  <Text style={[styles.aboutValue, t.aboutValue]}>{user.location}</Text>
-                </View>
-              ) : null}
-              {user.website ? (
-                <View style={[styles.aboutRow, t.aboutRow]}>
+            {user.website ? (
+              <View style={styles.aboutContainer}>
+                <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
                   <Text style={[styles.aboutLabel, t.aboutLabel]}>Website</Text>
                   <Text style={[styles.aboutValue, t.aboutValue]}>{user.website}</Text>
                 </View>
-              ) : null}
-              {memberSince ? (
-                <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Member Since</Text>
-                  <Text style={[styles.aboutValue, t.aboutValue]}>{memberSince}</Text>
-                </View>
-              ) : null}
-              {!user.bio && !user.location && !user.website && !memberSince && (
-                <Text style={[styles.aboutEmpty, t.aboutEmpty]}>No profile details added yet.</Text>
-              )}
-            </View>
-
-            {/* Shop stats — derived from seller trust data */}
-            {sellerTrust ? (
-              <View style={styles.aboutContainer}>
-                <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>Shop stats</Text>
-                {sellerTrust.rating !== null && sellerTrust.rating !== undefined && sellerTrust.reviewCount ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Rating</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>
-                      {sellerTrust.rating.toFixed(1)} ★ ({sellerTrust.reviewCount} review{sellerTrust.reviewCount === 1 ? '' : 's'})
-                    </Text>
-                  </View>
-                ) : null}
-                {sellerTrust.completedSales !== null && sellerTrust.completedSales !== undefined ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Completed sales</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.completedSales}</Text>
-                  </View>
-                ) : null}
-                {sellerTrust.responseTimeLabel ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Response time</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>Replies {sellerTrust.responseTimeLabel}</Text>
-                  </View>
-                ) : null}
-                {sellerTrust.dispatchTimeLabel ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Dispatch time</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.dispatchTimeLabel}</Text>
-                  </View>
-                ) : null}
-                {sellerTrust.responseRate !== null && sellerTrust.responseRate !== undefined ? (
-                  <View style={[styles.aboutRow, t.aboutRow]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Response rate</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.responseRate}%</Text>
-                  </View>
-                ) : null}
-                {sellerTrust.activeListingCount !== null && sellerTrust.activeListingCount !== undefined ? (
-                  <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                    <Text style={[styles.aboutLabel, t.aboutLabel]}>Active listings</Text>
-                    <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.activeListingCount}</Text>
-                  </View>
-                ) : null}
               </View>
             ) : null}
 
-            {/* Shop policies — derived from trust + account data */}
+            {/* Shop policies — canonical home for dispatch/response details.
+                Trust badges above show a compact "Replies Xh" pill; this section
+                provides the full policy context without duplicating the badge. */}
             <View style={styles.aboutContainer}>
               <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>Shop policies</Text>
               <View style={[styles.aboutRow, t.aboutRow]}>
@@ -765,6 +889,12 @@ export default function MyProfileScreen() {
                 <Text style={[styles.aboutLabel, t.aboutLabel]}>Returns</Text>
                 <Text style={[styles.aboutValue, t.aboutValue]}>Returns accepted for items not as described.</Text>
               </View>
+              {sellerTrust?.responseRate !== null && sellerTrust?.responseRate !== undefined ? (
+                <View style={[styles.aboutRow, t.aboutRow]}>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Response rate</Text>
+                  <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.responseRate}%</Text>
+                </View>
+              ) : null}
               <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
                 <Text style={[styles.aboutLabel, t.aboutLabel]}>Response</Text>
                 <Text style={[styles.aboutValue, t.aboutValue]}>
@@ -774,6 +904,10 @@ export default function MyProfileScreen() {
                 </Text>
               </View>
             </View>
+
+            {!user.website && !sellerTrust && (
+              <Text style={[styles.aboutEmpty, t.aboutEmpty]}>No additional details available.</Text>
+            )}
           </View>
         )}
       </Reanimated.ScrollView>
@@ -837,11 +971,61 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  topUtilityRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
   topUtilityIconBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // ── Co-Own portfolio preview ──
+  portfolioPreview: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    padding: Space.md,
+    borderRadius: Radius.lg,
+  },
+  portfolioHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Space.sm,
+  },
+  portfolioLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: LetterSpacing.caps,
+  },
+  portfolioHoldings: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  portfolioHoldingCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  portfolioHoldingImage: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    flexShrink: 0,
+  },
+  portfolioHoldingInfo: {
+    flexShrink: 1,
+  },
+  portfolioHoldingTitle: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+  },
+  portfolioHoldingUnits: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
   },
   topUtilityVisible: {
     width: Space.xl - 2,
@@ -878,7 +1062,7 @@ const styles = StyleSheet.create({
     right: Space.md - 2,
     bottom: Space.sm,
     minHeight: Control.hit,
-    paddingLeft: Space.sm + 4,
+    paddingLeft: Space.smMd,
     paddingRight: Space.xs + 1,
     borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.72)',
@@ -952,7 +1136,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   gridCard: {
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
   },
   gridImageWrap: {
     borderRadius: Radius.md,
@@ -1055,5 +1239,124 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingVertical: Space.xl,
+  },
+
+  // Stats row — followers / following / listings / sales
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    marginBottom: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xs,
+    gap: Space.xs / 4,
+  },
+  statValue: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  statLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: Space.xl - Space.xs,
+  },
+
+  // Seller trust badges — horizontal scroll
+  trustBadgesScroll: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+  },
+  trustBadgesContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xs / 2,
+  },
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  trustBadgeText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.1,
+  },
+  trustBadgeSep: {
+    width: StyleSheet.hairlineWidth,
+    height: Space.sm + Space.xxs,
+  },
+
+  // Profile completion prompt
+  completionCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Space.sm,
+  },
+  completionHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  completionHeadText: {
+    flex: 1,
+    gap: Space.xs / 4,
+  },
+  completionTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  completionPercent: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  completionDismiss: {
+    width: Control.hit - Space.sm,
+    height: Control.hit - Space.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -Space.xs / 2,
+    marginRight: -Space.xs / 2,
+  },
+  completionTrack: {
+    height: 4,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  completionFill: {
+    height: '100%',
+    borderRadius: Radius.full,
+  },
+  completionCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs / 2,
+    minHeight: Control.hit - 4,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+  },
+  completionCtaText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
   },
 });

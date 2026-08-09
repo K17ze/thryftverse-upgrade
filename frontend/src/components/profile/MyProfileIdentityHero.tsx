@@ -25,9 +25,16 @@ interface MyProfileIdentityHeroProps {
   ratingAverage?: number | null;
   reviewCount?: number;
   soldCount?: number;
+  followerCount?: number;
+  followingCount?: number;
   onEditAvatar: () => void;
   onEditProfile: () => void;
   onShare: () => void;
+  onPressListings?: () => void;
+  onPressLooks?: () => void;
+  onPressSold?: () => void;
+  onPressFollowers?: () => void;
+  onPressFollowing?: () => void;
 }
 
 export function MyProfileIdentityHero({
@@ -44,9 +51,16 @@ export function MyProfileIdentityHero({
   ratingAverage,
   reviewCount,
   soldCount,
+  followerCount = 0,
+  followingCount = 0,
   onEditAvatar,
   onEditProfile,
   onShare,
+  onPressListings,
+  onPressLooks,
+  onPressSold,
+  onPressFollowers,
+  onPressFollowing,
 }: MyProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -89,9 +103,9 @@ export function MyProfileIdentityHero({
         </View>
 
         <View style={styles.stats}>
-          <ProfileStat value={listingCount} label="Listings" styles={styles} />
-          <ProfileStat value={lookCount} label="Looks" styles={styles} />
-          <ProfileStat value={completedSales} label="Sold" styles={styles} />
+          <ProfileStat value={listingCount} label="Listings" styles={styles} onPress={onPressListings} a11yLabel={`${listingCount} listings`} />
+          <ProfileStat value={lookCount} label="Looks" styles={styles} onPress={onPressLooks} a11yLabel={`${lookCount} looks`} />
+          <ProfileStat value={completedSales} label="Sold" styles={styles} onPress={onPressSold} a11yLabel={`${completedSales} sold`} />
         </View>
       </View>
 
@@ -133,7 +147,47 @@ export function MyProfileIdentityHero({
         reviewCount={reviewCount}
         soldCount={soldCount}
         align="left"
+        hideSoldChip
       />
+
+      {/* ── SOCIAL ROW — followers / following ──
+          Dedicated bordered row between trust signals and actions.
+          Canonical position: identity → shop stats → trust → social → actions. */}
+      <View style={styles.socialRow}>
+        {onPressFollowers ? (
+          <Pressable
+            style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.6 }]}
+            onPress={onPressFollowers}
+            accessibilityRole="button"
+            accessibilityLabel={`${followerCount} followers`}
+          >
+            <Text style={styles.socialValue}>{followerCount}</Text>
+            <Text style={styles.socialLabel}>Followers</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.socialCell} accessible accessibilityLabel={`${followerCount} followers`}>
+            <Text style={styles.socialValue}>{followerCount}</Text>
+            <Text style={styles.socialLabel}>Followers</Text>
+          </View>
+        )}
+        <View style={styles.socialDivider} />
+        {onPressFollowing ? (
+          <Pressable
+            style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.6 }]}
+            onPress={onPressFollowing}
+            accessibilityRole="button"
+            accessibilityLabel={`${followingCount} following`}
+          >
+            <Text style={styles.socialValue}>{followingCount}</Text>
+            <Text style={styles.socialLabel}>Following</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.socialCell} accessible accessibilityLabel={`${followingCount} following`}>
+            <Text style={styles.socialValue}>{followingCount}</Text>
+            <Text style={styles.socialLabel}>Following</Text>
+          </View>
+        )}
+      </View>
 
       <View style={styles.actions}>
         <AnimatedPressable
@@ -164,9 +218,29 @@ export function MyProfileIdentityHero({
   );
 }
 
-function ProfileStat({ value, label, styles }: { value: number; label: string; styles: ReturnType<typeof createStyles> }) {
+function ProfileStat({ value, label, styles, onPress, a11yLabel }: {
+  value: number;
+  label: string;
+  styles: ReturnType<typeof createStyles>;
+  onPress?: () => void;
+  a11yLabel?: string;
+}) {
+  if (onPress) {
+    return (
+      <Pressable
+        style={styles.stat}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={a11yLabel ?? `${value} ${label}`}
+        hitSlop={4}
+      >
+        <Text style={styles.statValue}>{value}</Text>
+        <Text style={styles.statLabel}>{label}</Text>
+      </Pressable>
+    );
+  }
   return (
-    <View style={styles.stat}>
+    <View style={styles.stat} accessible accessibilityLabel={a11yLabel ?? `${value} ${label}`}>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
@@ -266,7 +340,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
     fontSize: Type.body.size,
-    lineHeight: 19,
+    lineHeight: Type.body.lineHeight,
     marginTop: Space.sm,
   },
   context: {
@@ -274,6 +348,41 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
     marginTop: 5,
+  },
+  // Social row — dedicated followers/following row between trust signals and actions.
+  // Matches the bordered stats row pattern: hairline top/bottom, centered cells, vertical divider.
+  socialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Space.sm + 2,
+    paddingVertical: Space.sm + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+  },
+  socialCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xs,
+    gap: Space.xs / 4,
+  },
+  socialValue: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.subtitle.letterSpacing,
+    color: colors.textPrimary,
+  },
+  socialLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+  },
+  socialDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: Space.xl - Space.xs,
+    backgroundColor: colors.borderSubtle,
   },
   actions: {
     flexDirection: 'row',

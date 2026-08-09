@@ -73,8 +73,8 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       gap: Space.xs / 4,
     },
     quickActionBadge: {
-      minWidth: Space.sm + 4,
-      height: Space.sm + 4,
+      minWidth: Space.smMd,
+      height: Space.smMd,
       borderRadius: Radius.lg,
       backgroundColor: colors.brand,
       justifyContent: 'center',

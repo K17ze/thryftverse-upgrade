@@ -13,7 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
@@ -148,6 +148,7 @@ export default function AuctionDetailScreen() {
   const [overflowVisible, setOverflowVisible] = React.useState(false);
   const [relatedAuctions, setRelatedAuctions] = React.useState<MarketAuction[]>([]);
   const [relatedLoading, setRelatedLoading] = React.useState(false);
+  const [lastFetchAt, setLastFetchAt] = React.useState<number | null>(null);
 
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
@@ -173,7 +174,19 @@ export default function AuctionDetailScreen() {
     return () => { isMountedRef.current = false; };
   }, []);
 
+  // ── Refresh-in-progress guard ────────────────────────────────────
+  // Prevents race conditions between 5 independent refresh sources:
+  // polling, manual pull-to-refresh, lifecycle transitions, server clock
+  // resync, and post-bid refresh. Without this guard, concurrent
+  // fetchDetail() calls cause UI flickering, state thrashing, and
+  // excessive API load — the root cause of the "worse" auction experience.
+  const isFetchingRef = React.useRef(false);
+
   const fetchDetail = React.useCallback(async (): Promise<AuctionDetailResponse | null> => {
+    // Block concurrent calls — the most recent caller will get null.
+    // This is safe because the next polling tick or user action will retry.
+    if (isFetchingRef.current) return null;
+    isFetchingRef.current = true;
     try {
       const res = await getAuctionDetail(auctionId);
       if (!isMountedRef.current) return null;
@@ -182,6 +195,7 @@ export default function AuctionDetailScreen() {
       setBidActivity(res.bidActivity);
       setBidActivityError(false);
       setError(null);
+      setLastFetchAt(Date.now());
       resync(res.serverNow);
       clearResyncFailed();
       return res;
@@ -192,6 +206,7 @@ export default function AuctionDetailScreen() {
       markResyncFailed();
       return null;
     } finally {
+      isFetchingRef.current = false;
       if (isMountedRef.current) {
         setLoading(false);
         setRefreshing(false);
@@ -463,6 +478,25 @@ export default function AuctionDetailScreen() {
   const isCancelled = effectiveState === 'cancelled';
   const isSettled = effectiveState === 'settled';
   const isTerminal = isEnded || isCancelled || isSettled;
+
+  // ── Real-time polling for live auctions ──────────────────────────
+  // During a live auction, poll the backend every 10s so competing bids,
+  // outbid status, and bid activity update without manual refresh.
+  // Upcoming auctions poll every 45s (price changes are unlikely but
+  // the auction may transition to live). Terminal auctions stop polling.
+  // The isFetchingRef guard inside fetchDetail prevents overlapping calls.
+  const pollIntervalMs = isLive ? 10_000 : isUpcoming ? 45_000 : 0;
+
+  React.useEffect(() => {
+    if (pollIntervalMs === 0) return;
+    if (isSubmittingBid || isBuyNowLoading) return;
+    const interval = setInterval(() => {
+      if (isMountedRef.current && !isSubmittingBid && !isBuyNowLoading && !isFetchingRef.current) {
+        void fetchDetail();
+      }
+    }, pollIntervalMs);
+    return () => clearInterval(interval);
+  }, [pollIntervalMs, isLive, isUpcoming, fetchDetail, isSubmittingBid, isBuyNowLoading]);
   const viewerState = auction?.viewerState ?? 'not_participating';
 
   // Compound haptic feedback when the viewer's auction outcome transitions
@@ -709,6 +743,12 @@ export default function AuctionDetailScreen() {
               <AuctionStateBadge
                 state={isLive ? 'live' : isUpcoming ? 'upcoming' : isCancelled ? 'cancelled' : isSettled ? 'settled' : 'ended'}
               />
+              {isLive && (
+                <View style={styles.livePollIndicator} accessibilityLabel="Live auction · updating in real time">
+                  <Reanimated.View style={styles.livePollDot} entering={FadeInDown.duration(300)} />
+                  <Text style={styles.livePollText}>updating</Text>
+                </View>
+              )}
             </View>
           }
           overlayBottomContent={
@@ -1928,7 +1968,29 @@ const styles = StyleSheet.create({
     top: Space.sm,
     left: Space.sm,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: Space.xs,
+  },
+  livePollIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  livePollDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ff3b30',
+  },
+  livePollText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.3,
   },
   // ── Seller identity extension ──
   // Tight rhythm: the seller row follows the transaction surface
@@ -1974,7 +2036,7 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
     marginTop: Space.sm,
     paddingVertical: Space.xs + 2,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     alignSelf: 'center',
   },
   discoverLinkInlineText: {

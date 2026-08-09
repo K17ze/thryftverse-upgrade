@@ -40,6 +40,9 @@ export interface ProfileTrustSignalsProps {
   soldCount?: number;
   /** Layout alignment — centered for self-profile, left for public profile. */
   align?: 'left' | 'center';
+  /** When true, suppresses the "X sold" chip because the parent already shows
+   *  a "Sold" stat. Used by MyProfileIdentityHero to avoid duplication. */
+  hideSoldChip?: boolean;
 }
 
 /**
@@ -55,6 +58,7 @@ export function ProfileTrustSignals({
   reviewCount = 0,
   soldCount = 0,
   align = 'left',
+  hideSoldChip = false,
 }: ProfileTrustSignalsProps) {
   const { colors } = useAppTheme();
   const chips: TrustChipProps[] = [];
@@ -92,10 +96,13 @@ export function ProfileTrustSignals({
     chips.push({ icon: 'cube', label: sellerTrust.dispatchTimeLabel });
   }
 
-  // Completed sales — prefer seller trust, fall back to sold count
-  const completedSales = sellerTrust?.completedSales ?? (soldCount > 0 ? soldCount : null);
-  if (completedSales !== null && completedSales !== undefined && completedSales > 0) {
-    chips.push({ icon: 'checkmark-done', label: `${completedSales} sold` });
+  // Completed sales — suppressed when hideSoldChip is true (MyProfileIdentityHero
+  // shows a "Sold" stat in its stats row). Public profile shows it here.
+  if (!hideSoldChip) {
+    const completedSales = sellerTrust?.completedSales ?? (soldCount > 0 ? soldCount : null);
+    if (completedSales !== null && completedSales !== undefined && completedSales > 0) {
+      chips.push({ icon: 'checkmark-done', label: `${completedSales} sold` });
+    }
   }
 
   // Response rate
@@ -141,7 +148,7 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   chipText: {
     fontSize: Type.meta.size,

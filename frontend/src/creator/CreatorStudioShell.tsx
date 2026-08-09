@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Keyboard,
   useWindowDimensions,
   Platform,
-  PanResponder,
+  LayoutChangeEvent,
   Modal,
   ActivityIndicator,
 } from 'react-native';
@@ -18,6 +18,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -34,12 +36,14 @@ import { CreatorPreviewOverlay } from './CreatorPreviewOverlay';
 import { CreatorEntryScreen } from './CreatorEntryScreen';
 import { CreatorCropSheet } from './CreatorCropSheet';
 import { CreatorCutoutSheet } from './CreatorCutoutSheet';
-import { PressScale, SheetContainer } from './CreatorAnimations';
+import { PressScale } from './CreatorAnimations';
 import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useHaptic } from '../hooks/useHaptic';
 import { fetchLookByIdFromApi } from '../services/looksApi';
 import { lookToDocument } from './viewerAdapters';
 import type { CreatorTemplate } from './templates';
+import { PageMenu } from './studio/PageMenu';
+import { OverflowMenu } from './studio/OverflowMenu';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -73,6 +77,7 @@ function CreatorStudioInner() {
   const route = useRoute<any>();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const haptic = useHaptic();
   const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, updatePageDuration, reorderPages, commitLayerTransform, isLoadingDraft, setDocument, saveDraft } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
@@ -248,11 +253,26 @@ function CreatorStudioInner() {
   const handleCanvasPress = useCallback(() => {
     Keyboard.dismiss();
     selectLayer(null);
-  }, [selectLayer]);
+    haptic.light();
+  }, [selectLayer, haptic]);
 
   const handleLayerPress = useCallback((layerId: string) => {
     selectLayer(layerId);
-  }, [selectLayer]);
+    haptic.light();
+  }, [selectLayer, haptic]);
+
+  // ── Undo/Redo with haptic feedback ────────────────────────────────
+  const handleUndo = useCallback(() => {
+    if (!canUndo) return;
+    haptic.light();
+    undo();
+  }, [canUndo, undo, haptic]);
+
+  const handleRedo = useCallback(() => {
+    if (!canRedo) return;
+    haptic.light();
+    redo();
+  }, [canRedo, redo, haptic]);
 
   const selectedLayer = page?.layers.find((l) => l.id === selectedLayerId) ?? null;
 
@@ -361,7 +381,7 @@ function CreatorStudioInner() {
               /* During selection: Done · object name · More */
               <>
                 <PressScale
-                  onPress={() => selectLayer(null)}
+                  onPress={() => { haptic.light(); selectLayer(null); }}
                   style={styles.topBtn}
                   accessibilityLabel="Done"
                 >
@@ -385,7 +405,7 @@ function CreatorStudioInner() {
                 </View>
               </>
             ) : (
-              /* Default: Close (X) · spacer · Next (Instagram minimalism) */
+              /* Default: Close (X) · Undo · Redo · Next (Instagram minimalism) */
               <>
                 <View style={styles.topLeftGroup}>
                   <PressScale
@@ -401,6 +421,30 @@ function CreatorStudioInner() {
                   {isDirty && (
                     <View style={styles.unsavedDot} />
                   )}
+                </View>
+
+                {/* Undo/Redo — spring scale on press, disabled at 0.3 opacity */}
+                <View style={styles.topCenterGroup}>
+                  <PressScale
+                    onPress={handleUndo}
+                    disabled={!canUndo}
+                    style={[styles.topBtn, { opacity: canUndo ? 1 : 0.3 }]}
+                    accessibilityLabel="Undo"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canUndo }}
+                  >
+                    <Ionicons name="arrow-undo" size={22} color="#fff" />
+                  </PressScale>
+                  <PressScale
+                    onPress={handleRedo}
+                    disabled={!canRedo}
+                    style={[styles.topBtn, { opacity: canRedo ? 1 : 0.3 }]}
+                    accessibilityLabel="Redo"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canRedo }}
+                  >
+                    <Ionicons name="arrow-redo" size={22} color="#fff" />
+                  </PressScale>
                 </View>
 
                 <View style={styles.topRightGroup}>
@@ -431,7 +475,7 @@ function CreatorStudioInner() {
             {document.pages.map((p, i) => (
               <Pressable
                 key={p.id}
-                onPress={() => { selectLayer(null); setActivePageIndex(i); }}
+                onPress={() => { haptic.light(); selectLayer(null); setActivePageIndex(i); }}
                 onLongPress={() => setPageMenuIndex(i)}
                 style={styles.pageSegmentTarget}
                 accessibilityLabel={`Page ${i + 1}`}
@@ -532,95 +576,24 @@ function CreatorStudioInner() {
       </View>
 
       {/* ── Overflow menu ────────────────────────────────────────────── */}
-      {showOverflow && (
-        <Pressable
-          style={styles.overflowBackdrop}
-          onPress={() => setShowOverflow(false)}
-          accessibilityLabel="Close menu"
-          accessibilityRole="button"
-        >
-          <View
-            style={[
-              styles.overflowMenu,
-              {
-                backgroundColor: colors.surfaceElevated,
-                borderColor: colors.border,
-                top: insets.top + 52,
-                right: 12,
-              },
-            ]}
-          >
-            <OverflowItem
-              icon="arrow-undo"
-              label="Undo"
-              disabled={!canUndo}
-              colors={colors}
-              onPress={() => { undo(); setShowOverflow(false); }}
-            />
-            <OverflowItem
-              icon="arrow-redo"
-              label="Redo"
-              disabled={!canRedo}
-              colors={colors}
-              onPress={() => { redo(); setShowOverflow(false); }}
-            />
-            <View style={[styles.overflowDivider, { backgroundColor: colors.border }]} />
-            <OverflowItem
-              icon="eye-outline"
-              label="Preview"
-              colors={colors}
-              onPress={() => { setShowPreview(true); setShowOverflow(false); }}
-            />
-            <OverflowItem
-              icon="at-outline"
-              label="Mention"
-              colors={colors}
-              onPress={() => { setPickerMode('mention'); setShowOverflow(false); }}
-            />
-            {isLook ? (
-              <OverflowItem
-                icon="shirt-outline"
-                label="Look"
-                colors={colors}
-                onPress={() => { setPickerMode('look'); setShowOverflow(false); }}
-              />
-            ) : (
-              <OverflowItem
-                icon="happy-outline"
-                label="Stickers"
-                colors={colors}
-                onPress={() => { setPickerMode('stickers'); setShowOverflow(false); }}
-              />
-            )}
-            <View style={[styles.overflowDivider, { backgroundColor: colors.border }]} />
-            <OverflowItem
-              icon="layers-outline"
-              label="Layers"
-              colors={colors}
-              onPress={() => { setShowLayers(true); setShowOverflow(false); }}
-            />
-            <OverflowItem
-              icon="grid-outline"
-              label="Templates"
-              colors={colors}
-              onPress={() => { setShowTemplates(true); setShowOverflow(false); }}
-            />
-            <OverflowItem
-              icon="document-text-outline"
-              label="Drafts"
-              colors={colors}
-              onPress={() => { navigation.navigate('CreatorDraftList'); setShowOverflow(false); }}
-            />
-            <View style={[styles.overflowDivider, { backgroundColor: colors.border }]} />
-            <OverflowItem
-              icon="settings-outline"
-              label="Settings"
-              colors={colors}
-              onPress={() => { setShowSettings(true); setShowOverflow(false); }}
-            />
-          </View>
-        </Pressable>
-      )}
+      <OverflowMenu
+        visible={showOverflow}
+        onClose={() => setShowOverflow(false)}
+        top={insets.top + 52}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={() => { undo(); setShowOverflow(false); }}
+        onRedo={() => { redo(); setShowOverflow(false); }}
+        onPreview={() => { setShowPreview(true); setShowOverflow(false); }}
+        onMention={() => { setPickerMode('mention'); setShowOverflow(false); }}
+        isLook={isLook}
+        onLook={() => { setPickerMode('look'); setShowOverflow(false); }}
+        onStickers={() => { setPickerMode('stickers'); setShowOverflow(false); }}
+        onLayers={() => { setShowLayers(true); setShowOverflow(false); }}
+        onTemplates={() => { setShowTemplates(true); setShowOverflow(false); }}
+        onDrafts={() => { navigation.navigate('CreatorDraftList'); setShowOverflow(false); }}
+        onSettings={() => { setShowSettings(true); setShowOverflow(false); }}
+      />
 
       {/* ── Sheets ────────────────────────────────────────────────────── */}
       <CreatorPreviewOverlay
@@ -698,7 +671,7 @@ function CreatorStudioInner() {
       />
       {/* ── Page options sheet (duration + duplicate + reorder + delete) ── */}
       {pageMenuIndex !== null && (
-        <PageOptionsSheet
+        <PageMenu
           pageIndex={pageMenuIndex}
           pageCount={document.pages.length}
           currentDuration={document.pages[pageMenuIndex]?.durationMs ?? 5000}
@@ -714,234 +687,69 @@ function CreatorStudioInner() {
   );
 }
 
-// ── Overflow menu item ─────────────────────────────────────────────
-
-interface OverflowItemProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  onPress: () => void;
-  disabled?: boolean;
-}
-
-const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemProps) {
-  const haptic = useHaptic();
-  return (
-    <PressScale
-      onPress={() => {
-        if (disabled) return;
-        haptic.selection();
-        onPress();
-      }}
-      disabled={disabled}
-      style={[styles.overflowItem, disabled ? { opacity: 0.4 } : {}]}
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      hitSlop={12}
-    >
-      <Ionicons
-        name={icon}
-        size={22}
-        color={disabled ? colors.textMuted : colors.textPrimary}
-      />
-      <Text
-        style={[
-          styles.overflowItemText,
-          { color: disabled ? colors.textMuted : colors.textPrimary },
-        ]}
-      >
-        {label}
-      </Text>
-    </PressScale>
-  );
-});
-
 // ── Opacity bar — drag-based slider for layer opacity (Instagram pattern) ──
+// Migrated from PanResponder to Gesture.Pan() from react-native-gesture-handler
+// for worklet-based, 60fps drag updates without setState during drag.
 const OpacityBar = React.memo(function OpacityBar({ value, onChange, onCommit }: { value: number; onChange: (v: number) => void; onCommit: (v: number) => void }) {
-  const trackRef = useRef<View | null>(null);
-  const draggingRef = useRef(false);
+  const widthSV = useSharedValue(0);
   const haptic = useHaptic();
 
-  const updateFromTouch = useCallback((locationX: number, width: number) => {
-    if (width <= 0) return;
-    const ratio = Math.max(0, Math.min(1, locationX / width));
-    const snapped = Math.round(ratio * 20) / 20; // snap to 5% increments
-    if (snapped !== value) {
-      haptic.selection();
-      onChange(snapped);
-    }
-  }, [value, onChange, haptic]);
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
+    widthSV.value = e.nativeEvent.layout.width;
+  }, [widthSV]);
 
-  const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (e) => {
-      draggingRef.current = true;
-      trackRef.current?.measure((x, y, w, h, pageX) => {
-        updateFromTouch(e.nativeEvent.pageX - pageX, w);
-      });
-    },
-    onPanResponderMove: (e) => {
-      trackRef.current?.measure((x, y, w, h, pageX) => {
-        updateFromTouch(e.nativeEvent.pageX - pageX, w);
-      });
-    },
-    onPanResponderRelease: () => {
-      draggingRef.current = false;
-      onCommit(value);
-    },
-    onPanResponderTerminate: () => {
-      draggingRef.current = false;
-      onCommit(value);
-    },
-  }), [updateFromTouch, onCommit, value]);
+  // Gesture.Pan() — worklet-based, e.x is position relative to the gesture view
+  const panGesture = useMemo(() =>
+    Gesture.Pan()
+      .onBegin((e) => {
+        'worklet';
+        const w = widthSV.value;
+        if (w <= 0) return;
+        const ratio = Math.max(0, Math.min(1, e.x / w));
+        const snapped = Math.round(ratio * 20) / 20; // snap to 5% increments
+        runOnJS(haptic.selection)();
+        runOnJS(onChange)(snapped);
+      })
+      .onChange((e) => {
+        'worklet';
+        const w = widthSV.value;
+        if (w <= 0) return;
+        const ratio = Math.max(0, Math.min(1, e.x / w));
+        const snapped = Math.round(ratio * 20) / 20; // snap to 5% increments
+        runOnJS(haptic.selection)();
+        runOnJS(onChange)(snapped);
+      })
+      .onEnd(() => {
+        'worklet';
+        runOnJS(onCommit)(value);
+      })
+      .onFinalize(() => {
+        'worklet';
+        runOnJS(onCommit)(value);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [value, onChange, onCommit]
+  );
 
   const pct = Math.round(value * 100);
 
   return (
     <View style={styles.opacityBar}>
       <Ionicons name="contrast-outline" size={16} color="rgba(255,255,255,0.7)" />
-      <View
-        ref={trackRef}
-        style={styles.opacitySliderTrack}
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.opacitySliderTrackBg} />
-        <View style={[styles.opacitySliderFill, { width: `${pct}%` }]} />
-        <View style={[styles.opacitySliderThumb, { left: `${pct}%` }]} />
-      </View>
+      <GestureDetector gesture={panGesture}>
+        <View
+          style={styles.opacitySliderTrack}
+          onLayout={handleLayout}
+        >
+          <View style={styles.opacitySliderTrackBg} />
+          <View style={[styles.opacitySliderFill, { width: `${pct}%` }]} />
+          <View style={[styles.opacitySliderThumb, { left: `${pct}%` }]} />
+        </View>
+      </GestureDetector>
       <Text style={styles.opacityLabel}>{pct}%</Text>
     </View>
   );
 });
-
-// ── Page options sheet ─────────────────────────────────────────────
-// Replaces the old Alert.alert-based page menu with a proper designed
-// sheet: segmented duration control, duplicate, move left/right, delete.
-function PageOptionsSheet({
-  pageIndex,
-  pageCount,
-  currentDuration,
-  onClose,
-  onSetDuration,
-  onDuplicate,
-  onDelete,
-  onMoveLeft,
-  onMoveRight,
-}: {
-  pageIndex: number;
-  pageCount: number;
-  currentDuration: number;
-  onClose: () => void;
-  onSetDuration: (ms: number) => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
-  onMoveLeft: () => void;
-  onMoveRight: () => void;
-}) {
-  const { colors } = useAppTheme();
-  const haptic = useHaptic();
-  const DURATIONS = [
-    { label: '3s', ms: 3000 },
-    { label: '5s', ms: 5000 },
-    { label: '7s', ms: 7000 },
-    { label: '10s', ms: 10000 },
-    { label: '15s', ms: 15000 },
-  ];
-  const canMoveLeft = pageIndex > 0;
-  const canMoveRight = pageIndex < pageCount - 1;
-  const canDelete = pageCount > 1;
-
-  return (
-    <SheetContainer visible={true} onClose={onClose} maxHeight={0.6}>
-      <View style={styles.pageSheetHeader}>
-        <Text style={[styles.pageSheetTitle, { color: colors.textPrimary }]}>Page {pageIndex + 1}</Text>
-        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close page options">
-          <Ionicons name="close" size={22} color={colors.textSecondary} />
-        </PressScale>
-      </View>
-      <View style={styles.pageSheetBody}>
-        {/* Duration — segmented control */}
-        <Text style={[styles.pageSheetLabel, { color: colors.textSecondary }]}>Duration</Text>
-        <View style={styles.pageSheetDurationRow}>
-          {DURATIONS.map((d) => {
-            const isActive = currentDuration === d.ms;
-            return (
-              <Pressable
-                key={d.ms}
-                onPress={() => { haptic.selection(); onSetDuration(d.ms); }}
-                style={({ pressed }) => [styles.pageSheetDurationBtn, isActive && { backgroundColor: colors.brand }, pressed && { opacity: 0.7 }]}
-                hitSlop={4}
-                accessibilityLabel={`Set duration to ${d.label}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text style={[styles.pageSheetDurationText, isActive && { color: colors.textInverse }]}>
-                  {d.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Reorder */}
-        <Text style={[styles.pageSheetLabel, { color: colors.textSecondary, marginTop: Space.md }]}>Order</Text>
-        <View style={styles.pageSheetActions}>
-          <Pressable
-            onPress={() => { if (canMoveLeft) { haptic.selection(); onMoveLeft(); } }}
-            disabled={!canMoveLeft}
-            style={({ pressed }) => [styles.pageSheetActionBtn, !canMoveLeft && { opacity: 0.35 }, pressed && canMoveLeft && { opacity: 0.6 }]}
-            hitSlop={8}
-            accessibilityLabel="Move page left"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canMoveLeft }}
-          >
-            <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
-            <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Left</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => { if (canMoveRight) { haptic.selection(); onMoveRight(); } }}
-            disabled={!canMoveRight}
-            style={({ pressed }) => [styles.pageSheetActionBtn, !canMoveRight && { opacity: 0.35 }, pressed && canMoveRight && { opacity: 0.6 }]}
-            hitSlop={8}
-            accessibilityLabel="Move page right"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canMoveRight }}
-          >
-            <Ionicons name="arrow-forward" size={20} color={colors.textPrimary} />
-            <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Move Right</Text>
-          </Pressable>
-        </View>
-
-        {/* Duplicate + Delete */}
-        <View style={styles.pageSheetActions}>
-          <Pressable
-            onPress={() => { haptic.medium(); onDuplicate(); }}
-            style={({ pressed }) => [styles.pageSheetActionBtn, pressed && { opacity: 0.6 }]}
-            hitSlop={8}
-            accessibilityLabel="Duplicate page"
-            accessibilityRole="button"
-          >
-            <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
-            <Text style={[styles.pageSheetActionLabel, { color: colors.textPrimary }]}>Duplicate</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => { if (canDelete) { haptic.medium(); onDelete(); } }}
-            disabled={!canDelete}
-            style={({ pressed }) => [styles.pageSheetActionBtn, !canDelete && { opacity: 0.35 }, pressed && canDelete && { opacity: 0.6 }]}
-            hitSlop={8}
-            accessibilityLabel="Delete page"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canDelete }}
-          >
-            <Ionicons name="trash-outline" size={20} color={canDelete ? colors.danger : colors.textMuted} />
-            <Text style={[styles.pageSheetActionLabel, { color: canDelete ? colors.danger : colors.textMuted }]}>Delete</Text>
-          </Pressable>
-        </View>
-      </View>
-    </SheetContainer>
-  );
-}
 
 export function CreatorStudioScreen() {
   const route = useRoute<any>();
@@ -1024,10 +832,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
   },
+  // Center group for undo/redo buttons
+  topCenterGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    flex: 1,
+    justifyContent: 'center',
+  },
   topRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+  },
+  // Disabled state for undo/redo — 0.3 opacity per spec
+  topBtnDisabled: {
+    opacity: 0.3,
   },
   // ── Transparent floating top bar ──
   topBar: {
@@ -1210,105 +1030,5 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     minWidth: 36,
     textAlign: 'right',
-  },
-  // ── Overflow menu ──
-  overflowBackdrop: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 200,
-  },
-  overflowMenu: {
-    position: 'absolute',
-    minWidth: 220,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: Space.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  overflowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    minHeight: 48,
-  },
-  overflowItemText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.bodyEmphasis.size,
-  },
-  overflowDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: Space.xs,
-  },
-  // ── Page options sheet ──
-  pageSheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  pageSheetTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
-  closeBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
-  pageSheetBody: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
-    gap: Space.xs,
-  },
-  pageSheetLabel: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  pageSheetDurationRow: {
-    flexDirection: 'row',
-    gap: Space.xs,
-    marginTop: Space.xs,
-  },
-  pageSheetDurationBtn: {
-    flex: 1,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-  },
-  pageSheetDurationText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    color: '#fff',
-  },
-  pageSheetActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.xs,
-  },
-  pageSheetActionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs + 2,
-    paddingVertical: Space.md,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  pageSheetActionLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: '#fff',
   },
 });

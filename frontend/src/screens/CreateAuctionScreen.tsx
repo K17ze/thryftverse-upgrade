@@ -700,7 +700,7 @@ function createStyles(colors: ThemeColors) {
   headerLaunchBtn: {
     borderRadius: Radius.md,
     minHeight: Control.chrome - 2,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
   },
   content: {
     paddingBottom: Space.xl,
@@ -799,7 +799,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     minHeight: Control.hit,
   },
   windowChipActive: {
@@ -828,7 +828,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs + 1,
     minWidth: Space.xxl,
     alignItems: 'center',

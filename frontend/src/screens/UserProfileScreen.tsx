@@ -515,23 +515,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         <ReviewSummaryBlock summary={reviewSummary} />
       ) : null}
 
-      {/* Shop policies — shown on Shop tab, derived from seller trust data */}
-      {activeTab === 'Shop' && sellerTrust ? (
+      {/* Shop policies — policy statements only. Dispatch/response metrics
+          are shown in SellerReputationCard above; duplicating them here
+          violated the surface-budget rule. */}
+      {activeTab === 'Shop' ? (
         <View style={styles.shopPoliciesSection}>
           <Text style={[styles.shopPoliciesTitle, t.shopPoliciesTitle]}>Shop policies</Text>
           <View style={styles.shopPoliciesGrid}>
-            {sellerTrust.dispatchTimeLabel ? (
-              <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-                <Ionicons name="cube-outline" size={14} color={MUTED} />
-                <Text style={[styles.shopPolicyText, t.shopPolicyText]}>{sellerTrust.dispatchTimeLabel}</Text>
-              </View>
-            ) : null}
-            {sellerTrust.responseTimeLabel ? (
-              <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-                <Ionicons name="time-outline" size={14} color={MUTED} />
-                <Text style={[styles.shopPolicyText, t.shopPolicyText]}>Replies {sellerTrust.responseTimeLabel}</Text>
-              </View>
-            ) : null}
             <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
               <Ionicons name="shield-checkmark-outline" size={14} color={MUTED} />
               <Text style={[styles.shopPolicyText, t.shopPolicyText]}>Buyer protection</Text>

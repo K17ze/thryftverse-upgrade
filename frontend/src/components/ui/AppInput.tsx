@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   inputWrap: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
     paddingHorizontal: 14,
     minHeight: 48,

@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   },
   textWrap: {
     flex: 1,
-    gap: 1,
+    gap: Space.xs / 4,
   },
   title: {
     fontSize: Type.meta.size,

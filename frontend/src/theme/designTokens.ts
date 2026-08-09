@@ -8,10 +8,14 @@
 // SPACING SCALE (4px base grid)
 // ============================================================================
 export const Space = {
+  /** 2px - Hairline gaps, sub-token adjustments */
+  xxs: 2,
   /** 4px - Micro adjustments, icon gaps */
   xs: 4,
   /** 8px - Tight spacing, inline elements, grid gaps */
   sm: 8,
+  /** 12px - Medium-tight spacing, grid gaps, rail gaps */
+  smMd: 12,
   /** 16px - Default padding, card padding, section gaps */
   md: 16,
   /** 24px - Section breaks, major separators */
@@ -145,79 +149,84 @@ export const Typography = {
   tracking: LetterSpacing,
 } as const;
 
+/**
+ * @deprecated Use `Type` tokens + `FontFamily` directly. TypeStyles is kept
+ * only for backward compatibility and now mirrors `Type` values exactly.
+ * Do not add new variants here — use `Type` instead.
+ */
 export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
   display: {
-    fontFamily: FontFamily.extrabold,
-    fontSize: FontSize.display,
-    letterSpacing: LetterSpacing.tight,
-    lineHeight: 46,
+    fontFamily: FontFamily.bold,
+    fontSize: Type.display.size,
+    letterSpacing: Type.display.letterSpacing,
+    lineHeight: Type.display.lineHeight,
   },
   hero: {
     fontFamily: FontFamily.extrabold,
-    fontSize: FontSize.hero,
-    letterSpacing: -1.1,
-    lineHeight: 60,
+    fontSize: Type.display.size,
+    letterSpacing: Type.display.letterSpacing,
+    lineHeight: Type.display.lineHeight,
   },
   heroDisplay: {
     fontFamily: FontFamily.extrabold,
-    fontSize: FontSize.hero,
-    letterSpacing: -1.4,
-    lineHeight: 60,
+    fontSize: Type.display.size,
+    letterSpacing: -1.0,
+    lineHeight: Type.display.lineHeight,
   },
   giantDisplay: {
     fontFamily: FontFamily.extrabold,
-    fontSize: FontSize.giant,
-    letterSpacing: -2,
-    lineHeight: 74,
+    fontSize: 48,
+    letterSpacing: -1.2,
+    lineHeight: 52,
   },
   heading: {
     fontFamily: FontFamily.bold,
-    fontSize: FontSize.heading,
-    letterSpacing: LetterSpacing.tight,
-    lineHeight: 36,
+    fontSize: Type.title.size,
+    letterSpacing: Type.title.letterSpacing,
+    lineHeight: Type.title.lineHeight,
   },
   title: {
     fontFamily: FontFamily.semibold,
-    fontSize: FontSize.title,
-    letterSpacing: LetterSpacing.normal,
-    lineHeight: 28,
+    fontSize: Type.title.size,
+    letterSpacing: Type.title.letterSpacing,
+    lineHeight: Type.title.lineHeight,
   },
   body: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSize.body,
-    letterSpacing: LetterSpacing.normal,
-    lineHeight: 22,
+    fontSize: Type.body.size,
+    letterSpacing: Type.body.letterSpacing,
+    lineHeight: Type.body.lineHeight,
   },
   bodyEmphasis: {
     fontFamily: FontFamily.semibold,
-    fontSize: 15,
-    letterSpacing: 0,
-    lineHeight: 21,
+    fontSize: Type.bodyEmphasis.size,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   caption: {
-    fontFamily: FontFamily.light,
-    fontSize: FontSize.caption,
-    letterSpacing: LetterSpacing.wide,
-    lineHeight: 18,
+    fontFamily: FontFamily.regular,
+    fontSize: Type.caption.size,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
   metadata: {
-    fontFamily: FontFamily.light,
-    fontSize: FontSize.caption,
-    letterSpacing: 0.4,
-    lineHeight: 18,
+    fontFamily: FontFamily.medium,
+    fontSize: Type.meta.size,
+    letterSpacing: Type.meta.letterSpacing,
+    lineHeight: Type.meta.lineHeight,
   },
   overline: {
-    fontFamily: FontFamily.medium,
-    fontSize: FontSize.micro,
-    letterSpacing: LetterSpacing.caps,
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.metaElevated.size,
+    letterSpacing: Type.metaElevated.letterSpacing,
     textTransform: 'uppercase',
-    lineHeight: 14,
+    lineHeight: Type.metaElevated.lineHeight,
   },
   button: {
     fontFamily: FontFamily.semibold,
-    fontSize: FontSize.bodyLarge,
-    letterSpacing: LetterSpacing.wide,
-    lineHeight: 20,
+    fontSize: Type.bodyEmphasis.size,
+    letterSpacing: 0.12,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
 };
 
@@ -478,4 +487,150 @@ export const AspectRatio = {
   wide: 16 / 9,
   /** 4:5 — marketplace standard (Depop, Instagram) */
   marketplace: 4 / 5,
+} as const;
+
+// ============================================================================
+// FEED LAYOUT GEOMETRY — Home and discovery feed surfaces
+// Replaces hardcoded constants in HomeScreen with tokenized values.
+// ============================================================================
+export const FeedLayout = {
+  /** Expanded header height (wordmark + actions visible) */
+  headerExpanded: 58,
+  /** Collapsed header height (compact, scrolled state) */
+  headerCollapsed: 52,
+  /** Grid gap between masonry columns */
+  gridGap: Space.smMd,
+  /** Poster rail card width (Instagram stories benchmark: 72-80pt) */
+  posterCardWidth: 76,
+  /** Poster rail card height (9:16-ish aspect) */
+  posterCardHeight: 135,
+  /** Listing card chrome height (title + price + seller row) */
+  listingCardChromeHeight: 110,
+  /** Skeleton height variation ratios for natural masonry rhythm */
+  skeletonHeightRatios: [1.25, 1.08, 1.32, 1.16] as readonly number[],
+  /** Missing media fallback height ratio */
+  missingMediaHeightRatio: 0.78,
+  /** Feed tab indicator height */
+  tabIndicatorHeight: 2,
+  /** Feed tab horizontal padding */
+  tabPaddingH: Space.md,
+  /** Feed tab vertical padding */
+  tabPaddingV: Space.sm,
+  /** Pull-to-refresh distance threshold */
+  refreshDistance: 80,
+} as const;
+
+// ============================================================================
+// PROFILE LAYOUT GEOMETRY — Profile and identity surfaces
+// Replaces 7 different hardcoded COVER_HEIGHT and 5 AVATAR_SIZE values
+// with a single canonical token set.
+// ============================================================================
+export const ProfileLayout = {
+  /** Standard cover height — used by ProfileHero and UserProfileScreen */
+  coverHeight: 160,
+  /** Compact cover height — used by MyProfileScreen (slightly shorter for own profile) */
+  coverHeightCompact: 152,
+  /** Skeleton cover height — matches coverHeight for no-shift loading */
+  coverHeightSkeleton: 160,
+  /** Edit preview cover height — smaller for edit profile sheet */
+  coverHeightEdit: 120,
+  /** States cover height — for error/unavailable state canvas */
+  coverHeightStates: 168,
+  /** Standard avatar size — used by ProfileHero (seam-row composition) */
+  avatarStandard: 88,
+  /** Identity hero avatar — used by MyProfileIdentityHero */
+  avatarIdentity: 84,
+  /** Public identity avatar — used by PublicProfileIdentityHero */
+  avatarPublic: 88,
+  /** Edit preview avatar — smaller for edit profile sheet */
+  avatarEdit: 76,
+  /** Skeleton avatar — matches avatarIdentity */
+  avatarSkeleton: 84,
+  /** Avatar overlap into cover (half the standard avatar) */
+  avatarOverlap: 44,
+  /** Stats row height in seam composition */
+  statsRowHeight: 44,
+  /** Tab rail height (44pt touch target per AGENTS.md §13) */
+  tabRailHeight: 44,
+  /** Utility rail item size */
+  utilityRailItem: 56,
+  /** Co-Own portfolio preview card height */
+  portfolioPreviewHeight: 72,
+} as const;
+
+// ============================================================================
+// SEARCH LAYOUT GEOMETRY — Search and explore surfaces
+// ============================================================================
+export const SearchLayout = {
+  /** Search bar height (44pt touch target + internal padding) */
+  searchBarHeight: 48,
+  /** Search bar border radius */
+  searchBarRadius: Radius.lg,
+  /** Tab bar height (44pt touch target) */
+  tabBarHeight: 44,
+  /** Tab indicator height */
+  tabIndicatorHeight: 2,
+  /** Recent search pill height */
+  recentPillHeight: 36,
+  /** Recent search pill radius */
+  recentPillRadius: Radius.full,
+  /** Suggestion row height (44pt touch target) */
+  suggestionRowHeight: 44,
+  /** Filter chip height */
+  filterChipHeight: 32,
+  /** Filter chip radius */
+  filterChipRadius: Radius.full,
+  /** Trending search pill height */
+  trendingPillHeight: 36,
+  /** Editorial card height */
+  editorialCardHeight: 120,
+  /** Explore grid gap */
+  exploreGridGap: Space.smMd,
+} as const;
+
+// ============================================================================
+// COMMERCE DETAIL LAYOUT — Product detail hardcoded dimensions
+// Replaces hardcoded card widths, image heights, zoom constants.
+// ============================================================================
+export const CommerceLayout = {
+  /** Related rail card width */
+  relatedCardWidth: 148,
+  /** Related rail card image height */
+  relatedCardImageHeight: 168,
+  /** Related rail badge offset */
+  relatedBadgeOffset: Space.sm,
+  /** Bundle upsell thumbnail size */
+  bundleThumbSize: 72,
+  /** Dock thumbnail size (anchoring product in sticky dock) */
+  dockThumbnailSize: 40,
+  /** Dock protection strip icon size */
+  dockProtectionIcon: 16,
+  /** Media stage max zoom */
+  mediaMaxZoom: 4,
+  /** Media stage min zoom */
+  mediaMinZoom: 1,
+  /** Media stage double-tap zoom target (normal motion) */
+  mediaDoubleTapZoom: 2.5,
+  /** Media stage double-tap zoom target (reduced motion) */
+  mediaDoubleTapZoomReduced: 2,
+  /** Fullscreen viewer max zoom */
+  fullscreenMaxZoom: 5,
+  /** Fullscreen viewer swipe-to-dismiss threshold */
+  fullscreenDismissThreshold: 100,
+  /** Price chart height */
+  priceChartHeight: 120,
+  /** Price chart padding */
+  priceChartPadding: Space.sm,
+  /** Price chart min width */
+  priceChartMinWidth: 280,
+  /** Price chart max width */
+  priceChartMaxWidth: 440,
+  /** Candle chart height */
+  candleChartHeight: 140,
+  /** Candle chart volume section height */
+  candleChartVolumeHeight: 30,
+  /** Candle width */
+  candleWidth: 6,
+  /** Candle gap */
+  candleGap: 2,
 } as const;

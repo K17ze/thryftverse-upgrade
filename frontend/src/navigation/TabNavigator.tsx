@@ -1,6 +1,7 @@
 import React, { useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, type AccessibilityState } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
@@ -27,9 +28,13 @@ import MyProfileScreen from '../screens/MyProfileScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
+// Tab bar geometry — these are deliberate layout values, not token candidates.
+// They are tuned for the Liquid Glass tab bar with 24pt icons.
 const NAV_HEIGHT = 60;
+// Create button: 52pt hit area (exceeds 44pt minimum), 40pt visible control
 const CREATE_HIT_SIZE = 52;
 const CREATE_CONTROL_SIZE = 40;
+// Profile avatar: 27pt — fits within 28pt tabIconWrap with 0.5pt inset
 const AVATAR_SIZE = 27;
 
 interface TabIconProps {
@@ -50,7 +55,7 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
 
   return (
     <View style={tabStyles.tabIconWrap} accessible={false} importantForAccessibility="no-hide-descendants">
-      <Ionicons name={iconName} size={26} color={color} />
+      <Ionicons name={iconName} size={24} color={color} />
       {displayBadge && (
         <View
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
@@ -115,8 +120,8 @@ const AnimatedPressableRe = Reanimated.createAnimatedComponent(Pressable);
 
 interface CreateTabButtonProps {
   onPress: () => void;
-  onLongPress?: (() => void) | null;
-  accessibilityState?: { disabled?: boolean; selected?: boolean; checked?: boolean; busy?: boolean; expanded?: boolean };
+  onLongPress?: ((event: import('react-native').GestureResponderEvent) => void) | null;
+  accessibilityState?: AccessibilityState;
   testID?: string;
   brandColor: string;
   surfaceColor: string;
@@ -220,8 +225,8 @@ export default function TabNavigator() {
           tabBarInactiveTintColor: colors.textMuted,
         }}
         screenListeners={{
-          tabPress: (e: any) => {
-            const currentTab = e.target?.split('-')[0];
+          tabPress: (e: { target?: string }) => {
+            const currentTab = e.target?.split('-')[0] ?? '';
             if (currentTab !== lastTabRef.current) {
               haptic.patterns.tabSwitch();
               lastTabRef.current = currentTab;
@@ -253,7 +258,7 @@ export default function TabNavigator() {
           name="Create"
           component={View}
           options={{
-            tabBarButton: (props: any) => (
+            tabBarButton: (props: BottomTabBarButtonProps) => (
               <CreateTabButton
                 onPress={handleCreatePress}
                 onLongPress={props.onLongPress}
@@ -316,10 +321,10 @@ const tabStyles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -6,
-    right: -10,
-    minWidth: 16,
-    height: 16,
+    top: -7,
+    right: -11,
+    minWidth: 18,
+    height: 18,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -328,7 +333,7 @@ const tabStyles = StyleSheet.create({
   },
   badgeText: {
     color: '#fff',
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: Typography.family.bold,
     includeFontPadding: false,
     textAlign: 'center',

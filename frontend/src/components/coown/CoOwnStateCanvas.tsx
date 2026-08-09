@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.lg,
   },
   primaryBtnText: {
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.lg,
     borderWidth: 1,
   },

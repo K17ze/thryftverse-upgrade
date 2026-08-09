@@ -2,10 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated from 'react-native-reanimated';
-import { FadeIn, SlideInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Radius, Typography, Elevation, DockConstants } from '../../../theme/designTokens';
+import { Space, Type, Radius, Typography, Elevation, DockConstants, CommerceLayout } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { CachedImage } from '../../CachedImage';
@@ -175,7 +173,7 @@ export function CommerceDetailStateDock({
             { borderBottomColor: colors.borderSubtle },
           ]}
         >
-          <Ionicons name="shield-checkmark" size={16} color={colors.success} />
+          <Ionicons name="shield-checkmark" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
           <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
             Buyer protection
           </Text>
@@ -328,14 +326,9 @@ export function CommerceDetailStateDock({
     return <View style={styles.wrapper}>{content}</View>;
   }
 
-  return (
-    <Reanimated.View
-      entering={SlideInDown.duration(280)}
-      style={styles.wrapper}
-    >
-      {content}
-    </Reanimated.View>
-  );
+  // Plain render — no spring entrance animation. The dock appears
+  // immediately when the Buy Now section becomes active.
+  return <View style={styles.wrapper}>{content}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -403,13 +396,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     flexShrink: 1,
   },
-  // Product thumbnail — 40x40, medium radius. Quiet, no border.
+  // Product thumbnail — tokenized via CommerceLayout.dockThumbnailSize.
   // Research (ecomdesignpro 2026): "40-48px with 8px radius, optional
   // on mobile." Radius.md (8px) matches the primary action radius for
   // visual coherence within the dock.
   thumbnail: {
-    width: 40,
-    height: 40,
+    width: CommerceLayout.dockThumbnailSize,
+    height: CommerceLayout.dockThumbnailSize,
     borderRadius: Radius.md,
     flexShrink: 0,
   },

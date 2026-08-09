@@ -1220,7 +1220,7 @@ export default function InboxScreen() {
 
                         title="No conversations yet"
 
-                        subtitle="Message a seller to start a chat."
+                        subtitle="Start chatting with a seller to see your messages here."
 
                         ctaLabel="Browse listings"
 

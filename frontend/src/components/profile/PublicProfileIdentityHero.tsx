@@ -126,7 +126,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
     marginBottom: Space.sm,
   },
   contextRow: {

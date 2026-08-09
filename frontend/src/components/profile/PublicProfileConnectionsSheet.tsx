@@ -224,7 +224,7 @@ function createStyles(colors: ThemeColors) {
   handle: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
   // Skeleton rows
   skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: Space.xxl + Space.xxl + Space.xs },
-  skeletonAvatar: { width: Space.xl + Space.sm + 4, height: Space.xl + Space.sm + 4, borderRadius: Radius.xxl, backgroundColor: colors.surfaceAlt },
+  skeletonAvatar: { width: Space.xl + Space.smMd, height: Space.xl + Space.smMd, borderRadius: Radius.xxl, backgroundColor: colors.surfaceAlt },
   skeletonIdentity: { flex: 1, gap: Space.xs },
   skeletonName: { width: Space.xxl + Space.xxl + Space.xs + Space.xs, height: Type.body.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
   skeletonHandle: { width: Space.xxl + Space.xxl - Space.xs, height: Type.caption.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },

@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     borderRadius: Radius.lg,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

@@ -942,7 +942,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs + 2,
   },
   sortChipActive: {
@@ -1002,7 +1002,7 @@ function createStyles(colors: ThemeColors) {
   launchBtn: {
     borderRadius: Radius.md,
     minHeight: Control.chromeCompact + 2,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
   },
   actionBtnRow: {
     flexDirection: 'row',

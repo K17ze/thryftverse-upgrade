@@ -170,7 +170,7 @@ function createStyles(colors: ThemeColors) {
   coverFallbackInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
   },
   coverFallbackText: {
     fontSize: Type.caption.size,
@@ -260,7 +260,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
-    lineHeight: 20,
+    lineHeight: Type.body.lineHeight,
     marginBottom: Space.xs,
   },
   contextText: {

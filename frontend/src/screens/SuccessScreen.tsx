@@ -241,7 +241,7 @@ function createTimelineStyles(colors: ThemeColors) {
   return StyleSheet.create({
   step: {
     flexDirection: 'row',
-    gap: Space.sm + 4,
+    gap: Space.smMd,
     paddingBottom: Space.md,
   },
   iconCol: {
@@ -301,15 +301,15 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xl,
   },
 
-  title: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.sm + 4, textAlign: 'center' },
+  title: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
   subtitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
   orderCardWrap: { width: '100%', marginTop: Space.lg },
   orderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 4,
-    padding: Space.sm + 4,
+    gap: Space.smMd,
+    padding: Space.smMd,
     borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
   },
@@ -344,7 +344,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs + 2,
   },
   supportAvatarWrap: {

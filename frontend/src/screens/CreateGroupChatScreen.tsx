@@ -532,13 +532,13 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
   },
   selectedChipAvatar: {
-    width: Space.sm + 4,
-    height: Space.sm + 4,
+    width: Space.smMd,
+    height: Space.smMd,
     borderRadius: Radius.full,
   },
   selectedChipAvatarPlaceholder: {
-    width: Space.sm + 4,
-    height: Space.sm + 4,
+    width: Space.smMd,
+    height: Space.smMd,
     borderRadius: Radius.full,
     backgroundColor: colors.border,
     justifyContent: 'center',

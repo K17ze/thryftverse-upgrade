@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius.xl + 8,
     borderTopRightRadius: Radius.xl + 8,
     paddingHorizontal: Space.lg - 4,
-    paddingTop: Space.sm + 4,
+    paddingTop: Space.smMd,
     paddingBottom: Space.xl + 20,
     ...Elevation.modal,
   },

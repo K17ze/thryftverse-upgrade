@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, ActiveTheme } from '../../constants/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 
 interface BoardEmptyGraphicProps {
@@ -12,20 +12,29 @@ interface BoardEmptyGraphicProps {
   size?: number;
 }
 
-const BG: [string, string] = ActiveTheme === 'light'
-  ? ['#F5F0EB', '#EDE8E1']
-  : ['#1A1A1A', '#141414'];
-
 export function BoardEmptyGraphic({
   title,
   subtitle,
   icon = 'folder-open-outline',
   size = 120,
 }: BoardEmptyGraphicProps) {
+  const { colors, isDark } = useAppTheme();
+
+  const bg: [string, string] = isDark
+    ? [colors.surfaceAlt, colors.surface]
+    : [colors.surfaceAlt, colors.surface];
+
+  const iconColor = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
+  const dotColor = isDark ? '#fff' : '#000';
+  const iconRingBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
+  const iconRingBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const titleColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+  const subtitleColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+
   return (
     <View style={[styles.container, { width: size, height: size }]}>
       <LinearGradient
-        colors={BG}
+        colors={bg}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -42,6 +51,7 @@ export function BoardEmptyGraphic({
                 left: `${(i % 4) * 25 + 10}%`,
                 top: `${Math.floor(i / 4) * 30 + 15}%`,
                 opacity: 0.04 + (i % 3) * 0.02,
+                backgroundColor: dotColor,
               },
             ]}
           />
@@ -49,15 +59,11 @@ export function BoardEmptyGraphic({
       </View>
 
       <View style={styles.center}>
-        <View style={styles.iconRing}>
-          <Ionicons
-            name={icon}
-            size={28}
-            color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)'}
-          />
+        <View style={[styles.iconRing, { backgroundColor: iconRingBg, borderColor: iconRingBorder }]}>
+          <Ionicons name={icon} size={28} color={iconColor} />
         </View>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        <Text style={[styles.title, { color: titleColor }]}>{title}</Text>
+        {subtitle ? <Text style={[styles.subtitle, { color: subtitleColor }]}>{subtitle}</Text> : null}
       </View>
     </View>
   );
@@ -78,13 +84,12 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: Radius.sm,
-    backgroundColor: ActiveTheme === 'light' ? '#000' : '#fff',
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: Space.smMd,
     padding: Space.md,
   },
   iconRing: {
@@ -93,22 +98,16 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor:
-      ActiveTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor:
-      ActiveTheme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
   },
   title: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.captionElevated.size,
-    color: ActiveTheme === 'light' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)',
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: Typography.family.regular,
     fontSize: Type.meta.size,
-    color: ActiveTheme === 'light' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
     textAlign: 'center',
   },
 });

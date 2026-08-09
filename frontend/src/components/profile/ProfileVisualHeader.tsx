@@ -274,20 +274,20 @@ const styles = StyleSheet.create({
     fontSize: Type.priceList.size,
     color: Colors.textPrimary,
     letterSpacing: -0.4,
-    lineHeight: 26,
+    lineHeight: Type.priceList.lineHeight,
   },
   handle: {
     fontFamily: Typography.family.medium,
     fontSize: Type.body.size,
     color: Colors.textSecondary,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   bio: {
     fontFamily: Typography.family.regular,
     fontSize: Type.captionElevated.size,
     color: Colors.textSecondary,
     marginTop: Space.xs,
-    lineHeight: 18,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   statsRail: {
     flexDirection: 'row',

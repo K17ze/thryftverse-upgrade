@@ -538,7 +538,7 @@ function createStyles(colors: ThemeColors) {
   secondaryBtn: {
     flex: 1,
     borderRadius: Radius.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
@@ -552,7 +552,7 @@ function createStyles(colors: ThemeColors) {
   dangerBtn: {
     flex: 1,
     borderRadius: Radius.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,

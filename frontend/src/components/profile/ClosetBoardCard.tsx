@@ -139,7 +139,7 @@ function createStyles(colors: ThemeColors) {
     right: 8,
     width: COVER_SIZE * 1.2,
     height: COVER_SIZE * 1.2,
-    gap: 3,
+    gap: Space.xs / 2 - 1,
   },
   miniTile: {
     flex: 1,

@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.lg,
     marginHorizontal: Space.md,
     marginBottom: Space.md,

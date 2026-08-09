@@ -1,6 +1,12 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Radius, Space, Type, Typography } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 
@@ -35,6 +41,24 @@ export function AppSegmentControl<T extends string>({
   fullWidth = false,
 }: AppSegmentControlProps<T>) {
   const { colors } = useAppTheme();
+  const { spring } = useMotionConfig();
+  const indicatorX = useSharedValue(0);
+  const indicatorWidth = useSharedValue(0);
+  const optionLayouts = useRef<Array<{ x: number; width: number }>>([]);
+
+  useEffect(() => {
+    const activeIndex = options.findIndex((o) => o.value === value);
+    if (activeIndex >= 0 && optionLayouts.current[activeIndex]) {
+      const layout = optionLayouts.current[activeIndex];
+      indicatorX.value = withSpring(layout.x, spring.tap);
+      indicatorWidth.value = withSpring(layout.width, spring.tap);
+    }
+  }, [value, options, spring, indicatorX, indicatorWidth]);
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorX.value }],
+    width: indicatorWidth.value,
+  }));
 
   return (
     <View
@@ -45,21 +69,37 @@ export function AppSegmentControl<T extends string>({
       ]}
       accessibilityRole="tablist"
     >
-      {options.map((option) => {
+      <Reanimated.View
+        style={[
+          styles.indicator,
+          { backgroundColor: colors.surface },
+          indicatorStyle,
+        ]}
+        pointerEvents="none"
+      />
+      {options.map((option, index) => {
         const isActive = option.value === value;
 
         return (
           <AnimatedPressable
             key={option.value}
+            onLayout={(e) => {
+              optionLayouts.current[index] = {
+                x: e.nativeEvent.layout.x,
+                width: e.nativeEvent.layout.width,
+              };
+              // Set initial indicator position without animation on first layout
+              if (isActive && indicatorWidth.value === 0) {
+                indicatorX.value = e.nativeEvent.layout.x;
+                indicatorWidth.value = e.nativeEvent.layout.width;
+              }
+            }}
             style={[
               styles.option,
               fullWidth && styles.optionFull,
-              { backgroundColor: 'transparent', borderColor: 'transparent' },
+              { backgroundColor: 'transparent' },
               optionStyle,
-              isActive && {
-                backgroundColor: colors.surface,
-                borderColor: colors.textMuted,
-              },
+              isActive && { backgroundColor: 'transparent' },
               isActive && optionActiveStyle,
             ]}
             onPress={() => {
@@ -101,10 +141,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  indicator: {
+    position: 'absolute',
+    top: 3,
+    bottom: 3,
+    left: 0,
+    borderRadius: Radius.sm,
+  },
   option: {
     minHeight: 44,
     borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     alignItems: 'center',

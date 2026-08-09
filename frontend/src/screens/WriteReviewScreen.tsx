@@ -367,7 +367,7 @@ function createStyles(colors: ThemeColors) {
   starsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: Space.sm + 4,
+    gap: Space.smMd,
     marginBottom: Space.sm,
   },
   ratingLabel: {

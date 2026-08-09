@@ -19,7 +19,6 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Listing } from '../data/mockData';
 import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT } from '../utils/media';
 import { StaggeredItem } from './StaggeredGridEntrance';
-import { PressPresets } from '../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../utils/listingMediaGeometry';
 import { computeSustainabilityScore } from '../utils/sustainabilityScore';
@@ -56,7 +55,10 @@ function ProductCardV2Base({
   mediaAspectRatio,
   enableEntranceAnimation = true,
   onPressSeller,
-  onMessageSeller,
+  // `onMessageSeller` remains in the interface so existing callers
+  // (SearchScreen, PinterestMasonryGrid) keep type-checking, but the
+  // chat action is intentionally not rendered on the card — messaging
+  // belongs on the product detail page, not the discovery surface.
 }: ProductCardV2Props) {
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
@@ -119,13 +121,32 @@ function ProductCardV2Base({
     ? Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)
     : 0;
 
+  // Condition badge — color-coded status pill overlaid on the preview.
+  //   New with tags → green (colors.success)
+  //   Used (very good / good / satisfactory) → dark gray scrim
+  //   Sold → dark gray scrim with a "Sold" label
+  // Badge backgrounds are always dark, so the label uses a fixed white
+  // ink instead of a theme text token (which would render black-on-dark
+  // in dark mode). Width is auto so longer conditions still fit at 20pt.
+  const conditionBadge = (() => {
+    if (item.isSold) {
+      return { label: 'Sold', bg: 'rgba(0,0,0,0.6)' };
+    }
+    if (!item.condition) return null;
+    const isNew = item.condition === 'New with tags';
+    return {
+      label: isNew ? 'New' : item.condition,
+      bg: isNew ? colors.success : 'rgba(0,0,0,0.55)',
+    };
+  })();
+
   const cardContent = (
-    <View style={styles.container}>
+    <View style={[styles.container, item.isSold && styles.soldContainer]}>
       {/* Image - Full bleed, subtle radius for modern feel */}
       <AnimatedPressable
         onPress={onPress}
         style={styles.imageWrap}
-        {...PressPresets.card}
+        hapticFeedback="light"
         accessibilityRole="button"
         accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
@@ -149,25 +170,26 @@ function ProductCardV2Base({
           />
         )}
 
-        {/* Consolidated badge — only ONE badge at a time, by priority:
-            price drop > sold > condition > sustainability.
-            Media count stays as a separate small icon in the corner. */}
+        {/* Sold state — gray scrim over the preview + a centered "Sold"
+            label. The whole card is additionally dimmed via the container
+            opacity (styles.soldContainer) so sold items recede visually
+            without hiding the media. The color-coded condition badge
+            below also flips to a gray "Sold" pill for at-a-glance status. */}
         {item.isSold ? (
           <>
-            <View style={styles.soldScrim} />
-            <View style={styles.soldPill}>
-              <Text style={styles.soldPillText}>Sold</Text>
-            </View>
+            <View style={styles.soldOverlay} />
+            <Text style={styles.soldLabelCenter}>Sold</Text>
           </>
-        ) : hasPriceDrop ? (
-          <View style={[styles.conditionBadge, styles.priceDropBadge]}>
+        ) : null}
+
+        {/* Price drop / sustainability — top-left, mutually exclusive.
+            A price reduction is the stronger deal signal, so it wins
+            over the eco chip. Both are suppressed once the item is sold. */}
+        {!item.isSold && hasPriceDrop ? (
+          <View style={styles.priceDropBadge}>
             <Text style={styles.conditionText}>-{priceDropPercent}%</Text>
           </View>
-        ) : item.condition ? (
-          <View style={styles.conditionBadge}>
-            <Text style={styles.conditionText}>{item.condition}</Text>
-          </View>
-        ) : showSustainabilityChip ? (
+        ) : !item.isSold && showSustainabilityChip ? (
           <View style={styles.sustainabilityChipWrap}>
             <SustainabilityBadge
               score={sustainabilityScore}
@@ -177,16 +199,27 @@ function ProductCardV2Base({
           </View>
         ) : null}
 
-        {/* Media indicator — separate small icon in corner */}
-        {(hasMultiple || hasVideo) && (
-          <View style={styles.mediaBadge}>
-            <Ionicons
-              name={hasVideo ? 'videocam' : 'images'}
-              size={13}
-              color={colors.textInverse}
-            />
+        {/* Condition badge — lower-left, color-coded (green = New,
+            dark = Used / Sold). Small 20pt pill so it never dominates
+            the media; auto width keeps longer conditions legible. */}
+        {conditionBadge ? (
+          <View style={[styles.conditionBadge, { backgroundColor: conditionBadge.bg }]}>
+            <Text style={styles.conditionText}>{conditionBadge.label}</Text>
           </View>
-        )}
+        ) : null}
+
+        {/* Media indicator — upper-right. Video gets a dedicated play
+            glyph in a small dark circle; multiple photos keep the
+            existing stack icon. Only one indicator ever shows. */}
+        {hasVideo ? (
+          <View style={styles.videoIndicator}>
+            <Ionicons name="play" size={16} color="#FFFFFF" />
+          </View>
+        ) : hasMultiple ? (
+          <View style={styles.mediaBadge}>
+            <Ionicons name="images" size={13} color="#FFFFFF" />
+          </View>
+        ) : null}
 
         {/* Favorite button — transparent hit targets with text-shadow scrim
             per AGENTS.md: separate hit area from visible shape. No decorative
@@ -196,7 +229,7 @@ function ProductCardV2Base({
             <AnimatedPressable
               style={styles.actionHitTarget}
               onPress={handleToggleSave}
-              {...PressPresets.iconButton}
+              hapticFeedback="light"
               hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel={isSaved ? 'Remove from saved' : 'Save item'}
@@ -249,8 +282,6 @@ function ProductCardV2Base({
                 style={styles.sellerIdentity}
                 onPress={onPressSeller}
                 disabled={!onPressSeller}
-                activeOpacity={0.68}
-                scaleValue={0.98}
                 accessible={Boolean(onPressSeller)}
                 accessibilityRole="button"
                 accessibilityLabel={`Open @${sellerUsername}'s profile`}
@@ -280,19 +311,6 @@ function ProductCardV2Base({
                 />
               ) : null}
               </AnimatedPressable>
-              {onMessageSeller ? (
-                <AnimatedPressable
-                  style={styles.messageButton}
-                  onPress={onMessageSeller}
-                  activeOpacity={0.62}
-                  scaleValue={0.94}
-                  hapticFeedback="light"
-                  accessibilityRole="button"
-                  accessibilityLabel={`Message @${sellerUsername}`}
-                >
-                  <Ionicons name="chatbubble-outline" size={17} color={colors.textPrimary} />
-                </AnimatedPressable>
-              ) : null}
             </View>
           ) : null}
         </View>
@@ -381,6 +399,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   container: {
     flex: 1,
   },
+  // Sold items recede without hiding the media — a gentle 0.7 opacity
+  // across the whole card communicates "no longer available" while the
+  // preview stays recognisable.
+  soldContainer: {
+    opacity: 0.7,
+  },
 
   // Image - Pinterest/Depop tight editorial feel. No shadow, minimal radius.
   imageWrap: {
@@ -393,27 +417,38 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: '100%',
   },
 
-  // Sold — editorial scrim + pill (image stays visible)
-  soldScrim: {
+  // Sold — gray scrim over the preview + a centered "Sold" label.
+  // Combined with soldContainer opacity, the status is unambiguous but
+  // the image remains visible behind the scrim.
+  soldOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.22)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  soldPill: {
-    position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
-  soldPillText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+  soldLabelCenter: {
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
     fontFamily: Typography.family.bold,
-    color: colors.textInverse,
-    letterSpacing: 0.3,
+    // Fixed white ink — the scrim is always dark, so a theme text token
+    // (black in dark mode) would render invisible.
+    color: '#FFFFFF',
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
+  },
+  // Video indicator — small dark circle with a white play glyph, upper-right.
+  // Subtle (24pt) but discoverable; only cards whose media includes a
+  // video render it.
+  videoIndicator: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mediaBadge: {
     position: 'absolute',
@@ -450,8 +485,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   sustainabilityChipWrap: {
     position: 'absolute',
-    bottom: Space.xs,
-    left: Space.xs,
+    top: Space.sm,
+    left: Space.sm,
   },
 
   // Info - Clean hierarchy with breathing room
@@ -541,31 +576,37 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   sellerVerifiedIcon: {
     flexShrink: 0,
   },
-  messageButton: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: -8,
-  },
-  // Condition & price-drop badges
-  conditionBadge: {
+  // Price-drop badge — top-left, red. Only the strongest deal signal
+  // occupies this corner; otherwise the sustainability chip takes it.
+  priceDropBadge: {
     position: 'absolute',
     top: Space.sm,
     left: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(200,50,50,0.65)',
     paddingHorizontal: Space.sm,
     paddingVertical: 5,
     borderRadius: Radius.md,
   },
-  priceDropBadge: {
-    backgroundColor: 'rgba(200,50,50,0.65)',
+  // Condition badge — lower-left, color-coded via inline backgroundColor.
+  // Small 20pt pill with an 8pt radius so it reads as metadata, not chrome.
+  conditionBadge: {
+    position: 'absolute',
+    bottom: Space.xs,
+    left: Space.xs,
+    height: 20,
+    paddingHorizontal: 6,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   conditionText: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.bold,
-    color: colors.textInverse,
+    // Fixed white ink — condition/price-drop badges always sit on a dark
+    // or saturated background, so a theme text token (black in dark mode)
+    // would be invisible.
+    color: '#FFFFFF',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },

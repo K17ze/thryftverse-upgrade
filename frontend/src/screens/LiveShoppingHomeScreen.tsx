@@ -515,7 +515,7 @@ export default function LiveShoppingHomeScreen() {
             <EmptyState
               icon="videocam-outline"
               title="No live sessions right now"
-              subtitle="Check back soon or start your own."
+              subtitle="Check back soon, or start your own session from the Seller Hub."
               ctaLabel="Go to Seller Hub"
               onCtaPress={() => navigation.navigate('MyListings')}
             />
@@ -896,7 +896,7 @@ function useStyles() {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs / 2 + 1,
-          paddingHorizontal: Space.sm + 4,
+          paddingHorizontal: Space.smMd,
           paddingVertical: Space.sm,
           borderRadius: Radius.full,
           borderWidth: Stroke.standard,

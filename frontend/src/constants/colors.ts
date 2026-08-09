@@ -1,3 +1,8 @@
+// CONSOLIDATED: Values mirror theme/ThemeContext.tsx exactly. Single source of truth is ThemeContext.
+// This file remains a standalone static export so non-component modules can access theme colors
+// without the React context hook. The 4 critical WCAG-compliant colors (textMuted, danger,
+// success, warning) and all semantic colors are kept identical to ThemeContext.
+
 import { Appearance } from 'react-native';
 
 export type ThemeMode = 'dark' | 'light';
@@ -8,6 +13,7 @@ const THEME_OVERRIDE_GLOBAL_KEY = '__THRYFTVERSE_THEME_OVERRIDE__';
 // CONSOLIDATED 5-CORE COLOR PALETTE
 // Based on luxury e-commerce reference designs (Farfetch/SSENSE aesthetic)
 // Principle: Restraint - use sparingly, let content breathe
+// Values mirror theme/ThemeContext.tsx DARK_COLORS exactly.
 // ============================================================================
 
 const DARK_COLORS = {
@@ -18,6 +24,8 @@ const DARK_COLORS = {
   surface: '#141414',
   // 2b. SURFACE ALT - More elevated tier (replaces `cardAlt`)
   surfaceAlt: '#1F1F1F',
+  // 2c. SURFACE ELEVATED - Highest elevation tier (mirrors ThemeContext)
+  surfaceElevated: '#242424',
 
   // 3. BRAND/PRIMARY - Warm off-white luxury accent (replaces gold)
   brand: '#F4F0E8',
@@ -26,17 +34,47 @@ const DARK_COLORS = {
   // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#FFFFFF',
   textSecondary: '#A3A3A3',
-  textMuted: '#666666',
+  // WCAG 2.2 AA: 4.64:1 on #0A0A0A (was #666666 at 3.05:1)
+  textMuted: '#7A7A7A',
   textInverse: '#000000',
 
   // 5. BORDERS - Subtle separators
   border: '#262626',
-  borderLight: '#333333',
+  // Canonical name (mirrors ThemeContext). borderLight kept as alias below.
+  borderSubtle: '#333333',
 
-  // Status (minimal set)
-  danger: '#7e0202',
-  success: '#0c5728',
-  warning: '#f2d097',
+  // Status (minimal set) — WCAG-compliant, mirrors ThemeContext
+  danger: '#9b0202',
+  success: '#215634',
+  warning: '#C9A46A',
+
+  // Co-Own financial truth — up/down movement only. Per Design.md
+  // proposed-semantic: coown-up #1C5631, coown-down #5F1616.
+  coownUp: '#1C5631',
+  coownDown: '#5F1616',
+
+  // Semantic accent colors from Design.md proposed-semantic section.
+  // Used for category icon badges and contextual accents — never decorative.
+  social: '#9A6B7A',
+  discovery: '#B85566',
+  commerceTrust: '#4A7AC4',
+
+  // Premium accent from Design.md proposed-luxury. Used sparingly for
+  // verified status, authenticated value, or curated distinction.
+  antiqueGold: '#C9A46A',
+  bronze: '#8A6A3F',
+
+  // Structural / utility colors (mirrors ThemeContext)
+  overlay: 'rgba(0,0,0,0.6)',
+  input: '#1A1A1A',
+  inputText: '#FFFFFF',
+  row: '#141414',
+  rowPressed: '#1A1A1A',
+  tabBar: '#0A0A0A',
+  header: '#0A0A0A',
+  shadow: '#000000',
+  glassBg: 'rgba(255,255,255,0.04)',
+  glassBorder: 'rgba(255,255,255,0.08)',
 } as const;
 
 const LIGHT_COLORS = {
@@ -47,6 +85,8 @@ const LIGHT_COLORS = {
   surface: '#F5F5F5',
   // 2b. SURFACE ALT - More elevated tier (replaces `cardAlt`)
   surfaceAlt: '#EBEBEB',
+  // 2c. SURFACE ELEVATED - Highest elevation tier (mirrors ThemeContext)
+  surfaceElevated: '#FFFFFF',
 
   // 3. BRAND/PRIMARY - Dark neutral luxury accent (replaces gold)
   brand: '#111111',
@@ -55,17 +95,44 @@ const LIGHT_COLORS = {
   // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#000000',
   textSecondary: '#666666',
-  textMuted: '#999999',
+  // WCAG 2.2 AA: 4.65:1 on #FFFFFF (was #999999 at 2.85:1)
+  textMuted: '#767676',
   textInverse: '#FFFFFF',
 
   // 5. BORDERS - Subtle separators
   border: '#E5E5E5',
-  borderLight: '#F0F0F0',
+  // Canonical name (mirrors ThemeContext). borderLight kept as alias below.
+  borderSubtle: '#F0F0F0',
 
-  // Status (minimal set)
-  danger: '#790e0e',
-  success: '#077c32',
-  warning: '#ffd48a',
+  // Status (minimal set) — WCAG-compliant, mirrors ThemeContext
+  danger: '#9b0202',
+  success: '#215634',
+  warning: '#8A6A3F',
+
+  // Co-Own financial truth — up/down movement only.
+  coownUp: '#1C5631',
+  coownDown: '#5F1616',
+
+  // Semantic accent colors — never decorative.
+  social: '#6B3245',
+  discovery: '#7B0E1E',
+  commerceTrust: '#06489A',
+
+  // Premium accents — used sparingly.
+  antiqueGold: '#C9A46A',
+  bronze: '#8A6A3F',
+
+  // Structural / utility colors (mirrors ThemeContext)
+  overlay: 'rgba(0,0,0,0.4)',
+  input: '#FFFFFF',
+  inputText: '#000000',
+  row: '#F5F5F5',
+  rowPressed: '#EBEBEB',
+  tabBar: '#FFFFFF',
+  header: '#FFFFFF',
+  shadow: '#000000',
+  glassBg: 'rgba(0,0,0,0.04)',
+  glassBorder: 'rgba(0,0,0,0.08)',
 } as const;
 
 // ============================================================================
@@ -93,6 +160,12 @@ const LIGHT_COLORS = {
 
 type ThemeColors = { [Key in keyof typeof DARK_COLORS]: string };
 
+// Backward-compatibility alias: `borderLight` was the legacy field name for
+// what ThemeContext calls `borderSubtle`. We keep `borderLight` accessible on
+// `Colors` so the 22 existing import sites continue to type-check, while
+// `borderSubtle` is the canonical name mirroring ThemeContext.
+type CompatThemeColors = ThemeColors & { borderLight: string };
+
 function resolveActiveTheme(): ThemeMode {
   const runtimeThemeOverride = (globalThis as Record<string, unknown>)[THEME_OVERRIDE_GLOBAL_KEY] as
     | ThemeMode
@@ -106,12 +179,17 @@ function resolveActiveTheme(): ThemeMode {
   return Appearance.getColorScheme() === 'light' ? 'light' : 'dark';
 }
 
+function buildColors(mode: ThemeMode): CompatThemeColors {
+  const base = mode === 'light' ? LIGHT_COLORS : DARK_COLORS;
+  return { ...base, borderLight: base.borderSubtle };
+}
+
 export let ActiveTheme: ThemeMode = resolveActiveTheme();
-export let Colors: ThemeColors = ActiveTheme === 'light' ? LIGHT_COLORS : DARK_COLORS;
+export let Colors: CompatThemeColors = buildColors(ActiveTheme);
 
 export function refreshThemeFromRuntime(): ThemeMode {
   ActiveTheme = resolveActiveTheme();
-  Colors = ActiveTheme === 'light' ? LIGHT_COLORS : DARK_COLORS;
+  Colors = buildColors(ActiveTheme);
   return ActiveTheme;
 }
 

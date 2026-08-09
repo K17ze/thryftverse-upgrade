@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
   sectionDescription: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
     marginLeft: Space.xs,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,

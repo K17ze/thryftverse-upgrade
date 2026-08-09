@@ -275,7 +275,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
             haptic.light();
             setIsMuted((m) => !m);
           }}
-          style={[styles.muteBtn, { top: insets.top + 52, right: Space.sm + 4 }]}
+          style={[styles.muteBtn, { top: insets.top + 52, right: Space.smMd }]}
           scaleValue={0.97}
           hapticFeedback="light"
           activeOpacity={0.85}
@@ -523,7 +523,7 @@ function createStyles(colors: any) {
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: 'rgba(0,0,0,0.7)',
-      gap: Space.sm + 4,
+      gap: Space.smMd,
       zIndex: 25,
     },
     mediaErrorText: {

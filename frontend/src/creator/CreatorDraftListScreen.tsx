@@ -4,11 +4,10 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  FlatList,
   ActivityIndicator,
   RefreshControl,
-  Alert,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Reanimated, {
@@ -16,8 +15,10 @@ import Reanimated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
+  withRepeat,
   runOnJS,
   Easing,
+  useReducedMotion,
   type SharedValue,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
@@ -26,8 +27,10 @@ import { CreatorDraftService, type DraftMeta } from './drafts';
 import { createStableId } from '../utils/createStableId';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SwipeableRow } from '../components/SwipeableRow';
+import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import type { CreatorDocument } from './composition';
 
 type SortBy = 'recent' | 'name' | 'type';
@@ -42,6 +45,7 @@ export function CreatorDraftListScreen() {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
+  const reduceMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const [drafts, setDrafts] = useState<DraftMeta[]>([]);
@@ -50,6 +54,7 @@ export function CreatorDraftListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('recent');
   const [undoDraft, setUndoDraft] = useState<{ meta: DraftMeta; doc: CreatorDocument | null } | null>(null);
+  const [deleteConfirmDraft, setDeleteConfirmDraft] = useState<DraftMeta | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toastTranslateY = useSharedValue(100);
@@ -80,6 +85,12 @@ export function CreatorDraftListScreen() {
   useEffect(() => {
     loadDrafts();
   }, [loadDrafts]);
+
+  // Haptic: light on screen appear
+  useEffect(() => {
+    haptic.light();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -115,25 +126,36 @@ export function CreatorDraftListScreen() {
   }, [navigation, haptic]);
 
   const handleDeleteDraft = useCallback((draft: DraftMeta) => {
-    Alert.alert(
-      'Delete draft?',
-      `"${draft.title}" will be permanently deleted.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await CreatorDraftService.deleteDraft(draft.id);
-            setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
-          },
-        },
-      ],
-    );
-  }, []);
+    haptic.selection();
+    setDeleteConfirmDraft(draft);
+  }, [haptic]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    const draft = deleteConfirmDraft;
+    if (!draft) return;
+    setDeleteConfirmDraft(null);
+    haptic.success();
+    const doc = draftDocs[draft.id] ?? null;
+    setUndoDraft({ meta: draft, doc });
+    setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+    await CreatorDraftService.deleteDraft(draft.id);
+    showToast();
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+    }
+    undoTimerRef.current = setTimeout(() => {
+      hideToast();
+      setUndoDraft(null);
+    }, 5000);
+  }, [deleteConfirmDraft, draftDocs, haptic, showToast, hideToast]);
+
+  const handleCancelDelete = useCallback(() => {
+    haptic.light();
+    setDeleteConfirmDraft(null);
+  }, [haptic]);
 
   const handleSwipeDelete = useCallback(async (draft: DraftMeta) => {
-    haptic.medium();
+    haptic.warning();
     const doc = draftDocs[draft.id] ?? null;
     setUndoDraft({ meta: draft, doc });
     setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
@@ -197,80 +219,31 @@ export function CreatorDraftListScreen() {
     navigation.navigate('CreatorStudio', { type: 'look' });
   }, [navigation]);
 
-  const renderItem = useCallback(({ item }: { item: DraftMeta }) => {
+  const renderItem = useCallback(({ item, index }: { item: DraftMeta; index: number }) => {
     const doc = draftDocs[item.id];
-    const thumbW = 72;
-    const thumbH = doc ? Math.floor(thumbW / doc.canvas.aspectRatio) : 72;
+    const thumbW = 120;
+    const thumbH = doc ? Math.floor(thumbW / doc.canvas.aspectRatio) : 120;
     const isPortrait = thumbH > thumbW;
-    const finalThumbW = isPortrait ? 80 : thumbW;
-    const finalThumbH = isPortrait ? Math.min(100, Math.floor(finalThumbW / (doc?.canvas.aspectRatio ?? 0.8))) : thumbH;
+    const finalThumbW = isPortrait ? 100 : thumbW;
+    const finalThumbH = isPortrait ? Math.min(140, Math.floor(finalThumbW / (doc?.canvas.aspectRatio ?? 0.8))) : thumbH;
     return (
-    <SwipeableRow
-      accessibilityLabel={`Open draft ${item.title}`}
-      accessibilityHint="Swipe left to delete"
-      onPress={() => handleOpenDraft(item)}
-      rightAction={{
-        icon: 'trash-outline',
-        label: 'Delete',
-        onPress: () => handleSwipeDelete(item),
-        color: colors.danger,
-      }}
-      swipeThreshold={88}
-    >
-      <View style={styles.draftRow}>
-        {doc ? (
-          <View style={[styles.draftThumb, { width: finalThumbW, height: finalThumbH }]}>
-            <CreatorCanvas
-              document={doc}
-              page={doc.pages[0]}
-              canvasWidth={finalThumbW}
-              canvasHeight={finalThumbH}
-              mode="view"
-            />
-          </View>
-        ) : (
-          <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discovery + '20' : colors.bronze + '20' }]}>
-            <Ionicons
-              name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
-              size={28}
-              color={item.type === 'look' ? colors.discovery : colors.bronze}
-            />
-          </View>
-        )}
-        <View style={styles.draftInfo}>
-          <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.draftMeta} numberOfLines={1}>
-            {item.type === 'look' ? 'Look' : 'Poster'} · {new Date(item.updatedAt).toLocaleDateString()}
-          </Text>
-          <View style={styles.statusRow}>
-            <View style={[styles.typeBadge, item.type === 'look' ? styles.typeBadgeLook : styles.typeBadgePoster]}>
-              <Text style={styles.typeBadgeText}>{item.type === 'look' ? 'Look' : 'Poster'}</Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.actions}>
-          <Pressable
-            onPress={() => handleDuplicateDraft(item)}
-            style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel={`Duplicate draft ${item.title}`}
-            accessibilityRole="button"
-          >
-            <Ionicons name="copy-outline" size={18} color={colors.textSecondary} />
-          </Pressable>
-          <Pressable
-            onPress={() => handleDeleteDraft(item)}
-            style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel={`Delete draft ${item.title}`}
-            accessibilityRole="button"
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.danger} />
-          </Pressable>
-        </View>
-      </View>
-    </SwipeableRow>
-  ); }, [handleOpenDraft, handleDeleteDraft, handleSwipeDelete, handleDuplicateDraft, draftDocs, styles, colors]);
+      <DraftCard
+        item={item}
+        doc={doc}
+        index={index}
+        finalThumbW={finalThumbW}
+        finalThumbH={finalThumbH}
+        colors={colors}
+        styles={styles}
+        reduceMotion={reduceMotion}
+        springCfg={spring.entrance}
+        onPress={() => handleOpenDraft(item)}
+        onDuplicate={() => handleDuplicateDraft(item)}
+        onDelete={() => handleDeleteDraft(item)}
+        onSwipeDelete={() => handleSwipeDelete(item)}
+      />
+    );
+  }, [handleOpenDraft, handleDeleteDraft, handleSwipeDelete, handleDuplicateDraft, draftDocs, styles, colors, reduceMotion, spring.entrance]);
 
   if (loading) {
     return (
@@ -319,7 +292,7 @@ export function CreatorDraftListScreen() {
         })}
       </View>
 
-      <FlatList
+      <FlashList
         data={sortedDrafts}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
@@ -328,19 +301,12 @@ export function CreatorDraftListScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadDrafts(); }} />
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="document-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No drafts yet</Text>
-            <Text style={styles.emptySubtext}>Start creating to see your drafts here</Text>
-            <Pressable
-              onPress={handleStartCreating}
-              style={({ pressed }) => [styles.emptyCta, pressed && { opacity: 0.85 }]}
-              accessibilityLabel="Start creating"
-              accessibilityRole="button"
-            >
-              <Text style={styles.emptyCtaText}>Start Creating</Text>
-            </Pressable>
-          </View>
+          <EmptyDraftsState
+            colors={colors}
+            styles={styles}
+            reduceMotion={reduceMotion}
+            onCreate={handleStartCreating}
+          />
         }
       />
 
@@ -352,6 +318,14 @@ export function CreatorDraftListScreen() {
         toastOpacity={toastOpacity}
         onUndo={handleUndoDelete}
         onDismiss={hideToast}
+      />
+
+      <DeleteConfirmSheet
+        draft={deleteConfirmDraft}
+        colors={colors}
+        reduceMotion={reduceMotion}
+        onCancel={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
       />
     </View>
   );
@@ -466,6 +440,309 @@ function UndoToast({
   );
 }
 
+// ── DraftCard with stagger entrance and spring thumbnail ───────────
+interface DraftCardProps {
+  item: DraftMeta;
+  doc: CreatorDocument | null | undefined;
+  index: number;
+  finalThumbW: number;
+  finalThumbH: number;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  reduceMotion: boolean;
+  springCfg: { damping: number; stiffness: number; mass: number };
+  onPress: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onSwipeDelete: () => void;
+}
+
+function DraftCard({
+  item,
+  doc,
+  index,
+  finalThumbW,
+  finalThumbH,
+  colors,
+  styles,
+  reduceMotion,
+  springCfg,
+  onPress,
+  onDuplicate,
+  onDelete,
+  onSwipeDelete,
+}: DraftCardProps) {
+  // Stagger entrance: 50ms delay per card
+  const cardScale = useSharedValue(reduceMotion ? 1 : 0.92);
+  const cardOpacity = useSharedValue(reduceMotion ? 1 : 0);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const delay = Math.min(index * 50, 400);
+    const timer = setTimeout(() => {
+      cardScale.value = withSpring(1, springCfg);
+      cardOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [cardScale, cardOpacity, reduceMotion, springCfg, index]);
+
+  const cardAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: cardScale.value }],
+    opacity: cardOpacity.value,
+  }));
+
+  // Thumbnail press spring scale
+  const thumbScale = useSharedValue(1);
+  const thumbAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: thumbScale.value }],
+  }));
+
+  return (
+    <Reanimated.View style={cardAnimatedStyle}>
+      <SwipeableRow
+        accessibilityLabel={`Open draft ${item.title}`}
+        accessibilityHint="Swipe left to delete"
+        onPress={onPress}
+        rightAction={{
+          icon: 'trash-outline',
+          label: 'Delete',
+          onPress: onSwipeDelete,
+          color: colors.danger,
+        }}
+        swipeThreshold={88}
+      >
+        <View style={styles.draftRow}>
+          <Pressable
+            onPress={onPress}
+            onPressIn={() => { if (!reduceMotion) thumbScale.value = withSpring(0.95, Motion.spring.tap); }}
+            onPressOut={() => { if (!reduceMotion) thumbScale.value = withSpring(1, Motion.spring.tap); }}
+            accessibilityLabel={`Open draft ${item.title}`}
+            accessibilityRole="button"
+          >
+            <Reanimated.View style={[thumbAnimatedStyle]}>
+              {doc ? (
+                <View style={[styles.draftThumb, { width: finalThumbW, height: finalThumbH }]}>
+                  <CreatorCanvas
+                    document={doc}
+                    page={doc.pages[0]}
+                    canvasWidth={finalThumbW}
+                    canvasHeight={finalThumbH}
+                    mode="view"
+                  />
+                  {/* Title overlay on thumbnail */}
+                  <View style={styles.thumbOverlay}>
+                    <Text style={styles.thumbOverlayText} numberOfLines={1}>{item.title}</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discovery + '20' : colors.bronze + '20' }]}>
+                  <Ionicons
+                    name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
+                    size={36}
+                    color={item.type === 'look' ? colors.discovery : colors.bronze}
+                  />
+                  <View style={styles.thumbOverlay}>
+                    <Text style={styles.thumbOverlayText} numberOfLines={1}>{item.title}</Text>
+                  </View>
+                </View>
+              )}
+            </Reanimated.View>
+          </Pressable>
+          <View style={styles.draftInfo}>
+            <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
+            <Text style={styles.draftMeta} numberOfLines={1}>
+              {item.type === 'look' ? 'Look' : 'Poster'} · {new Date(item.updatedAt).toLocaleDateString()}
+            </Text>
+            <View style={styles.statusRow}>
+              <View style={[styles.typeBadge, item.type === 'look' ? styles.typeBadgeLook : styles.typeBadgePoster]}>
+                <Text style={styles.typeBadgeText}>{item.type === 'look' ? 'Look' : 'Poster'}</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.actions}>
+            <Pressable
+              onPress={onDuplicate}
+              style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel={`Duplicate draft ${item.title}`}
+              accessibilityRole="button"
+            >
+              <Ionicons name="copy-outline" size={18} color={colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              onPress={onDelete}
+              style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel={`Delete draft ${item.title}`}
+              accessibilityRole="button"
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            </Pressable>
+          </View>
+        </View>
+      </SwipeableRow>
+    </Reanimated.View>
+  );
+}
+
+// ── Empty state with breathing icon ────────────────────────────────
+interface EmptyDraftsStateProps {
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  reduceMotion: boolean;
+  onCreate: () => void;
+}
+
+function EmptyDraftsState({ colors, styles, reduceMotion, onCreate }: EmptyDraftsStateProps) {
+  // Breathing animation: scale 1.0 → 1.05 → 1.0, loop, 2s
+  const breatheScale = useSharedValue(1);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    breatheScale.value = withRepeat(
+      withSpring(1.05, Motion.spring.lift),
+      -1,
+      true,
+    );
+  }, [breatheScale, reduceMotion]);
+
+  const breatheStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: breatheScale.value }],
+  }));
+
+  return (
+    <View style={styles.emptyState}>
+      <Reanimated.View style={breatheStyle}>
+        <Ionicons name="document-outline" size={56} color={colors.textMuted} />
+      </Reanimated.View>
+      <Text style={styles.emptyTitle}>No drafts yet</Text>
+      <Text style={styles.emptySubtext}>Create your first poster to see it here</Text>
+      <PressScale
+        onPress={onCreate}
+        style={styles.emptyCta}
+        accessibilityLabel="Create your first poster"
+        accessibilityRole="button"
+        scale={0.95}
+      >
+        <Text style={styles.emptyCtaText}>Create Poster</Text>
+      </PressScale>
+    </View>
+  );
+}
+
+// ── Delete confirmation ActionSheet ────────────────────────────────
+interface DeleteConfirmSheetProps {
+  draft: DraftMeta | null;
+  colors: ThemeColors;
+  reduceMotion: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }: DeleteConfirmSheetProps) {
+  const translateY = useSharedValue(400);
+  const backdropOpacity = useSharedValue(0);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    if (draft) {
+      mounted.current = true;
+      if (reduceMotion) {
+        translateY.value = 0;
+        backdropOpacity.value = 1;
+      } else {
+        translateY.value = withSpring(0, Motion.spring.entrance);
+        backdropOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
+      }
+    } else if (mounted.current) {
+      if (reduceMotion) {
+        translateY.value = 400;
+        backdropOpacity.value = 0;
+      } else {
+        translateY.value = withTiming(400, { duration: 180, easing: Easing.in(Easing.ease) });
+        backdropOpacity.value = withTiming(0, { duration: 160 });
+      }
+    }
+  }, [draft, reduceMotion, translateY, backdropOpacity]);
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }));
+
+  if (!draft && !mounted.current) return null;
+
+  return (
+    <View style={[StyleSheet.absoluteFill, { zIndex: 500 }]} pointerEvents={draft ? 'auto' : 'none'}>
+      <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityLabel="Cancel delete" accessibilityRole="button" />
+      </Reanimated.View>
+      <Reanimated.View
+        style={[
+          {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: Radius.xl,
+            borderTopRightRadius: Radius.xl,
+            paddingTop: Space.xs,
+            paddingBottom: Space.lg,
+            paddingHorizontal: Space.md,
+          },
+          sheetStyle,
+        ]}
+      >
+        <View style={{ alignItems: 'center', paddingVertical: Space.xs }}>
+          <View style={{ width: 32, height: 4, borderRadius: Radius.sm, backgroundColor: colors.borderSubtle }} />
+        </View>
+        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: colors.textPrimary, marginTop: Space.sm, textAlign: 'center' }}>
+          Delete this draft?
+        </Text>
+        <Text style={{ fontFamily: Typography.family.regular, fontSize: Type.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs, marginBottom: Space.md }}>
+          &ldquo;{draft?.title ?? ''}&rdquo; will be permanently deleted.
+        </Text>
+        <Pressable
+          onPress={onConfirm}
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.danger : colors.danger,
+            opacity: pressed ? 0.85 : 1,
+            paddingVertical: Space.md,
+            borderRadius: Radius.lg,
+            alignItems: 'center',
+            marginBottom: Space.sm,
+          })}
+          accessibilityLabel="Confirm delete"
+          accessibilityRole="button"
+        >
+          <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textInverse }}>
+            Delete
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={onCancel}
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
+            paddingVertical: Space.md,
+            borderRadius: Radius.lg,
+            alignItems: 'center',
+          })}
+          accessibilityLabel="Cancel"
+          accessibilityRole="button"
+        >
+          <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary }}>
+            Cancel
+          </Text>
+        </Pressable>
+      </Reanimated.View>
+    </View>
+  );
+}
+
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
@@ -556,6 +833,20 @@ function createStyles(colors: ThemeColors) {
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+  },
+  thumbOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: Space.xs,
+    paddingVertical: 3,
+  },
+  thumbOverlayText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    color: '#FFFFFF',
   },
   draftIcon: {
     borderRadius: Radius.lg,

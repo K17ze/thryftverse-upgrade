@@ -167,7 +167,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
     marginTop: Space.lg,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -183,7 +183,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
     minHeight: Control.hit + Space.sm + Space.xs,
-    gap: Space.sm + 4,
+    gap: Space.smMd,
   },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,

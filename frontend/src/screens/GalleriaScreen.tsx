@@ -833,8 +833,8 @@ function useStyles() {
           gap: Space.xs,
         },
         collectionAvatar: {
-          width: Space.sm + 4,
-          height: Space.sm + 4,
+          width: Space.smMd,
+          height: Space.smMd,
           borderRadius: Radius.full,
         } as ImageStyle,
         collectionCurator: {

@@ -5,7 +5,7 @@ import {
   safeValidateDocument,
 } from './composition';
 import type { LookCreateBody, LookCreateTag } from '../services/looksApi';
-import type { PosterStoryCreateBody } from '../services/postersApi';
+import type { PosterStoryCreateBody, PosterStickerType } from '../services/postersApi';
 import type { CreatorStoryCreateFrame } from './publishTypes';
 
 // ── Schema version strategy ───────────────────────────────────────
@@ -266,19 +266,66 @@ export function serialiseToPosterPayload(doc: CreatorDocument): {
 // ── Helpers ───────────────────────────────────────────────────────
 function mapLayerTypeToStickerType(
   type: string,
-): 'text' | 'mention' | 'listing' | 'look' | 'style_vote' {
+): PosterStickerType {
   switch (type) {
     case 'text': return 'text';
     case 'mention': return 'mention';
     case 'product': return 'listing';
     case 'look': return 'look';
     case 'vote': return 'style_vote';
+    case 'quiz': return 'quiz';
+    case 'question': return 'question';
+    case 'emojiSlider': return 'poll';
+    case 'countdown': return 'countdown';
+    // Decorative/non-interactive layers that don't have a backend sticker type
+    // are serialised as 'text' so the backend accepts them. The full
+    // compositionDocument preserves the original type for WYSIWYG rendering.
     default: return 'text';
   }
 }
 
 function extractStickerPayload(layer: CreatorLayer): Record<string, unknown> {
-  return layer.payload as Record<string, unknown>;
+  const p = layer.payload as Record<string, unknown>;
+  switch (layer.type) {
+    case 'question': {
+      // Creator uses `prompt`; backend expects `question`
+      return { question: p.prompt ?? p.question };
+    }
+    case 'countdown': {
+      // Creator uses `endDateTime`; backend expects `targetDate`
+      return {
+        label: p.label,
+        targetDate: p.endDateTime ?? p.targetDate,
+        endLabel: p.endLabel,
+      };
+    }
+    case 'emojiSlider': {
+      // Emoji slider maps to poll — synthesize two options from the slider
+      return {
+        question: p.question,
+        options: [
+          { id: 'low', label: '😐' },
+          { id: 'high', label: p.emoji ?? '😍' },
+        ],
+      };
+    }
+    case 'quiz': {
+      // Only send fields the backend contract accepts
+      return {
+        question: p.question,
+        options: p.options,
+        correctOptionId: p.correctOptionId,
+      };
+    }
+    case 'vote': {
+      return {
+        question: p.question,
+        options: p.options,
+      };
+    }
+    default:
+      return p;
+  }
 }
 
 // ── Duplicate submission guard ─────────────────────────────────────

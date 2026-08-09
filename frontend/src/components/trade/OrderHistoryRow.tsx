@@ -214,7 +214,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,

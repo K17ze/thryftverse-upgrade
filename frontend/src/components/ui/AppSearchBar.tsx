@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type , Typography  } from '../../theme/designTokens';
+import { Space, Radius, Type , Typography, Control, Stroke  } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface AppSearchBarProps {
@@ -63,6 +63,8 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
         <AnimatedPressable
           onPress={handleClear}
           hapticFeedback="light"
+          scaleValue={0.96}
+          activeOpacity={0.65}
           accessibilityLabel="Clear search"
           accessibilityRole="button"
         >
@@ -79,15 +81,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: 0,
     borderColor: 'transparent',
-    paddingHorizontal: Space.sm + Space.xs,
+    paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.xs + Space.xs,
+    gap: Space.sm,
+    minHeight: Control.hit,
   },
   containerFocused: {
+    borderWidth: Stroke.standard,
     borderColor: colors.textSecondary,
   },
   input: {

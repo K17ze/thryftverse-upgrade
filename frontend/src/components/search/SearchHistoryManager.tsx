@@ -197,7 +197,7 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: Type.subtitle.letterSpacing,
     },
     doneBtn: {
-      paddingHorizontal: Space.sm + 4,
+      paddingHorizontal: Space.smMd,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,

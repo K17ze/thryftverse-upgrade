@@ -18,9 +18,12 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { getAllLayersSorted } from './composition';
 import { SheetContainer, PressScale } from './CreatorAnimations';
+import { SwipeableRow } from '../components/SwipeableRow';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import type { CreatorLayer } from './composition';
+import { getLayerAccentColor } from '../components/poster/shared/layerAccents';
 
 export interface CreatorLayersSheetProps {
   visible: boolean;
@@ -76,13 +79,20 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
   const dragY = useSharedValue(0);
   const dragStartIndex = useRef(-1);
 
+  // Haptic: light on sheet open
+  useEffect(() => {
+    if (visible) {
+      haptic.light();
+    }
+  }, [visible, haptic]);
+
   const handleExitReorder = useCallback(() => {
     setDraggingId(null);
     setReorderMode(false);
   }, []);
 
   const handleLongPressRow = useCallback((id: string) => {
-    haptic.medium();
+    haptic.light();
     setReorderMode(true);
     setDraggingId(id);
     const idx = layers.findIndex((l) => l.id === id);
@@ -107,7 +117,10 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     haptic.selection();
     setDraggingId(id);
     if (!reduceMotion) {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      LayoutAnimation.configureNext({
+        duration: 300,
+        update: { type: LayoutAnimation.Types.easeInEaseOut },
+      });
     }
     reorderLayer(id, dir);
   }, [haptic, reorderLayer, reduceMotion]);
@@ -118,6 +131,23 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
   }, [haptic, toggleLayerVisibility]);
 
   const handleLock = useCallback((id: string) => {
+    haptic.light();
+    toggleLayerLock(id);
+  }, [haptic, toggleLayerLock]);
+
+  const handleQuickDelete = useCallback((id: string) => {
+    haptic.warning();
+    if (!reduceMotion) {
+      LayoutAnimation.configureNext({
+        duration: 250,
+        update: { type: LayoutAnimation.Types.easeInEaseOut },
+        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      });
+    }
+    removeLayer(id);
+  }, [haptic, reduceMotion, removeLayer]);
+
+  const handleQuickLock = useCallback((id: string) => {
     haptic.light();
     toggleLayerLock(id);
   }, [haptic, toggleLayerLock]);
@@ -141,7 +171,11 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
       if (!layer) return;
       setOverflowLayer(null);
       if (!reduceMotion) {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        LayoutAnimation.configureNext({
+          duration: 300,
+          update: { type: LayoutAnimation.Types.easeInEaseOut },
+          delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+        });
       }
       switch (action) {
         case 'front':
@@ -174,7 +208,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
       .onEnd((e) => {
         const step = ROW_HEIGHT + ROW_GAP;
         const deltaRows = Math.round(e.translationY / step);
-        runOnJS(haptic.light)();
+        runOnJS(haptic.medium)();
         dragY.value = withSpring(0, spring.press);
         runOnJS(setDraggingId)(null);
         runOnJS(setReorderMode)(false);
@@ -195,9 +229,15 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
               const doStep = () => {
                 if (count >= steps) return;
                 count += 1;
+                if (!reduceMotion) {
+                  LayoutAnimation.configureNext({
+                    duration: 200,
+                    update: { type: LayoutAnimation.Types.easeInEaseOut },
+                  });
+                }
                 reorderLayer(layerId, dir as 'forward' | 'backward');
                 if (count < steps) {
-                  setTimeout(doStep, 30);
+                  setTimeout(doStep, 16);
                 }
               };
               doStep();
@@ -259,6 +299,8 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
                 onReorder={handleReorder}
                 onVisibility={handleVisibility}
                 onLock={handleLock}
+                onQuickDelete={handleQuickDelete}
+                onQuickLock={handleQuickLock}
                 onOverflow={openOverflow}
                 panGesture={panGesture}
               />
@@ -295,6 +337,8 @@ interface LayerRowProps {
   onReorder: (id: string, dir: 'forward' | 'backward') => void;
   onVisibility: (id: string) => void;
   onLock: (id: string) => void;
+  onQuickDelete: (id: string) => void;
+  onQuickLock: (id: string) => void;
   onOverflow: (layer: CreatorLayer) => void;
   panGesture?: ReturnType<typeof Gesture.Pan>;
 }
@@ -314,9 +358,23 @@ function LayerRow({
   onReorder,
   onVisibility,
   onLock,
+  onQuickDelete,
+  onQuickLock,
   onOverflow,
   panGesture,
 }: LayerRowProps) {
+  // Thumbnail spring scale on appearance
+  const thumbScale = useSharedValue(reduceMotion ? 1 : 0.8);
+  useEffect(() => {
+    if (!reduceMotion) {
+      thumbScale.value = withSpring(1, Motion.spring.tap);
+    }
+  }, [thumbScale, reduceMotion]);
+
+  const thumbAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: thumbScale.value }],
+  }));
+
   const rowAnimatedStyle = useAnimatedStyle(() => {
     if (!dragY || reduceMotion) {
       return { transform: [{ translateY: 0 }], opacity: 1, zIndex: 0, elevation: 0 };
@@ -336,6 +394,7 @@ function LayerRow({
         {
           backgroundColor: colors.surface,
           borderColor: isSelected && !reorderMode ? colors.brand : colors.borderSubtle,
+          opacity: layer.locked ? 0.5 : (layer.hidden ? 0.3 : 1),
         },
         isDragging && styles.layerRowDragging,
       ]}
@@ -367,25 +426,33 @@ function LayerRow({
         accessibilityRole="button"
         hitSlop={8}
       >
-        <View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` }, layer.hidden && styles.thumbnailHidden]}>
+        <Reanimated.View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` }, layer.hidden && styles.thumbnailHidden, thumbAnimatedStyle]}>
           {thumbSource ? (
             <ExpoImage source={thumbSource} style={styles.thumbnailImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={thumbSource.uri} enforceEarlyResizing />
           ) : (
-            <Ionicons name={LAYER_ICONS[layer.type]} size={20} color={layer.hidden ? colors.textMuted : getLayerColor(layer.type, colors)} />
+            <Ionicons name={LAYER_ICONS[layer.type]} size={20} color={layer.hidden ? colors.textMuted : getLayerAccentColor(layer.type)} />
           )}
           {layer.type === 'media' && layer.payload.mediaType === 'video' && (
             <View style={[styles.videoBadge, { backgroundColor: colors.overlay }]}>
               <Ionicons name="play" size={10} color={colors.textInverse} />
             </View>
           )}
-        </View>
+          {layer.locked && (
+            <View style={[styles.lockBadge, { backgroundColor: colors.surfaceElevated }]}>
+              <Ionicons name="lock-closed" size={10} color={colors.warning} />
+            </View>
+          )}
+        </Reanimated.View>
         <View style={styles.layerInfo}>
-          <Text
-            style={[styles.layerName, { color: colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
-            numberOfLines={1}
-          >
-            {getLayerDisplayName(layer)}
-          </Text>
+          <View style={styles.layerNameRow}>
+            <Ionicons name={LAYER_ICONS[layer.type]} size={16} color={getLayerAccentColor(layer.type)} />
+            <Text
+              style={[styles.layerName, { color: colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
+              numberOfLines={1}
+            >
+              {getLayerDisplayName(layer)}
+            </Text>
+          </View>
           <Text style={[styles.layerType, { color: colors.textMuted }]} numberOfLines={1}>
             {layer.type}
           </Text>
@@ -472,13 +539,40 @@ function LayerRow({
     </View>
   );
 
-  if (panGesture) {
+  // In reorder mode: use GestureDetector for drag-to-reorder.
+  // In normal mode: wrap in SwipeableRow for quick delete (left swipe)
+  // and quick lock/unlock (right swipe).
+  if (reorderMode && panGesture) {
     return (
       <GestureDetector gesture={panGesture}>
         <Reanimated.View style={[rowAnimatedStyle]}>
           {rowContent}
         </Reanimated.View>
       </GestureDetector>
+    );
+  }
+
+  if (!reorderMode) {
+    return (
+      <SwipeableRow
+        accessibilityLabel={`Layer ${getLayerDisplayName(layer)}${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
+        accessibilityHint="Swipe left to delete, swipe right to lock. Double tap to select."
+        leftAction={{
+          icon: layer.locked ? 'lock-open-outline' : 'lock-closed',
+          label: layer.locked ? 'Unlock' : 'Lock',
+          onPress: () => onQuickLock(layer.id),
+          color: colors.commerceTrust,
+        }}
+        rightAction={{
+          icon: 'trash-outline',
+          label: 'Delete',
+          onPress: () => onQuickDelete(layer.id),
+          color: colors.danger,
+        }}
+        swipeThreshold={80}
+      >
+        {rowContent}
+      </SwipeableRow>
     );
   }
 
@@ -515,7 +609,7 @@ function LayerOverflowActionSheet({
         translateY.value = 0;
         backdropOpacity.value = 1;
       } else {
-        translateY.value = withSpring(0, { damping: 22, stiffness: 180, mass: 1.0 });
+        translateY.value = withSpring(0, Motion.spring.entrance);
         backdropOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
       }
     } else if (mounted.current) {
@@ -870,14 +964,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  lockBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: Radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   layerInfo: {
     flex: 1,
     justifyContent: 'center',
     gap: 2,
   },
+  layerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   layerName: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
+    flex: 1,
   },
   layerType: {
     fontFamily: Typography.family.regular,

@@ -5,12 +5,18 @@ import {
   Text,
   TextInput,
   ScrollView,
-  Animated,
   Dimensions,
   ActivityIndicator,
-  Pressable,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+} from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
@@ -18,6 +24,12 @@ import { getListingCoverUri } from '../../utils/media';
 import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 import { KeyboardAwareScrollView } from '../../platform/keyboard/KeyboardProvider';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
+
+/** Spring config shape returned by useMotionConfig().spring.* */
+type SpringConfig = { damping: number; stiffness: number; mass: number };
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.55;
@@ -54,9 +66,16 @@ export default function DetailsDrawer({
   currentUserId,
 }: DetailsDrawerProps) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
+  const { spring, isEnabled } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const translateY = React.useRef(new Animated.Value(DRAWER_HEIGHT)).current;
-  const backdropOpacity = React.useRef(new Animated.Value(0)).current;
+
+  // Reanimated shared values for spring slide-up + backdrop fade
+  const translateYSV = useSharedValue(DRAWER_HEIGHT);
+  const backdropOpacitySV = useSharedValue(0);
+  const closeBtnScaleSV = useSharedValue(1);
+  const closeBtnOpacitySV = useSharedValue(0);
 
   const marketplaceListings = React.useMemo(
     () => (currentUserId ? listings.filter((l) => l.sellerId !== currentUserId) : listings),
@@ -65,33 +84,61 @@ export default function DetailsDrawer({
 
   React.useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          friction: 8,
-        }),
-        Animated.timing(backdropOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // Spring slide-up entrance
+      translateYSV.value = withSpring(0, spring.entrance as SpringConfig);
+      backdropOpacitySV.value = withTiming(1, { duration: 200 });
+      // Staggered close button appearance
+      closeBtnOpacitySV.value = withDelay(
+        100,
+        withTiming(1, { duration: 150 })
+      );
     } else {
-      Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: DRAWER_HEIGHT,
-          useNativeDriver: true,
-          friction: 8,
-        }),
-        Animated.timing(backdropOpacity, {
-          toValue: 0,
-          duration: 150,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // Spring slide-down exit
+      translateYSV.value = withSpring(DRAWER_HEIGHT, spring.entrance as SpringConfig);
+      backdropOpacitySV.value = withTiming(0, { duration: 150 });
+      closeBtnOpacitySV.value = withTiming(0, { duration: 100 });
     }
-  }, [visible]);
+  }, [visible, translateYSV, backdropOpacitySV, closeBtnOpacitySV, spring]);
+
+  const drawerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateYSV.value }],
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacitySV.value,
+  }));
+
+  const closeBtnStyle = useAnimatedStyle(() => ({
+    opacity: closeBtnOpacitySV.value,
+    transform: [{ scale: closeBtnScaleSV.value }],
+  }));
+
+  const handleClosePressIn = () => {
+    if (isEnabled) {
+      closeBtnScaleSV.value = withSpring(0.9, spring.press as SpringConfig);
+    }
+  };
+
+  const handleClosePressOut = () => {
+    if (isEnabled) {
+      closeBtnScaleSV.value = withSpring(1, spring.press as SpringConfig);
+    }
+  };
+
+  const handleListingSelect = (id: string) => {
+    haptic.selection();
+    onListingSelect(id);
+  };
+
+  const handleExpiryChange = (h: number) => {
+    haptic.selection();
+    onExpiryChange(h);
+  };
+
+  const handlePublish = () => {
+    haptic.medium();
+    onPublish();
+  };
 
   const renderListingCard = (item: Listing) => {
     const selected = item.id === selectedListingId;
@@ -99,7 +146,7 @@ export default function DetailsDrawer({
       <AnimatedPressable
         key={item.id}
         style={[styles.listingCard, selected && styles.listingCardSelected]}
-        onPress={() => onListingSelect(item.id)}
+        onPress={() => handleListingSelect(item.id)}
         scaleValue={0.96}
         activeOpacity={0.85}
         hapticFeedback="selection"
@@ -127,11 +174,16 @@ export default function DetailsDrawer({
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
-      {/* Backdrop */}
-      <Animated.View
-        style={[styles.backdrop, { opacity: backdropOpacity }]}
+      {/* Backdrop — BlurView for true glassmorphism depth */}
+      <Reanimated.View
+        style={[styles.backdrop, backdropStyle]}
         pointerEvents={visible ? 'auto' : 'none'}
       >
+        <BlurView
+          intensity={40}
+          tint="dark"
+          style={StyleSheet.absoluteFill}
+        />
         <AnimatedPressable
           style={StyleSheet.absoluteFill}
           onPress={onClose}
@@ -140,13 +192,13 @@ export default function DetailsDrawer({
           accessibilityLabel="Close details drawer"
           accessibilityRole="button"
         />
-      </Animated.View>
+      </Reanimated.View>
 
-      {/* Drawer */}
-      <Animated.View
+      {/* Drawer — spring slide-up from bottom */}
+      <Reanimated.View
         style={[
           styles.drawer,
-          { transform: [{ translateY }] },
+          drawerStyle,
         ]}
       >
         <View style={styles.keyboardWrap}>
@@ -154,6 +206,23 @@ export default function DetailsDrawer({
           <View style={styles.handleRow}>
             <View style={styles.handle} />
           </View>
+
+          {/* Close button — spring scale feedback, top-right */}
+          <Reanimated.View style={[styles.closeBtnWrap, closeBtnStyle]}>
+            <AnimatedPressable
+              style={styles.closeBtn}
+              onPress={onClose}
+              onPressIn={handleClosePressIn}
+              onPressOut={handleClosePressOut}
+              scaleValue={0.9}
+              activeOpacity={0.85}
+              hapticFeedback="light"
+              accessibilityLabel="Close details drawer"
+              accessibilityRole="button"
+            >
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </AnimatedPressable>
+          </Reanimated.View>
 
           <KeyboardAwareScrollView
             showsVerticalScrollIndicator={false}
@@ -183,7 +252,7 @@ export default function DetailsDrawer({
                       styles.expiryPill,
                       expiryHours === h && styles.expiryPillActive,
                     ]}
-                    onPress={() => onExpiryChange(h)}
+                    onPress={() => handleExpiryChange(h)}
                     scaleValue={0.95}
                     activeOpacity={0.85}
                     hapticFeedback="selection"
@@ -226,7 +295,7 @@ export default function DetailsDrawer({
             {/* Publish */}
             <AnimatedPressable
               style={[styles.publishBtn, isPublishing && styles.publishBtnDisabled]}
-              onPress={onPublish}
+              onPress={handlePublish}
               disabled={isPublishing}
               scaleValue={0.97}
               activeOpacity={0.85}
@@ -250,7 +319,7 @@ export default function DetailsDrawer({
             </AnimatedPressable>
           </KeyboardAwareScrollView>
         </View>
-      </Animated.View>
+      </Reanimated.View>
     </View>
   );
 }
@@ -259,7 +328,6 @@ function createStyles(colors: any) {
   return StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   drawer: {
     position: 'absolute',
@@ -285,6 +353,20 @@ function createStyles(colors: any) {
     height: 4,
     borderRadius: Radius.sm,
     backgroundColor: colors.border,
+  },
+  // Close button — positioned top-right, transparent 44pt hit target
+  closeBtnWrap: {
+    position: 'absolute',
+    top: 8,
+    right: Space.sm,
+    zIndex: 10,
+  },
+  closeBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     paddingHorizontal: Space.md,

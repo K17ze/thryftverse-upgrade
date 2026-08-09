@@ -22,6 +22,8 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   FadeInDown,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from '../components/compat/Video';
@@ -34,13 +36,16 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchPosterStories } from '../services/postersApi';
 import type { PosterStory } from '../services/postersApi';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
-import { NativeStackNavigationProp, RootStackParamList } from '../navigation/types';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useTabScroll } from '../context/TabScrollContext';
 // Phase 3: Removed AnimatedBadge (badge clutter reduced)
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -52,6 +57,7 @@ import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile'
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { MasonryGrid, ProductCardV2 } from '../components/ProductCardV2';
 import { DoubleTapHeart } from '../components/DoubleTapHeart';
+import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Type, Stroke } from '../theme/designTokens';
@@ -93,10 +99,6 @@ const GRID_GAP = 12; // 12pt — breathable discovery gutter (flagship spacing)
 const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
 const POSTER_CARD_WIDTH = 76;
 const POSTER_CARD_HEIGHT = 135;
-// Instagram-style gradient ring for unseen story cards.
-const STORY_GRADIENT_RING = ['#F58529', '#DD2A7B', '#8134AF', '#515BD4'] as const;
-// Ring thickness around story cards (matches Instagram ~2.5pt).
-const STORY_RING_PADDING = 2.5;
 const LISTING_CARD_CHROME_HEIGHT = 110;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -164,6 +166,15 @@ function MediaPreview({
   );
 }
 
+type StoryStatus = 'new-listing' | 'live-auction' | 'co-own-launching' | 'sold-recently';
+
+const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
+  'new-listing': 'new listing',
+  'live-auction': 'auction',
+  'co-own-launching': 'co-own launch',
+  'sold-recently': 'sold recently',
+};
+
 // Trend clips removed — demo-only content, not real data
 
 type ExploreTile = {
@@ -179,6 +190,17 @@ type ExploreTile = {
   caption: string;
   category?: string;
   aspectRatio: number;
+  isSaved?: boolean;
+};
+
+type StoryBubble = {
+  id: string;
+  userId: string;
+  username: string;
+  avatar: string;
+  posterId?: string;
+  isNew: boolean;
+  status: StoryStatus;
   isSaved?: boolean;
 };
 
@@ -314,7 +336,6 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
     <View style={[styles.exploreItemBox, { width: tileWidth }]}>
       <AnimatedPressable
         style={[styles.exploreMediaWrap, { height: mediaHeight }]}
-        activeOpacity={0.92}
         onPress={() => onPress(item.routeId)}
         onLongPress={() => onLongPress(item)}
         accessibilityLabel={`${item.caption}, ${formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}`}
@@ -360,7 +381,6 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
           <AnimatedPressable
             style={styles.exploreSellerChip}
             onPress={() => item.sellerId && onPressSellerProfile(item.sellerId)}
-            activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={sellerUsername ? `Seller: @${sellerUsername}` : 'Open seller profile'}
           >
@@ -382,7 +402,6 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
           <AnimatedPressable
             style={styles.exploreMessageBtn}
             onPress={() => item.sellerId && item.routeId && onPressSellerMessage(item.sellerId, item.routeId)}
-            activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Message seller"
           >
@@ -405,6 +424,7 @@ export default function HomeScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
+  const { spring } = useMotionConfig();
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
   const followingFeed = useFollowingFeed();
   const forYouFeed = useForYouFeed();
@@ -416,6 +436,8 @@ export default function HomeScreen() {
 
   const scrollY = useSharedValue(0);
   const lastScrollY = useSharedValue(0);
+  // Crossfade opacity for feed content on tab switch (120ms = Motion.duration.fast).
+  const feedOpacity = useSharedValue(1);
   const { tabBarVisible } = useTabScroll();
   const scrollRef = React.useRef<any>(null);
   const knownListingIdsRef = React.useRef<Set<string>>(new Set());
@@ -425,11 +447,29 @@ export default function HomeScreen() {
   const headerExpandedHeight = React.useMemo(() => HEADER_EXPANDED + insets.top, [insets.top]);
   const headerCollapsedHeight = React.useMemo(() => HEADER_COLLAPSED + insets.top, [insets.top]);
 
+  // Spring-driven header height — settles towards the scroll-derived target
+  // with physics instead of tracking it linearly. This gives the collapse a
+  // natural, flagship feel (AGENTS.md §4 motion language) while still snapping
+  // to the expanded/collapsed edges via the spring's damping.
+  const headerHeightSV = useSharedValue(headerExpandedHeight);
+
   useScrollToTop(scrollRef);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
+
+      // Spring the header towards the scroll-derived target height. The spring
+      // is triggered from the scroll worklet so a new animation is only created
+      // when the target actually changes — Reanimated coalesces concurrent
+      // springs on the same shared value, so this remains performant.
+      const targetHeight = interpolate(
+        e.contentOffset.y,
+        [0, 120],
+        [headerExpandedHeight, headerCollapsedHeight],
+        Extrapolation.CLAMP,
+      );
+      headerHeightSV.value = withSpring(targetHeight, spring.entrance);
 
       if (e.contentOffset.y > lastScrollY.value + 5 && e.contentOffset.y > 80) {
         tabBarVisible.value = false;
@@ -442,14 +482,7 @@ export default function HomeScreen() {
   });
 
   const headerHeightStyle = useAnimatedStyle(() => {
-    const height = interpolate(
-      scrollY.value,
-      [0, 120],
-      [headerExpandedHeight, headerCollapsedHeight],
-      Extrapolation.CLAMP,
-    );
-
-    return { height };
+    return { height: headerHeightSV.value };
   });
 
   const headerTitleStyle = useAnimatedStyle(() => {
@@ -581,6 +614,16 @@ export default function HomeScreen() {
     return () => { mounted = false; };
   }, []);
 
+  const feedStatus = React.useMemo(
+    () =>
+      getBackendSyncStatus({
+        isSyncing,
+        source,
+        hasError: Boolean(lastError),
+      }),
+    [isSyncing, lastError, source],
+  );
+
   const showFeedLoadingSkeleton = isSyncing && !lastError;
 
   const gridTileWidth = React.useMemo(
@@ -694,6 +737,22 @@ export default function HomeScreen() {
     }
   }, [feedGridData.length, feedMode]);
 
+  // Crossfade the feed content when the active tab changes. The opacity dips
+  // to 0 then returns to 1 over Motion.duration.fast (120ms) so the content
+  // swap reads as a smooth fade rather than an instant cut. Reduced-motion
+  // users get an instant swap (duration 0).
+  React.useEffect(() => {
+    feedOpacity.value = 0;
+    feedOpacity.value = withTiming(1, {
+      duration: reducedMotionEnabled ? 0 : Motion.duration.fast,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedMode]);
+
+  const feedOpacityStyle = useAnimatedStyle(() => ({
+    opacity: feedOpacity.value,
+  }));
+
   const closePeek = React.useCallback(() => {
     setPeekItem(null);
   }, []);
@@ -704,15 +763,6 @@ export default function HomeScreen() {
         <View style={styles.postersSection}>
           <View style={styles.posterSectionHeading}>
             <Text style={styles.posterSectionTitle}>Posters</Text>
-            <Pressable
-              style={styles.posterHeaderCameraBtn}
-              onPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
-              accessibilityRole="button"
-              accessibilityLabel="Create poster with camera"
-              accessibilityHint="Opens camera to create a new poster"
-            >
-              <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
-            </Pressable>
           </View>
           <HorizontalRail contentContainerStyle={styles.postersScroll}>
             {Array.from({ length: 4 }).map((_, index) => (
@@ -734,41 +784,13 @@ export default function HomeScreen() {
       <View style={styles.postersSection}>
         <View style={styles.posterSectionHeading}>
           <Text style={styles.posterSectionTitle}>Posters</Text>
-          <Pressable
-            style={styles.posterHeaderCameraBtn}
-            onPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
-            accessibilityRole="button"
-            accessibilityLabel="Create poster with camera"
-            accessibilityHint="Opens camera to create a new poster"
-          >
-            <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
-          </Pressable>
         </View>
 
         <HorizontalRail
           contentContainerStyle={styles.postersScroll}
         >
-          <AnimatedPressable
-            key="poster-create"
-            style={styles.posterCreateCard}
-            activeOpacity={0.9}
-            onPress={() => { haptic.light(); navigation.navigate('CreateCamera', { mode: 'poster' }); }}
-            accessibilityRole="button"
-            accessibilityLabel="Create poster with camera"
-            accessibilityHint="Opens camera to create a new poster"
-          >
-            <View style={styles.posterCreateTile}>
-              <View style={styles.posterCreateDashed}>
-                <Ionicons name="camera" size={28} color={colors.brand} />
-              </View>
-              <View style={styles.posterCreatePlusBadge}>
-                <Ionicons name="add" size={14} color="#fff" />
-              </View>
-            </View>
-            <Text style={styles.posterCreateLabel} numberOfLines={1}>Your Poster</Text>
-          </AnimatedPressable>
           {(() => {
-            // Sort posters: unwatched-first, then watched
+            // Sort stories: unwatched-first, then watched
             const sortedPosters = [...realPosters].sort((a, b) => {
               if (a.seenByViewer === b.seenByViewer) return 0;
               return a.seenByViewer ? 1 : -1;
@@ -776,53 +798,44 @@ export default function HomeScreen() {
             const unwatchedCount = realPosters.filter((s) => !s.seenByViewer).length;
             return sortedPosters.map((story, idx) => {
             const isUnwatched = !story.seenByViewer;
-            // Show unwatched badge on the first unwatched poster
+            // Show unwatched badge on the first unwatched story
             const showUnwatchedBadge = isUnwatched && idx === 0 && unwatchedCount > 1;
             return (
             <AnimatedPressable
               key={story.id}
               style={styles.posterCard}
-              activeOpacity={0.9}
               onPress={() => { haptic.light(); navigation.navigate('PosterViewer', { storyId: story.id }); }}
               accessibilityRole="button"
-              accessibilityLabel={`Open poster by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
-              accessibilityHint="Opens poster viewer"
+              accessibilityLabel={`Open poster story by @${story.creator.username ?? story.creatorId}${isUnwatched ? ', new' : ''}`}
+              accessibilityHint="Opens poster story viewer"
             >
-              <View
-                style={[
-                  styles.posterRingOuter,
-                  isUnwatched ? styles.posterRingOuterUnseen : styles.posterRingOuterSeen,
-                ]}
-              >
-                {isUnwatched && (
-                  <LinearGradient
-                    colors={STORY_GRADIENT_RING}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.posterRingGradient}
+              <View style={[styles.posterTile, isUnwatched ? styles.posterTileUnseen : styles.posterTileSeen, isUnwatched && styles.posterTileRing]}>
+                <PosterStoryArtwork story={story} />
+                <View style={styles.posterShade} />
+
+                <View style={styles.posterCreatorOverlay}>
+                  <Text style={styles.posterCreatorName} numberOfLines={1}>
+                    @{story.creator.username ?? story.creatorId}
+                  </Text>
+                  <View
+                    style={isUnwatched ? styles.posterFreshDot : styles.posterSeenDot}
+                    accessible={false}
                   />
-                )}
-                <View style={styles.posterRingInner}>
-                  <PosterStoryArtwork story={story} />
-                  <View style={styles.posterShade} />
-
-                  {story.totalFrameCount > 1 && (
-                    <View style={styles.frameCountBadge} accessible={false}>
-                      <Ionicons name="layers" size={10} color={colors.textInverse} />
-                      <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
-                    </View>
-                  )}
-
-                  {showUnwatchedBadge && (
-                    <View style={styles.unwatchedBadge} accessible={false}>
-                      <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
-                    </View>
-                  )}
                 </View>
+
+                {story.totalFrameCount > 1 && (
+                  <View style={styles.frameCountBadge} accessible={false}>
+                    <Ionicons name="layers" size={10} color={colors.textInverse} />
+                    <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
+                  </View>
+                )}
+
+                {showUnwatchedBadge && (
+                  <View style={styles.unwatchedBadge} accessible={false}>
+                    <Text style={styles.unwatchedBadgeText}>{unwatchedCount} new</Text>
+                  </View>
+                )}
               </View>
-              <Text style={styles.posterCardLabel} numberOfLines={1}>
-                @{story.creator.username ?? story.creatorId}
-              </Text>
             </AnimatedPressable>
             );
             });
@@ -929,34 +942,10 @@ export default function HomeScreen() {
           <View style={styles.headerRight}>
             <AnimatedPressable
               style={styles.headerBtn}
-              onPress={() => navigation.navigate('Galleria')}
-              accessibilityLabel="Galleria"
-              accessibilityRole="button"
-              accessibilityHint="Opens curated Co-Own collections"
-              activeOpacity={0.58}
-              scaleValue={0.94}
-            >
-              <Ionicons name="grid-outline" size={22} color={colors.textPrimary} />
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.headerBtn}
-              onPress={() => navigation.navigate('AuctionHome')}
-              accessibilityLabel="Auctions"
-              accessibilityRole="button"
-              accessibilityHint="Opens live and upcoming auctions"
-              activeOpacity={0.58}
-              scaleValue={0.94}
-            >
-              <Ionicons name="hammer-outline" size={22} color={colors.textPrimary} />
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.headerBtn}
               onPress={() => navigation.navigate('Sell')}
               accessibilityLabel="List an item"
               accessibilityRole="button"
               accessibilityHint="Opens sell listing flow"
-              activeOpacity={0.58}
-              scaleValue={0.94}
             >
               <Ionicons name="add" size={24} color={colors.textPrimary} />
             </AnimatedPressable>
@@ -966,8 +955,6 @@ export default function HomeScreen() {
               accessibilityLabel="Search listings"
               accessibilityRole="button"
               accessibilityHint="Opens global search"
-              activeOpacity={0.58}
-              scaleValue={0.94}
             >
               <Ionicons name="search" size={22} color={colors.textPrimary} />
             </AnimatedPressable>
@@ -977,8 +964,6 @@ export default function HomeScreen() {
               accessibilityLabel={notificationCount > 0 ? `Notifications, ${notificationCount} unread` : 'Notifications'}
               accessibilityRole="button"
               accessibilityHint="Opens notifications center"
-              activeOpacity={0.58}
-              scaleValue={0.94}
             >
               <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
@@ -993,6 +978,7 @@ export default function HomeScreen() {
         </View>
       </Reanimated.View>
 
+      <Reanimated.View style={[styles.feedShell, feedOpacityStyle]}>
       <AnimatedFlashList
         ref={scrollRef}
         data={feedGridData}
@@ -1065,8 +1051,6 @@ export default function HomeScreen() {
                         setFeedMode(option);
                       }
                     }}
-                    activeOpacity={0.68}
-                    scaleValue={0.98}
                     accessibilityRole="tab"
                     accessibilityLabel={option === 'foryou'
                       ? 'For you feed'
@@ -1102,6 +1086,8 @@ export default function HomeScreen() {
                     }
                     ctaLabel={followingFeed.hasFollowing ? 'Refresh' : 'Discover sellers'}
                     onCtaPress={followingFeed.hasFollowing ? () => void handleRefresh() : () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                    secondaryCtaLabel={followingFeed.hasFollowing ? 'Explore all' : undefined}
+                    onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
                   />
                 </Reanimated.View>
               ) : (
@@ -1116,6 +1102,8 @@ export default function HomeScreen() {
                     subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
                     ctaLabel="Browse all"
                     onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                    secondaryCtaLabel="Refresh"
+                    onSecondaryCtaPress={() => void handleRefresh()}
                   />
                 </Reanimated.View>
               )
@@ -1125,7 +1113,7 @@ export default function HomeScreen() {
         ListFooterComponent={
           isLoadingMore ? (
             <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-              <Text style={{ color: colors.textMuted, fontSize: Type.captionElevated.size }}>Loading more...</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading more...</Text>
             </View>
           ) : null
         }
@@ -1133,12 +1121,14 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="transparent"
-            colors={['transparent']}
-            progressBackgroundColor="transparent"
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            titleColor={colors.textMuted}
+            progressBackgroundColor={colors.background}
           />
         }
       />
+      </Reanimated.View>
 
       <Modal
         transparent
@@ -1223,6 +1213,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  feedShell: {
+    flex: 1,
+  },
   floatingHeaderShell: {
     position: 'absolute',
     top: 0,
@@ -1245,11 +1238,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingRight: 10,
   },
   brandTitle: {
-    fontSize: Type.priceList.size,
+    fontSize: 20,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.35,
     color: colors.textPrimary,
     lineHeight: 26,
+  },
+  brandSubtitle: {
+    marginTop: 2,
+    fontSize: 11,
+    fontFamily: Typography.family.regular,
+    letterSpacing: 0.25,
+    color: colors.textSecondary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1277,7 +1277,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   notificationBadgeText: {
     color: colors.textInverse,
-    fontSize: Type.meta.size,
+    fontSize: 10,
     fontFamily: 'Inter_700Bold',
     lineHeight: 12,
   },
@@ -1364,11 +1364,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   newListingsBannerIconWrap: {
     width: 14,
     height: 14,
-    borderRadius: Radius.md,
+    borderRadius: 7,
     backgroundColor: 'transparent',
   },
   newListingsBannerText: {
-    fontSize: Type.caption.size,
+    fontSize: 12,
     fontFamily: Typography.family.semibold,
     color: colors.background,
     letterSpacing: 0.2,
@@ -1382,16 +1382,210 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 16,
   },
   sectionTitle: {
-    fontSize: Type.subtitle.size,
+    fontSize: 17,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     letterSpacing: -0.1,
   },
   sectionHint: {
-    fontSize: Type.meta.size,
+    fontSize: 11,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     letterSpacing: 0.22,
+  },
+
+  storiesSection: {
+    paddingTop: 6,
+    paddingBottom: 10,
+  },
+  storiesScroll: {
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  storyCreateWrap: {
+    alignItems: 'center',
+    width: 68,
+  },
+  storyCreateRing: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2,
+    marginBottom: 6,
+  },
+  storyItem: {
+    alignItems: 'center',
+    width: 68,
+  },
+  storyRingGradient: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    position: 'relative',
+  },
+  storyRingGradientMuted: {
+    opacity: 0.64,
+  },
+  storyRingInner: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  storyAvatarWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+  },
+  storyAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 27,
+  },
+  storyPulseDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.brand,
+    position: 'absolute',
+    right: 1,
+    top: 1,
+    borderWidth: 1,
+    borderColor: colors.background,
+  },
+  storyName: {
+    fontSize: 10,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
+    width: 66,
+    textAlign: 'center',
+  },
+  storyStatus: {
+    marginTop: 2,
+    fontSize: 9,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    width: 66,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.24,
+  },
+
+  looksSection: {
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  looksRail: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  lookCard: {
+    width: SCREEN_WIDTH * 0.82,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  lookImageWrap: {
+    width: '100%',
+    height: 280,
+  },
+  lookFeedRow: {
+    paddingHorizontal: GRID_GAP,
+    marginBottom: GRID_GAP,
+  },
+  lookFeedCard: {
+    width: '100%',
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  lookFeedImageWrap: {
+    width: '100%',
+    aspectRatio: 3 / 4,
+  },
+  lookImage: {
+    width: '100%',
+    height: '100%',
+  },
+  lookOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  lookOwnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  lookOwnerAvatarWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  lookOwnerAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 10,
+  },
+  lookOwnerName: {
+    color: colors.textInverse,
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+  },
+  lookTitle: {
+    color: colors.textInverse,
+    fontSize: 21,
+    fontFamily: Typography.family.extrabold,
+    letterSpacing: -0.4,
+    lineHeight: 24,
+  },
+  lookDescription: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontFamily: Typography.family.medium,
+    marginTop: 2,
+  },
+  lookMetaRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  lookMetaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.34)',
+  },
+  lookMetaText: {
+    color: colors.textInverse,
+    fontSize: 11,
+    fontFamily: Typography.family.semibold,
+  },
+  lookTime: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 11,
+    fontFamily: Typography.family.medium,
+    marginLeft: 'auto',
   },
 
   postersSection: {
@@ -1399,9 +1593,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingBottom: Space.sm,
   },
   posterSectionHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     marginBottom: Space.xs,
   },
@@ -1411,13 +1602,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.3,
-  },
-  posterHeaderCameraBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   postersScroll: {
     paddingHorizontal: Space.md,
@@ -1432,98 +1616,28 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterCard: {
     width: POSTER_CARD_WIDTH,
   },
-  // Outer ring container — holds the gradient (unseen) or grey (seen) ring
-  // with the artwork clipped inside. The ring is the padding area.
-  posterRingOuter: {
-    width: POSTER_CARD_WIDTH,
-    height: POSTER_CARD_HEIGHT,
-    borderRadius: Radius.lg,
-    padding: STORY_RING_PADDING,
-    overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  posterRingOuterUnseen: {
-    // Transparent — the LinearGradient layer fills this and shows through
-    // the padding as the Instagram-style gradient ring.
-    backgroundColor: 'transparent',
-  },
-  posterRingOuterSeen: {
-    // Plain grey ring for already-watched stories.
-    backgroundColor: colors.border,
-  },
-  posterRingGradient: {
-    ...StyleSheet.absoluteFill,
-  },
-  posterRingInner: {
-    flex: 1,
-    borderRadius: Radius.lg - STORY_RING_PADDING,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: colors.surfaceAlt,
-  },
-  // Username label below the card — Instagram story rail convention.
-  posterCardLabel: {
-    marginTop: 6,
-    fontSize: Type.meta.size,
-    lineHeight: 14,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-    width: POSTER_CARD_WIDTH,
-    textAlign: 'center',
-  },
-  posterCreateCard: {
-    width: POSTER_CARD_WIDTH,
-  },
-  posterCreateTile: {
+  posterTile: {
     width: POSTER_CARD_WIDTH,
     height: POSTER_CARD_HEIGHT,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
   },
-  // Dashed border differentiates the create card from gradient-ring story cards.
-  posterCreateDashed: {
-    flex: 1,
-    margin: 2,
-    borderRadius: Radius.lg - 2,
+  posterTileUnseen: {
     borderWidth: 2,
-    borderStyle: 'dashed',
     borderColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  posterCreatePlusBadge: {
-    position: 'absolute',
-    bottom: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.brand,
-    borderWidth: 2,
-    borderColor: colors.background,
+  posterTileRing: {
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  posterCreateLabel: {
-    marginTop: 6,
-    fontSize: Type.meta.size,
-    lineHeight: 14,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-    width: POSTER_CARD_WIDTH,
-    textAlign: 'center',
+  posterTileSeen: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   posterImage: {
     width: '100%',
@@ -1540,7 +1654,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 88,
     height: 88,
-    borderRadius: Radius.full,
+    borderRadius: 44,
     top: -42,
     right: -34,
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -1563,7 +1677,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 5,
     width: 24,
     height: 24,
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: colors.textInverse,
@@ -1576,12 +1690,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterAvatarOverlayWrap: {
     width: 24,
     height: 24,
-    borderRadius: Radius.lg,
+    borderRadius: 12,
   },
   posterAvatarOverlayImage: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.lg,
+    borderRadius: 12,
   },
   posterTopRow: {
     position: 'absolute',
@@ -1599,23 +1713,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 5,
     paddingVertical: 3,
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     flex: 1,
     gap: 4,
   },
   posterOwnerAvatarWrap: {
     width: 14,
     height: 14,
-    borderRadius: Radius.md,
+    borderRadius: 7,
   },
   posterOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.md,
+    borderRadius: 7,
   },
   posterOwnerName: {
     color: colors.textInverse,
-    fontSize: Type.meta.size,
+    fontSize: 8,
     fontFamily: Typography.family.medium,
     flex: 1,
   },
@@ -1624,13 +1738,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
   posterExpiryText: {
     color: colors.textInverse,
-    fontSize: Type.meta.size,
+    fontSize: 9,
     fontFamily: Typography.family.bold,
   },
   posterBottomOverlay: {
@@ -1644,9 +1758,29 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterCaption: {
     color: colors.textInverse,
-    fontSize: Type.meta.size,
+    fontSize: 9,
     lineHeight: 12,
     fontFamily: Typography.family.medium,
+  },
+  posterCreatorOverlay: {
+    position: 'absolute',
+    left: 5,
+    right: 5,
+    bottom: 5,
+    minHeight: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(0,0,0,0.58)',
+  },
+  posterCreatorName: {
+    flex: 1,
+    color: colors.textInverse,
+    fontSize: 9,
+    lineHeight: 12,
+    fontFamily: Typography.family.semibold,
   },
   frameCountBadge: {
     position: 'absolute',
@@ -1656,13 +1790,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: Radius.md,
+    borderRadius: 8,
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
   frameCountBadgeText: {
     color: colors.textInverse,
-    fontSize: Type.meta.size,
+    fontSize: 9,
     fontFamily: Typography.family.bold,
   },
   unwatchedBadge: {
@@ -1670,14 +1804,26 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 6,
     left: 6,
     backgroundColor: colors.brand,
-    borderRadius: Radius.md,
+    borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   unwatchedBadgeText: {
     color: colors.textInverse,
-    fontSize: Type.meta.size,
+    fontSize: 9,
     fontFamily: Typography.family.bold,
+  },
+  posterFreshDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.brand,
+  },
+  posterSeenDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.border,
   },
 
   masonryGrid: {
@@ -1721,7 +1867,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 170,
     height: 170,
-    borderRadius: Radius.full,
+    borderRadius: 85,
     top: -76,
     right: -64,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1732,7 +1878,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'absolute',
     width: 96,
     height: 96,
-    borderRadius: Radius.full,
+    borderRadius: 48,
     bottom: -44,
     left: -30,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1763,7 +1909,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
   explorePrice: {
     color: colors.textPrimary,
-    fontSize: Type.bodyLarge.size,
+    fontSize: 16,
     lineHeight: 20,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
@@ -1789,17 +1935,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerAvatarWrap: {
     width: 20,
     height: 20,
-    borderRadius: Radius.lg,
+    borderRadius: 10,
   },
   exploreSellerAvatar: {
     width: 20,
     height: 20,
-    borderRadius: Radius.lg,
+    borderRadius: 10,
   },
   exploreSellerAvatarFallback: {
     width: 20,
     height: 20,
-    borderRadius: Radius.lg,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
@@ -1807,7 +1953,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerText: {
     flex: 1,
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
+    fontSize: 12,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
   },
@@ -1822,7 +1968,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   exploreMessageText: {
     color: colors.textPrimary,
-    fontSize: Type.meta.size,
+    fontSize: 10,
     fontFamily: Typography.family.semibold,
   },
   videoBadge: {
@@ -1881,14 +2027,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 14,
   },
   peekTitle: {
-    fontSize: Type.subtitle.size,
+    fontSize: 19,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   peekSubtitle: {
     marginTop: 4,
-    fontSize: Type.captionElevated.size,
+    fontSize: 13,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -1904,7 +2050,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'transparent',
   },
   peekGhostText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: 13,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -1917,11 +2063,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekPrimaryIconWrap: {
     width: 16,
     height: 16,
-    borderRadius: Radius.md,
+    borderRadius: 8,
     backgroundColor: 'transparent',
   },
   peekPrimaryText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: 13,
     fontFamily: Typography.family.bold,
     color: colors.background,
   },

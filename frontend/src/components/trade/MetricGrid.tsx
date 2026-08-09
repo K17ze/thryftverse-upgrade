@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   card: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     paddingHorizontal: Space.sm,
     minHeight: 72,
   },

@@ -7,10 +7,11 @@ import {
   ScrollView,
   TextInput,
   FlatList,
-  Image,
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,10 +26,25 @@ import { fetchLooksFromApi } from '../services/looksApi';
 import { createStableId } from '../utils/createStableId';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { useMotionConfig } from '../hooks/useMotionConfig';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { CreatorLayer } from './composition';
 import { Canvas, Path, Skia, DashPathEffect } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Reanimated, { useSharedValue, runOnJS } from 'react-native-reanimated';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  withRepeat,
+  withSequence,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
 
 export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw' | 'gif' | 'music' | 'quiz' | 'question' | 'emojiSlider' | 'countdown' | 'stickers' | 'link' | 'location' | 'hashtag' | 'time' | 'weather';
 
@@ -163,18 +179,202 @@ interface MediaAsset {
   duration?: number;
 }
 
+// Camera roll category tabs
+type MediaCategory = 'recent' | 'photos' | 'videos' | 'selfies';
+const MEDIA_CATEGORIES: { key: MediaCategory; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+  { key: 'recent', label: 'Recent', icon: 'time-outline' },
+  { key: 'photos', label: 'Photos', icon: 'images-outline' },
+  { key: 'videos', label: 'Videos', icon: 'videocam-outline' },
+  { key: 'selfies', label: 'Selfies', icon: 'person-circle-outline' },
+];
+
+// ── MediaGridItem — spring press feedback + spring scale selection badge ──
+function MediaGridItem({
+  asset,
+  isSelected,
+  selectionOrder,
+  onPress,
+  colors,
+  styles,
+}: {
+  asset: MediaAsset;
+  isSelected: boolean;
+  selectionOrder: number;
+  onPress: () => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const reduceMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
+  const pressedSV = useSharedValue(0);
+  const badgeScaleSV = useSharedValue(isSelected ? 1 : 0);
+
+  useEffect(() => {
+    if (isSelected) {
+      if (reduceMotion) {
+        badgeScaleSV.value = 1;
+      } else {
+        badgeScaleSV.value = withSpring(1, spring.success);
+      }
+    } else {
+      badgeScaleSV.value = reduceMotion ? 0 : withSpring(0, spring.tap);
+    }
+  }, [isSelected, reduceMotion, spring, badgeScaleSV]);
+
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(pressedSV.value, [0, 1], [1, 0.95], Extrapolation.CLAMP) }],
+  }));
+
+  const badgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: badgeScaleSV.value }],
+    opacity: badgeScaleSV.value,
+  }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => { pressedSV.value = withSpring(1, spring.tap); }}
+      onPressOut={() => { pressedSV.value = withSpring(0, spring.tap); }}
+      accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      hitSlop={4}
+    >
+      <Reanimated.View style={[styles.mediaGridCell, pressStyle]}>
+        <Image
+          source={{ uri: asset.uri }}
+          style={styles.mediaGridThumb}
+          contentFit="cover"
+        />
+        {asset.mediaType === 'video' && (
+          <View style={styles.mediaGridVideoBadge}>
+            <Ionicons name="play" size={14} color="#fff" />
+            {asset.duration && (
+              <Text style={styles.mediaGridDuration}>
+                {Math.floor(asset.duration / 1000)}s
+              </Text>
+            )}
+          </View>
+        )}
+        {isSelected && (
+          <View style={styles.mediaGridSelectedOverlay}>
+            <Reanimated.View style={[styles.mediaGridSelectionBadge, { backgroundColor: colors.brand }, badgeStyle]}>
+              <Text style={[styles.mediaGridSelectionText, { color: colors.textInverse }]}>{selectionOrder}</Text>
+            </Reanimated.View>
+          </View>
+        )}
+      </Reanimated.View>
+    </Pressable>
+  );
+}
+
+// ── BreathingIcon — gentle scale breathing for empty states ──
+function BreathingIcon({ name, size, color }: { name: React.ComponentProps<typeof Ionicons>['name']; size: number; color: string }) {
+  const reduceMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
+  const breathSV = useSharedValue(1);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      breathSV.value = 1;
+      return;
+    }
+    breathSV.value = withRepeat(
+      withSequence(
+        withSpring(1.08, spring.lift),
+        withSpring(1, spring.lift),
+      ),
+      -1,
+      false
+    );
+    return () => { cancelAnimation(breathSV); };
+  }, [reduceMotion, breathSV]);
+
+  const breathStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: breathSV.value }],
+  }));
+
+  return (
+    <Reanimated.View style={breathStyle}>
+      <Ionicons name={name} size={size} color={color} />
+    </Reanimated.View>
+  );
+}
+
+// ── PermissionDeniedState — spring entrance with retry CTA ──
+function PermissionDeniedState({
+  icon,
+  title,
+  message,
+  ctaLabel,
+  onCta,
+  colors,
+  styles,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  title: string;
+  message: string;
+  ctaLabel: string;
+  onCta: () => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const reduceMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
+  const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
+
+  useEffect(() => {
+    if (!reduceMotion) {
+      entranceSV.value = withDelay(100, withSpring(1, spring.entrance));
+    }
+  }, [reduceMotion, spring, entranceSV]);
+
+  const entranceStyle = useAnimatedStyle(() => ({
+    opacity: entranceSV.value,
+    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [20, 0], Extrapolation.CLAMP) }],
+  }));
+
+  return (
+    <Reanimated.View style={[styles.mediaPermissionState, entranceStyle]}>
+      <BreathingIcon name={icon} size={40} color={colors.textMuted} />
+      <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
+        {title}
+      </Text>
+      <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
+        {message}
+      </Text>
+      <PressScale
+        onPress={onCta}
+        style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
+        accessibilityLabel={ctaLabel}
+        hitSlop={12}
+      >
+        <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>{ctaLabel}</Text>
+      </PressScale>
+    </Reanimated.View>
+  );
+}
+
 function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { spring } = useMotionConfig();
+  const reduceMotion = useReducedMotion();
   const [status, requestPermission] = MediaLibrary.usePermissions();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [activeCategory, setActiveCategory] = useState<MediaCategory>('recent');
   const cursorRef = useRef<string | undefined>(undefined);
   const mountedRef = useRef(true);
+
+  // Spring indicator for category tab
+  const tabIndicatorXSV = useSharedValue(0);
+  const tabIndicatorWidthSV = useSharedValue(0);
+  const tabLayoutsRef = useRef<Record<MediaCategory, { x: number; width: number }>>({} as any);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -232,6 +432,35 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       loadRecentMedia(true);
     }
   }, [status, loadRecentMedia]);
+
+  // ── Category tab switch with spring indicator ────────────────────
+  const handleCategorySwitch = useCallback((cat: MediaCategory) => {
+    if (cat === activeCategory) return;
+    haptic.selection();
+    setActiveCategory(cat);
+    const layout = tabLayoutsRef.current[cat];
+    if (layout) {
+      if (reduceMotion) {
+        tabIndicatorXSV.value = layout.x;
+        tabIndicatorWidthSV.value = layout.width;
+      } else {
+        tabIndicatorXSV.value = withSpring(layout.x, spring.tap);
+        tabIndicatorWidthSV.value = withSpring(layout.width, spring.tap);
+      }
+    }
+  }, [activeCategory, haptic, reduceMotion, tabIndicatorXSV, tabIndicatorWidthSV, spring]);
+
+  // Filter assets by category
+  const filteredAssets = useMemo(() => {
+    if (activeCategory === 'recent') return assets;
+    if (activeCategory === 'photos') return assets.filter(a => a.mediaType === 'image');
+    if (activeCategory === 'videos') return assets.filter(a => a.mediaType === 'video');
+    if (activeCategory === 'selfies') return assets.filter(a => a.mediaType === 'image' && a.width === a.height);
+    return assets;
+  }, [assets, activeCategory]);
+
+  // Recent photos section (top 6 most recent)
+  const recentPhotos = useMemo(() => filteredAssets.slice(0, 6), [filteredAssets]);
 
   const toggleSelect = useCallback((asset: MediaAsset) => {
     haptic.selection();
@@ -325,74 +554,71 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   const selectedCount = selectedIds.size;
 
-  // ── Hooks that must run on every render (before any early returns) ──
-  const renderItem = useCallback(({ item, index }: { item: MediaAsset | 'camera' | 'video'; index: number }) => {
+  // ── Selection count badge with spring scale ──────────────────────
+  const countBadgeScaleSV = useSharedValue(0);
+  useEffect(() => {
+    if (selectedCount > 0) {
+      countBadgeScaleSV.value = reduceMotion ? 1 : withSpring(1, spring.success);
+    } else {
+      countBadgeScaleSV.value = reduceMotion ? 0 : withSpring(0, spring.tap);
+    }
+  }, [selectedCount, reduceMotion, spring, countBadgeScaleSV]);
+
+  const countBadgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: countBadgeScaleSV.value }],
+    opacity: countBadgeScaleSV.value,
+  }));
+
+  // ── Tab indicator animated style ─────────────────────────────────
+  const tabIndicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tabIndicatorXSV.value }],
+    width: tabIndicatorWidthSV.value,
+  }));
+
+  // ── FlashList renderItem ─────────────────────────────────────────
+  const renderItem: ListRenderItem<MediaAsset | 'camera' | 'video'> = useCallback(({ item }) => {
     if (item === 'camera') {
       return (
-        <Pressable
+        <PressScale
           onPress={handleTakePhoto}
           style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Take photo with camera"
-          accessibilityRole="button"
-          hitSlop={12}
+          hitSlop={4}
         >
           <Ionicons name="camera-outline" size={28} color={colors.textPrimary} />
-        </Pressable>
+        </PressScale>
       );
     }
     if (item === 'video') {
       return (
-        <Pressable
+        <PressScale
           onPress={handlePickVideo}
           style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Pick video from gallery"
-          accessibilityRole="button"
-          hitSlop={12}
+          hitSlop={4}
         >
           <Ionicons name="videocam-outline" size={28} color={colors.textPrimary} />
-        </Pressable>
+        </PressScale>
       );
     }
     const asset = item as MediaAsset;
     const isSelected = selectedIds.has(asset.id);
     const selectionOrder = isSelected ? Array.from(selectedIds).indexOf(asset.id) + 1 : 0;
     return (
-      <Pressable
+      <MediaGridItem
+        asset={asset}
+        isSelected={isSelected}
+        selectionOrder={selectionOrder}
         onPress={() => toggleSelect(asset)}
-        style={styles.mediaGridCell}
-        accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
-        accessibilityRole="button"
-        hitSlop={12}
-      >
-        <Image
-          source={{ uri: asset.uri }}
-          style={styles.mediaGridThumb}
-          resizeMode="cover"
-        />
-        {asset.mediaType === 'video' && (
-          <View style={styles.mediaGridVideoBadge}>
-            <Ionicons name="play" size={14} color="#fff" />
-            {asset.duration && (
-              <Text style={styles.mediaGridDuration}>
-                {Math.floor(asset.duration / 1000)}s
-              </Text>
-            )}
-          </View>
-        )}
-        {isSelected && (
-          <View style={styles.mediaGridSelectedOverlay}>
-            <View style={styles.mediaGridSelectionBadge}>
-              <Text style={styles.mediaGridSelectionText}>{selectionOrder}</Text>
-            </View>
-          </View>
-        )}
-      </Pressable>
+        colors={colors}
+        styles={styles}
+      />
     );
-  }, [colors, handleTakePhoto, handlePickVideo, toggleSelect, selectedIds]);
+  }, [colors, handleTakePhoto, handlePickVideo, toggleSelect, selectedIds, styles]);
 
   const gridData: (MediaAsset | 'camera' | 'video')[] = useMemo(() => {
-    return ['camera', 'video', ...assets];
-  }, [assets]);
+    return ['camera', 'video', ...filteredAssets];
+  }, [filteredAssets]);
 
   // ── Permission states (after all hooks) ──
   if (!status) {
@@ -408,24 +634,15 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   if (!status.granted && !status.canAskAgain) {
     return (
       <PickerShell title="Add Media" onClose={onClose}>
-        <View style={styles.mediaPermissionState}>
-          <Ionicons name="lock-closed-outline" size={40} color={colors.textMuted} />
-          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
-            Photo access needed
-          </Text>
-          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
-            Allow access to your photo library to pick media for your creation.
-          </Text>
-          <Pressable
-            onPress={handleOpenSettings}
-            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Open settings"
-            accessibilityRole="button"
-            hitSlop={12}
-          >
-            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Open settings</Text>
-          </Pressable>
-        </View>
+        <PermissionDeniedState
+          icon="lock-closed-outline"
+          title="Photo access needed"
+          message="Allow access to your photo library to pick media for your creation."
+          ctaLabel="Open settings"
+          onCta={handleOpenSettings}
+          colors={colors}
+          styles={styles}
+        />
       </PickerShell>
     );
   }
@@ -433,24 +650,15 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   if (!status.granted) {
     return (
       <PickerShell title="Add Media" onClose={onClose}>
-        <View style={styles.mediaPermissionState}>
-          <Ionicons name="images-outline" size={40} color={colors.textMuted} />
-          <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
-            Access your photos
-          </Text>
-          <Text style={[styles.mediaPermissionText, { color: colors.textSecondary }]}>
-            We need access to show your recent photos and videos here.
-          </Text>
-          <Pressable
-            onPress={() => requestPermission()}
-            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Grant access"
-            accessibilityRole="button"
-            hitSlop={12}
-          >
-            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Allow access</Text>
-          </Pressable>
-        </View>
+        <PermissionDeniedState
+          icon="images-outline"
+          title="Access your photos"
+          message="We need access to show your recent photos and videos here."
+          ctaLabel="Allow access"
+          onCta={() => requestPermission()}
+          colors={colors}
+          styles={styles}
+        />
       </PickerShell>
     );
   }
@@ -465,14 +673,16 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         </Text>
         <View style={styles.headerRight}>
           {selectedCount > 0 && (
-            <PressScale
-              onPress={handleAddSelected}
-              style={[styles.addBtn, { backgroundColor: colors.brand }]}
-              accessibilityLabel="Add selected media"
-              hitSlop={12}
-            >
-              <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add</Text>
-            </PressScale>
+            <Reanimated.View style={countBadgeStyle}>
+              <PressScale
+                onPress={handleAddSelected}
+                style={[styles.addBtn, { backgroundColor: colors.brand }]}
+                accessibilityLabel="Add selected media"
+                hitSlop={12}
+              >
+                <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add</Text>
+              </PressScale>
+            </Reanimated.View>
           )}
           <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" hitSlop={12}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
@@ -480,42 +690,115 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         </View>
       </View>
 
+      {/* Camera roll category tabs with spring indicator */}
+      <View style={styles.categoryTabRow}>
+        <Reanimated.View
+          style={[styles.categoryTabIndicator, { backgroundColor: colors.brand }, tabIndicatorStyle]}
+        />
+        {MEDIA_CATEGORIES.map((cat) => {
+          const active = activeCategory === cat.key;
+          return (
+            <Pressable
+              key={cat.key}
+              onPress={() => handleCategorySwitch(cat.key)}
+              onLayout={(e) => {
+                tabLayoutsRef.current[cat.key] = {
+                  x: e.nativeEvent.layout.x,
+                  width: e.nativeEvent.layout.width,
+                };
+                if (cat.key === 'recent' && tabIndicatorWidthSV.value === 0) {
+                  tabIndicatorWidthSV.value = e.nativeEvent.layout.width;
+                }
+              }}
+              style={styles.categoryTab}
+              accessibilityLabel={`Category ${cat.label}`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+            >
+              <Ionicons
+                name={cat.icon}
+                size={16}
+                color={active ? colors.textInverse : colors.textSecondary}
+              />
+              <Text style={[
+                styles.categoryTabLabel,
+                { color: active ? colors.textInverse : colors.textSecondary },
+              ]}>
+                {cat.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {isLoading ? (
         <View style={styles.mediaLoadingState}>
           <ActivityIndicator size="large" color={colors.brand} />
         </View>
-      ) : assets.length === 0 ? (
+      ) : filteredAssets.length === 0 ? (
+        // Empty state with breathing icon
         <View style={styles.mediaEmptyState}>
-          <Ionicons name="images-outline" size={40} color={colors.textMuted} />
+          <BreathingIcon name="images-outline" size={40} color={colors.textMuted} />
           <Text style={[styles.mediaEmptyText, { color: colors.textSecondary }]}>
-            No photos found
+            {activeCategory === 'videos' ? 'No videos found' : activeCategory === 'selfies' ? 'No selfies found' : 'No photos found'}
           </Text>
-          <Pressable
+          <PressScale
             onPress={handleTakePhoto}
             style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Take photo"
-            accessibilityRole="button"
             hitSlop={12}
           >
             <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Take photo</Text>
-          </Pressable>
+          </PressScale>
         </View>
       ) : (
-        <FlatList
-          data={gridData}
-          keyExtractor={(item, index) => typeof item === 'string' ? item : item.id}
-          renderItem={renderItem}
-          numColumns={GRID_COLUMNS}
-          columnWrapperStyle={styles.mediaGridRow}
-          contentContainerStyle={styles.mediaGridContent}
-          onEndReached={() => loadRecentMedia(false)}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={loadingMore ? (
-            <View style={styles.mediaGridFooter}>
-              <ActivityIndicator size="small" color={colors.textMuted} />
+        <>
+          {/* Recent photos section at top (horizontal scroll) */}
+          {activeCategory === 'recent' && recentPhotos.length > 0 && (
+            <View style={styles.recentSection}>
+              <Text style={[styles.recentSectionLabel, { color: colors.textSecondary }]}>
+                Recent
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.recentScroll}
+              >
+                {recentPhotos.map((asset) => {
+                  const isSelected = selectedIds.has(asset.id);
+                  const selectionOrder = isSelected ? Array.from(selectedIds).indexOf(asset.id) + 1 : 0;
+                  return (
+                    <MediaGridItem
+                      key={asset.id}
+                      asset={asset}
+                      isSelected={isSelected}
+                      selectionOrder={selectionOrder}
+                      onPress={() => toggleSelect(asset)}
+                      colors={colors}
+                      styles={styles}
+                    />
+                  );
+                })}
+              </ScrollView>
             </View>
-          ) : null}
-        />
+          )}
+
+          {/* Full grid via FlashList for virtualization */}
+          <FlashList
+            data={gridData}
+            keyExtractor={(item) => typeof item === 'string' ? item : item.id}
+            renderItem={renderItem}
+            numColumns={GRID_COLUMNS}
+            contentContainerStyle={styles.mediaGridContent}
+            onEndReached={() => loadRecentMedia(false)}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={loadingMore ? (
+              <View style={styles.mediaGridFooter}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+              </View>
+            ) : null}
+          />
+        </>
       )}
     </SheetContainer>
   );
@@ -1753,7 +2036,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
               <Image
                 source={{ uri: item.stillUrl || item.gifUrl }}
                 style={styles.gifThumb}
-                resizeMode="cover"
+                contentFit="cover"
               />
             </Pressable>
           )}
@@ -1863,7 +2146,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       <View style={styles.musicPreviewCard}>
         {previewTrack ? (
           <>
-            <Image source={{ uri: previewTrack.artworkUrl }} style={styles.musicPreviewArt} resizeMode="cover" />
+            <Image source={{ uri: previewTrack.artworkUrl }} style={styles.musicPreviewArt} contentFit="cover" />
             <View style={styles.musicPreviewInfo}>
               <Text style={styles.musicPreviewTrackName} numberOfLines={1}>{previewTrack.trackName}</Text>
               <Text style={styles.musicPreviewArtistName} numberOfLines={1}>{previewTrack.artistName}</Text>
@@ -1924,7 +2207,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
               accessibilityRole="button"
             >
-              <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} resizeMode="cover" />
+              <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} contentFit="cover" />
               <View style={styles.musicInfo}>
                 <Text style={styles.musicTrackName} numberOfLines={1}>{item.trackName}</Text>
                 <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
@@ -3350,6 +3633,51 @@ function createStyles(colors: ThemeColors) {
   mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
   mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
   mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  // ── Category tabs ──
+  categoryTabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    position: 'relative',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  categoryTabIndicator: {
+    position: 'absolute',
+    top: Space.xs,
+    bottom: 0,
+    borderRadius: Radius.md,
+    height: 36,
+  },
+  categoryTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: Space.sm,
+    zIndex: 1,
+  },
+  categoryTabLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+  },
+  // ── Recent photos section ──
+  recentSection: {
+    paddingVertical: Space.sm,
+  },
+  recentSectionLabel: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.caption.size,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: Space.md,
+    marginBottom: Space.xs,
+  },
+  recentScroll: {
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
+  },
   // ── Media grid ──
   mediaGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   mediaGridRow: { gap: Space.xs, marginBottom: Space.xs },

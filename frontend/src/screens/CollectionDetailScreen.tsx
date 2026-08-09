@@ -342,9 +342,9 @@ export default function CollectionDetailScreen() {
         )}
         {count === 0 && (
           <EmptyState
-            graphic={<BoardEmptyGraphic title="Empty collection" subtitle="Add items to this board" icon="folder-open-outline" size={140} />}
-            title="Empty collection"
-            subtitle="Browse items and add them to this collection."
+            graphic={<BoardEmptyGraphic title="No items yet" subtitle="Add items to this board" icon="folder-open-outline" size={140} />}
+            title="No items in this collection yet"
+            subtitle="Browse items and save them to this collection to see them here."
             ctaLabel="Browse"
             onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
           />

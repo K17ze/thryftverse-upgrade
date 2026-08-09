@@ -221,7 +221,7 @@ const createStyles = (colors: ThemeColors) =>
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm + 4,
+      gap: Space.smMd,
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.sm + 2,
       borderRadius: Radius.lg,

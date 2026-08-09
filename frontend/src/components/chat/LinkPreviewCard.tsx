@@ -116,7 +116,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderTopRightRadius: Radius.lg,
   },
   textWrap: {
-    padding: Space.sm + 4,
+    padding: Space.smMd,
     gap: 2,
   },
   domainRow: {

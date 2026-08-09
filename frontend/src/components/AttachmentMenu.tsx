@@ -167,7 +167,7 @@ function createStyles(colors: ThemeColors) {
       borderTopRightRadius: Radius.xl + 8,
       paddingHorizontal: Space.lg - 4,
       paddingBottom: Space.xl + 14,
-      paddingTop: Space.sm + 4,
+      paddingTop: Space.smMd,
     },
     handle: {
       width: 40,

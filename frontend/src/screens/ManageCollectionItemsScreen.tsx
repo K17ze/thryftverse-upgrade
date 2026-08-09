@@ -146,8 +146,8 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
       {collectionItems.length === 0 ? (
         <EmptyState
           icon="folder-open-outline"
-          title="Empty collection"
-          subtitle="This collection has no items to manage."
+          title="No items in this collection"
+          subtitle="Add saved products to this collection to manage them here."
           ctaLabel="Browse"
           onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
         />

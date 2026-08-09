@@ -56,14 +56,8 @@ export function OrderStatusStepper({
 
   function formatStageDate(value?: string): string | undefined {
     if (!value) return undefined;
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return undefined;
-    return parsed.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const formatted = formatShortDateTime(value);
+    return formatted || undefined;
   }
 
   if (isFailure) {

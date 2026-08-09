@@ -71,7 +71,7 @@ function createStyles(colors: ThemeColors) {
   tabContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Space.xs + 1,
   },
   label: {
     fontSize: Type.body.size,

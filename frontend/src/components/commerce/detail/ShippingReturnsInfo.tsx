@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
-    gap: 2,
+    gap: Space.xs / 2,
   },
   summaryRow: {
     flexDirection: 'row',

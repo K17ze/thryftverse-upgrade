@@ -378,7 +378,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingHorizontal: Space.lg,
     paddingTop: Space.xxl + Space.xxl + Space.xxl - 24,
-    gap: Space.sm + 4,
+    gap: Space.smMd,
   },
   emptyMark: {
     width: Space.xl + Space.xl - 4,
@@ -404,7 +404,7 @@ function createStyles(colors: ThemeColors) {
   createEmptyBtn: {
     backgroundColor: colors.brand,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderRadius: Radius.lg,
   },
   createEmptyBtnText: {

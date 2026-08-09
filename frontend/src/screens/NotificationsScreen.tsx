@@ -830,9 +830,9 @@ export default function NotificationsScreen() {
           ) : (
             <EmptyState
               density="compact"
-              icon="notifications-outline"
-              title="No notifications yet"
-              subtitle="We'll notify you about new items, price drops, and order updates."
+              icon="checkmark-done-outline"
+              title="You're all caught up"
+              subtitle="We'll let you know when there's something new."
               iconColor={colors.textMuted}
             />
           )

@@ -278,7 +278,7 @@ function createStyles(colors: ThemeColors) {
   ticketCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 4,
+    gap: Space.smMd,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     marginBottom: Space.sm,

@@ -42,7 +42,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   header: {
-    marginBottom: Space.sm + 4,
+    marginBottom: Space.smMd,
     gap: 2,
   },
   title: {

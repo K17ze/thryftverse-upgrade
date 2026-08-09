@@ -257,7 +257,7 @@ function createStyles(colors: ThemeColors) {
       maxHeight: Space.xxl * 2 + Space.xs,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
-      paddingHorizontal: Space.sm + 4,
+      paddingHorizontal: Space.smMd,
       paddingVertical: Space.sm,
       fontSize: Type.body.size,
       fontFamily: Typography.family.regular,

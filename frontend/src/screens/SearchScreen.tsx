@@ -29,6 +29,7 @@ import PulseTab from '../components/explore/PulseTab';
 import LooksTab from '../components/explore/LooksTab';
 import EditTab from '../components/explore/EditTab';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { AppSegmentControl, type AppSegmentOption } from '../components/ui/AppSegmentControl';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -87,7 +88,7 @@ export default function SearchScreen() {
   headerRow: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.sm + Space.xs,
+    paddingBottom: Space.smMd,
   },
   hugeTitle: {
     fontSize: Type.title.size,
@@ -102,7 +103,7 @@ export default function SearchScreen() {
     color: colors.textSecondary,
   },
   headerStatusWrap: {
-    marginTop: Space.xs + 3,
+    marginTop: Space.sm,
   },
   discoverBtn: {
     marginTop: Space.sm,
@@ -111,7 +112,7 @@ export default function SearchScreen() {
     borderWidth: 0,
     backgroundColor: colors.surfaceAlt,
     alignSelf: 'flex-end',
-    paddingHorizontal: Space.sm + Space.xs,
+    paddingHorizontal: Space.smMd,
   },
   discoverBtnIconWrap: {
     width: Control.iconCompact,
@@ -129,22 +130,22 @@ export default function SearchScreen() {
   // Search
   searchRow: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm + 2,
+    paddingBottom: Space.smMd,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 2,
+    gap: Space.smMd,
   },
   searchBar: {
     flex: 1,
-    minHeight: Control.hit + 2,
+    minHeight: Control.hit,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 2,
-    backgroundColor: colors.background,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.hairline,
-    borderColor: colors.border,
-    paddingHorizontal: Space.sm + 6,
+    gap: Space.smMd,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.lg,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingHorizontal: Space.md,
   },
   searchPlaceholder: {
     flex: 1,
@@ -155,63 +156,31 @@ export default function SearchScreen() {
     letterSpacing: LetterSpacing.wide,
   },
   visualSearchButton: {
-    width: Control.hit + 2,
-    height: Control.hit + 2,
-    borderRadius: Radius.md,
-    backgroundColor: 'transparent',
-    borderWidth: Stroke.hairline,
-    borderColor: colors.border,
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 0,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  exploreTabs: {
-    minHeight: Space.xxl,
-    marginBottom: Space.sm + 2,
-    paddingHorizontal: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    borderBottomWidth: Stroke.hairline,
-    borderBottomColor: colors.border,
-  },
-  exploreTab: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: Space.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    paddingHorizontal: Space.sm,
-  },
-  exploreTabText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
-  exploreTabTextActive: {
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  exploreTabIndicator: {
-    position: 'absolute',
-    bottom: -Stroke.hairline,
-    width: Space.xl,
-    height: Space.xs / 2,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.textPrimary,
+  exploreTabsContainer: {
+    marginBottom: Space.smMd,
+    paddingHorizontal: Space.md,
   },
 
   // Tabs
-  tabsContainer: { paddingHorizontal: Space.md, paddingBottom: Space.sm + Space.xs },
-  tabsWrapper: { flexDirection: 'row', backgroundColor: 'transparent', gap: Space.sm + 2 },
+  tabsContainer: { paddingHorizontal: Space.md, paddingBottom: Space.smMd },
+  tabsWrapper: { flexDirection: 'row', backgroundColor: 'transparent', gap: Space.smMd },
   tab: {
     flex: 1,
     borderRadius: Radius.xxl,
     minHeight: Space.xl + Space.sm,
     borderWidth: 0,
     backgroundColor: colors.surface,
-    paddingHorizontal: Space.sm + Space.xs,
+    paddingHorizontal: Space.smMd,
   },
   activeTab: { backgroundColor: colors.textPrimary },
   tabIconWrap: {
@@ -249,7 +218,7 @@ export default function SearchScreen() {
   },
   syncRetryBanner: {
     marginHorizontal: Space.md,
-    marginBottom: Space.sm + Space.xs,
+    marginBottom: Space.smMd,
   },
 
   // Lists
@@ -260,9 +229,9 @@ export default function SearchScreen() {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.sm + Space.xs,
+    paddingHorizontal: Space.smMd,
     paddingBottom: Space.xxl * 2 + Space.lg,
-    rowGap: Space.sm + Space.xs,
+    rowGap: Space.smMd,
   },
   wishlistLoadingCard: {
     width: (SCREEN_WIDTH - Space.xl) / 2,
@@ -273,8 +242,8 @@ export default function SearchScreen() {
     overflow: 'hidden',
   },
   wishlistLoadingBody: {
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.smMd,
+    paddingVertical: Space.smMd,
   },
 
   emptyFooter: {
@@ -303,7 +272,7 @@ export default function SearchScreen() {
   closetShortcutLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + Space.xs,
+    gap: Space.smMd,
   },
   closetShortcutIcon: {
     width: Space.xxl - Space.sm,
@@ -366,7 +335,6 @@ export default function SearchScreen() {
         <AnimatedPressable
           style={styles.searchBar}
           onPress={() => navigation.navigate('GlobalSearch')}
-          activeOpacity={0.76}
           accessibilityRole="search"
           accessibilityLabel="Search items, brands and people"
         >
@@ -376,7 +344,6 @@ export default function SearchScreen() {
         <AnimatedPressable
           style={styles.visualSearchButton}
           onPress={() => navigation.navigate('VisualSearch')}
-          activeOpacity={0.76}
           accessibilityLabel="Search with an image"
           accessibilityRole="button"
         >
@@ -417,26 +384,13 @@ export default function SearchScreen() {
         >
           <OfflineBanner onRetry={() => void handleRefresh()} />
 
-          <View style={styles.exploreTabs} accessibilityRole="tablist">
-            {EXPLORE_TABS.map((tab) => {
-              const selected = activeTab === tab.value;
-              return (
-                <AnimatedPressable
-                  key={tab.value}
-                  style={styles.exploreTab}
-                  onPress={() => setActiveTab(tab.value as 'discover' | 'pulse' | 'looks' | 'edit')}
-                  activeOpacity={0.68}
-                  accessibilityRole="tab"
-                  accessibilityLabel={`${tab.label} explore tab`}
-                  accessibilityState={{ selected }}
-                >
-                  <Text style={[styles.exploreTabText, selected && styles.exploreTabTextActive]} numberOfLines={1}>
-                    {tab.label}
-                  </Text>
-                  {selected ? <View style={styles.exploreTabIndicator} /> : null}
-                </AnimatedPressable>
-              );
-            })}
+          <View style={styles.exploreTabsContainer}>
+            <AppSegmentControl
+              options={EXPLORE_TABS as AppSegmentOption<'discover' | 'pulse' | 'looks' | 'edit'>[]}
+              value={activeTab}
+              onChange={(next) => setActiveTab(next)}
+              fullWidth
+            />
           </View>
 
           {/* Loading skeleton during initial sync (no cached listings yet) */}
@@ -464,14 +418,43 @@ export default function SearchScreen() {
             </Reanimated.View>
           ) : listings.length === 0 && !isSyncing && !lastError ? (
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)}>
-              <EmptyState
-                density="compact"
-                icon="compass-outline"
-                title="Nothing to explore yet"
-                subtitle="New items are uploaded every day. Check back soon or browse categories."
-                ctaLabel="Browse Categories"
-                onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
-              />
+              {activeTab === 'pulse' ? (
+                <EmptyState
+                  density="compact"
+                  icon="pulse-outline"
+                  title="No activity yet"
+                  subtitle="Live auctions and fresh drops will appear here. Check back later."
+                  ctaLabel="Browse Listings"
+                  onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
+                />
+              ) : activeTab === 'looks' ? (
+                <EmptyState
+                  density="compact"
+                  icon="shirt-outline"
+                  title="No looks yet"
+                  subtitle="Creators are styling their first looks. Be the first to share a look."
+                  ctaLabel="Create a Look"
+                  onCtaPress={() => navigation.navigate('CreateLook')}
+                />
+              ) : activeTab === 'edit' ? (
+                <EmptyState
+                  density="compact"
+                  icon="trending-up-outline"
+                  title="Nothing trending"
+                  subtitle="Trending items will appear here once the community starts engaging."
+                  ctaLabel="Browse All Listings"
+                  onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
+                />
+              ) : (
+                <EmptyState
+                  density="compact"
+                  icon="compass-outline"
+                  title="Nothing to explore yet"
+                  subtitle="New items are uploaded every day. Check back soon or browse categories."
+                  ctaLabel="Browse Categories"
+                  onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
+                />
+              )}
             </Reanimated.View>
           ) : (
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>

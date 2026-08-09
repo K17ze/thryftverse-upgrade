@@ -247,7 +247,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.xl,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
   },

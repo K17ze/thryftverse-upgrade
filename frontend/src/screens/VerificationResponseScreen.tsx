@@ -658,7 +658,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
-      paddingVertical: Space.sm + 4,
+      paddingVertical: Space.smMd,
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
     },

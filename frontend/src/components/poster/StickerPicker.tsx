@@ -6,18 +6,35 @@ import {
   Text,
   ScrollView,
   TextInput,
-  Animated,
   Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  interpolate,
+  SlideInRight,
+} from 'react-native-reanimated';
 import { Typography, Radius, Space, Type, Control, Stroke } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { formatTime, formatShortDate } from '../../utils/dateFormat';
+import { EMOJI_DATA } from '../../data/stickerEmojiData';
+import {
+  SHAPES,
+  PRESET_POLLS,
+  PRESET_QUESTIONS,
+  COUNTDOWN_PRESETS,
+} from '../../data/stickerPresets';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const DRAWER_HEIGHT = SCREEN_H * 0.5;
@@ -44,95 +61,271 @@ interface StickerPickerProps {
   onStickerSelect: (sticker: StickerItem) => void;
 }
 
-const EMOJI_DATA: Array<{ emoji: string; keywords: string[] }> = [
-  { emoji: '🔥', keywords: ['fire', 'hot', 'lit', 'flame', 'trending'] },
-  { emoji: '❤️', keywords: ['heart', 'love', 'red', 'romance'] },
-  { emoji: '😂', keywords: ['laugh', 'funny', 'lol', 'joy'] },
-  { emoji: '😍', keywords: ['love', 'heart eyes', 'adore', 'smitten'] },
-  { emoji: '👀', keywords: ['eyes', 'look', 'watch', 'see'] },
-  { emoji: '✨', keywords: ['sparkle', 'shine', 'magic', 'stars'] },
-  { emoji: '🎉', keywords: ['party', 'celebrate', 'confetti', 'festive'] },
-  { emoji: '💯', keywords: ['hundred', 'perfect', '100', 'approval'] },
-  { emoji: '🙌', keywords: ['praise', 'hands up', 'celebrate', 'yes'] },
-  { emoji: '⚡', keywords: ['lightning', 'fast', 'energy', 'bolt'] },
-  { emoji: '🌟', keywords: ['star', 'shine', 'bright', 'featured'] },
-  { emoji: '💥', keywords: ['boom', 'explosion', 'impact', 'bang'] },
-  { emoji: '🏷️', keywords: ['tag', 'label', 'price', 'sale'] },
-  { emoji: '📌', keywords: ['pin', 'location', 'mark', 'save'] },
-  { emoji: '🚀', keywords: ['rocket', 'launch', 'fast', 'growth'] },
-  { emoji: '💎', keywords: ['diamond', 'gem', 'jewel', 'valuable'] },
-  { emoji: '🛍️', keywords: ['shopping', 'bag', 'purchase', 'retail'] },
-  { emoji: '👗', keywords: ['dress', 'fashion', 'clothing', 'wear'] },
-  { emoji: '👟', keywords: ['shoe', 'sneaker', 'footwear', 'run'] },
-  { emoji: '👜', keywords: ['bag', 'purse', 'handbag', 'accessory'] },
-  { emoji: '💰', keywords: ['money', 'cash', 'profit', 'deal'] },
-  { emoji: '🤑', keywords: ['money', 'rich', 'profit', 'cash'] },
-  { emoji: '😍', keywords: ['love', 'heart', 'adore'] },
-  { emoji: '🤩', keywords: ['excited', 'star', 'amazing', 'wow'] },
-  { emoji: '😎', keywords: ['cool', 'sunglasses', 'chill', 'swag'] },
-  { emoji: '🤔', keywords: ['think', 'question', 'hmm', 'wonder'] },
-  { emoji: '😱', keywords: ['shock', 'scream', 'wow', 'surprised'] },
-  { emoji: '😭', keywords: ['cry', 'sad', 'tears', 'emotional'] },
-  { emoji: '🥺', keywords: ['pleading', 'cute', 'beg', 'sad'] },
-  { emoji: '😏', keywords: ['smirk', 'smug', 'flirt', 'cheeky'] },
-  { emoji: '👍', keywords: ['thumbs up', 'yes', 'approve', 'good'] },
-  { emoji: '👎', keywords: ['thumbs down', 'no', 'disapprove', 'bad'] },
-  { emoji: '👏', keywords: ['clap', 'applause', 'praise', 'well done'] },
-  { emoji: '🤝', keywords: ['handshake', 'deal', 'agreement', 'partnership'] },
-  { emoji: '✅', keywords: ['check', 'done', 'complete', 'verified'] },
-  { emoji: '❌', keywords: ['cross', 'no', 'cancel', 'wrong'] },
-  { emoji: '⭐', keywords: ['star', 'rating', 'review', 'favorite'] },
-  { emoji: '🏆', keywords: ['trophy', 'win', 'champion', 'first'] },
-  { emoji: '🎁', keywords: ['gift', 'present', 'free', 'bonus'] },
-  { emoji: '🆕', keywords: ['new', 'fresh', 'latest', 'just in'] },
-  { emoji: '🆓', keywords: ['free', 'no cost', 'gratis'] },
-  { emoji: '💰', keywords: ['money', 'cash', 'deal', 'price'] },
-  { emoji: '🏷️', keywords: ['tag', 'label', 'sale', 'price'] },
-];
-
 const EMOJI_SIZE = 38;
 
-// Shape swatch colors are sticker payload (persisted with the sticker and
-// rendered over media), so they stay hardcoded rather than mapped to tokens.
-const SHAPES: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string }> = [
-  { icon: 'heart', label: 'Heart', color: '#7B0E1E' },
-  { icon: 'star', label: 'Star', color: '#C9A46A' },
-  { icon: 'flash', label: 'Bolt', color: '#8A6A3F' },
-  { icon: 'sunny', label: 'Sun', color: '#C9A46A' },
-  { icon: 'moon', label: 'Moon', color: '#6B3245' },
-  { icon: 'location', label: 'Pin', color: '#9b0202' },
-];
-
-const PRESET_POLLS = [
-  { q: 'Cop or drop?', o1: 'Cop', o2: 'Drop' },
-  { q: 'Worth it?', o1: 'Yes', o2: 'No' },
-  { q: 'Size check?', o1: 'TTS', o2: 'Size up' },
-];
-
-const PRESET_QUESTIONS = [
-  'Ask me anything',
-  'Rate this fit',
-  'Guess the price',
-  'Where from?',
-];
-
-const COUNTDOWN_PRESETS = [
-  { label: '1 Hour', hours: 1 },
-  { label: '6 Hours', hours: 6 },
-  { label: '12 Hours', hours: 12 },
-  { label: '24 Hours', hours: 24 },
-  { label: '3 Days', hours: 72 },
-  { label: '1 Week', hours: 168 },
-];
-
 const RECENT_STICKERS_KEY = '@thryftverse_recent_stickers';
-const MAX_RECENT = 8;
+const FAVORITE_STICKERS_KEY = '@thryftverse_favorite_stickers';
+const MAX_RECENT = 12;
+const SEARCH_DEBOUNCE_MS = 300;
+const STAGGER_DELAY_MS = 50;
+const EMOJI_CELL_SIZE = 72;
+const EMOJI_VISIBLE_SIZE = 44;
+
+type StickerTab = 'emoji' | 'text' | 'shapes' | 'poll' | 'quiz' | 'question' | 'countdown';
+
+const TAB_DEFS: { key: StickerTab; label: string }[] = [
+  { key: 'emoji', label: 'Emoji' },
+  { key: 'text', label: 'Text' },
+  { key: 'shapes', label: 'Shapes' },
+  { key: 'poll', label: 'Poll' },
+  { key: 'quiz', label: 'Quiz' },
+  { key: 'question', label: 'Question' },
+  { key: 'countdown', label: 'Countdown' },
+];
 
 interface RecentSticker {
   type: StickerItem['type'];
   content: string;
   emoji?: string;
 }
+
+interface FavoriteSticker {
+  type: StickerItem['type'];
+  content: string;
+  emoji?: string;
+}
+
+// ── Tab Button with spring scale + gradient underline ──────────────
+// Active tab scales to 1.05x with a gradient underline; inactive tabs
+// sit at 0.7 opacity. Spring snap-to-position for a native feel.
+interface StickerTabButtonProps {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  reducedMotion: boolean;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+}
+
+const StickerTabButton = React.memo(function StickerTabButton({
+  label,
+  active,
+  onPress,
+  reducedMotion,
+  colors,
+}: StickerTabButtonProps) {
+  const scaleSV = useSharedValue(active ? 1.05 : 1);
+  const underlineSV = useSharedValue(active ? 1 : 0);
+
+  React.useEffect(() => {
+    if (reducedMotion) {
+      scaleSV.value = active ? 1.05 : 1;
+      underlineSV.value = active ? 1 : 0;
+    } else {
+      scaleSV.value = withSpring(active ? 1.05 : 1, Motion.spring.tap);
+      underlineSV.value = withSpring(active ? 1 : 0, Motion.spring.entrance);
+    }
+  }, [active, reducedMotion, scaleSV, underlineSV]);
+
+  const tabStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleSV.value }],
+    opacity: interpolate(scaleSV.value, [1, 1.05], [0.7, 1]),
+  }));
+
+  const underlineStyle = useAnimatedStyle(() => ({
+    opacity: underlineSV.value,
+    transform: [{ scaleX: underlineSV.value }],
+  }));
+
+  return (
+    <Reanimated.View style={[tabStyle]}>
+      <Pressable
+        onPress={onPress}
+        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+        accessibilityLabel={`${label} sticker tab`}
+        accessibilityRole="tab"
+        accessibilityHint={`Switches to ${label} stickers`}
+      >
+        <Text
+          style={[
+            { fontSize: Type.body.size, fontFamily: Typography.family.semibold },
+            { color: active ? colors.textPrimary : colors.textMuted },
+          ]}
+        >
+          {label}
+        </Text>
+        <Reanimated.View
+          style={[
+            {
+              height: 2,
+              marginTop: 4,
+              borderRadius: 1,
+              overflow: 'hidden',
+            },
+            underlineStyle,
+          ]}
+        >
+          <LinearGradient
+            colors={[colors.brand, colors.brandPressed]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ flex: 1 }}
+          />
+        </Reanimated.View>
+      </Pressable>
+    </Reanimated.View>
+  );
+});
+
+// ── Emoji Cell — memoized for FlashList performance ─────────────────
+// 72pt cell with 44pt visible emoji. Press scale 0.9 with spring.
+// Long-press toggles favorite with heart overlay. Stagger entrance.
+interface EmojiCellProps {
+  emoji: string;
+  index: number;
+  isFav: boolean;
+  reducedMotion: boolean;
+  onPress: (emoji: string) => void;
+  onLongPress: (emoji: string) => void;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+}
+
+const EmojiCell = React.memo(function EmojiCell({
+  emoji,
+  index,
+  isFav,
+  reducedMotion,
+  onPress,
+  onLongPress,
+  colors,
+}: EmojiCellProps) {
+  const scaleSV = useSharedValue(reducedMotion ? 1 : 0);
+  const pressSV = useSharedValue(1);
+
+  React.useEffect(() => {
+    if (!reducedMotion) {
+      scaleSV.value = withDelay(
+        Math.min(index * STAGGER_DELAY_MS, 600),
+        withSpring(1, Motion.spring.entrance)
+      );
+    }
+  }, [index, reducedMotion, scaleSV]);
+
+  const enterStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleSV.value * pressSV.value }],
+    opacity: reducedMotion ? 1 : interpolate(scaleSV.value, [0, 1], [0, 1]),
+  }));
+
+  return (
+    <Reanimated.View style={[{ width: EMOJI_CELL_SIZE, height: EMOJI_CELL_SIZE, alignItems: 'center', justifyContent: 'center' }, enterStyle]}>
+      <Pressable
+        onPress={() => onPress(emoji)}
+        onLongPress={() => onLongPress(emoji)}
+        onPressIn={() => {
+          if (!reducedMotion) pressSV.value = withSpring(0.9, Motion.spring.tap);
+        }}
+        onPressOut={() => {
+          if (!reducedMotion) pressSV.value = withSpring(1, Motion.spring.tap);
+        }}
+        style={{ width: EMOJI_VISIBLE_SIZE, height: EMOJI_VISIBLE_SIZE, alignItems: 'center', justifyContent: 'center' }}
+        accessibilityLabel={`Emoji ${emoji}`}
+        accessibilityHint="Adds this emoji sticker to the frame. Long-press to favorite."
+        accessibilityRole="button"
+      >
+        <Text style={{ fontSize: EMOJI_SIZE }}>{emoji}</Text>
+      </Pressable>
+      {isFav && (
+        <View style={{
+          position: 'absolute',
+          top: 2,
+          right: 2,
+          width: 14,
+          height: 14,
+          borderRadius: 7,
+          backgroundColor: colors.danger,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <Ionicons name="heart" size={8} color="#fff" />
+        </View>
+      )}
+    </Reanimated.View>
+  );
+});
+
+// ── Horizontal scroll item for recent/favorites ─────────────────────
+// Spring spawn animation on each sticker. Used in horizontal rails.
+interface RailStickerProps {
+  emoji: string;
+  index: number;
+  isFav: boolean;
+  reducedMotion: boolean;
+  onPress: (emoji: string) => void;
+  onLongPress?: (emoji: string) => void;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+}
+
+const RailSticker = React.memo(function RailSticker({
+  emoji,
+  index,
+  isFav,
+  reducedMotion,
+  onPress,
+  onLongPress,
+  colors,
+}: RailStickerProps) {
+  const scaleSV = useSharedValue(reducedMotion ? 1 : 0);
+
+  React.useEffect(() => {
+    if (!reducedMotion) {
+      scaleSV.value = withDelay(
+        Math.min(index * STAGGER_DELAY_MS, 400),
+        withSpring(1, Motion.spring.success)
+      );
+    }
+  }, [index, reducedMotion, scaleSV]);
+
+  const enterStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleSV.value }],
+    opacity: reducedMotion ? 1 : interpolate(scaleSV.value, [0, 1], [0, 1]),
+  }));
+
+  return (
+    <Reanimated.View style={[enterStyle]}>
+      <Pressable
+        onPress={() => onPress(emoji)}
+        onLongPress={onLongPress ? () => onLongPress(emoji) : undefined}
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: Radius.xl,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginRight: Space.sm,
+        }}
+        accessibilityLabel={`Sticker ${emoji}`}
+        accessibilityHint="Adds this sticker to the frame"
+        accessibilityRole="button"
+      >
+        <Text style={{ fontSize: EMOJI_SIZE }}>{emoji}</Text>
+        {isFav && (
+          <View style={{
+            position: 'absolute',
+            top: 2,
+            right: 2,
+            width: 14,
+            height: 14,
+            borderRadius: 7,
+            backgroundColor: colors.danger,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Ionicons name="heart" size={8} color="#fff" />
+          </View>
+        )}
+      </Pressable>
+    </Reanimated.View>
+  );
+});
 
 export default function StickerPicker({ visible, onClose, onStickerSelect }: StickerPickerProps) {
   const { colors } = useAppTheme();
@@ -142,8 +335,8 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
   const [tab, setTab] = React.useState<'emoji' | 'text' | 'shapes' | 'poll' | 'quiz' | 'question' | 'countdown'>('emoji');
   const [mentionInput, setMentionInput] = React.useState('');
   const [hashtagInput, setHashtagInput] = React.useState('');
-  const translateY = React.useRef(new Animated.Value(DRAWER_HEIGHT)).current;
-  const backdropOpacity = React.useRef(new Animated.Value(0)).current;
+  const translateY = useSharedValue(DRAWER_HEIGHT);
+  const backdropOpacity = useSharedValue(0);
   const [recentStickers, setRecentStickers] = React.useState<RecentSticker[]>([]);
 
   // Poll creation state
@@ -165,25 +358,79 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
   const [countdownTime, setCountdownTime] = React.useState('');
   const [countdownEndLabel, setCountdownEndLabel] = React.useState('');
 
-  // Emoji search
+  // Emoji search — debounced (300ms) for performance
   const [emojiSearch, setEmojiSearch] = React.useState('');
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+  const searchScaleSV = useSharedValue(1);
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchChange = React.useCallback((text: string) => {
+    setEmojiSearch(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(text);
+    }, SEARCH_DEBOUNCE_MS);
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const handleSearchFocus = React.useCallback(() => {
+    haptic.light();
+    if (!reducedMotion) {
+      searchScaleSV.value = withSpring(1.02, Motion.spring.press);
+    }
+  }, [haptic, reducedMotion, searchScaleSV]);
+
+  const handleSearchBlur = React.useCallback(() => {
+    if (!reducedMotion) {
+      searchScaleSV.value = withSpring(1, Motion.spring.press);
+    }
+  }, [reducedMotion, searchScaleSV]);
+
+  const searchWrapStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: searchScaleSV.value }],
+  }));
+
   const filteredEmojis = React.useMemo(() => {
-    const q = emojiSearch.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     if (!q) return EMOJI_DATA.map((e) => e.emoji);
     return EMOJI_DATA.filter((e) => e.keywords.some((k) => k.includes(q))).map((e) => e.emoji);
-  }, [emojiSearch]);
+  }, [debouncedSearch]);
+
+  // Favorites — persisted to AsyncStorage, toggled via long-press
+  const [favoriteStickers, setFavoriteStickers] = React.useState<FavoriteSticker[]>([]);
+
+  const isFavorite = React.useCallback(
+    (emoji: string) => favoriteStickers.some((f) => f.type === 'emoji' && f.content === emoji),
+    [favoriteStickers]
+  );
+
+  const toggleFavorite = React.useCallback(
+    (emoji: string) => {
+      haptic.medium();
+      setFavoriteStickers((prev) => {
+        const exists = prev.some((f) => f.type === 'emoji' && f.content === emoji);
+        const next = exists
+          ? prev.filter((f) => !(f.type === 'emoji' && f.content === emoji))
+          : [{ type: 'emoji' as const, content: emoji, emoji }, ...prev];
+        AsyncStorage.setItem(FAVORITE_STICKERS_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    },
+    [haptic]
+  );
 
   React.useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, friction: 8 }),
-        Animated.timing(backdropOpacity, { toValue: 1, duration: Motion.duration.normal, useNativeDriver: true }),
-      ]).start();
+      translateY.value = withSpring(0, Motion.spring.entrance);
+      backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal });
     } else {
-      Animated.parallel([
-        Animated.spring(translateY, { toValue: DRAWER_HEIGHT, useNativeDriver: true, friction: 8 }),
-        Animated.timing(backdropOpacity, { toValue: 0, duration: Motion.duration.fast, useNativeDriver: true }),
-      ]).start();
+      translateY.value = withSpring(DRAWER_HEIGHT, Motion.spring.entrance);
+      backdropOpacity.value = withTiming(0, { duration: Motion.duration.fast });
     }
   }, [visible]);
 
@@ -195,6 +442,16 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
             try {
               const parsed = JSON.parse(raw) as RecentSticker[];
               setRecentStickers(parsed.slice(0, MAX_RECENT));
+            } catch {}
+          }
+        })
+        .catch(() => {});
+      AsyncStorage.getItem(FAVORITE_STICKERS_KEY)
+        .then((raw) => {
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw) as FavoriteSticker[];
+              setFavoriteStickers(parsed);
             } catch {}
           }
         })
@@ -235,8 +492,6 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     },
     [haptic]
   );
-
-  const tabEnter = reducedMotion ? undefined : FadeIn.duration(Motion.duration.normal);
 
   const handleMentionSubmit = () => {
     const text = mentionInput.trim().replace(/^@/, '');
@@ -351,24 +606,34 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     setCountdownEndLabel('');
   };
 
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }));
+
+  const drawerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
-      <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} pointerEvents={visible ? 'auto' : 'none'}>
+      <Reanimated.View style={[styles.backdrop, backdropStyle]} pointerEvents={visible ? 'auto' : 'none'}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      </Animated.View>
+      </Reanimated.View>
 
-      <Animated.View style={[styles.drawer, { transform: [{ translateY }] }]}>
+      <Reanimated.View style={[styles.drawer, drawerStyle]}>
         <View style={styles.handleRow}>
           <View style={styles.handle} />
         </View>
 
-        {/* Search bar */}
-        <View style={styles.searchWrap}>
+        {/* Search bar — spring scale on focus, debounced filtering */}
+        <Reanimated.View style={[styles.searchWrap, searchWrapStyle]}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
             style={styles.searchInput}
             value={emojiSearch}
-            onChangeText={setEmojiSearch}
+            onChangeText={handleSearchChange}
+            onFocus={handleSearchFocus}
+            onBlur={handleSearchBlur}
             placeholder="Search stickers"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
@@ -379,7 +644,11 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
           />
           {emojiSearch.length > 0 && (
             <Pressable
-              onPress={() => setEmojiSearch('')}
+              onPress={() => {
+                setEmojiSearch('');
+                setDebouncedSearch('');
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+              }}
               hitSlop={8}
               accessibilityLabel="Clear search"
               accessibilityRole="button"
@@ -387,94 +656,123 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
             </Pressable>
           )}
-        </View>
+        </Reanimated.View>
 
-        {/* Tabs */}
+        {/* Tabs — spring scale, gradient underline, 0.7 opacity inactive */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.tabScroll}
           contentContainerStyle={styles.tabRow}
         >
-          {(['emoji', 'text', 'shapes', 'poll', 'quiz', 'question', 'countdown'] as const).map((t) => {
-            const tabLabel = t === 'text' ? 'Text' : t === 'emoji' ? 'Emoji' : t === 'shapes' ? 'Shapes' : t === 'poll' ? 'Poll' : t === 'quiz' ? 'Quiz' : t === 'question' ? 'Question' : 'Countdown';
-            return (
-              <AnimatedPressable
-                key={t}
-                style={[styles.tab, tab === t && styles.tabActive]}
-                onPress={() => handleTabChange(t)}
-                scaleValue={0.96}
-                activeOpacity={0.8}
-                hapticFeedback="selection"
-                accessibilityLabel={`${t} sticker tab`}
-                accessibilityRole="tab"
-                accessibilityHint={`Switches to ${tabLabel} stickers`}
-              >
-                <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-                  {tabLabel}
-                </Text>
-              </AnimatedPressable>
-            );
-          })}
+          {TAB_DEFS.map((t) => (
+            <StickerTabButton
+              key={t.key}
+              label={t.label}
+              active={tab === t.key}
+              onPress={() => handleTabChange(t.key)}
+              reducedMotion={reducedMotion}
+              colors={colors}
+            />
+          ))}
         </ScrollView>
 
-        {/* Content */}
+        {/* Content — spring slide transition between categories */}
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          <Reanimated.View key={tab} entering={tabEnter}>
+          <Reanimated.View
+            key={tab}
+            entering={reducedMotion ? undefined : SlideInRight.duration(Motion.duration.normal).springify().damping(22).stiffness(180)}
+          >
           {tab === 'emoji' && (
             <View>
+              {/* Favorites rail — horizontal scroll, only if favorites exist */}
+              {favoriteStickers.length > 0 && (
+                <View style={styles.recentSection}>
+                  <Text style={styles.recentLabel}>Favorites</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.railContent}
+                  >
+                    {favoriteStickers.map((f, idx) => (
+                      <RailSticker
+                        key={`fav_${idx}`}
+                        emoji={f.emoji ?? f.content}
+                        index={idx}
+                        isFav={true}
+                        reducedMotion={reducedMotion}
+                        colors={colors}
+                        onPress={(emoji) => {
+                          haptic.light();
+                          handleStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
+                        }}
+                        onLongPress={(emoji) => toggleFavorite(emoji)}
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Recent rail — horizontal scroll, only if recent exist */}
               {recentStickers.length > 0 && (
                 <View style={styles.recentSection}>
                   <Text style={styles.recentLabel}>Recent</Text>
-                  <View style={styles.emojiGrid}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.railContent}
+                  >
                     {recentStickers.map((r, idx) => (
-                      <AnimatedPressable
+                      <RailSticker
                         key={`recent_${idx}`}
-                        style={styles.emojiBtn}
+                        emoji={r.emoji ?? r.content}
+                        index={idx}
+                        isFav={r.type === 'emoji' && isFavorite(r.content)}
+                        reducedMotion={reducedMotion}
+                        colors={colors}
                         onPress={() => {
+                          haptic.light();
                           handleStickerSelect({
                             id: `${r.type}_${Date.now()}`,
                             type: r.type,
                             content: r.content,
                           });
                         }}
-                        scaleValue={0.9}
-                        activeOpacity={0.7}
-                        hapticFeedback="light"
-                        accessibilityLabel={`Recent sticker ${r.content}`}
-                        accessibilityHint="Adds this recent sticker to the frame"
-                      >
-                        <Text style={styles.emojiText}>{r.emoji ?? r.content}</Text>
-                      </AnimatedPressable>
+                      />
                     ))}
-                  </View>
+                  </ScrollView>
                 </View>
               )}
-              <View style={styles.emojiGrid}>
-                {filteredEmojis.length > 0 ? (
-                  filteredEmojis.map((emoji, idx) => (
-                    <AnimatedPressable
-                      key={`${emoji}_${idx}`}
-                      style={styles.emojiBtn}
-                      onPress={() => {
-                        handleStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
-                      }}
-                      scaleValue={0.9}
-                      activeOpacity={0.7}
-                      hapticFeedback="light"
-                      accessibilityLabel={`Emoji ${emoji}`}
-                      accessibilityHint="Adds this emoji sticker to the frame"
-                    >
-                      <Text style={styles.emojiText}>{emoji}</Text>
-                    </AnimatedPressable>
-                  ))
-                ) : (
-                  <View style={styles.emptyState}>
-                    <Ionicons name="search-outline" size={28} color={colors.textMuted} />
-                    <Text style={styles.emptyStateText}>No stickers found</Text>
-                  </View>
-                )}
-              </View>
+
+              {/* Emoji grid — FlashList for performance, 4 columns, stagger entrance */}
+              {filteredEmojis.length > 0 ? (
+                <View style={styles.flashListWrap}>
+                  <FlashList
+                    data={filteredEmojis}
+                    numColumns={4}
+                    keyExtractor={(item, index) => `${item}_${index}`}
+                    renderItem={({ item, index }) => (
+                      <EmojiCell
+                        emoji={item}
+                        index={index}
+                        isFav={isFavorite(item)}
+                        reducedMotion={reducedMotion}
+                        colors={colors}
+                        onPress={(emoji) => {
+                          haptic.light();
+                          handleStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
+                        }}
+                        onLongPress={(emoji) => toggleFavorite(emoji)}
+                      />
+                    )}
+                  />
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="search-outline" size={28} color={colors.textMuted} />
+                  <Text style={styles.emptyStateText}>No stickers found</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -623,7 +921,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                   style={styles.pillBtn}
                   onPress={() => {
                     const now = new Date();
-                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const timeStr = formatTime(now);
                     onStickerSelect({
                       id: `time_${Date.now()}`,
                       type: 'time',
@@ -644,7 +942,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                   style={styles.pillBtn}
                   onPress={() => {
                     const now = new Date();
-                    const dateStr = now.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    const dateStr = formatShortDate(now);
                     onStickerSelect({
                       id: `time_${Date.now()}`,
                       type: 'time',
@@ -1019,7 +1317,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
           )}
           </Reanimated.View>
         </ScrollView>
-      </Animated.View>
+      </Reanimated.View>
     </View>
   );
 }
@@ -1070,6 +1368,8 @@ function createStyles(colors: any) {
     height: 38,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.standard,
+    borderColor: colors.borderSubtle,
   },
   searchInput: {
     flex: 1,
@@ -1083,24 +1383,8 @@ function createStyles(colors: any) {
   },
   tabRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: Space.md,
     paddingHorizontal: 16,
-  },
-  tab: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm - 2,
-    borderRadius: Radius.full,
-  },
-  tabActive: {
-    backgroundColor: colors.brand,
-  },
-  tabText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textMuted,
-  },
-  tabTextActive: {
-    color: colors.textInverse,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -1117,21 +1401,11 @@ function createStyles(colors: any) {
     letterSpacing: 0.5,
     marginBottom: Space.xs,
   },
-  emojiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
+  railContent: {
+    paddingRight: Space.md,
+  },
+  flashListWrap: {
     paddingTop: 4,
-  },
-  emojiBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emojiText: {
-    fontSize: EMOJI_SIZE,
   },
   emptyState: {
     alignItems: 'center',

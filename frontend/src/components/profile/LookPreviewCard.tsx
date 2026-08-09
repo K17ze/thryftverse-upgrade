@@ -164,7 +164,7 @@ function createStyles(colors: ThemeColors) {
   coverMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs + 2,
     marginTop: Space.xs,
   },
   creatorName: {
@@ -187,7 +187,7 @@ function createStyles(colors: ThemeColors) {
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   actionText: {
     fontFamily: Typography.family.medium,

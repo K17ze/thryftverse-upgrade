@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,25 +7,33 @@ import {
   ScrollView,
   ActivityIndicator,
   AccessibilityInfo,
+  Platform,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   withSpring,
   withTiming,
+  withDelay,
   useAnimatedStyle,
+  useAnimatedReaction,
   Easing as ReEasing,
+  runOnJS,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography, Control } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { LiquidGlassBackdrop } from '../LiquidGlassBackdrop';
 import type { PosterReactionType } from '../../services/postersApi';
 
-// Spring config for reaction tray entrance
-const SPRING_CONFIG = Motion.spring.entrance;
+/** Spring config shape returned by useMotionConfig().spring.* */
+type SpringConfig = { damping: number; stiffness: number; mass: number };
 
 // Character limit for reply input
 const REPLY_MAX_LENGTH = 500;
@@ -86,6 +94,8 @@ export function PosterReactionReplyBar({
 }: PosterReactionReplyBarProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
+  const { spring, isEnabled } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [replyText, setReplyText] = useState('');
   const [showReactions, setShowReactions] = useState(false);
@@ -96,6 +106,27 @@ export function PosterReactionReplyBar({
   // Reanimated shared values for reaction tray entry
   const trayScaleSV = useSharedValue(0);
   const trayOpacitySV = useSharedValue(0);
+
+  // Spring entrance for the entire bar
+  const barEntranceY = useSharedValue(reducedMotion ? 0 : 20);
+  const barEntranceOpacity = useSharedValue(reducedMotion ? 1 : 0);
+
+  // Drag-to-select: track horizontal pan position for the reaction tray
+  const dragX = useSharedValue(0);
+  const dragSelectedIndex = useSharedValue(-1);
+  const reactionLayoutX = useRef(0);
+
+  React.useEffect(() => {
+    if (!reducedMotion) {
+      barEntranceY.value = withSpring(0, spring.entrance as SpringConfig);
+      barEntranceOpacity.value = withTiming(1, { duration: Motion.duration.normal });
+    }
+  }, [reducedMotion, spring, barEntranceY, barEntranceOpacity]);
+
+  const barEntranceStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: barEntranceY.value }],
+    opacity: barEntranceOpacity.value,
+  }));
 
   const handleSendReply = useCallback(async () => {
     const trimmed = replyText.trim();
@@ -117,7 +148,7 @@ export function PosterReactionReplyBar({
       haptic.selection();
       setShowReactions(true);
       // Spring in — Reanimated with spring config
-      trayScaleSV.value = withSpring(1, SPRING_CONFIG);
+      trayScaleSV.value = withSpring(1, spring.entrance as SpringConfig);
       trayOpacitySV.value = withTiming(1, { duration: 150, easing: ReEasing.out(ReEasing.ease) });
     } else {
       // Fade out then hide — use setTimeout to hide after the animation completes
@@ -127,7 +158,7 @@ export function PosterReactionReplyBar({
         trayScaleSV.value = 0;
       }, 130);
     }
-  }, [showReactions, trayScaleSV, trayOpacitySV, haptic]);
+  }, [showReactions, trayScaleSV, trayOpacitySV, haptic, spring]);
 
   const handleQuickReply = (text: string) => {
     haptic.selection();
@@ -136,10 +167,53 @@ export function PosterReactionReplyBar({
     setShowQuickReplies(false);
   };
 
+  const handleReactionSelect = useCallback((r: typeof REACTIONS[number]) => {
+    if (viewerReaction === r.type) {
+      onRemoveReaction();
+      AccessibilityInfo.announceForAccessibility(`${r.label} reaction removed`);
+    } else {
+      onReaction(r.type);
+      AccessibilityInfo.announceForAccessibility(`${r.label} reaction sent`);
+    }
+    setShowReactions(false);
+  }, [viewerReaction, onReaction, onRemoveReaction]);
+
   const trayAnimatedStyle = useAnimatedStyle(() => ({
     opacity: trayOpacitySV.value,
     transform: [{ scale: trayScaleSV.value }],
   }));
+
+  // ── Drag-to-select gesture ───────────────────────────────────────────
+  // Pan horizontally over the reaction tray to scrub through reactions.
+  // The selected reaction follows the drag with a spring, and haptic fires
+  // when the selection crosses to a new reaction.
+  const dragGesture = React.useMemo(() => {
+    if (!isEnabled) return null;
+    return Gesture.Pan()
+      .activateAfterLongPress(50)
+      .onUpdate((e) => {
+        'worklet';
+        dragX.value = e.translationX;
+        // Calculate which reaction the drag is over
+        const reactionWidth = Control.hit;
+        const startX = reactionLayoutX.current;
+        const idx = Math.max(0, Math.min(REACTIONS.length - 1, Math.floor((e.absoluteX - startX) / reactionWidth)));
+        if (idx !== dragSelectedIndex.value) {
+          dragSelectedIndex.value = idx;
+          runOnJS(haptic.selection)();
+        }
+      })
+      .onEnd(() => {
+        'worklet';
+        const idx = dragSelectedIndex.value;
+        dragX.value = withSpring(0, spring.tap as SpringConfig);
+        if (idx >= 0 && idx < REACTIONS.length) {
+          const r = REACTIONS[idx];
+          runOnJS(handleReactionSelect)(r);
+        }
+        dragSelectedIndex.value = -1;
+      });
+  }, [isEnabled, dragX, dragSelectedIndex, haptic, spring, handleReactionSelect]);
 
   const showCounter = replyText.length > REPLY_COUNTER_THRESHOLD;
 
@@ -148,7 +222,7 @@ export function PosterReactionReplyBar({
   // plus share. No reply bar (owners don't reply to their own story).
   if (isOwner) {
     return (
-      <View style={styles.container}>
+      <Reanimated.View style={[styles.container, barEntranceStyle]}>
         <View style={styles.ownerRow}>
           {onShowActivity && (
             <AnimatedPressable
@@ -182,58 +256,50 @@ export function PosterReactionReplyBar({
             </AnimatedPressable>
           )}
         </View>
-      </View>
+      </Reanimated.View>
     );
   }
 
   // ── Viewer view ──────────────────────────────────────────────────────
   return (
-    <View style={styles.container}>
+    <Reanimated.View style={[styles.container, barEntranceStyle]}>
       {/* Floating emoji tray — no container, no card-on-card.
           Emoji sit directly on the media surface, matching Instagram's
-          floating quick-reaction pattern. Animated with spring on entry. */}
+          floating quick-reaction pattern. Animated with spring on entry.
+          Supports drag-to-select: pan horizontally to scrub through reactions
+          with spring follow and haptic on selection change. */}
       {showReactions && allowReactions && (
-        <Reanimated.View
-          style={[styles.reactionTray, trayAnimatedStyle]}
-        >
-          {/* Frosted glass pill behind the floating emoji — true
-              glassmorphism (Liquid Glass on iOS 26, BlurView fallback
-              elsewhere) so the tray reads as frosted glass floating
-              over the media, not a flat shadowed row. */}
-          <LiquidGlassBackdrop
-            intensity={35}
-            tint="light"
-            absoluteFill
-            style={styles.reactionTrayGlass}
-          />
-          {REACTIONS.map((r) => (
-            <AnimatedPressable
-              key={r.type}
-              onPress={() => {
-                if (viewerReaction === r.type) {
-                  onRemoveReaction();
-                  AccessibilityInfo.announceForAccessibility(`${r.label} reaction removed`);
-                } else {
-                  onReaction(r.type);
-                  AccessibilityInfo.announceForAccessibility(`${r.label} reaction sent`);
-                }
-                setShowReactions(false);
-              }}
-              style={[
-                styles.reactionBtn,
-                viewerReaction === r.type && styles.reactionActive,
-              ]}
-              scaleValue={0.82}
-              activeOpacity={0.7}
-              hapticFeedback="light"
-              accessibilityLabel={`${r.label} reaction`}
-              accessibilityRole="button"
-              accessibilityHint="Toggle this reaction on the story"
-            >
-              <Text style={styles.reactionGlyph}>{r.glyph}</Text>
-            </AnimatedPressable>
-          ))}
-        </Reanimated.View>
+        <GestureDetector gesture={dragGesture ?? Gesture.Pan().enabled(false)}>
+          <Reanimated.View
+            style={[styles.reactionTray, trayAnimatedStyle]}
+            onLayout={(e) => {
+              reactionLayoutX.current = e.nativeEvent.layout.x;
+            }}
+          >
+            {/* Frosted glass pill behind the floating emoji — true
+                glassmorphism (Liquid Glass on iOS 26, BlurView fallback
+                elsewhere) so the tray reads as frosted glass floating
+                over the media, not a flat shadowed row. */}
+            <LiquidGlassBackdrop
+              intensity={35}
+              tint="light"
+              absoluteFill
+              style={styles.reactionTrayGlass}
+            />
+            {REACTIONS.map((r, i) => (
+              <ReactionButton
+                key={r.type}
+                reaction={r}
+                index={i}
+                isActive={viewerReaction === r.type}
+                dragSelectedIndex={dragSelectedIndex}
+                springConfig={spring.press as SpringConfig}
+                reducedMotion={reducedMotion}
+                onPress={() => handleReactionSelect(r)}
+              />
+            ))}
+          </Reanimated.View>
+        </GestureDetector>
       )}
 
       {/* Quick reply suggestion chips — Instagram pattern.
@@ -367,7 +433,75 @@ export function PosterReactionReplyBar({
           </AnimatedPressable>
         )}
       </View>
-    </View>
+    </Reanimated.View>
+  );
+}
+
+/**
+ * Individual reaction button with spring scale on press and drag-follow.
+ * When the drag-to-select gesture is active, the button under the drag
+ * finger scales up with a spring for visual feedback.
+ */
+function ReactionButton({
+  reaction,
+  index,
+  isActive,
+  dragSelectedIndex,
+  springConfig,
+  reducedMotion,
+  onPress,
+}: {
+  reaction: { type: PosterReactionType; glyph: string; label: string };
+  index: number;
+  isActive: boolean;
+  dragSelectedIndex: SharedValue<number>;
+  springConfig: SpringConfig;
+  reducedMotion: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  // Spring scale — grows when this button is the drag-selected one
+  const scaleSV = useSharedValue(1);
+
+  // React to drag-selected index changes
+  useAnimatedReaction(
+    () => dragSelectedIndex.value === index,
+    (isSelected, wasSelected) => {
+      if (isSelected !== wasSelected) {
+        if (isSelected) {
+          scaleSV.value = withSpring(1.3, springConfig);
+        } else {
+          scaleSV.value = withSpring(1, springConfig);
+        }
+      }
+    },
+    [index, springConfig]
+  );
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleSV.value }],
+  }));
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      style={[
+        styles.reactionBtn,
+        isActive && styles.reactionActive,
+      ]}
+      scaleValue={0.82}
+      activeOpacity={0.7}
+      hapticFeedback="light"
+      accessibilityLabel={`${reaction.label} reaction`}
+      accessibilityRole="button"
+      accessibilityHint="Toggle this reaction on the story"
+    >
+      <Reanimated.View style={animatedStyle}>
+        <Text style={styles.reactionGlyph}>{reaction.glyph}</Text>
+      </Reanimated.View>
+    </AnimatedPressable>
   );
 }
 

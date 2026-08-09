@@ -277,7 +277,7 @@ export default function BrowseScreen() {
       borderRadius: Radius.sm,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
-      marginBottom: Space.sm + 4,
+      marginBottom: Space.smMd,
     },
     gridImageContainer: {
       width: '100%',

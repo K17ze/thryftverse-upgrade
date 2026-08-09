@@ -48,6 +48,7 @@ import { EditorialSection } from '../components/discover/EditorialSection';
 import { FeaturedBoardCard, FeaturedBoard } from '../components/discover/FeaturedBoardCard';
 import { EditorialImageRow, EditorialImage } from '../components/discover/EditorialImageRow';
 import { Typography, Radius } from '../theme/designTokens';
+import { CATEGORIES } from '../constants/categories';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GlobalSearch'>;
 
@@ -90,10 +91,14 @@ const TOP_SEARCH_CARDS = [
   { label: 'Minimal', color: '#E8DAEF', textColor: '#4A235A', image: '' },
 ];
 
-// Trending searches ΓÇö curated popular terms shown in the focus state (Depop/Vinted pattern)
-const TRENDING_SEARCHES: string[] = [
-  'Nike', 'Vintage', 'Y2K', 'Streetwear', 'Designer', 'Minimal', 'Summer', 'Denim',
-];
+// Trending categories ΓÇö derived from the app's canonical category tree so
+// pills map to real browse destinations. Shown in the focus state (Depop/Vinted
+// pattern) with category emoji icons.
+const TRENDING_CATEGORIES: { label: string; icon: string; query: string }[] = CATEGORIES.slice(0, 8).map((cat) => ({
+  label: cat.name,
+  icon: cat.emoji,
+  query: cat.id,
+}));
 
 /* ΓöÇΓöÇ Editorial seed data ΓöÇΓöÇ */
 const HERO_ITEMS: HeroItem[] = [
@@ -230,6 +235,22 @@ function getRecencyBoost(createdAt?: string) {
   if (Number.isNaN(createdTs)) return 0;
   const ageHours = (Date.now() - createdTs) / (1000 * 60 * 60);
   return Math.max(0, 16 - ageHours / 8);
+}
+
+/**
+ * Derives broadened search suggestions from a multi-word query.
+ * For "vintage denim jacket" → ["denim", "vintage"].
+ * For a single word, falls back to trending category labels so the user
+ * always has a meaningful next step.
+ */
+function getBroadenedSuggestions(rawQuery: string): string[] {
+  const tokens = rawQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length > 1) {
+    // Offer the individual tokens (shorter / broader) as suggestions
+    return tokens.slice(0, 2);
+  }
+  // Single token ΓÇö surface a couple of trending categories as alternatives
+  return ['women', 'men'];
 }
 
 export default function GlobalSearchScreen({ navigation }: Props) {
@@ -489,7 +510,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   }, []);
 
   const saveRecentSearch = async (term: string) => {
-    const updated = [term, ...recentSearches.filter((s) => s !== term)].slice(0, 10);
+    const updated = [term, ...recentSearches.filter((s) => s !== term)].slice(0, 8);
     setRecentSearches(updated);
     await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
   };
@@ -746,7 +767,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             onChangeText={setQuery}
             containerStyle={{ flex: 1, borderWidth: 0, backgroundColor: 'transparent' }}
             rightNode={
-              <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} activeOpacity={0.85} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Visual search" accessibilityRole="button">
+              <AnimatedPressable onPress={() => navigation.navigate('VisualSearch')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Visual search" accessibilityRole="button">
                 <Ionicons name="camera" size={24} color={colors.textMuted} />
               </AnimatedPressable>
             }
@@ -782,7 +803,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             <AnimatedPressable
               key={`${suggestion.type}_${idx}`}
               style={[styles.suggestionRow, t.suggestionRow]}
-              activeOpacity={0.7}
               onPress={() => {
                 setQuery(suggestion.text);
                 inputRef.current?.blur();
@@ -834,14 +854,13 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             <AnimatedPressable
                               key={idx}
                               style={[styles.recentPill, t.recentPill]}
-                              activeOpacity={0.8}
                               onPress={() => handlePillPress(term)}
                             >
                               <Ionicons name="time-outline" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
                               <Text style={[styles.recentPillText, t.recentPillText]}>{term}</Text>
                             </AnimatedPressable>
                           ))}
-                          <AnimatedPressable style={[styles.recentPill, t.recentPill, styles.clearRecentPill, t.clearRecentPill]} activeOpacity={0.8} onPress={clearRecentSearches}>
+                          <AnimatedPressable style={[styles.recentPill, t.recentPill, styles.clearRecentPill, t.clearRecentPill]} onPress={clearRecentSearches}>
                             <Ionicons name="close-circle" size={14} color={colors.textMuted} />
                             <Text style={[styles.recentPillText, t.recentPillText, { color: colors.textMuted }]}>Clear</Text>
                           </AnimatedPressable>
@@ -861,7 +880,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             <View key={search.id} style={[styles.savedSearchRow, t.savedSearchRow]}>
                               <AnimatedPressable
                                 style={styles.savedSearchMain}
-                                activeOpacity={0.8}
                                 onPress={() => handleSavedSearchPress(search.query)}
                                 accessibilityLabel={`Search for ${search.query}`}
                                 accessibilityRole="button"
@@ -886,21 +904,26 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       </EditorialSection>
                     )}
 
-                    {/* Popular searches */}
-                    <EditorialSection kicker="What others are searching" title="Popular searches">
-                      <View style={styles.trendingFocusWrap}>
-                        {TRENDING_SEARCHES.map((term, idx) => (
+                    {/* Trending categories ΓÇö real category data with icons */}
+                    <EditorialSection kicker="Browse by category" title="Trending categories">
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.trendingFocusScroll}
+                      >
+                        {TRENDING_CATEGORIES.map((cat, idx) => (
                           <AnimatedPressable
                             key={idx}
                             style={[styles.trendingFocusPill, t.trendingFocusPill]}
-                            activeOpacity={0.8}
-                            onPress={() => handlePillPress(term)}
+                            onPress={() => handlePillPress(cat.query)}
+                            accessibilityLabel={`Search ${cat.label} category`}
+                            accessibilityRole="button"
                           >
-                            <Ionicons name="flame" size={12} color={colors.danger} style={{ marginRight: 4 }} />
-                            <Text style={[styles.trendingFocusText, t.trendingFocusText]}>{term}</Text>
+                            <Text style={styles.trendingFocusIcon}>{cat.icon}</Text>
+                            <Text style={[styles.trendingFocusText, t.trendingFocusText]}>{cat.label}</Text>
                           </AnimatedPressable>
                         ))}
-                      </View>
+                      </ScrollView>
                     </EditorialSection>
                   </Reanimated.View>
                 ) : (
@@ -943,13 +966,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         <AnimatedPressable
                           key={idx}
                           style={[styles.recentPill, t.recentPill]}
-                          activeOpacity={0.8}
                           onPress={() => handlePillPress(term)}
                         >
                           <Text style={[styles.recentPillText, t.recentPillText]}>{term}</Text>
                         </AnimatedPressable>
                       ))}
-                      <AnimatedPressable style={[styles.recentPill, t.recentPill, styles.clearRecentPill, t.clearRecentPill]} activeOpacity={0.8} onPress={clearRecentSearches}>
+                      <AnimatedPressable style={[styles.recentPill, t.recentPill, styles.clearRecentPill, t.clearRecentPill]} onPress={clearRecentSearches}>
                         <Ionicons name="close-circle" size={14} color={colors.textMuted} />
                         <Text style={[styles.recentPillText, t.recentPillText, { color: colors.textMuted }]}>Clear</Text>
                       </AnimatedPressable>
@@ -969,7 +991,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         <View key={search.id} style={[styles.savedSearchRow, t.savedSearchRow]}>
                           <AnimatedPressable
                             style={styles.savedSearchMain}
-                            activeOpacity={0.8}
                             onPress={() => handleSavedSearchPress(search.query)}
                             accessibilityLabel={`Search for ${search.query}`}
                             accessibilityRole="button"
@@ -993,7 +1014,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           </AnimatedPressable>
                           <AnimatedPressable
                             style={styles.savedSearchToggle}
-                            activeOpacity={0.8}
                             onPress={() => handleToggleAlerts(search.id)}
                             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             accessibilityLabel={search.alertsEnabled ? 'Disable alerts' : 'Enable alerts'}
@@ -1007,7 +1027,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           </AnimatedPressable>
                           <AnimatedPressable
                             style={styles.savedSearchRemove}
-                            activeOpacity={0.8}
                             onPress={() => handleRemoveSavedSearch(search.id)}
                             accessibilityLabel="Remove saved search"
                             accessibilityRole="button"
@@ -1027,7 +1046,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       <AnimatedPressable
                         key={idx}
                         style={[styles.topSearchCard, { backgroundColor: card.color }]}
-                        activeOpacity={0.85}
                         onPress={() => handlePillPress(card.label)}
                       >
                         <CachedImage uri={card.image} style={styles.topSearchCardImage} contentFit="cover" />
@@ -1043,7 +1061,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 <EditorialSection title="Explore categories">
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
                     {trendingTags.map((tag, idx) => (
-                      <AnimatedPressable key={idx} style={[styles.trendingPill, t.trendingPill]} activeOpacity={0.8} onPress={() => handlePillPress(tag)}>
+                      <AnimatedPressable key={idx} style={[styles.trendingPill, t.trendingPill]} onPress={() => handlePillPress(tag)}>
                         <Text style={[styles.trendingPillText, t.trendingPillText]}>{tag}</Text>
                       </AnimatedPressable>
                     ))}
@@ -1082,7 +1100,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
-                            activeOpacity={0.9}
                             onPress={() => handleOpenRecommendation(listing.id)}
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1100,7 +1117,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
-                            activeOpacity={0.9}
                             onPress={() => handleOpenRecommendation(listing.id)}
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1151,12 +1167,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
                 {/* Sort + Filter bar */}
                 <View style={styles.filterBar}>
-                  <AnimatedPressable style={[styles.sortChip, t.sortChip]} onPress={handleCycleSort} activeOpacity={0.8} accessibilityLabel={`Sort by ${browseFilters.sort}`} accessibilityRole="button">
+                  <AnimatedPressable style={[styles.sortChip, t.sortChip]} onPress={handleCycleSort} accessibilityLabel={`Sort by ${browseFilters.sort}`} accessibilityRole="button">
                     <Ionicons name="swap-vertical" size={16} color={colors.textSecondary} />
                     <Text style={[styles.sortChipText, t.sortChipText]}>{browseFilters.sort}</Text>
                   </AnimatedPressable>
 
-                  <AnimatedPressable style={[styles.filterChip, t.filterChip]} onPress={handleOpenFilter} activeOpacity={0.8} accessibilityLabel={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : 'Open filters'} accessibilityRole="button">
+                  <AnimatedPressable style={[styles.filterChip, t.filterChip]} onPress={handleOpenFilter} accessibilityLabel={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : 'Open filters'} accessibilityRole="button">
                     <Ionicons name="options-outline" size={16} color={colors.textSecondary} />
                     <Text style={[styles.filterChipText, t.filterChipText]}>Filter</Text>
                     {activeFilterCount > 0 && (
@@ -1167,7 +1183,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </AnimatedPressable>
 
                   {hasActiveDiscoverFilters && (
-                    <AnimatedPressable style={[styles.clearChip, t.clearChip]} onPress={handleClearDiscoverFilters} activeOpacity={0.8} accessibilityLabel="Clear all filters" accessibilityRole="button">
+                    <AnimatedPressable style={[styles.clearChip, t.clearChip]} onPress={handleClearDiscoverFilters} accessibilityLabel="Clear all filters" accessibilityRole="button">
                       <Ionicons name="close-circle" size={16} color={colors.danger} />
                       <Text style={[styles.clearChipText, t.clearChipText]}>Clear</Text>
                     </AnimatedPressable>
@@ -1190,7 +1206,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             isCurrentQuerySaved && styles.saveSearchBtnActive,
                             isCurrentQuerySaved && t.saveSearchBtnActive,
                           ]}
-                          activeOpacity={0.8}
                           onPress={isCurrentQuerySaved ? undefined : handleSaveSearch}
                           accessibilityLabel={isCurrentQuerySaved ? 'Search saved with alerts' : 'Save this search with alerts'}
                           accessibilityRole="button"
@@ -1213,7 +1228,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         </AnimatedPressable>
                       )}
                       {!normalizedQuery && (
-                        <AnimatedPressable style={[styles.topicSearchBtn, t.topicSearchBtn]} activeOpacity={0.8} onPress={handleSearchSubmit}>
+                        <AnimatedPressable style={[styles.topicSearchBtn, t.topicSearchBtn]} onPress={handleSearchSubmit}>
                           <Ionicons name="search" size={18} color={colors.textPrimary} />
                         </AnimatedPressable>
                       )}
@@ -1230,7 +1245,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
-                            activeOpacity={0.9}
                             onPress={() => handleOpenRecommendation(listing.id)}
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1252,7 +1266,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
-                            activeOpacity={0.9}
                             onPress={() => handleOpenRecommendation(listing.id)}
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1284,23 +1297,48 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       }}
                     />
                   ) : (
-                    <View style={[styles.recoEmptyState, t.recoEmptyState]}>
-                      <Ionicons name="sparkles-outline" size={18} color={colors.textMuted} />
-                      <Text style={[styles.recoEmptyText, t.recoEmptyText]}>
+                    <View style={[styles.noResultsState, { borderColor: colors.border }]}>
+                      <Ionicons name="search-outline" size={22} color={colors.textMuted} />
+                      <Text style={[styles.noResultsTitle, { color: colors.textPrimary }]}>
                         {hasActiveDiscoverFilters
-                          ? 'No picks match your current filters. Adjust or clear them.'
-                          : isSearching ? 'Searching...' : 'No results found. Try a different keyword.'}
+                          ? `No matches for "${query.trim()}" with these filters`
+                          : `No matches for "${query.trim()}"`}
                       </Text>
-                      {hasActiveDiscoverFilters && !isSearching && (
-                        <AnimatedPressable
-                          style={[styles.recoEmptyCta, { borderColor: colors.border }]}
-                          onPress={resetBrowseFilters}
-                          accessibilityRole="button"
-                          accessibilityLabel="Clear all filters"
-                        >
-                          <Text style={[styles.recoEmptyCtaText, { color: colors.textPrimary }]}>Clear filters</Text>
-                        </AnimatedPressable>
-                      )}
+                      <Text style={[styles.noResultsSubtitle, { color: colors.textSecondary }]}>
+                        {isSearching
+                          ? 'Searching the indexΓÇª'
+                          : hasActiveDiscoverFilters
+                            ? 'Try clearing your filters or broadening your search.'
+                            : (() => {
+                                const suggestions = getBroadenedSuggestions(query);
+                                return `Try ${suggestions.map((s) => `"${s}"`).join(' or ')} ΓÇö or browse all categories.`;
+                              })()}
+                      </Text>
+                      <View style={styles.noResultsActions}>
+                        {hasActiveDiscoverFilters && !isSearching && (
+                          <AnimatedPressable
+                            style={[styles.noResultsPrimaryCta, { backgroundColor: colors.textPrimary }]}
+                            onPress={handleClearDiscoverFilters}
+                            accessibilityRole="button"
+                            accessibilityLabel="Clear all filters"
+                          >
+                            <Text style={[styles.noResultsPrimaryCtaText, { color: colors.textInverse }]}>Clear filters</Text>
+                          </AnimatedPressable>
+                        )}
+                        {!isSearching && (
+                          <AnimatedPressable
+                            style={[styles.noResultsSecondaryCta, { borderColor: colors.border }]}
+                            onPress={() => {
+                              setQuery('');
+                              navigation.navigate('Browse', { categoryId: 'all', title: 'Browse all' });
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel="Browse all categories"
+                          >
+                            <Text style={[styles.noResultsSecondaryCtaText, { color: colors.textPrimary }]}>Browse all</Text>
+                          </AnimatedPressable>
+                        )}
+                      </View>
                     </View>
                   )}
                 </Reanimated.View>
@@ -1480,12 +1518,10 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
 
-  // Focus state ΓÇö trending pills (wrap layout, not horizontal scroll)
-  trendingFocusWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  // Focus state ΓÇö trending pills (horizontal scroll with category icons)
+  trendingFocusScroll: {
     paddingHorizontal: 16,
+    gap: 10,
   },
   trendingFocusPill: {
     flexDirection: 'row',
@@ -1494,6 +1530,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: Radius.xxl,
     borderWidth: 1,
+  },
+  trendingFocusIcon: {
+    fontSize: 15,
+    marginRight: 6,
   },
   trendingFocusText: {
     fontSize: 13,
@@ -1729,6 +1769,54 @@ const styles = StyleSheet.create({
   },
   recoEmptyCtaText: {
     fontSize: 12,
+    fontFamily: Typography.family.semibold,
+  },
+
+  // Contextual no-results state (search results surface)
+  noResultsState: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    marginHorizontal: 20,
+    borderRadius: Radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  noResultsTitle: {
+    fontSize: 16,
+    fontFamily: Typography.family.semibold,
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  noResultsSubtitle: {
+    fontSize: 13,
+    fontFamily: Typography.family.regular,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  noResultsActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+  },
+  noResultsPrimaryCta: {
+    borderRadius: Radius.full,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  noResultsPrimaryCtaText: {
+    fontSize: 13,
+    fontFamily: Typography.family.semibold,
+  },
+  noResultsSecondaryCta: {
+    borderRadius: Radius.full,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+  },
+  noResultsSecondaryCtaText: {
+    fontSize: 13,
     fontFamily: Typography.family.semibold,
   },
 });

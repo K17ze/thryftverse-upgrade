@@ -977,7 +977,7 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     minHeight: Control.hit,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
@@ -1002,7 +1002,7 @@ const styles = StyleSheet.create({
   },
   sortOption: {
     minHeight: Control.hit,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',

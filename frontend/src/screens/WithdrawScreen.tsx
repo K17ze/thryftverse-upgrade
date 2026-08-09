@@ -692,7 +692,7 @@ function createStyles(colors: ThemeColors) {
   balanceError: { textAlign: 'center', marginTop: Space.xs, marginBottom: Space.md + 4, fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.danger },
   sectionTitle: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: LetterSpacing.caps + 0.38, marginBottom: Space.sm + Space.xs },
 
-  bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: Space.md, borderRadius: Radius.lg, marginBottom: Space.sm + 4, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.subtle },
+  bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: Space.md, borderRadius: Radius.lg, marginBottom: Space.smMd, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.subtle },
   bankLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   bankIcon: { width: Space.xl + Space.xl - 4, height: Space.xl + Space.xl - 4, borderRadius: Radius.xxl, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   bankName: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginBottom: Space.xs },

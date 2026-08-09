@@ -763,8 +763,8 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             <EmptyState
               density="compact"
               icon="create-outline"
-              title="Empty moodboard"
-              subtitle="Tap a listing below to place it on the canvas"
+              title="Start your moodboard"
+              subtitle="Tap a listing below to place it on the canvas."
               {...(pickerItems.length > 0
                 ? { ctaLabel: 'Add items', onCtaPress: () => void handleAddItem(pickerItems[0]) }
                 : {})}

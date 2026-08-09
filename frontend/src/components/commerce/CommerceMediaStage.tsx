@@ -794,7 +794,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   dotRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
   },
   dot: {
     width: 5,
@@ -819,10 +819,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.md,
   },
   videoBadgeText: {
@@ -838,10 +838,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.md,
   },
   zoomHintIcon: {
@@ -869,7 +869,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   thumbnailContent: {
     paddingHorizontal: Space.md,
-    gap: 6,
+    gap: Space.xs + 2,
   },
   thumbnail: {
     width: 40,

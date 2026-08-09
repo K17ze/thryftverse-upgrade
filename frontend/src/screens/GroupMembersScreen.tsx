@@ -192,7 +192,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     gap: Space.sm,
   },
   memberAvatar: {
@@ -220,7 +220,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.sm,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
@@ -269,7 +269,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    gap: Space.sm + 4,
+    gap: Space.smMd,
   },
   memberAvatarV2: {
     width: Control.hit,
@@ -295,7 +295,7 @@ function createStyles(colors: ThemeColors) {
   memberDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: Space.md + 44 + Space.sm + 4,
+    marginLeft: Space.md + 44 + Space.smMd,
     marginRight: Space.md,
   },
   emptyWrapV2: {

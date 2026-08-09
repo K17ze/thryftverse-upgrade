@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
   },
   actionBtn: {
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',

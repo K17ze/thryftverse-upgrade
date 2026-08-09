@@ -501,8 +501,8 @@ export default function ClosetScreen() {
         <EmptyState
           graphic={<BoardEmptyGraphic title="No collections" subtitle="Create your first moodboard" icon="folder-open-outline" size={140} />}
           title="No collections yet"
-          subtitle="Group your saved items into boards."
-          ctaLabel="Create Collection"
+          subtitle="Group your saved items into boards to organise your finds."
+          ctaLabel="Create collection"
           onCtaPress={handleCreateCollection}
         />
       );
@@ -895,7 +895,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 4,
+    paddingVertical: Space.smMd,
     borderBottomWidth: Stroke.hairline,
   },
   sortOptionActive: {
@@ -917,7 +917,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
@@ -1011,7 +1011,7 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   brandChip: {
-    paddingHorizontal: Space.sm + 4,
+    paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,

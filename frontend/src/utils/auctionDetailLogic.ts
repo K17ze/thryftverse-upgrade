@@ -144,11 +144,25 @@ export function resolveStateAction(
       };
     }
     // ended — watching or not_participating
+    if (viewerState === 'watching') {
+      return {
+        primary: { type: 'viewSimilar', label: 'View similar items' },
+        secondary: { type: 'none', label: '' },
+        forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+        viewerMessage: auction.bidCount > 0
+          ? `Auction ended · ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'}`
+          : 'Auction ended · no bids',
+        viewerTreatment: 'subdued',
+      };
+    }
+    // not_participating
     return {
-      primary: { type: 'none', label: '' },
+      primary: { type: 'viewSimilar', label: 'View similar items' },
       secondary: { type: 'none', label: '' },
       forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
-      viewerMessage: null,
+      viewerMessage: auction.bidCount > 0
+        ? `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'}`
+        : 'Auction ended · no bids',
       viewerTreatment: 'subdued',
     };
   }

@@ -12,6 +12,14 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
+import { Anton_400Regular } from '@expo-google-fonts/anton';
+import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
+import { Caveat_400Regular } from '@expo-google-fonts/caveat';
+import { DancingScript_400Regular } from '@expo-google-fonts/dancing-script';
+import { Lobster_400Regular } from '@expo-google-fonts/lobster';
+import { Pacifico_400Regular } from '@expo-google-fonts/pacifico';
+import { PlayfairDisplay_400Regular, PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
+import { PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import * as Network from 'expo-network';
@@ -114,6 +122,15 @@ export default function App() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
+    Anton_400Regular,
+    BebasNeue_400Regular,
+    Caveat_400Regular,
+    DancingScript_400Regular,
+    Lobster_400Regular,
+    Pacifico_400Regular,
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_700Bold,
+    PressStart2P_400Regular,
   });
 
   React.useEffect(() => {

@@ -6,11 +6,12 @@ import {
   Pressable,
   FlatList,
   ScrollView,
-  Image,
   ActivityIndicator,
   useWindowDimensions,
   Linking,
+  Image as RNImage,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +22,22 @@ import { createStableId } from '../utils/createStableId';
 import type { CreatorLayer } from './composition';
 import CreatorCamera from './CreatorCamera';
 import { useHaptic } from '../hooks/useHaptic';
+import { useMotionConfig } from '../hooks/useMotionConfig';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  withRepeat,
+  withSequence,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
 
 // ── Creator Entry Screen ───────────────────────────────────────────
 // Camera-first entry for the creator. Modeled on VisualSearchScreen:
@@ -146,7 +163,7 @@ export function CreatorEntryScreen({
   // ── Camera capture → create media layer → enter editor ──
   const handleCapture = useCallback((uri: string) => {
     // Get image dimensions to preserve aspect ratio
-    Image.getSize(uri, (imgW, imgH) => {
+    RNImage.getSize(uri, (imgW: number, imgH: number) => {
       const imgRatio = imgW / imgH;
       // Fit within canvas while preserving aspect ratio
       const layer: CreatorLayer = {
