@@ -18,6 +18,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { CURRENCIES } from '../constants/currencies';
+import { COPY } from '../constants/copy';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
@@ -49,6 +50,8 @@ import {
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
+import { SkeletonLoader } from '../components/SkeletonLoader';
+import { useHaptic } from '../hooks/useHaptic';
 
 export default function WithdrawScreen() {
   const navigation = useNavigation<any>();
@@ -66,6 +69,7 @@ export default function WithdrawScreen() {
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
+  const haptic = useHaptic();
   const currentUser = useStore((state) => state.currentUser);
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
@@ -238,7 +242,7 @@ export default function WithdrawScreen() {
     resolvedCapabilities: UserCountryCapabilities | null
   ): Promise<PayoutAccountPayload> => {
     if (!currentUser?.id) {
-      throw new Error('Please sign in to connect a payout profile.');
+      throw new Error('Sign in to connect a payout profile.');
     }
 
     const gatewayPriority = resolvedCapabilities?.payouts.gatewayPriority ?? ['stripe_americas'];
@@ -300,7 +304,7 @@ export default function WithdrawScreen() {
     capabilities: UserCountryCapabilities | null;
   }> => {
     if (!currentUser?.id) {
-      throw new Error('Please sign in to withdraw your balance.');
+      throw new Error('Sign in to withdraw your balance.');
     }
 
     const resolvedCapabilities = await ensureCapabilities();
@@ -355,11 +359,12 @@ export default function WithdrawScreen() {
     }
 
     if (!currentUser?.id) {
-      show('Please sign in to withdraw your balance.', 'error');
+      show('Sign in to withdraw your balance.', 'error');
       navigation.navigate('AuthLanding');
       return;
     }
 
+    haptic.patterns.save();
     setIsWithdrawing(true);
     try {
       const { account: payoutProfile, capabilities: activeCapabilities } = await ensurePayoutAccount();
@@ -477,6 +482,35 @@ export default function WithdrawScreen() {
     );
   }
 
+  // ── Balance hydration skeleton: shows matching layout while balance loads ──
+  // Prevents layout shift and provides immediate visual feedback on first render.
+  if (isHydratingBalance) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <View style={styles.header}>
+          <AnimatedPressable
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            accessibilityHint="Returns to the previous screen"
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <Text style={styles.headerTitle}>Withdraw Balance</Text>
+          <View style={{ width: 44 }} />
+        </View>
+        <View style={styles.skeletonContainer}>
+          <SkeletonLoader width="60%" height={32} borderRadius={Radius.md} style={{ marginBottom: Space.lg }} />
+          <SkeletonLoader width="100%" height={80} borderRadius={Radius.lg} style={{ marginBottom: Space.md }} />
+          <SkeletonLoader width="100%" height={56} borderRadius={Radius.md} style={{ marginBottom: Space.sm }} />
+          <SkeletonLoader width="100%" height={56} borderRadius={Radius.md} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
@@ -499,7 +533,7 @@ export default function WithdrawScreen() {
         <View style={[styles.offlineBanner, { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border }]}>
           <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
           <Text style={[styles.offlineBannerText, { color: colors.textPrimary }]}>
-            You are offline. Withdrawals cannot be submitted until connection returns.
+            {COPY.offline}
           </Text>
         </View>
       )}
@@ -536,7 +570,8 @@ export default function WithdrawScreen() {
             <TextInput
               style={styles.amountInput}
               value={amount}
-              onChangeText={(value) => setAmount(sanitizeDecimalInput(value))}
+              onChangeText={(value) => { haptic.selection(); setAmount(sanitizeDecimalInput(value)); }}
+              onFocus={() => haptic.light()}
               keyboardType="decimal-pad"
               autoFocus
               selectionColor={colors.brand}
@@ -637,6 +672,7 @@ export default function WithdrawScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  skeletonContainer: { paddingHorizontal: Space.md + Space.xs, paddingTop: Space.md },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, height: Space.xl + Space.xl + 8, borderBottomWidth: Stroke.standard, borderBottomColor: colors.border },
   backBtn: { width: Control.hit, height: Control.hit, justifyContent: 'center', alignItems: 'flex-start' },
   headerTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
@@ -674,6 +710,7 @@ function createStyles(colors: ThemeColors) {
   heroTitle: {
     fontSize: Type.title.size - 2,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   heroSubtitle: {
     fontSize: Type.body.size,
@@ -685,7 +722,7 @@ function createStyles(colors: ThemeColors) {
 
   amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Space.xl + Space.xl - 8, marginBottom: Space.sm + Space.xs },
   currencySymbol: { fontSize: Type.priceLarge.size + 16, fontFamily: Typography.family.bold, color: colors.textPrimary, marginRight: Space.sm },
-  amountInput: { fontSize: Type.priceLarge.size + 28, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2 },
+  amountInput: { fontSize: Type.priceLarge.size + 28, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2, fontVariant: ['tabular-nums'] },
   availableText: { textAlign: 'center', fontSize: Type.body.size, fontFamily: Typography.family.medium, color: colors.textSecondary, marginBottom: Space.sm },
   policyLabel: { textAlign: 'center', fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.textMuted, marginBottom: Space.xs },
   policyHint: { textAlign: 'center', fontSize: Type.caption.size, fontFamily: Typography.family.medium, color: colors.textMuted, marginBottom: Space.lg + Space.xs },
@@ -694,7 +731,7 @@ function createStyles(colors: ThemeColors) {
 
   bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: Space.md, borderRadius: Radius.lg, marginBottom: Space.smMd, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.subtle },
   bankLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  bankIcon: { width: Space.xl + Space.xl - 4, height: Space.xl + Space.xl - 4, borderRadius: Radius.xxl, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  bankIcon: { width: Space.xl + Space.xl - 4, height: Space.xl + Space.xl - 4, borderRadius: Radius.xxl, alignItems: 'center', justifyContent: 'center' },
   bankName: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginBottom: Space.xs },
   bankDetails: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
 
@@ -706,6 +743,6 @@ function createStyles(colors: ThemeColors) {
   feeText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center', marginBottom: Space.md },
   primaryBtn: { backgroundColor: colors.textPrimary, height: Space.xl + Space.xl + 8, borderRadius: Space.lg + 4, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: colors.background, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold },
+  primaryText: { color: colors.background, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
   });
 }

@@ -182,9 +182,10 @@ function ProductCardV2Base({
           </>
         ) : null}
 
-        {/* Price drop / sustainability — top-left, mutually exclusive.
-            A price reduction is the stronger deal signal, so it wins
-            over the eco chip. Both are suppressed once the item is sold. */}
+        {/* Badge cascade — priority: price drop > sold > condition > sustainability.
+            Top-left corner is mutually exclusive: a price reduction is the
+            stronger deal signal, so it wins over the eco chip. Both are
+            suppressed once the item is sold. */}
         {!item.isSold && hasPriceDrop ? (
           <View style={styles.priceDropBadge}>
             <Text style={styles.conditionText}>-{priceDropPercent}%</Text>

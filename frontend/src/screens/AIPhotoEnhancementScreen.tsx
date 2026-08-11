@@ -31,8 +31,10 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AITrustSignal } from '../components/ai/AITrustSignal';
 import { EmptyState as CanonicalEmptyState } from '../components/EmptyState';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useHaptic } from '../hooks/useHaptic';
 import {
   AI_PHOTO_DEMO_MODE,
   fetchEnhancementOptions,
@@ -63,6 +65,7 @@ type ScreenPhase =
 
 export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
@@ -106,7 +109,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
       const msg =
         typeof e === 'object' && e && 'message' in e
           ? (e as Error).message
-          : 'Could not load enhancement options. Please try again.';
+          : 'Could not load enhancement options. Try again.';
       setError(msg);
       setPhase('error');
     }
@@ -126,6 +129,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   const handleSelectOption = useCallback(
     (option: EnhancementOption) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptic.patterns.tabSwitch();
       setSelectedOptionId(option.id);
       setSelectedPresetId(null);
       if (option.type === 'background_replace') {
@@ -134,20 +138,22 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
         setShowBackgroundPicker(false);
       }
     },
-    [],
+    [haptic],
   );
 
   const handleSelectPreset = useCallback((preset: EnhancementPreset) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.patterns.tabSwitch();
     setSelectedPresetId(preset.id);
     setSelectedOptionId(null);
     setShowBackgroundPicker(false);
-  }, []);
+  }, [haptic]);
 
   const handleSelectScene = useCallback((scene: BackgroundScene) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.patterns.tabSwitch();
     setSelectedSceneId(scene.id);
-  }, []);
+  }, [haptic]);
 
   // -- Apply enhancement ---------------------------------------------------
   const handleApply = useCallback(async () => {
@@ -175,27 +181,29 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
       setShowAfter(true);
       setPhase('applied');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptic.patterns.save();
     } catch (e: unknown) {
       const msg =
         typeof e === 'object' && e && 'message' in e
           ? (e as Error).message
-          : 'Enhancement failed. Please try again.';
+          : 'Enhancement failed. Try again.';
       setError(msg);
       setPhase('error');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     } finally {
       setIsApplying(false);
     }
-  }, [imageUri, isOffline, selectedOptionId, selectedPresetId, selectedSceneId, showBackgroundPicker]);
+  }, [imageUri, isOffline, selectedOptionId, selectedPresetId, selectedSceneId, showBackgroundPicker, haptic]);
 
   // -- Revert --------------------------------------------------------------
   const handleRevert = useCallback(async () => {
     if (!result) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.patterns.toggle();
     setShowAfter(false);
     setResult(null);
     setPhase('populated');
-  }, [result]);
+  }, [result, haptic]);
 
   // -- Save (return to listing flow) ---------------------------------------
   const handleSave = useCallback(() => {
@@ -534,7 +542,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
             <Text style={[styles.appliedMessageText, { color: colors.textPrimary }]}>
               {AI_PHOTO_DEMO_MODE
                 ? 'Demo: No changes were made to your image. Connect the AI service to enable real enhancement.'
-                : 'Enhancement applied. You can compare, revert, or save.'}
+                : 'Enhancement applied. Compare, revert, or save.'}
             </Text>
           </Reanimated.View>
         )}
@@ -703,12 +711,12 @@ function LoadingSkeleton({ colors, styles }: { colors: ThemeColors; styles: Retu
   return (
     <View style={styles.skeletonWrap}>
       {/* Options rail skeleton */}
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 80, height: 64 }]} />
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 80, height: 64 }]} />
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 80, height: 64 }]} />
+      <SkeletonLoader width={80} height={64} borderRadius={Radius.md} />
+      <SkeletonLoader width={80} height={64} borderRadius={Radius.md} />
+      <SkeletonLoader width={80} height={64} borderRadius={Radius.md} />
       {/* Presets skeleton */}
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 120, height: 36, marginTop: Space.md }]} />
-      <View style={[styles.skeletonBlock, { backgroundColor: colors.surfaceAlt, width: 120, height: 36 }]} />
+      <SkeletonLoader width={120} height={36} borderRadius={Radius.md} style={{ marginTop: Space.md }} />
+      <SkeletonLoader width={120} height={36} borderRadius={Radius.md} />
     </View>
   );
 }

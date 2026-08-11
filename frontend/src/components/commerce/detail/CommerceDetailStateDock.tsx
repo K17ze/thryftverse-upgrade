@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Type, Radius, Typography, Elevation, DockConstants, CommerceLayout } from '../../../theme/designTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -326,9 +327,13 @@ export function CommerceDetailStateDock({
     return <View style={styles.wrapper}>{content}</View>;
   }
 
-  // Plain render — no spring entrance animation. The dock appears
-  // immediately when the Buy Now section becomes active.
-  return <View style={styles.wrapper}>{content}</View>;
+  // Single FadeIn entry transition — no spring. The dock fades in over
+  // 280ms when the Buy Now section becomes active.
+  return (
+    <Animated.View style={styles.wrapper} entering={FadeIn.duration(280)}>
+      {content}
+    </Animated.View>
+  );
 }
 
 const styles = StyleSheet.create({

@@ -7,7 +7,7 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius, Stroke } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const TAB_HEIGHT = 44;
@@ -52,7 +52,7 @@ export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: Ta
     const offsetX = tabOffsets.current[key] ?? 0;
     const underlineW = tabW * 0.4;
     const targetX = offsetX + (tabW - underlineW) / 2;
-    if (reducedMotion) {
+    if (reducedMotion || reducedMotionHook) {
       // Instant — no animation
       underlineTranslateX.value = targetX;
       underlineWidth.value = underlineW;
@@ -91,7 +91,7 @@ export function TabRail({ tabs, activeKey, onChange, reducedMotion = false }: Ta
         return (
           <Pressable
             key={tab.key}
-            style={styles.tab}
+            style={({ pressed }) => [styles.tab, pressed && { opacity: 0.6 }]}
             onLayout={onTabLayout(tab.key)}
             onPress={() => handlePress(tab.key)}
             accessibilityRole="tab"
@@ -149,7 +149,7 @@ export function SegmentedControl<K extends string = SegmentKey>({ segments, acti
     measureSegments();
     const segW = segWidths.current[key] ?? 0;
     const offsetX = segOffsets.current[key] ?? 0;
-    if (reducedMotion) {
+    if (reducedMotion || reducedMotionHook) {
       // Instant — no animation
       segUnderlineX.value = offsetX;
       segUnderlineW.value = segW;
@@ -187,7 +187,7 @@ export function SegmentedControl<K extends string = SegmentKey>({ segments, acti
         return (
           <Pressable
             key={seg.key}
-            style={styles.segment}
+            style={({ pressed }) => [styles.segment, pressed && { opacity: 0.6 }]}
             onLayout={onSegLayout(seg.key)}
             onPress={() => handleSegPress(seg.key)}
             accessibilityRole="tab"
@@ -221,20 +221,20 @@ function createStyles(colors: ThemeColors) {
   tabContent: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 5,
+    gap: Space.xs + 1,
   },
   tabLabel: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
-    letterSpacing: -0.2,
+    letterSpacing: Type.body.letterSpacing,
   },
   tabLabelActive: {
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
   tabCount: {
-    fontSize: Type.caption.size,
+    fontSize: 12,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     minWidth: 14,
@@ -245,9 +245,9 @@ function createStyles(colors: ThemeColors) {
   tabUnderline: {
     position: 'absolute',
     bottom: 0,
-    height: 2,
+    height: Stroke.emphasis,
     backgroundColor: colors.textPrimary,
-    borderRadius: 1,
+    borderRadius: Radius.sm,
   },
   segmentControl: {
     flexDirection: 'row',
@@ -259,7 +259,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   segmentLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: 13,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     letterSpacing: -0.1,
@@ -271,9 +271,9 @@ function createStyles(colors: ThemeColors) {
   segmentUnderline: {
     position: 'absolute',
     bottom: 0,
-    height: 2,
+    height: Stroke.emphasis,
     backgroundColor: colors.textPrimary,
-    borderRadius: 1,
+    borderRadius: Radius.sm,
   },
   });
 }
