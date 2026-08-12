@@ -175,9 +175,9 @@ export function ProfileHero({
 
         {/* Identity canvas — paddingTop reserves avatar space */}
         <View style={styles.identityCanvas}>
-          {/* Seam row — shop stat to the right of avatar, vertically centred.
-              Followers/Following moved to a dedicated Social Row below the
-              identity section for clearer hierarchy (matching MyProfileScreen). */}
+          {/* Seam row — shop + social stats to the right of avatar, vertically centred.
+              For sale, Followers, and Following all live here for a single
+              authoritative stats row at the top (Instagram pattern). */}
           <View style={styles.seamRow}>
             <View style={styles.seamSpacer} />
             <View style={styles.seamStats}>
@@ -189,6 +189,24 @@ export function ProfileHero({
               >
                 <Text style={styles.seamStatValue}>{activeCount}</Text>
                 <Text style={styles.seamStatLabel} numberOfLines={1}>For sale</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.6 }]}
+                onPress={() => onOpenConnections('followers')}
+                accessibilityRole="button"
+                accessibilityLabel={`${followerCount} followers — view followers`}
+              >
+                <Text style={styles.seamStatValue}>{followerCount}</Text>
+                <Text style={styles.seamStatLabel} numberOfLines={1}>Followers</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.6 }]}
+                onPress={() => onOpenConnections('following')}
+                accessibilityRole="button"
+                accessibilityLabel={`${followingCount} following — view following`}
+              >
+                <Text style={styles.seamStatValue}>{followingCount}</Text>
+                <Text style={styles.seamStatLabel} numberOfLines={1}>Following</Text>
               </Pressable>
             </View>
           </View>
@@ -266,32 +284,6 @@ export function ProfileHero({
           {/* Trust signal chips removed — the trust line above shows rating/sold/joined,
               and SellerReputationCard below shows the full metric breakdown (response
               time, dispatch time, response rate). Chips here duplicated both. */}
-
-          {/* ── SOCIAL ROW — followers / following ──
-              Dedicated bordered row matching MyProfileScreen's Social Row.
-              Positioned after the trust line, BEFORE the actions — this is
-              the canonical Instagram/TikTok pattern: identity → stats → actions. */}
-          <View style={styles.socialRow}>
-            <Pressable
-              style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.6 }]}
-              onPress={() => onOpenConnections('followers')}
-              accessibilityRole="button"
-              accessibilityLabel={`${followerCount} followers — view followers`}
-            >
-              <Text style={styles.socialValue}>{followerCount}</Text>
-              <Text style={styles.socialLabel}>Followers</Text>
-            </Pressable>
-            <View style={styles.socialDivider} />
-            <Pressable
-              style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.6 }]}
-              onPress={() => onOpenConnections('following')}
-              accessibilityRole="button"
-              accessibilityLabel={`${followingCount} following — view following`}
-            >
-              <Text style={styles.socialValue}>{followingCount}</Text>
-              <Text style={styles.socialLabel}>Following</Text>
-            </Pressable>
-          </View>
         </View>
 
         {/* Actions — flat 11pt radius, restrained, content-first */}
@@ -467,42 +459,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 1,
-  },
-
-  // Social row — dedicated followers/following row below identity + actions.
-  // Matches MyProfileScreen's Social Row: bordered, centered, with dividers.
-  socialRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-  },
-  socialCell: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xs,
-    gap: Space.xs / 4,
-  },
-  socialValue: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
-    color: colors.textPrimary,
-  },
-  socialLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-  socialDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: Space.xl - Space.xs,
-    backgroundColor: colors.borderSubtle,
   },
 
   // Identity — full-width, left-aligned
