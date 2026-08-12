@@ -793,27 +793,65 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         ) : null}
       </Reanimated.View>
 
-      {/* Content list â€” cover scrolls naturally as first header item */}
-      <AnimatedFlashList
-        ref={listRef}
-        data={listData as (ListingApiItem | LookApiItem | SellerReviewItem)[]}
-        renderItem={renderItem}
-        keyExtractor={(item: ListingApiItem | LookApiItem | SellerReviewItem, index: number) => (item as { id?: string }).id ?? `item-${index}`}
-        ListHeaderComponent={listHeader}
-        ListEmptyComponent={listEmpty}
-        ListFooterComponent={listFooter}
-        numColumns={numColumns}
-        columnWrapperStyle={numColumns > 1 ? { paddingHorizontal: Space.md, gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP } : undefined}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
-        key={`list-${numColumns}`}
-        onContentSizeChange={handleContentSizeChange}
-      />
+      {/* Content list — cover scrolls naturally as first header item.
+          On native: FlashList for virtualization + recycling.
+          On web: ScrollView + map because FlashList v2 crashes on web
+          ("Changing onViewableItemsChanged on the fly is not supported"
+          — FlashList v2 internally passes a new callback to FlatList). */}
+      {Platform.OS === 'web' ? (
+        <ScrollView
+          ref={(r: any) => { if (r && listRef.current !== r) listRef.current = r; }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler as any}
+          scrollEventThrottle={16}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
+          onContentSizeChange={handleContentSizeChange}
+        >
+          {listHeader}
+          {listEmpty}
+          {listData.length > 0 && (
+            numColumns > 1 ? (
+              <View style={{ paddingHorizontal: Space.md, flexDirection: 'row', flexWrap: 'wrap', gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP }}>
+                {listData.map((item, index) => {
+                  const rendered = renderItem({ item });
+                  return rendered ? <View key={(item as { id?: string }).id ?? `item-${index}`} style={{ width: cardWidth }}>{rendered}</View> : null;
+                })}
+              </View>
+            ) : (
+              <View>
+                {listData.map((item, index) => {
+                  const rendered = renderItem({ item });
+                  return rendered ? <View key={(item as { id?: string }).id ?? `item-${index}`}>{rendered}</View> : null;
+                })}
+              </View>
+            )
+          )}
+          {listFooter}
+        </ScrollView>
+      ) : (
+        <AnimatedFlashList
+          ref={listRef}
+          data={listData as (ListingApiItem | LookApiItem | SellerReviewItem)[]}
+          renderItem={renderItem}
+          keyExtractor={(item: ListingApiItem | LookApiItem | SellerReviewItem, index: number) => (item as { id?: string }).id ?? `item-${index}`}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          ListFooterComponent={listFooter}
+          numColumns={numColumns}
+          {...(numColumns > 1 ? { columnWrapperStyle: { paddingHorizontal: Space.md, gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP } } : {})}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={MUTED} colors={[MUTED]} />}
+          key={`list-${numColumns}`}
+          onContentSizeChange={handleContentSizeChange}
+        />
+      )}
 
       {/* Sheets */}
       <ProfileMoreSheet
