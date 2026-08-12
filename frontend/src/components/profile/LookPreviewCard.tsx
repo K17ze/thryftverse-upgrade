@@ -51,7 +51,7 @@ export function LookPreviewCard({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
     <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
-      <AnimatedPressable style={styles.card} onPress={onPress} {...PressPresets.card} accessibilityRole="button">
+      <AnimatedPressable style={styles.card} onPress={onPress} {...PressPresets.card} accessibilityRole="none" accessibilityLabel={`Look: ${title} by ${creatorName}`} accessibilityHint="Opens look details">
         {/* Cover */}
         <View style={styles.coverWrap}>
           <CachedImage
@@ -93,11 +93,11 @@ export function LookPreviewCard({
 
         {/* Action bar */}
         <View style={styles.actionBar}>
-          <AnimatedPressable style={styles.actionItem} onPress={onLike} {...PressPresets.iconButton}>
+          <AnimatedPressable style={styles.actionItem} onPress={onLike} {...PressPresets.iconButton} accessibilityRole="button" accessibilityLabel={`Like ${title}`} accessibilityHint="Likes this look">
             <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={saved ? colors.danger : colors.textSecondary} />
             <Text style={styles.actionText}>{likes}</Text>
           </AnimatedPressable>
-          <AnimatedPressable style={styles.actionItem} onPress={onSave} {...PressPresets.iconButton}>
+          <AnimatedPressable style={styles.actionItem} onPress={onSave} {...PressPresets.iconButton} accessibilityRole="button" accessibilityLabel={saved ? `Unsave ${title}` : `Save ${title}`} accessibilityHint="Saves this look to your closet">
             <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={saved ? colors.textPrimary : colors.textSecondary} />
             <Text style={styles.actionText}>{saved ? 'Saved' : 'Save'}</Text>
           </AnimatedPressable>

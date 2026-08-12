@@ -25,6 +25,10 @@ import Reanimated, {
   Extrapolation,
   runOnJS,
 } from 'react-native-reanimated';
+// Note: useAnimatedScrollHandler + AnimatedFlashList crashes on web due to
+// Reanimated 4.x not backporting the FlashList scroll-event fix from 3.12.
+// On web we use a plain JS scroll handler + non-animated FlashList.
+// See: https://github.com/software-mansion/react-native-reanimated/issues/9266
 import { useStore } from '../store/useStore';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -65,7 +69,11 @@ import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { SellerReputationCard } from '../components/seller/SellerReputationCard';
 
-const AnimatedFlashList: any = Reanimated.createAnimatedComponent(FlashList);
+// AnimatedFlashList crashes on web with Reanimated 4.x (issue #9266).
+// Use plain FlashList on web; animated version on native for UI-thread perf.
+const AnimatedFlashList: any = Platform.OS === 'web'
+  ? FlashList
+  : Reanimated.createAnimatedComponent(FlashList);
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UserProfile'>;
 
@@ -236,7 +244,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const stickyShared = useSharedValue(false);
   const stickyThreshold = useSharedValue(9999);
 
-  const scrollHandler = useAnimatedScrollHandler({
+  // Scroll handler — animated on native (UI-thread), plain JS on web.
+  // The web fallback is required because useAnimatedScrollHandler does not
+  // receive scroll events from FlashList in Reanimated 4.x (issue #9266).
+  const animatedScrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
       runOnJS(saveScrollOffset)(e.contentOffset.y);
@@ -258,6 +269,30 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       }
     },
   });
+
+  const webScrollHandler = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const offsetY = e.nativeEvent.contentOffset.y;
+    scrollY.value = offsetY;
+    saveScrollOffset(offsetY);
+    const collapsedAt = COVER_HEIGHT - 60;
+    if (offsetY > collapsedAt && !collapsedShared.value) {
+      collapsedShared.value = true;
+      setCollapsedVisible(true);
+    } else if (offsetY <= collapsedAt && collapsedShared.value) {
+      collapsedShared.value = false;
+      setCollapsedVisible(false);
+    }
+    const stickyAt = stickyThreshold.value;
+    if (offsetY > stickyAt && !stickyShared.value) {
+      stickyShared.value = true;
+      setStickyRailVisible(true);
+    } else if (offsetY <= stickyAt && stickyShared.value) {
+      stickyShared.value = false;
+      setStickyRailVisible(false);
+    }
+  }, [stickyThreshold]);
+
+  const scrollHandler = Platform.OS === 'web' ? webScrollHandler : animatedScrollHandler;
 
   const topUtilityStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [0, 80], [1, 0], Extrapolation.CLAMP);

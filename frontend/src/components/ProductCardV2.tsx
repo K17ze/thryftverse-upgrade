@@ -147,7 +147,7 @@ function ProductCardV2Base({
         onPress={onPress}
         style={styles.imageWrap}
         hapticFeedback="light"
-        accessibilityRole="button"
+        accessibilityRole="none"
         accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
       >
