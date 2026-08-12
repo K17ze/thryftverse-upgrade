@@ -21,6 +21,7 @@ import type { PublicProfileStats, PublicProfileViewer } from '../../services/pro
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 
 const COVER_HEIGHT = 160;
 const AVATAR_SIZE = 88; // design contract: 88-96pt seam avatar
@@ -175,37 +176,51 @@ export function ProfileHero({
 
         {/* Identity canvas — paddingTop reserves avatar space */}
         <View style={styles.identityCanvas}>
-          {/* Seam row — shop + social stats to the right of avatar, vertically centred.
-              For sale, Followers, and Following all live here for a single
-              authoritative stats row at the top (Instagram pattern). */}
+          {/* ── Seam row — avatar (left) + unified stats (right) ──
+              All profile stats live in a single row beside the avatar,
+              matching the Instagram/Depop mobile pattern. Three stats:
+              For sale · Followers · Following.
+
+              Psychology (2026 research): stats are the "reputation layer" —
+              users process them at 0.5–1.5s. Grouping them in one row
+              reduces cognitive load vs scattering across multiple sections.
+              Compact notation (1.2K, 3.4M) enables instant scanning while
+              accessibility labels carry the full count for screen readers.
+
+              Styling: no bordered cards (2026 trend — spacing gaps, not
+              containers). Tabular numerals so digits align across stats.
+              Subtle vertical dividers provide rhythm without enclosing
+              each stat in a box. */}
           <View style={styles.seamRow}>
             <View style={styles.seamSpacer} />
             <View style={styles.seamStats}>
               <Pressable
-                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.55 }]}
                 onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('forsale'); }}
                 accessibilityRole="button"
-                accessibilityLabel={`${activeCount} for sale — view shop`}
+                accessibilityLabel={`${formatFullCount(activeCount)} for sale — view shop`}
               >
-                <Text style={styles.seamStatValue}>{activeCount}</Text>
+                <Text style={styles.seamStatValue} numberOfLines={1}>{formatCompactCount(activeCount)}</Text>
                 <Text style={styles.seamStatLabel} numberOfLines={1}>For sale</Text>
               </Pressable>
+              <View style={styles.seamStatDivider} />
               <Pressable
-                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.55 }]}
                 onPress={() => onOpenConnections('followers')}
                 accessibilityRole="button"
-                accessibilityLabel={`${followerCount} followers — view followers`}
+                accessibilityLabel={`${formatFullCount(followerCount)} followers — view followers`}
               >
-                <Text style={styles.seamStatValue}>{followerCount}</Text>
+                <Text style={styles.seamStatValue} numberOfLines={1}>{formatCompactCount(followerCount)}</Text>
                 <Text style={styles.seamStatLabel} numberOfLines={1}>Followers</Text>
               </Pressable>
+              <View style={styles.seamStatDivider} />
               <Pressable
-                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.55 }]}
                 onPress={() => onOpenConnections('following')}
                 accessibilityRole="button"
-                accessibilityLabel={`${followingCount} following — view following`}
+                accessibilityLabel={`${formatFullCount(followingCount)} following — view following`}
               >
-                <Text style={styles.seamStatValue}>{followingCount}</Text>
+                <Text style={styles.seamStatValue} numberOfLines={1}>{formatCompactCount(followingCount)}</Text>
                 <Text style={styles.seamStatLabel} numberOfLines={1}>Following</Text>
               </Pressable>
             </View>
@@ -428,7 +443,9 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.sm,
   },
 
-  // Seam row — begins immediately at canvas boundary, reserves avatar overlap height
+  // Seam row — begins immediately at canvas boundary, reserves avatar overlap height.
+  // The seam is the cover/canvas boundary; the row holds the avatar (left,
+  // absolutely positioned) and the stats cluster (right, flex 1).
   seamRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -436,29 +453,48 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   seamSpacer: {
+    // Reserves horizontal space for the avatar so stats don't overlap it.
     width: AVATAR_SIZE + Space.sm,
   },
   seamStats: {
     flex: 1,
     flexDirection: 'row',
+    alignItems: 'center',
+    // Per 2026 research: spacing gaps (not bordered cards) between stats.
+    // justifyContent space-around gives equal breathing room without
+    // enclosing each stat in a container — the modern minimal trend.
     justifyContent: 'space-around',
   },
   seamStat: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: Space.xs,
   },
+  // Stat value — bold, tabular numerals for digit alignment across stats.
+  // Type.subtitle (17/24/600) matches Instagram's stat value weight.
   seamStatValue: {
     fontSize: Type.subtitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // Stat label — muted, regular weight, tight spacing.
+  // Type.caption (12/16/400) is the industry standard for stat labels.
   seamStatLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 1,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  // Subtle vertical divider between stats — provides visual rhythm without
+  // enclosing each stat in a bordered card. Hairline width, muted color.
+  seamStatDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: Space.lg,
+    backgroundColor: colors.borderSubtle,
   },
 
   // Identity — full-width, left-aligned

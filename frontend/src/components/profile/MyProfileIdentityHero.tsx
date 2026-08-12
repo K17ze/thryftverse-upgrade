@@ -8,6 +8,7 @@ import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { ProfileTrustSignals } from './ProfileTrustSignals';
+import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 
 const AVATAR_SIZE = 84;
 
@@ -103,9 +104,9 @@ export function MyProfileIdentityHero({
         </View>
 
         <View style={styles.stats}>
-          <ProfileStat value={listingCount} label="Listings" styles={styles} onPress={onPressListings} a11yLabel={`${listingCount} listings`} />
-          <ProfileStat value={lookCount} label="Looks" styles={styles} onPress={onPressLooks} a11yLabel={`${lookCount} looks`} />
-          <ProfileStat value={completedSales} label="Sold" styles={styles} onPress={onPressSold} a11yLabel={`${completedSales} sold`} />
+          <ProfileStat value={listingCount} label="Listings" styles={styles} onPress={onPressListings} a11yLabel={`${formatFullCount(listingCount)} listings`} />
+          <ProfileStat value={lookCount} label="Looks" styles={styles} onPress={onPressLooks} a11yLabel={`${formatFullCount(lookCount)} looks`} />
+          <ProfileStat value={completedSales} label="Sold" styles={styles} onPress={onPressSold} a11yLabel={`${formatFullCount(completedSales)} sold`} />
         </View>
       </View>
 
@@ -152,38 +153,40 @@ export function MyProfileIdentityHero({
 
       {/* ── SOCIAL ROW — followers / following ──
           Dedicated bordered row between trust signals and actions.
-          Canonical position: identity → shop stats → trust → social → actions. */}
+          Canonical position: identity → shop stats → trust → social → actions.
+          Uses compact count notation (1.2K, 3.4M) for scannability;
+          accessibility labels carry the full count for screen readers. */}
       <View style={styles.socialRow}>
         {onPressFollowers ? (
           <Pressable
-            style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.55 }]}
             onPress={onPressFollowers}
             accessibilityRole="button"
-            accessibilityLabel={`${followerCount} followers`}
+            accessibilityLabel={`${formatFullCount(followerCount)} followers`}
           >
-            <Text style={styles.socialValue}>{followerCount}</Text>
+            <Text style={styles.socialValue}>{formatCompactCount(followerCount)}</Text>
             <Text style={styles.socialLabel}>Followers</Text>
           </Pressable>
         ) : (
-          <View style={styles.socialCell} accessible accessibilityLabel={`${followerCount} followers`}>
-            <Text style={styles.socialValue}>{followerCount}</Text>
+          <View style={styles.socialCell} accessible accessibilityLabel={`${formatFullCount(followerCount)} followers`}>
+            <Text style={styles.socialValue}>{formatCompactCount(followerCount)}</Text>
             <Text style={styles.socialLabel}>Followers</Text>
           </View>
         )}
         <View style={styles.socialDivider} />
         {onPressFollowing ? (
           <Pressable
-            style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.55 }]}
             onPress={onPressFollowing}
             accessibilityRole="button"
-            accessibilityLabel={`${followingCount} following`}
+            accessibilityLabel={`${formatFullCount(followingCount)} following`}
           >
-            <Text style={styles.socialValue}>{followingCount}</Text>
+            <Text style={styles.socialValue}>{formatCompactCount(followingCount)}</Text>
             <Text style={styles.socialLabel}>Following</Text>
           </Pressable>
         ) : (
-          <View style={styles.socialCell} accessible accessibilityLabel={`${followingCount} following`}>
-            <Text style={styles.socialValue}>{followingCount}</Text>
+          <View style={styles.socialCell} accessible accessibilityLabel={`${formatFullCount(followingCount)} following`}>
+            <Text style={styles.socialValue}>{formatCompactCount(followingCount)}</Text>
             <Text style={styles.socialLabel}>Following</Text>
           </View>
         )}
@@ -225,23 +228,24 @@ function ProfileStat({ value, label, styles, onPress, a11yLabel }: {
   onPress?: () => void;
   a11yLabel?: string;
 }) {
+  const displayValue = formatCompactCount(value);
   if (onPress) {
     return (
       <Pressable
         style={styles.stat}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={a11yLabel ?? `${value} ${label}`}
+        accessibilityLabel={a11yLabel ?? `${formatFullCount(value)} ${label}`}
         hitSlop={4}
       >
-        <Text style={styles.statValue}>{value}</Text>
+        <Text style={styles.statValue}>{displayValue}</Text>
         <Text style={styles.statLabel}>{label}</Text>
       </Pressable>
     );
   }
   return (
-    <View style={styles.stat} accessible accessibilityLabel={a11yLabel ?? `${value} ${label}`}>
-      <Text style={styles.statValue}>{value}</Text>
+    <View style={styles.stat} accessible accessibilityLabel={a11yLabel ?? `${formatFullCount(value)} ${label}`}>
+      <Text style={styles.statValue}>{displayValue}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -312,6 +316,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   statLabel: {
     color: colors.textSecondary,
@@ -373,6 +378,7 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.subtitle.lineHeight,
     letterSpacing: Type.subtitle.letterSpacing,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   socialLabel: {
     fontSize: Type.caption.size,
