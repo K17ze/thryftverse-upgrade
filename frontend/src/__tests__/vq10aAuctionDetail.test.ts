@@ -181,18 +181,37 @@ describe('PASS 4.1: State-action resolver', () => {
     });
   });
 
-  describe('ended — seller sold', () => {
+  describe('ended — seller sold (valid winner, unpaid)', () => {
     it('shows View outcome as primary', () => {
-      const auction = makeAuction({ viewerState: 'seller', bidCount: 5 });
+      const auction = makeAuction({ viewerState: 'seller', bidCount: 5, winnerBidderId: 'winner-1' });
       const result = resolveStateAction('ended', 'seller', auction);
       expect(result.primary.type).toBe('viewOutcome');
-      expect(result.viewerMessage).toBe('Your auction has ended');
+      expect(result.viewerMessage).toBe('Your auction has ended · awaiting buyer payment');
     });
   });
 
-  describe('ended — seller no bids', () => {
-    it('shows no bids received message', () => {
+  describe('ended — seller sold (paid, unsettled)', () => {
+    it('shows settlement pending message', () => {
+      const auction = makeAuction({
+        viewerState: 'seller',
+        bidCount: 5,
+        winnerBidderId: 'winner-1',
+        fulfilment: { orderId: 'order-1', paymentStatus: 'paid', fulfilmentStatus: 'awaiting_seller', buyerNextAction: null, sellerNextAction: null },
+      });
+      const result = resolveStateAction('ended', 'seller', auction);
+      expect(result.viewerMessage).toBe('Payment confirmed · settlement pending');
+    });
+  });
+
+  describe('ended — seller no valid winner', () => {
+    it('shows no bids received message when no bids', () => {
       const auction = makeAuction({ viewerState: 'seller', bidCount: 0 });
+      const result = resolveStateAction('ended', 'seller', auction);
+      expect(result.viewerMessage).toBe('No bids were received');
+    });
+
+    it('shows no bids received message when bids exist but no winner', () => {
+      const auction = makeAuction({ viewerState: 'seller', bidCount: 5, winnerBidderId: null });
       const result = resolveStateAction('ended', 'seller', auction);
       expect(result.viewerMessage).toBe('No bids were received');
     });

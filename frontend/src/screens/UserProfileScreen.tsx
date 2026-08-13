@@ -32,7 +32,9 @@ import Reanimated, {
 import { useStore } from '../store/useStore';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Typography, DockConstants, Elevation, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, Elevation, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
   type PublicProfileStats,
   type PublicProfileViewer,
@@ -726,7 +728,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             <CachedImage
               uri={displayAvatar}
               style={styles.collapsedAvatar}
-              containerStyle={{ width: 28, height: 28, borderRadius: Radius.full }}
+              containerStyle={{ width: 28, height: 28, borderRadius: RadiusRoleValue.pillAvatar }}
               contentFit="cover"
             />
           ) : (
@@ -920,7 +922,7 @@ const styles = StyleSheet.create({
   topUtilityRow: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topUtilityRight: { flexDirection: 'row', gap: Space.sm },
   topUtilityIconBtn: {
-    width: Control.hit, height: Control.hit, borderRadius: Radius.lg,
+    width: Control.hit, height: Control.hit, borderRadius: RadiusRoleValue.sheetDialog,
     backgroundColor: 'rgba(0,0,0,0.22)',
     alignItems: 'center', justifyContent: 'center',
   },
@@ -931,19 +933,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     ...Elevation.card,
   },
-  collapsedBackBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  collapsedBackBtn: { width: Control.hit, height: Control.hit, borderRadius: RadiusRoleValue.pillAvatar, alignItems: 'center', justifyContent: 'center' },
   collapsedCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.xs },
-  collapsedAvatar: { width: Space.lg + Space.xs, height: Space.lg + Space.xs, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  collapsedAvatar: { width: Space.lg + Space.xs, height: Space.lg + Space.xs, borderRadius: RadiusRoleValue.pillAvatar, alignItems: 'center', justifyContent: 'center' },
   collapsedAvatarMonogram: {},
-  collapsedAvatarInitials: { fontSize: Type.caption.size, fontFamily: Typography.family.bold },
-  collapsedTitle: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, letterSpacing: Type.bodyLarge.letterSpacing - 0.1, flexShrink: 1 },
+  collapsedAvatarInitials: { fontSize: TypographyV2.meta.size, fontFamily: FontFamily.bold },
+  collapsedTitle: { fontSize: TypographyV2.priceList.size, fontFamily: FontFamily.semibold, letterSpacing: TypographyV2.priceList.letterSpacing - 0.1, flexShrink: 1 },
   collapsedRight: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2 },
-  collapsedFollowBtn: { height: Control.hit, paddingHorizontal: Space.md + 2, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
+  collapsedFollowBtn: { height: Control.hit, paddingHorizontal: Space.md + 2, borderRadius: RadiusRoleValue.sheetDialog, alignItems: 'center', justifyContent: 'center' },
   collapsedFollowingBtn: { borderWidth: StyleSheet.hairlineWidth },
   collapsedFollowActiveBtn: {},
-  collapsedFollowText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold },
+  collapsedFollowText: { fontSize: TypographyV2.meta.size, fontFamily: FontFamily.semibold },
   collapsedFollowActiveText: {},
-  collapsedIconBtn: { width: Control.hit, height: Control.hit, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  collapsedIconBtn: { width: Control.hit, height: Control.hit, borderRadius: RadiusRoleValue.pillAvatar, alignItems: 'center', justifyContent: 'center' },
   stickyRailWrap: {
     position: 'absolute', left: 0, right: 0, zIndex: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -959,7 +961,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md - 2,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
   },
   awayBannerTextWrap: {
@@ -967,14 +969,14 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   awayBannerTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
   },
   awayBannerSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight + 1,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight + 1,
   },
   shopPoliciesSection: {
     paddingHorizontal: Space.md,
@@ -982,10 +984,10 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   shopPoliciesTitle: {
-    fontSize: Type.metaElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    fontFamily: FontFamily.semibold,
     textTransform: 'uppercase',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
     marginBottom: Space.sm,
   },
   shopPoliciesGrid: {
@@ -999,12 +1001,12 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
     paddingHorizontal: Space.md - 2,
     paddingVertical: Space.sm,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
   },
   shopPolicyText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   featuredSection: {
     paddingTop: Space.md,
@@ -1018,10 +1020,10 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   featuredTitle: {
-    fontSize: Type.metaElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    fontFamily: FontFamily.semibold,
     textTransform: 'uppercase',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   featuredScroll: {
     paddingHorizontal: Space.md,
@@ -1034,20 +1036,20 @@ const styles = StyleSheet.create({
   featuredImage: {
     width: 120,
     height: 160,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
   },
   featuredImagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   featuredPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
-  listStateTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
-  listStateSub: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, textAlign: 'center' },
+  listStateTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.semibold },
+  listStateSub: { fontSize: TypographyV2.meta.size, fontFamily: FontFamily.regular, textAlign: 'center' },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
 });

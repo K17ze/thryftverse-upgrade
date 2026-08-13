@@ -952,6 +952,7 @@ export default function BrowseScreen() {
             showSaveButton
             gap={gridDensity === 'compact' ? Space.xs + 2 : 3}
             horizontalPadding={Space.md}
+            testIDPrefix="golden-browse-product-card"
           />
         ) : hasAnyFiltering ? (
           // Filtered-empty — filters returned no results. Friendly, not an

@@ -5,7 +5,9 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Numeric, Control } from '../theme/designTokens';
+import { Space, FontFamily, Numeric, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -524,21 +526,21 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.sm,
     },
     eyebrow: {
-      fontSize: Type.metaElevated.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      fontSize: TypographyV2.label.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.label.letterSpacing,
       textTransform: 'uppercase',
       marginBottom: Space.sm,
     },
     eyebrowCount: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.regular,
       marginBottom: Space.sm,
     },
 
     /* Hero -- one dominant panel */
     hero: {
-      borderRadius: Radius.lg,
+      borderRadius: RadiusRoleValue.sheetDialog,
       borderWidth: StyleSheet.hairlineWidth,
       padding: Space.md,
       marginBottom: Space.md,
@@ -551,7 +553,7 @@ function createStyles(colors: ThemeColors) {
     heroAvatar: {
       width: 40,
       height: 40,
-      borderRadius: Radius.full,
+      borderRadius: RadiusRoleValue.pillAvatar,
       borderWidth: StyleSheet.hairlineWidth,
       alignItems: 'center',
       justifyContent: 'center',
@@ -566,9 +568,9 @@ function createStyles(colors: ThemeColors) {
       gap: 1,
     },
     heroEyebrow: {
-      fontSize: Type.metaElevated.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      fontSize: TypographyV2.label.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.label.letterSpacing,
       textTransform: 'uppercase',
     },
     heroNameRow: {
@@ -577,16 +579,16 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
     },
     heroName: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
     },
     heroHandle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.regular,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
     },
     heroBadges: {
       marginTop: Space.sm,
@@ -609,26 +611,26 @@ function createStyles(colors: ThemeColors) {
     heroFigureValue: {
       fontSize: Numeric.priceLarge.size,
       lineHeight: Numeric.priceLarge.lineHeight,
-      fontFamily: Typography.family.bold,
+      fontFamily: FontFamily.bold,
       letterSpacing: Numeric.priceLarge.letterSpacing,
       fontVariant: ['tabular-nums'],
     },
     heroFigureLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     heroMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight + 2,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.regular,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight + 2,
       marginTop: Space.sm + 2,
     },
 
     /* Needs attention panel */
     attentionPanel: {
-      borderRadius: Radius.lg,
+      borderRadius: RadiusRoleValue.sheetDialog,
       borderWidth: StyleSheet.hairlineWidth,
       overflow: 'hidden',
       marginBottom: Space.md,
@@ -643,22 +645,22 @@ function createStyles(colors: ThemeColors) {
     },
     attentionLabel: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.medium,
+      letterSpacing: TypographyV2.body.letterSpacing,
     },
     attentionBadge: {
       minWidth: 22,
       height: 22,
-      borderRadius: Radius.full,
+      borderRadius: RadiusRoleValue.pillAvatar,
       paddingHorizontal: Space.xs + 2,
       alignItems: 'center',
       justifyContent: 'center',
     },
     attentionBadgeText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.bold,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
 
     /* Verify CTA */
@@ -669,7 +671,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      borderRadius: Radius.lg,
+      borderRadius: RadiusRoleValue.sheetDialog,
       borderWidth: StyleSheet.hairlineWidth,
       marginBottom: Space.lg,
     },
@@ -684,26 +686,26 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs / 2,
     },
     verifyCtaTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.body.letterSpacing,
     },
     verifyCtaSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.regular,
+      letterSpacing: TypographyV2.body.letterSpacing,
     },
     verifyCtaBtn: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      borderRadius: Radius.md,
+      borderRadius: RadiusRoleValue.mediaThumbnail,
       minHeight: 44,
       alignItems: 'center',
       justifyContent: 'center',
     },
     verifyCtaBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.bold,
     },
 
     /* Performance grid -- flat hairline grid on canvas */
@@ -711,7 +713,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: Radius.lg,
+      borderRadius: RadiusRoleValue.sheetDialog,
       overflow: 'hidden',
       marginBottom: Space.lg,
     },
@@ -728,16 +730,16 @@ function createStyles(colors: ThemeColors) {
       borderTopWidth: StyleSheet.hairlineWidth,
     },
     metricValue: {
-      fontSize: Type.bodyLarge.size,
-      lineHeight: Type.bodyLarge.lineHeight,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.bodyLarge.letterSpacing,
+      fontSize: TypographyV2.priceList.size,
+      lineHeight: TypographyV2.priceList.lineHeight,
+      fontFamily: FontFamily.bold,
+      letterSpacing: TypographyV2.priceList.letterSpacing,
       fontVariant: ['tabular-nums'],
     },
     metricLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.meta.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
 
     /* Empty onboarding panel */
@@ -747,22 +749,22 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xl,
       paddingHorizontal: Space.md,
       borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: Radius.lg,
+      borderRadius: RadiusRoleValue.sheetDialog,
       borderStyle: 'dashed',
       marginBottom: Space.lg,
     },
     emptyTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
       marginTop: Space.xs,
     },
     emptySubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.regular,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
       textAlign: 'center',
     },
 
@@ -774,7 +776,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md,
     },
     toolGroupContainer: {
-      borderRadius: Radius.lg,
+      borderRadius: RadiusRoleValue.sheetDialog,
       borderWidth: StyleSheet.hairlineWidth,
       overflow: 'hidden',
     },
@@ -791,14 +793,14 @@ function createStyles(colors: ThemeColors) {
       gap: 1,
     },
     toolLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.body.letterSpacing,
     },
     toolSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.regular,
+      letterSpacing: TypographyV2.body.letterSpacing,
     },
     toolRowSeparator: {
       height: StyleSheet.hairlineWidth,

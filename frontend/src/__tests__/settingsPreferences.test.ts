@@ -101,6 +101,7 @@ describe('settings preference persistence', () => {
       mySizes: [],
       filterPresets: [],
       analyticsOptOut: true,
+      developerMode: false,
     });
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
@@ -112,6 +113,7 @@ describe('settings preference persistence', () => {
         mySizes: [],
         filterPresets: [],
         analyticsOptOut: true,
+        developerMode: false,
       })
     );
   });

@@ -58,9 +58,10 @@ import { DoubleTapHeart } from '../components/DoubleTapHeart';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Type, Stroke } from '../theme/designTokens';
+import { Space, FontFamily, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { T } from '../components/ui/Text';
-import { Typography } from '../theme/designTokens';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
@@ -749,7 +750,7 @@ export default function HomeScreen() {
                 key={`poster-skeleton-${index}`}
                 width={POSTER_CARD_WIDTH}
                 height={POSTER_CARD_HEIGHT}
-                borderRadius={Radius.md}
+                borderRadius={RadiusRoleValue.mediaThumbnail}
               />
             ))}
           </HorizontalRail>
@@ -861,14 +862,14 @@ export default function HomeScreen() {
           const ratio = SKELETON_HEIGHT_RATIOS[index % SKELETON_HEIGHT_RATIOS.length];
           return (
             <View key={`feed_loading_left_${index}`} style={styles.skeletonTileWrap}>
-              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.lg} />
+              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={RadiusRoleValue.sheetDialog} />
               <View style={styles.skeletonMetaRow}>
-                <PremiumSkeletonTile width="70%" height={Type.captionElevated.lineHeight} borderRadius={Radius.sm} />
-                <PremiumSkeletonTile width="40%" height={Type.bodyLarge.lineHeight} borderRadius={Radius.sm} />
+                <PremiumSkeletonTile width="70%" height={TypographyV2.meta.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
+                <PremiumSkeletonTile width="40%" height={TypographyV2.priceList.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
               </View>
               <View style={styles.skeletonSellerRow}>
-                <PremiumSkeletonTile width={24} height={24} borderRadius={Radius.full} />
-                <PremiumSkeletonTile width="45%" height={Type.meta.lineHeight} borderRadius={Radius.sm} />
+                <PremiumSkeletonTile width={24} height={24} borderRadius={RadiusRoleValue.pillAvatar} />
+                <PremiumSkeletonTile width="45%" height={TypographyV2.meta.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
               </View>
             </View>
           );
@@ -879,14 +880,14 @@ export default function HomeScreen() {
           const ratio = SKELETON_HEIGHT_RATIOS[(index + 2) % SKELETON_HEIGHT_RATIOS.length];
           return (
             <View key={`feed_loading_right_${index}`} style={styles.skeletonTileWrap}>
-              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.lg} />
+              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={RadiusRoleValue.sheetDialog} />
               <View style={styles.skeletonMetaRow}>
-                <PremiumSkeletonTile width="70%" height={Type.captionElevated.lineHeight} borderRadius={Radius.sm} />
-                <PremiumSkeletonTile width="40%" height={Type.bodyLarge.lineHeight} borderRadius={Radius.sm} />
+                <PremiumSkeletonTile width="70%" height={TypographyV2.meta.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
+                <PremiumSkeletonTile width="40%" height={TypographyV2.priceList.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
               </View>
               <View style={styles.skeletonSellerRow}>
-                <PremiumSkeletonTile width={24} height={24} borderRadius={Radius.full} />
-                <PremiumSkeletonTile width="45%" height={Type.meta.lineHeight} borderRadius={Radius.sm} />
+                <PremiumSkeletonTile width={24} height={24} borderRadius={RadiusRoleValue.pillAvatar} />
+                <PremiumSkeletonTile width="45%" height={TypographyV2.meta.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
               </View>
             </View>
           );
@@ -1252,16 +1253,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   // Brand title: subtitle token (17/24/600) — lighter header chrome per AGENTS.md §4.
   brandTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     color: colors.textPrimary,
   },
   brandSubtitle: {
     marginTop: 2,
     fontSize: 11,
-    fontFamily: Typography.family.regular,
+    fontFamily: FontFamily.regular,
     letterSpacing: 0.25,
     color: colors.textSecondary,
   },
@@ -1281,7 +1282,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: -2,
     minWidth: 18,
     height: 18,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1323,25 +1324,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     position: 'relative',
   },
   feedTabLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
     color: colors.textMuted,
   },
   feedTabLabelActive: {
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
   },
   feedTabCount: {
     minWidth: 20,
     height: 20,
     paddingHorizontal: 5,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     overflow: 'hidden',
     textAlign: 'center',
     textAlignVertical: 'center',
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     lineHeight: 20,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     color: colors.textSecondary,
     backgroundColor: colors.surfaceAlt,
   },
@@ -1355,7 +1356,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 0,
     bottom: -1,
     height: 2,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: colors.textPrimary,
   },
   newListingsBannerWrap: {
@@ -1368,7 +1369,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minHeight: 40,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs + Space.xs,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: colors.brand,
     borderWidth: 0,
   },
@@ -1378,13 +1379,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   newListingsBannerIconWrap: {
     width: 16,
     height: 16,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'transparent',
   },
   newListingsBannerText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
     color: colors.background,
     letterSpacing: 0.2,
   },
@@ -1397,16 +1398,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   sectionTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   sectionHint: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
     color: colors.textMuted,
     letterSpacing: 0.22,
   },
@@ -1479,7 +1480,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   storyName: {
     fontSize: 10,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     color: colors.textSecondary,
     width: 66,
     textAlign: 'center',
@@ -1487,7 +1488,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   storyStatus: {
     marginTop: 2,
     fontSize: 9,
-    fontFamily: Typography.family.regular,
+    fontFamily: FontFamily.regular,
     color: colors.textMuted,
     width: 66,
     textAlign: 'center',
@@ -1563,19 +1564,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   lookOwnerName: {
     color: colors.textInverse,
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
   },
   lookTitle: {
     color: colors.textInverse,
     fontSize: 21,
-    fontFamily: Typography.family.extrabold,
+    fontFamily: FontFamily.extrabold,
     letterSpacing: -0.4,
     lineHeight: 24,
   },
   lookDescription: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     marginTop: 2,
   },
   lookMetaRow: {
@@ -1596,12 +1597,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   lookMetaText: {
     color: colors.textInverse,
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
   },
   lookTime: {
     color: 'rgba(255,255,255,0.82)',
     fontSize: 11,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     marginLeft: 'auto',
   },
 
@@ -1616,10 +1617,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // Poster heading: subtitle token with semibold — quieter than bold, clear hierarchy.
   posterSectionTitle: {
     color: colors.textPrimary,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   postersScroll: {
     paddingHorizontal: Space.md,
@@ -1637,7 +1638,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterTile: {
     width: POSTER_CARD_WIDTH,
     height: POSTER_CARD_HEIGHT,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
@@ -1670,9 +1671,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterTextArtworkCopy: {
     color: colors.textInverse,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.bold,
     textAlign: 'center',
     letterSpacing: -0.2,
   },
@@ -1739,7 +1740,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterOwnerName: {
     color: colors.textInverse,
     fontSize: 8,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     flex: 1,
   },
   posterExpiryPill: {
@@ -1754,7 +1755,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterExpiryText: {
     color: colors.textInverse,
     fontSize: 9,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
   },
   posterBottomOverlay: {
     position: 'absolute',
@@ -1769,7 +1770,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textInverse,
     fontSize: 9,
     lineHeight: 12,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
   },
   posterCreatorOverlay: {
     position: 'absolute',
@@ -1781,7 +1782,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 6,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     backgroundColor: 'rgba(0,0,0,0.58)',
   },
   posterCreatorName: {
@@ -1789,7 +1790,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textInverse,
     fontSize: 9,
     lineHeight: 12,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
   },
   frameCountBadge: {
     position: 'absolute',
@@ -1806,7 +1807,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   frameCountBadgeText: {
     color: colors.textInverse,
     fontSize: 9,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
   },
   unwatchedBadge: {
     position: 'absolute',
@@ -1820,7 +1821,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   unwatchedBadgeText: {
     color: colors.textInverse,
     fontSize: 9,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
   },
   posterFreshDot: {
     width: 7,
@@ -1855,7 +1856,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   exploreMediaWrap: {
     position: 'relative',
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
   },
@@ -1876,7 +1877,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   listingMediaPlaceholderIcon: {
     width: 40,
     height: 40,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
@@ -1890,20 +1891,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   // Title: captionElevated (13/18/400) — quiet, lets price dominate.
   exploreTitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
     color: colors.textPrimary,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // Price: bodyLarge (16/22/700) — clearly dominant over title.
   explorePrice: {
     color: colors.textPrimary,
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
   },
   exploreSellerRow: {
     minHeight: 44,
@@ -1917,14 +1918,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerAvatar: {
     width: 24,
     height: 24,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: Stroke.hairline,
     borderColor: colors.border,
   },
   exploreSellerAvatarFallback: {
     width: 24,
     height: 24,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
@@ -1935,10 +1936,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerText: {
     flex: 1,
     color: colors.textSecondary,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   videoBadge: {
     position: 'absolute',
@@ -1946,7 +1947,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: Space.xs,
     width: 28,
     height: 28,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'rgba(0,0,0,0.52)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1990,7 +1991,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekCard: {
     width: '100%',
     maxWidth: 420,
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -2011,14 +2012,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   peekTitle: {
     fontSize: 19,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   peekSubtitle: {
     marginTop: 4,
     fontSize: 13,
-    fontFamily: Typography.family.regular,
+    fontFamily: FontFamily.regular,
     color: colors.textSecondary,
   },
   peekActionsRow: {
@@ -2029,18 +2030,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekGhostBtn: {
     flex: 1,
     height: 44,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'transparent',
   },
   peekGhostText: {
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
   },
   peekPrimaryBtn: {
     flex: 1,
     height: 44,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'transparent',
   },
   peekPrimaryIconWrap: {
@@ -2051,7 +2052,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   peekPrimaryText: {
     fontSize: 13,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
     color: colors.background,
   },
 });

@@ -15,6 +15,19 @@
 # After capture, review screenshots and promote to baselines:
 #   cp -r .maestro/screenshots/golden-routes src/__tests__/__screenshots__/
 #
+# Baseline capture process (P0.6):
+#   1. Build a development client for the target device.
+#   2. Run the flow above on each device in the matrix.
+#   3. Review each screenshot against the optical rubric in
+#      .devin/visual-qa-gates.md (light/dark parity, hierarchy, media
+#      dominance, state coverage).
+#   4. On sign-off, promote to baselines:
+#        cp -r .maestro/screenshots/golden-routes src/__tests__/__screenshots__/
+#   5. Commit the baselines. The visualRegressionPlan.test.ts and
+#      check-visual-release-gates.mjs scripts enforce their presence on
+#      every subsequent PR — a missing baseline directory is a
+#      release-blocking failure, not a soft pass.
+#
 # Device matrix (run once per device + theme):
 #   maestro test --device "iPhone 15" .maestro/golden-route-screenshots.yml
 #   maestro test --device "iPhone SE (3rd generation)" .maestro/golden-route-screenshots.yml
@@ -28,6 +41,11 @@
 #   - mid-range Android
 #   - lower-memory Android
 #   Each in: light, dark, 100% text, 200% text, reduced motion, poor network.
+#
+# testID selectors:
+#   Key elements on golden route screens expose testID props so Maestro
+#   flows use semantic selectors (tapOn id:) instead of brittle coordinate
+#   taps (tapOn point:). This makes flows resilient to layout changes.
 
 appId: ${MAESTRO_APP_ID}
 ---

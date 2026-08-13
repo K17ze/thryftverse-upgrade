@@ -38,13 +38,15 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { searchListingsFromApi } from '../services/feedApi';
 import { friendlyBackendError } from '../services/listingMapper';
+import type { ListingCondition } from '../services/listingsApi';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /* ΓöÇΓöÇ New Discover Components ΓöÇΓöÇ */
 import { EditorialSection } from '../components/discover/EditorialSection';
-import { Typography, Radius } from '../theme/designTokens';
+import { FontFamily } from '../theme/designTokens';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { CATEGORIES } from '../constants/categories';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 
@@ -62,9 +64,9 @@ const MASONRY_COL_WIDTH = (SCREEN_WIDTH - 20 * 2 - 8) / 2;
 interface RankedListing {
   id: string;
   title: string;
-  brand: string;
-  size: string;
-  condition: 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
+  brand: string | null;
+  size: string | null;
+  condition: ListingCondition | null;
   image: string;
   price: number;
   likes: number;
@@ -106,9 +108,28 @@ const TRENDING_CATEGORIES: { label: string; icon: string; query: string }[] = CA
 // when a backend editorial schema is available (see backlog: Search →
 // server-driven editorial schema).
 
-function buildAffinitySet(values: string[]) {
+// Canonical listing conditions. Backend search rows may carry a free-form
+// condition string; only accept it when it matches a known condition so we
+// never fabricate a commerce fact (audit P0.4).
+const KNOWN_CONDITIONS: readonly ListingCondition[] = [
+  'New with tags',
+  'Very good',
+  'Good',
+  'Satisfactory',
+];
+
+function normalizeSearchCondition(value: string | null | undefined): ListingCondition | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  const match = KNOWN_CONDITIONS.find(
+    (c) => c.toLowerCase() === value.toLowerCase(),
+  );
+  return match ?? null;
+}
+
+function buildAffinitySet(values: Array<string | null | undefined>) {
   const counts = new Map<string, number>();
   values.forEach((value) => {
+    if (value == null) return;
     const normalized = value.trim().toLowerCase();
     if (!normalized) return;
     counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
@@ -199,10 +220,14 @@ export default function GlobalSearchScreen({ navigation }: Props) {
             result.items.map((item) => ({
               id: item.id,
               title: item.title || 'Untitled listing',
-              // Safe brand fallback ΓÇö never blank in the result rows.
-              brand: item.brand || (item.title ? item.title.split(' ').slice(0, 2).join(' ') : 'Thryftverse'),
-              size: item.size || 'One size',
-              condition: 'Very good' as const,
+              // Render only known facts. A missing brand is not the first
+              // two words of a title; an unknown size is not "One size";
+              // an unknown condition is not "Very good". Backend search
+              // rows carry nullable commerce facts and the UI omits
+              // absent values rather than inventing them (audit P0.4).
+              brand: item.brand ?? null,
+              size: item.size ?? null,
+              condition: normalizeSearchCondition(item.condition),
               image: item.imageUrl ?? '',
               price: Number(item.priceGbp ?? 0),
               likes: 0,
@@ -353,9 +378,17 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     }));
 
     const filtered = sourceListings.filter((listing) => {
-      if (selectedBrands.size > 0 && !selectedBrands.has(listing.brand.toLowerCase())) return false;
-      if (selectedSizes.size > 0 && !selectedSizes.has(listing.size.toLowerCase())) return false;
-      if (browseFilters.condition !== 'Any' && listing.condition !== browseFilters.condition) return false;
+      // Null/unknown commerce facts must not match any active filter —
+      // otherwise fabricated values would surface as false matches.
+      if (selectedBrands.size > 0) {
+        if (!listing.brand || !selectedBrands.has(listing.brand.toLowerCase())) return false;
+      }
+      if (selectedSizes.size > 0) {
+        if (!listing.size || !selectedSizes.has(listing.size.toLowerCase())) return false;
+      }
+      if (browseFilters.condition !== 'Any') {
+        if (!listing.condition || listing.condition !== browseFilters.condition) return false;
+      }
       return true;
     });
 
@@ -1240,7 +1273,7 @@ const styles = StyleSheet.create({
   backBtn: {
     width: 40,
     height: 40,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1248,7 +1281,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
@@ -1262,7 +1295,7 @@ const styles = StyleSheet.create({
   suggestionsWrap: {
     marginHorizontal: 12,
     marginBottom: 8,
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -1273,7 +1306,7 @@ const styles = StyleSheet.create({
   },
   suggestionsHeader: {
     fontSize: 11,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     paddingHorizontal: 16,
@@ -1291,7 +1324,7 @@ const styles = StyleSheet.create({
   suggestionText: {
     flex: 1,
     fontSize: 15,
-    fontFamily: Typography.family.regular,
+    fontFamily: FontFamily.regular,
   },
 
   // Loading
@@ -1320,7 +1353,7 @@ const styles = StyleSheet.create({
   },
   sectionSupertitle: {
     fontSize: 13,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     marginBottom: 4,
   },
 
@@ -1334,7 +1367,7 @@ const styles = StyleSheet.create({
   recentPill: {
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   clearRecentPill: {
     flexDirection: 'row',
@@ -1344,7 +1377,7 @@ const styles = StyleSheet.create({
   },
   recentPillText: {
     fontSize: 14,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
   },
 
   // Trending
@@ -1355,12 +1388,12 @@ const styles = StyleSheet.create({
   trendingPill: {
     paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: 1,
   },
   trendingPillText: {
     fontSize: 15,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
   },
 
   // Focus state ΓÇö trending pills (horizontal scroll with category icons)
@@ -1373,7 +1406,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: Radius.xxl,
+    borderRadius: RadiusRoleValue.dominantPanel,
     borderWidth: 1,
   },
   trendingFocusIcon: {
@@ -1382,7 +1415,7 @@ const styles = StyleSheet.create({
   },
   trendingFocusText: {
     fontSize: 13,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
   },
 
   // Filter bar
@@ -1398,27 +1431,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: Radius.xxl,
+    borderRadius: RadiusRoleValue.dominantPanel,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
   },
   sortChipText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     fontSize: 13,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: Radius.xxl,
+    borderRadius: RadiusRoleValue.dominantPanel,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
     position: 'relative',
   },
   filterChipText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     fontSize: 13,
   },
   filterBadge: {
@@ -1427,25 +1460,25 @@ const styles = StyleSheet.create({
     right: -4,
     minWidth: 18,
     height: 18,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
   },
   filterBadgeText: {
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
     fontSize: 10,
   },
   clearChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: Radius.xxl,
+    borderRadius: RadiusRoleValue.dominantPanel,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
   },
   clearChipText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     fontSize: 13,
   },
 
@@ -1464,14 +1497,14 @@ const styles = StyleSheet.create({
   },
   recoHeaderTitle: {
     fontSize: 22,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
     letterSpacing: -0.5,
     flexShrink: 1,
   },
   topicSearchBtn: {
     width: 44,
     height: 44,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1481,14 +1514,14 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     height: 34,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: 1,
   },
   saveSearchBtnActive: {
   },
   saveSearchText: {
     fontSize: 12,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
   },
   saveSearchTextActive: {
   },
@@ -1502,7 +1535,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     borderWidth: StyleSheet.hairlineWidth,
   },
   savedSearchMain: {
@@ -1514,7 +1547,7 @@ const styles = StyleSheet.create({
   savedSearchIconWrap: {
     width: 32,
     height: 32,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1524,16 +1557,16 @@ const styles = StyleSheet.create({
   },
   savedSearchQuery: {
     fontSize: 14,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
   },
   savedSearchMeta: {
     fontSize: 11,
-    fontFamily: Typography.family.regular,
+    fontFamily: FontFamily.regular,
   },
   savedSearchToggle: {
     width: 36,
     height: 36,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1553,13 +1586,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   masonryItemWrap: {
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     overflow: 'hidden',
     position: 'relative',
   },
   masonryImg: {
     width: '100%',
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
   },
   resultOverlay: {
     position: 'absolute',
@@ -1573,19 +1606,19 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 16,
   },
   resultPrice: {
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
     fontSize: 14,
     color: '#fff',
   },
   resultReason: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     fontSize: 11,
     color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
   },
   recoEmptyState: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     paddingVertical: 14,
     paddingHorizontal: 12,
     flexDirection: 'row',
@@ -1596,19 +1629,19 @@ const styles = StyleSheet.create({
   },
   recoEmptyText: {
     fontSize: 12,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     flex: 1,
   },
   recoEmptyCta: {
     borderWidth: 1,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     paddingVertical: 6,
     paddingHorizontal: 12,
     marginTop: 4,
   },
   recoEmptyCtaText: {
     fontSize: 12,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
   },
 
   // Contextual no-results state (search results surface)
@@ -1617,19 +1650,19 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     paddingHorizontal: 20,
     marginHorizontal: 20,
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     borderWidth: StyleSheet.hairlineWidth,
     gap: 8,
   },
   noResultsTitle: {
     fontSize: 16,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     textAlign: 'center',
     letterSpacing: -0.2,
   },
   noResultsSubtitle: {
     fontSize: 13,
-    fontFamily: Typography.family.regular,
+    fontFamily: FontFamily.regular,
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -1640,22 +1673,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   noResultsPrimaryCta: {
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     paddingVertical: 10,
     paddingHorizontal: 18,
   },
   noResultsPrimaryCtaText: {
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
   },
   noResultsSecondaryCta: {
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderWidth: 1,
   },
   noResultsSecondaryCtaText: {
     fontSize: 13,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
   },
 });

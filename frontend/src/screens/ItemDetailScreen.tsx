@@ -108,7 +108,9 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
-import { Space, Type, Typography, Radius, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { t } from '../i18n';
 
 type ItemDetailRoute = RouteProp<RootStackParamList, 'ItemDetail'>;
@@ -205,8 +207,8 @@ const paginationStyles = StyleSheet.create({
     borderRadius: DOT_HEIGHT / 2,
   },
   counter: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
     letterSpacing: LetterSpacing.wide,
     fontVariant: ['tabular-nums'],
   },
@@ -1871,7 +1873,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 1,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'transparent', // overridden inline with theme color
     flexShrink: 0,
@@ -1884,18 +1886,18 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   conditionChipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   attributeText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     flexShrink: 1,
   },
   sizeGuideLink: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
     flexShrink: 0,
   },
   quietTextTarget: {
@@ -1903,11 +1905,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   izeText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Elevated trust strip ──
   // Compact inline trust signals placed immediately after the identity
@@ -1955,9 +1957,9 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent', // overridden inline with theme color
   },
   moreFromSellerRailTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
   },
@@ -1985,13 +1987,13 @@ const styles = StyleSheet.create({
     gap: Space.xs + 1,
   },
   trustChipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
   },
   purchaseSummary: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + Space.xs,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + Space.xs,
     paddingBottom: Space.sm,
   },
   purchaseSheetHeader: {
@@ -2006,15 +2008,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   purchaseSheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   purchaseSheetSubtitle: {
     marginTop: Space.xs / 2,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   purchaseSheetBody: {
     paddingHorizontal: Space.md,
@@ -2042,18 +2044,18 @@ const styles = StyleSheet.create({
     height: Space.lg + Space.xs,
   },
   descriptionText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + Space.xs,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + Space.xs,
+    fontFamily: FontFamily.regular,
   },
   descriptionToggle: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
     alignSelf: 'flex-start',
   },
   postedDate: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
     paddingTop: Space.xs,
   },
   // ── Sustainability row ──
@@ -2065,10 +2067,10 @@ const styles = StyleSheet.create({
   },
   sustainabilitySummary: {
     flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing / 2,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing / 2,
   },
   sustainabilityDetailWrap: {
     marginTop: Space.sm,
@@ -2088,13 +2090,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   alertRowLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
   },
   toggleTrack: {
     width: Control.chrome,
     height: Space.md + Space.xs,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: Stroke.standard,
     justifyContent: 'center',
     paddingHorizontal: Space.xs / 2,
@@ -2102,7 +2104,7 @@ const styles = StyleSheet.create({
   toggleThumb: {
     width: Space.md - 2,
     height: Space.md - 2,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
   },
   // ── Sync retry ──
   syncRetryWrap: {
@@ -2127,26 +2129,26 @@ const styles = StyleSheet.create({
   moreLikeThisImage: {
     width: '100%',
     aspectRatio: AspectRatio.portrait,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     alignItems: 'center',
     justifyContent: 'center',
   },
   moreLikeThisPrice: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'],
     marginTop: Space.xs / 2,
   },
   moreLikeThisTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
   },
   moreLikeThisMeta: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   // ── Discovery ──
   recommendationSection: {
@@ -2160,8 +2162,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.lg,
   },
   railLoadingText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
   },
   recErrorRow: {
     paddingHorizontal: Space.md,
@@ -2177,14 +2179,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   qaSheetTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.subtitle.lineHeight,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
   },
   // ── Dock state badge ──
   dockStateBadge: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
     letterSpacing: LetterSpacing.normal,
   },
   // ── Overflow sheet (rendered inside canonical BottomSheet) ──
@@ -2194,8 +2196,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   overflowTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
   },
   overflowRow: {
     flexDirection: 'row',
@@ -2205,8 +2207,8 @@ const styles = StyleSheet.create({
     minHeight: Control.hit + Space.xs,
   },
   overflowRowText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
   },
   pressed: {
     opacity: 0.85,
@@ -2226,9 +2228,9 @@ const styles = StyleSheet.create({
     minHeight: Control.hit + Space.sm,
   },
   conditionSheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   conditionSheetBody: {
     paddingHorizontal: Space.md,
@@ -2242,17 +2244,17 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.sm,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
   },
   conditionSheetBadgeText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   conditionSheetDefinition: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + Space.xs,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + Space.xs,
+    fontFamily: FontFamily.regular,
   },
   // ── Condition evidence gallery jump ──
   // Per audit 03 P1: a compact row that jumps to the condition evidence
@@ -2267,7 +2269,7 @@ const styles = StyleSheet.create({
   },
   conditionEvidenceJumpText: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
   },
 });

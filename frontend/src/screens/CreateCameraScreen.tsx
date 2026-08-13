@@ -20,9 +20,11 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { Motion } from '../theme/motionTokens';
-import type { RootStackParamList } from '../navigation/types';
+import type { RootStackParamList, CreatorInitialMedia } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateCamera'>;
 
@@ -201,10 +203,10 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         show('Photo library access required', 'error');
         return;
       }
-      // Gallery now supports photos AND videos with ordered multi-select
-      // (up to 10), matching the canonical acquisition surface. The first
-      // asset is sent via the existing flow; additional assets are passed
-      // via initialMediaUris so the studio can receive them all.
+      // Gallery supports photos AND videos with ordered multi-select (up to
+      // 10). Every selected ImagePickerAsset is mapped into the typed
+      // CreatorInitialMedia payload — preserving kind, dimensions and video
+      // duration (in ms) — so the studio receives the full selection.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
         quality: 0.92,
@@ -214,32 +216,31 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         orderedSelection: true,
       });
       if (!result.canceled && result.assets.length > 0) {
-        const firstUri = result.assets[0].uri;
-        if (result.assets.length > 1) {
-          // Multi-select: pass all assets to the studio. The route type is
-          // extended with initialMediaUris via a cast since the navigation
-          // types file is outside this task's edit scope.
-          const allUris = result.assets.map((a) => a.uri).filter(Boolean);
-          if (mode === 'visual-search') {
-            navigation.navigate('VisualSearch', { initialImageUri: firstUri });
-          } else {
-            (navigation.navigate as (route: 'CreatorStudio', params: Record<string, unknown>) => void)(
-              'CreatorStudio',
-              {
-                type: mode,
-                initialMediaUri: firstUri,
-                initialMediaUris: allUris,
-              },
-            );
-          }
-        } else {
-          handleCapture(firstUri);
+        if (mode === 'visual-search') {
+          navigation.navigate('VisualSearch', { initialImageUri: result.assets[0].uri });
+          return;
         }
+        const initialMedia: CreatorInitialMedia[] = result.assets.map((a, i) => ({
+          // ImagePicker does not expose a stable id; derive one from the
+          // ordered selection index + uri so deterministic seeding is stable.
+          id: a.uri ? `picker_${i}_${a.uri}` : `picker_${i}`,
+          uri: a.uri,
+          kind: a.type === 'video' ? 'video' : 'image',
+          width: a.width,
+          height: a.height,
+          // ImagePicker returns video duration in milliseconds.
+          durationMs: a.type === 'video' ? a.duration ?? undefined : undefined,
+          mimeType: a.mimeType,
+        }));
+        navigation.navigate('CreatorStudio', {
+          type: mode,
+          initialMedia,
+        });
       }
     } catch {
       show('Failed to open gallery', 'error');
     }
-  }, [handleCapture, show, navigation, mode, haptic]);
+  }, [show, navigation, mode, haptic]);
 
   const handleClose = useCallback(() => {
     navigation.goBack();
@@ -568,8 +569,8 @@ const s = StyleSheet.create({
     zIndex: 10,
   },
   modeContextText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
+    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.body.size,
     color: 'rgba(255,255,255,0.6)',
     letterSpacing: LetterSpacing.wide + 0.18,
   },
@@ -590,12 +591,12 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: MODE_CHIP_HORIZONTAL_PADDING,
     paddingVertical: Space.sm + 2,
-    borderRadius: Radius.xxl,
+    borderRadius: RadiusRoleValue.dominantPanel,
     zIndex: 1,
   },
   modeTabText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size,
     letterSpacing: LetterSpacing.wide + 0.18,
   },
   // Sliding white pill — fills the active chip area from behind for a
@@ -606,12 +607,12 @@ const s = StyleSheet.create({
     bottom: 0,
     left: 0,
     backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: Radius.xxl,
+    borderRadius: RadiusRoleValue.dominantPanel,
   },
   // Mode-specific hint text
   modeHintText: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size,
     color: 'rgba(255,255,255,0.55)',
     textAlign: 'center',
     marginTop: Space.xs,
@@ -620,7 +621,7 @@ const s = StyleSheet.create({
   topIconBtn: {
     width: Control.hit,
     height: Control.hit,
-    borderRadius: Radius.xxl,
+    borderRadius: RadiusRoleValue.dominantPanel,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -684,8 +685,8 @@ const s = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderTopLeftRadius: Radius.xxl,
-    borderTopRightRadius: Radius.xxl,
+    borderTopLeftRadius: RadiusRoleValue.dominantPanel,
+    borderTopRightRadius: RadiusRoleValue.dominantPanel,
     paddingHorizontal: Space.lg,
     paddingTop: Space.sm,
     shadowColor: '#000',
@@ -697,7 +698,7 @@ const s = StyleSheet.create({
   overflowGrabHandle: {
     width: Space.xl + Space.sm,
     height: Space.xs,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     alignSelf: 'center',
     marginBottom: Space.md,
   },
@@ -712,8 +713,8 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
   overflowOptionText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
+    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.body.size,
   },
   overflowHairline: {
     height: StyleSheet.hairlineWidth,

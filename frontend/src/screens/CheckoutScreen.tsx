@@ -65,7 +65,9 @@ import { BuyerProtectionStrip } from '../components/product';
 import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
-import { Space, Typography, Radius, Stroke, Type, Control, LetterSpacing, Numeric, Elevation } from '../theme/designTokens';
+import { Space, FontFamily, Stroke, Control, LetterSpacing, Numeric, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { createStableId } from '../utils/createStableId';
 import {
   configureStripeMobile,
@@ -1739,7 +1741,7 @@ function PulsingDot({
   return (
     <Reanimated.View
       style={[
-        { width: size, height: size, borderRadius: Radius.full, backgroundColor: color },
+        { width: size, height: size, borderRadius: RadiusRoleValue.pillAvatar, backgroundColor: color },
         reducedMotion ? undefined : dotStyle,
       ]}
     />
@@ -1865,7 +1867,7 @@ const paymentBannerStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: Stroke.hairline,
     overflow: 'hidden',
     marginTop: Space.sm,
@@ -1885,14 +1887,14 @@ const paymentBannerStyles = StyleSheet.create({
   dot: {
     width: 8,
     height: 8,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     flexShrink: 0,
   },
   label: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
   },
 });
 
@@ -1967,7 +1969,7 @@ const progressOverlayStyles = StyleSheet.create({
     top: 60,
     left: Space.md,
     right: Space.md,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: Stroke.hairline,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
@@ -1985,12 +1987,12 @@ const progressOverlayStyles = StyleSheet.create({
   },
   label: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
   },
   track: {
     height: Space.xs - 1,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     overflow: 'hidden',
   },
   fill: {
@@ -1999,7 +2001,7 @@ const progressOverlayStyles = StyleSheet.create({
     bottom: 0,
     left: '-40%',
     width: '40%',
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
 });
 
@@ -2012,24 +2014,24 @@ function PriceRow({ label, value, bold }: { label: string; value: string; bold?:
       paddingVertical: Space.xs + 2,
     },
     label: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.regular,
       color: colors.textSecondary,
     },
     labelBold: {
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
     },
     value: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.medium,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
     },
     valueBold: {
-      fontSize: Type.bodyLarge.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: FontFamily.bold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
     },
@@ -2065,8 +2067,8 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
   },
   headerSpacer: {
     width: Control.hit,
@@ -2086,12 +2088,12 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     alignSelf: 'flex-start',
   },
   savingsText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   protectionStripWrap: {
     marginTop: Space.sm,
@@ -2104,9 +2106,9 @@ const styles = StyleSheet.create({
   },
   protectionIncludedText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   balanceRow: {
     marginTop: Space.sm,
@@ -2126,7 +2128,7 @@ const styles = StyleSheet.create({
   balanceSwitch: {
     width: Space.xxl - Space.sm,
     height: Space.lg,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: Stroke.standard,
     justifyContent: 'center',
     padding: Space.xs,
@@ -2134,7 +2136,7 @@ const styles = StyleSheet.create({
   balanceKnob: {
     width: Control.iconCompact,
     height: Control.iconCompact,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignSelf: 'flex-start',
   },
   balanceKnobOn: {
@@ -2145,12 +2147,12 @@ const styles = StyleSheet.create({
     gap: Space.xs - 3,
   },
   balanceLabel: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   balanceAmount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
   },
   feedbackRow: {
     flexDirection: 'row',
@@ -2159,17 +2161,17 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
   },
   feedbackText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
   },
   orderErrorText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
     paddingVertical: Space.sm,
   },
   hintText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
     paddingVertical: Space.xs,
   },
   partialDataBanner: {
@@ -2180,26 +2182,26 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: Stroke.hairline,
   },
   partialDataMessage: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
   },
   partialDataAction: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 1,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     borderWidth: Stroke.standard,
     minHeight: Control.chromeCompact,
     justifyContent: 'center',
   },
   partialDataActionText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   capabilityErrorRow: {
     flexDirection: 'row',
@@ -2210,19 +2212,19 @@ const styles = StyleSheet.create({
   capabilityRetryBtn: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 1,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     borderWidth: Stroke.standard,
     minHeight: Control.chromeCompact,
     justifyContent: 'center',
   },
   capabilityRetryText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   termsText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
     textAlign: 'center',
     paddingTop: Space.md,
   },
@@ -2246,14 +2248,14 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs + 1,
   },
   compactSummaryLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   compactSummaryVal: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
     fontVariant: ['tabular-nums'],
   },
   compactSummaryDivider: {
@@ -2272,15 +2274,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   compactSummaryTotalLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   compactSummaryTotalValue: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.priceHero.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   breakdownChevron: {
@@ -2289,8 +2291,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   breakdownChevronText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
   },
   trustBadges: {
     flexDirection: 'row',
@@ -2307,15 +2309,15 @@ const styles = StyleSheet.create({
   trustBadgeIcon: {
     width: 20,
     height: 20,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
   },
   trustBadgeText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   trustBadgeDivider: {
     width: 1,
@@ -2333,8 +2335,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.lg,
   },
   breakdownSheetTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
     marginBottom: Space.md,
   },
   breakdownSheetDivider: {
@@ -2348,12 +2350,12 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   breakdownSheetTotalLabel: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: FontFamily.semibold,
   },
   breakdownSheetTotalValue: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   breakdownSheetPolicyRow: {
@@ -2364,9 +2366,9 @@ const styles = StyleSheet.create({
   },
   breakdownSheetPolicyText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   payBtn: {
     flex: 1,
@@ -2377,7 +2379,7 @@ const styles = StyleSheet.create({
     minWidth: 180,
     paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     minHeight: 52,
   },
   applePayBtn: {
@@ -2387,12 +2389,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     minWidth: 140,
     height: 52,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     marginBottom: Space.xs,
   },
   applePayBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
   },
   payBtnDisabled: {
     opacity: 0.5,
@@ -2402,8 +2404,8 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   payBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
   },
   signedOutContainer: {
     flex: 1,
@@ -2413,21 +2415,21 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   signedOutTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
     textAlign: 'center',
   },
   signedOutBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
     textAlign: 'center',
-    lineHeight: Type.body.lineHeight,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   signedOutBtn: {
     marginTop: Space.sm,
     paddingVertical: Space.md - 2,
     paddingHorizontal: Space.xl,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     minHeight: Space.xxl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2437,7 +2439,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   signedOutBtnText: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: FontFamily.semibold,
   },
 });

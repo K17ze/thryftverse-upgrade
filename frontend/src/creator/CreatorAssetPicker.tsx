@@ -176,7 +176,14 @@ interface MediaAsset {
   mediaType: 'image' | 'video';
   width: number;
   height: number;
-  duration?: number;
+  /**
+   * Video duration in milliseconds, normalized at the boundary.
+   * The legacy expo-media-library API returns duration in seconds, while
+   * expo-image-picker returns it in milliseconds. Both are converted to
+   * milliseconds here so all downstream comparisons and display formatting
+   * use one consistent unit.
+   */
+  durationMs?: number;
 }
 
 // Camera roll category tabs
@@ -254,9 +261,9 @@ function MediaGridItem({
         {asset.mediaType === 'video' && (
           <View style={styles.mediaGridVideoBadge}>
             <Ionicons name="play" size={14} color="#fff" />
-            {asset.duration && (
+            {asset.durationMs != null && (
               <Text style={styles.mediaGridDuration}>
-                {Math.floor(asset.duration / 1000)}s
+                {Math.floor(asset.durationMs / 1000)}s
               </Text>
             )}
           </View>
@@ -426,7 +433,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         mediaType: a.mediaType === 'video' ? 'video' : 'image',
         width: a.width,
         height: a.height,
-        duration: a.duration ? Math.round(a.duration) : undefined,
+        // Legacy expo-media-library returns duration in seconds; normalize
+        // to milliseconds at the boundary so all downstream logic uses one
+        // consistent unit.
+        durationMs: a.duration != null ? Math.round(a.duration * 1000) : undefined,
       }));
 
       setAssets((prev) => reset ? mapped : [...prev, ...mapped]);
@@ -484,9 +494,9 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   const toggleSelect = useCallback((asset: MediaAsset) => {
     if (asset.mediaType === 'video') {
-      if (asset.duration && asset.duration > MAX_VIDEO_DURATION_MS) {
+      if (asset.durationMs != null && asset.durationMs > MAX_VIDEO_DURATION_MS) {
         haptic.medium();
-        videoPreflightError.current = `Video is ${Math.floor(asset.duration / 1000)}s — max 60s supported`;
+        videoPreflightError.current = `Video is ${Math.floor(asset.durationMs / 1000)}s — max 60s supported`;
         return;
       }
     }
@@ -518,7 +528,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           mediaUri: asset.uri,
           mediaType: asset.mediaType,
           contentFit: 'cover',
-          videoDurationMs: asset.duration,
+          videoDurationMs: asset.durationMs,
           opacity: 1,
         },
       });
@@ -583,7 +593,8 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           mediaUri: result.assets[0].uri,
           mediaType: 'video',
           contentFit: 'cover',
-          videoDurationMs: result.assets[0].duration ? Math.round(result.assets[0].duration) : undefined,
+          // ImagePicker returns duration in milliseconds.
+          videoDurationMs: result.assets[0].duration ?? undefined,
           opacity: 1,
         },
       });

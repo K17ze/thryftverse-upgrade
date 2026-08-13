@@ -18,6 +18,12 @@ interface Props {
   gap?: number;
   horizontalPadding?: number;
   enableEntranceAnimation?: boolean;
+  /**
+   * TestID prefix for Maestro/automation. When provided, the first card
+   * (index 0) receives `${prefix}-first` so Maestro flows can tapOn by
+   * id instead of brittle coordinate taps (P0.6).
+   */
+  testIDPrefix?: string;
 }
 
 export function PinterestMasonryGrid({
@@ -31,6 +37,7 @@ export function PinterestMasonryGrid({
   gap = Space.sm,
   horizontalPadding = Space.md,
   enableEntranceAnimation = true,
+  testIDPrefix,
 }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const reducedMotionEnabled = useReducedMotion();
@@ -89,6 +96,7 @@ export function PinterestMasonryGrid({
                   onPressSeller={onPressSeller ? () => onPressSeller(item) : undefined}
                   onMessageSeller={onMessageSeller ? () => onMessageSeller(item) : undefined}
                   downscaleWidth={Math.round(colWidth)}
+                  testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
                 />
               </Reanimated.View>
             ) : (
@@ -104,6 +112,7 @@ export function PinterestMasonryGrid({
                 onPressSeller={onPressSeller ? () => onPressSeller(item) : undefined}
                 onMessageSeller={onMessageSeller ? () => onMessageSeller(item) : undefined}
                 downscaleWidth={Math.round(colWidth)}
+                testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
               />
             )
           ))}

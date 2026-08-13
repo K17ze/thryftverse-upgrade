@@ -21,11 +21,12 @@
  * Run via: npm run check:visual-gates
  */
 
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, resolve, extname, relative } from 'path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const SRC = join(ROOT, 'src');
+const SCREENSHOT_BASELINE_DIR = join(SRC, '__tests__', '__screenshots__');
 
 const SCAN_EXTENSIONS = new Set(['.tsx', '.ts']);
 const EXCLUDE_DIRS = new Set([
@@ -406,6 +407,69 @@ function checkDepartmentCoverage(files) {
   return violations;
 }
 
+// ─── Check 9: Screenshot baseline presence (P0.6 release gate) ──────────────
+// Audit 15 §Golden routes / P0.6: a green build requires committed, approved
+// visual baselines. This check fails when no baseline directory exists or when
+// the baselines do not cover every department golden route.
+function checkScreenshotBaselines() {
+  const violations = [];
+  const expectedRoutePrefixes = [
+    'golden-home',
+    'golden-search',
+    'golden-pdp',
+    'golden-sell',
+    'golden-profile',
+    'golden-settings',
+    'golden-inbox',
+    'golden-chat',
+    'golden-auction',
+    'golden-seller-hub',
+    'golden-coown',
+    'golden-poster',
+  ];
+
+  if (!existsSync(SCREENSHOT_BASELINE_DIR)) {
+    violations.push({
+      file: 'src/__tests__/__screenshots__/',
+      line: 0,
+      rule: 'missing-screenshot-baselines',
+      message:
+        'No screenshot baselines found. Run `maestro test .maestro/golden-route-screenshots.yml` ' +
+        'on the target device matrix, review against the optical rubric, then commit baselines ' +
+        'to src/__tests__/__screenshots__/. A green build requires approved visual baselines (P0.6).',
+    });
+    return violations;
+  }
+
+  const files = readdirSync(SCREENSHOT_BASELINE_DIR).filter((f) =>
+    /\.(png|jpg|jpeg)$/i.test(f)
+  );
+  if (files.length === 0) {
+    violations.push({
+      file: 'src/__tests__/__screenshots__/',
+      line: 0,
+      rule: 'empty-screenshot-baselines',
+      message:
+        'Screenshot baseline directory exists but contains no images. ' +
+        'Capture and commit approved baselines (P0.6).',
+    });
+    return violations;
+  }
+
+  const missing = expectedRoutePrefixes.filter(
+    (prefix) => !files.some((f) => f.startsWith(prefix))
+  );
+  for (const route of missing) {
+    violations.push({
+      file: `src/__tests__/__screenshots__/${route}-*.png`,
+      line: 0,
+      rule: 'missing-golden-route-baseline',
+      message: `Missing golden-route baseline: ${route}. Re-run the Maestro flow and commit the missing screenshot (P0.6).`,
+    });
+  }
+  return violations;
+}
+
 // ─── Check 8: Experiment framework presence ─────────────────────────────────
 // Audit 15 §Metrics/Experiments: verify that an experiment/metrics framework
 // exists for tracking production metrics per release.
@@ -442,10 +506,12 @@ function main() {
   const flashListViolations = checkFlashListPerformance(files);
   const coverageViolations = checkDepartmentCoverage(files);
   const experimentViolations = checkExperimentFramework(files);
+  const baselineViolations = checkScreenshotBaselines();
 
   const p0Violations = [
     ...colorViolations,
     ...a11yViolations.filter((v) => v.rule === 'missing-accessibility-label'),
+    ...baselineViolations,
   ];
 
   const p1Violations = [

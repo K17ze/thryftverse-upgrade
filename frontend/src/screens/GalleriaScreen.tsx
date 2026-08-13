@@ -162,9 +162,11 @@ const CollectionRailCard = React.memo(function CollectionRailCard({
 const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
   asset,
   onPress,
+  testID,
 }: {
   asset: GalleriaFeaturedAsset;
   onPress: () => void;
+  testID?: string;
 }) {
   const styles = useStyles();
   const { formatFromFiat } = useFormattedPrice();
@@ -179,6 +181,7 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
       accessibilityRole="button"
       accessibilityLabel={`${asset.title}, valued at ${formatFromFiat(asset.valuation)}`}
       accessibilityHint="Opens the asset detail"
+      testID={testID}
     >
       <View style={[styles.assetImageWrap, { height: imageHeight }]}>
         <CachedImage
@@ -588,11 +591,12 @@ export default function GalleriaScreen() {
                   key={colIdx}
                   style={[styles.masonryColumn, { width: MASONRY_COL_WIDTH }]}
                 >
-                  {columnItems.map((asset) => (
+                  {columnItems.map((asset, assetIdx) => (
                     <FeaturedAssetCard
                       key={asset.id}
                       asset={asset}
                       onPress={() => handleAssetPress(asset)}
+                      testID={colIdx === 0 && assetIdx === 0 ? 'golden-coown-first-asset' : undefined}
                     />
                   ))}
                 </View>

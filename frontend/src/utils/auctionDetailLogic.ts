@@ -4,6 +4,7 @@ import {
   type AuctionEffectiveState,
 } from '../hooks/useServerClock';
 import { formatFinalMinutesCountdown, type AuctionViewerState } from './auctionHomeLogic';
+import type { AuctionFulfilmentSummary } from '../services/marketApi';
 
 // ── Detail-level auction input (richer than AuctionHomeItem) ──
 
@@ -32,6 +33,14 @@ export interface AuctionDetailInput {
   winnerBidderId: string | null;
   lifecycle: string;
   terminalReason: string | null;
+  /**
+   * Backend-backed terminal fulfilment summary (spec 02_AUCTION §8).
+   * Carries authoritative payment/fulfilment status so the resolver can
+   * distinguish "ended + winner + unpaid" from "ended + paid + unsettled"
+   * without fabricating a `Settled` state. Null when the auction is not
+   * terminal or fulfilment data is not yet available.
+   */
+  fulfilment?: AuctionFulfilmentSummary | null;
 }
 
 // ── CTA action types ──
@@ -88,6 +97,8 @@ export type AuctionPresentationLabel =
   | 'No sale'
   | 'Cancelled'
   | 'Settled'
+  | 'Awaiting payment'
+  | 'Settlement pending'
   | 'Watching'
   | 'Leading'
   | 'Outbid'
@@ -134,6 +145,23 @@ export interface AuctionPresentationState {
  * This is the canonical view model — the detail screen, home cards, and
  * seller centre should all derive their UI from this single function.
  */
+
+// ── Terminal sale-state helpers (audit P0.5) ──
+// `ended` (auction closed) is not the same as `settled` (authoritative
+// backend settlement). These helpers derive the truthful sale state from
+// the backend-backed fulfilment contract so the resolver never labels an
+// ended auction as `Settled` before settlement is actually proven.
+
+/** A valid winner exists when the backend recorded a winner and bids. */
+function hasValidWinner(auction: AuctionDetailInput): boolean {
+  return auction.winnerBidderId != null && auction.bidCount > 0;
+}
+
+/** Payment has been confirmed by the backend fulfilment contract. */
+function isPaymentConfirmed(auction: AuctionDetailInput): boolean {
+  return auction.fulfilment?.paymentStatus === 'paid';
+}
+
 export function resolveAuctionPresentationState(
   effectiveState: AuctionEffectiveState,
   viewerState: AuctionViewerState,
@@ -209,12 +237,23 @@ export function resolveAuctionPresentationState(
   }
 
   // ── Ended ──
+  // Auction closed but NOT authoritatively settled. Split the sale state
+  // using the backend-backed fulfilment contract so `Settled` is reserved
+  // for the authoritative `settled` effectiveState (audit P0.5):
+  //   ended + winner + unpaid   -> Won / Awaiting payment
+  //   ended + paid + unsettled  -> Settlement pending
+  //   ended + no valid winner   -> No sale
   if (effectiveState === 'ended') {
+    const hasWinner = hasValidWinner(auction);
+    const paid = isPaymentConfirmed(auction);
+
     if (viewerState === 'won') {
       return {
         stateLabel: 'Won',
         colorKey: 'success',
-        viewerMessage: 'You won this auction',
+        viewerMessage: paid
+          ? 'Payment confirmed · settlement pending'
+          : 'You won this auction · awaiting payment',
         viewerTreatment: 'result',
         primaryAction: actionConfig.primary,
         secondaryAction: actionConfig.secondary,
@@ -222,7 +261,9 @@ export function resolveAuctionPresentationState(
         urgency: 'none',
         showBidControls: false,
         showLiveIndicator: false,
-        accessibilityHint: 'You won this auction. Tap to view result and complete payment.',
+        accessibilityHint: paid
+          ? 'Payment confirmed. Settlement pending. Tap to view result.'
+          : 'You won this auction. Tap to view result and complete payment.',
       };
     }
     if (viewerState === 'lost') {
@@ -241,11 +282,27 @@ export function resolveAuctionPresentationState(
       };
     }
     if (isSeller) {
-      const sold = auction.bidCount > 0;
+      if (!hasWinner) {
+        return {
+          stateLabel: 'No sale',
+          colorKey: 'textMuted',
+          viewerMessage: 'No bids were received',
+          viewerTreatment: 'seller',
+          primaryAction: actionConfig.primary,
+          secondaryAction: actionConfig.secondary,
+          forbidden: actionConfig.forbidden,
+          urgency: 'none',
+          showBidControls: false,
+          showLiveIndicator: false,
+          accessibilityHint: 'No bids received. Tap to review.',
+        };
+      }
       return {
-        stateLabel: sold ? 'Settled' : 'No sale',
-        colorKey: sold ? 'success' : 'textMuted',
-        viewerMessage: sold ? 'Your auction has ended' : 'No bids were received',
+        stateLabel: paid ? 'Settlement pending' : 'Awaiting payment',
+        colorKey: paid ? 'brand' : 'warning',
+        viewerMessage: paid
+          ? 'Payment confirmed · settlement pending'
+          : 'Your auction has ended · awaiting buyer payment',
         viewerTreatment: 'seller',
         primaryAction: actionConfig.primary,
         secondaryAction: actionConfig.secondary,
@@ -253,16 +310,33 @@ export function resolveAuctionPresentationState(
         urgency: 'none',
         showBidControls: false,
         showLiveIndicator: false,
-        accessibilityHint: sold ? 'Your auction sold. Tap to view outcome.' : 'No bids received. Tap to review.',
+        accessibilityHint: paid
+          ? 'Payment confirmed. Settlement pending. Tap to view outcome.'
+          : 'Your auction sold. Awaiting buyer payment. Tap to view outcome.',
       };
     }
-    const sold = auction.bidCount > 0;
+    // watching or not_participating
+    if (!hasWinner) {
+      return {
+        stateLabel: 'No sale',
+        colorKey: 'textMuted',
+        viewerMessage: 'Auction ended · no bids',
+        viewerTreatment: 'subdued',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'Auction ended with no bids.',
+      };
+    }
     return {
-      stateLabel: sold ? 'Settled' : 'No sale',
-      colorKey: 'textMuted',
-      viewerMessage: sold
-        ? `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'}`
-        : 'Auction ended · no bids',
+      stateLabel: paid ? 'Settlement pending' : 'Awaiting payment',
+      colorKey: 'textSecondary',
+      viewerMessage: paid
+        ? 'Payment confirmed · settlement pending'
+        : `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'} · awaiting payment`,
       viewerTreatment: 'subdued',
       primaryAction: actionConfig.primary,
       secondaryAction: actionConfig.secondary,
@@ -270,7 +344,9 @@ export function resolveAuctionPresentationState(
       urgency: 'none',
       showBidControls: false,
       showLiveIndicator: false,
-      accessibilityHint: sold ? 'Auction sold.' : 'Auction ended with no bids.',
+      accessibilityHint: paid
+        ? 'Auction sold. Payment confirmed, settlement pending.'
+        : 'Auction sold. Awaiting buyer payment.',
     };
   }
 
@@ -418,12 +494,16 @@ export function resolveStateAction(
   }
 
   if (effectiveState === 'ended') {
+    const hasWinner = hasValidWinner(auction);
+    const paid = isPaymentConfirmed(auction);
     if (viewerState === 'won') {
       return {
         primary: { type: 'viewResult', label: 'View result' },
         secondary: { type: 'none', label: '' },
         forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
-        viewerMessage: 'You won this auction',
+        viewerMessage: paid
+          ? 'Payment confirmed · settlement pending'
+          : 'You won this auction · awaiting payment',
         viewerTreatment: 'result',
       };
     }
@@ -441,19 +521,26 @@ export function resolveStateAction(
         primary: { type: 'viewOutcome', label: 'View outcome' },
         secondary: { type: 'none', label: '' },
         forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
-        viewerMessage: auction.bidCount > 0 ? 'Your auction has ended' : 'No bids were received',
+        viewerMessage: !hasWinner
+          ? 'No bids were received'
+          : paid
+            ? 'Payment confirmed · settlement pending'
+            : 'Your auction has ended · awaiting buyer payment',
         viewerTreatment: 'seller',
       };
     }
     // ended — watching or not_participating
+    const endedMessage = !hasWinner
+      ? 'Auction ended · no bids'
+      : paid
+        ? 'Payment confirmed · settlement pending'
+        : `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'} · awaiting payment`;
     if (viewerState === 'watching') {
       return {
         primary: { type: 'viewSimilar', label: 'View similar items' },
         secondary: { type: 'none', label: '' },
         forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
-        viewerMessage: auction.bidCount > 0
-          ? `Auction ended · ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'}`
-          : 'Auction ended · no bids',
+        viewerMessage: endedMessage,
         viewerTreatment: 'subdued',
       };
     }
@@ -462,9 +549,7 @@ export function resolveStateAction(
       primary: { type: 'viewSimilar', label: 'View similar items' },
       secondary: { type: 'none', label: '' },
       forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
-      viewerMessage: auction.bidCount > 0
-        ? `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'}`
-        : 'Auction ended · no bids',
+      viewerMessage: endedMessage,
       viewerTreatment: 'subdued',
     };
   }

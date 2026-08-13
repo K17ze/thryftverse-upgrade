@@ -38,7 +38,9 @@ import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 import { useAppTheme as useTheme } from '../theme/ThemeContext';
 
-import { Space, Radius, Type, Control, Typography, Elevation } from '../theme/designTokens';
+import { Space, FontFamily, Control, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 interface DestinationMeta {
@@ -120,6 +122,7 @@ export default function SettingsScreen({ navigation }: Props) {
     setLanguage,
     analyticsOptOut,
     setAnalyticsOptOut,
+    developerMode,
   } = useSettingsPreferences();
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
@@ -276,14 +279,26 @@ export default function SettingsScreen({ navigation }: Props) {
   const isSearching = searchQuery.trim().length > 0;
   const q = searchQuery.toLowerCase().trim();
 
+  // ── Developer eligibility gate ──
+  // The "Advanced & developer" section (agent/API settings) is hidden from
+  // ordinary consumers. It is revealed only when the user has enabled
+  // developer mode (Settings → About → tap version 7 times). A backend
+  // `accountCapabilities.agentBuilder` flag could also gate this; until that
+  // contract exists, developer mode is the sole eligibility signal.
+  const showAdvancedDeveloper = developerMode;
+
   const searchResults = React.useMemo(() => {
     if (!isSearching) return [];
-    return ROUTE_METADATA.filter((d) =>
-      d.searchTerms.toLowerCase().includes(q) ||
-      d.label.toLowerCase().includes(q) ||
-      d.section.toLowerCase().includes(q)
-    );
-  }, [isSearching, q]);
+    return ROUTE_METADATA.filter((d) => {
+      // Hide Advanced & developer routes from search when the section is gated.
+      if (d.section === 'Advanced & developer' && !showAdvancedDeveloper) return false;
+      return (
+        d.searchTerms.toLowerCase().includes(q) ||
+        d.label.toLowerCase().includes(q) ||
+        d.section.toLowerCase().includes(q)
+      );
+    });
+  }, [isSearching, q, showAdvancedDeveloper]);
 
   const avatarUri = currentUser?.avatar || null;
   const displayName = currentUser?.displayName ?? currentUser?.username ?? 'Not signed in';
@@ -742,35 +757,39 @@ export default function SettingsScreen({ navigation }: Props) {
           move Agent/API settings out of ordinary Settings). These are
           developer-facing capabilities (BYOK keys, agent builder, bot
           management) and are visually separated from the consumer settings
-          above so they do not read as ordinary user preferences. */}
-      <SettingsSection title="Advanced & developer" icon="code-working-outline" noCard>
-        <SettingsRow
-          icon="key-outline"
-          title="Provider credentials"
-          subtitle="Bring your own API key"
-          onPress={() => navigation.navigate('AIAgentIntegration')}
-          isFirst
-        />
-        <SettingsRow
-          icon="people-outline"
-          title="Automation & agents"
-          subtitle="Browse and deploy assistants"
-          onPress={() => navigation.navigate('BotDirectory')}
-        />
-        <SettingsRow
-          icon="person-circle-outline"
-          title="My agents"
-          subtitle="Your custom agents"
-          onPress={() => navigation.navigate('CustomBots')}
-        />
-        <SettingsRow
-          icon="create-outline"
-          title="Create agent"
-          subtitle="Build a custom assistant"
-          onPress={() => navigation.navigate('BotBuilder', {})}
-          isLast
-        />
-      </SettingsSection>
+          above so they do not read as ordinary user preferences.
+          Gated behind developer mode (Settings → About → tap version 7 times)
+          so ordinary consumers never see implementation technology. */}
+      {showAdvancedDeveloper ? (
+        <SettingsSection title="Advanced & developer" icon="code-working-outline" noCard>
+          <SettingsRow
+            icon="key-outline"
+            title="Provider credentials"
+            subtitle="Bring your own API key"
+            onPress={() => navigation.navigate('AIAgentIntegration')}
+            isFirst
+          />
+          <SettingsRow
+            icon="people-outline"
+            title="Automation & agents"
+            subtitle="Browse and deploy assistants"
+            onPress={() => navigation.navigate('BotDirectory')}
+          />
+          <SettingsRow
+            icon="person-circle-outline"
+            title="My agents"
+            subtitle="Your custom agents"
+            onPress={() => navigation.navigate('CustomBots')}
+          />
+          <SettingsRow
+            icon="create-outline"
+            title="Create agent"
+            subtitle="Build a custom assistant"
+            onPress={() => navigation.navigate('BotBuilder', {})}
+            isLast
+          />
+        </SettingsSection>
+      ) : null}
 
       {/* ── SIGN OUT ── */}
       {/* Sign Out action is rendered via SettingsSignOutRow for destructive separation */}
@@ -821,7 +840,7 @@ const styles = StyleSheet.create({
   },
   // ── Identity hero card ──
   identityHero: {
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     marginBottom: Space.lg,
@@ -835,7 +854,7 @@ const styles = StyleSheet.create({
   identityAvatarWrap: {
     width: Space.xxl + Space.sm,
     height: Space.xxl + Space.sm,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -843,33 +862,33 @@ const styles = StyleSheet.create({
   identityAvatarImage: {
     width: Space.xxl + Space.sm,
     height: Space.xxl + Space.sm,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   identityAvatarText: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: FontFamily.bold,
   },
   identityHeroText: {
     flex: 1,
     gap: Space.xs / 2,
   },
   identityName: {
-    fontSize: Type.bodyEmphasis.size + 1,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size + 1,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.priceList.lineHeight,
   },
   identityHandle: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   identityEmail: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   identityBadges: {
     flexDirection: 'row',
@@ -883,12 +902,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   identityBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.meta.letterSpacing * 2,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing * 2,
   },
   identityQuickActions: {
     flexDirection: 'row',
@@ -902,19 +921,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs + 1,
     paddingVertical: Space.sm + Space.xs / 2,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: Control.hit,
   },
   identityQuickBtnText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   identityEditAffordance: {
     width: Control.chromeCompact,
     height: Control.chromeCompact,
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
@@ -925,7 +944,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptySearchText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
   },
 });

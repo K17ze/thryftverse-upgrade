@@ -51,12 +51,23 @@ import { join } from 'path';
  * these screenshots. This test verifies that:
  *
  * 1. The Maestro golden-route flow file exists.
- * 2. A baseline screenshot directory exists (once the flow has been run and
- *    promoted). This is a soft check — it passes if the directory does not
- *    exist yet (first run), but logs a warning so the gap is visible.
+ * 2. A baseline screenshot directory exists AND contains screenshots. This is
+ *    a HARD gate — the branch cannot be "green" without committed, approved
+ *    visual baselines (P0.6 closure). A missing baseline directory is a
+ *    release-blocking failure, not a soft pass.
+ * 3. The committed baselines cover every department golden route so a missing
+ *    golden route is caught in CI.
  *
- * When baselines are committed, this test verifies the expected screenshot
- * files are present so a missing golden route is caught in CI.
+ * Baseline capture process (see `.devin/visual-qa-gates.md`):
+ *   1. Build a development client for the target device.
+ *   2. Run: maestro test .maestro/golden-route-screenshots.yml \
+ *             --output .maestro/screenshots/golden-routes
+ *   3. Review each screenshot against the optical rubric (light/dark parity,
+ *      hierarchy, media dominance, state coverage).
+ *   4. On sign-off, promote to baselines:
+ *        cp -r .maestro/screenshots/golden-routes src/__tests__/__screenshots__/
+ *   5. Commit the baselines. This test then enforces their presence on every
+ *      subsequent PR.
  */
 describe('Golden-route screenshot baseline', () => {
   const MAESTRO_FLOW = join(__dirname, '..', '..', '.maestro', 'golden-route-screenshots.yml');
@@ -91,17 +102,54 @@ describe('Golden-route screenshot baseline', () => {
     }
   });
 
-  // Soft check — passes if baselines don't exist yet, but warns.
-  it('baseline screenshot directory is promoted when captures exist', () => {
+  // HARD gate — fails when no approved baseline is committed. This closes
+  // P0.6: the branch can no longer be "green" with zero visual baselines.
+  it('baseline screenshot directory exists with approved captures', () => {
     if (!existsSync(BASELINE_DIR)) {
-      // Baselines not yet captured — this is expected on first run.
-      // Run `maestro test .maestro/golden-route-screenshots.yml` to capture.
-      expect(true).toBe(true);
-      return;
+      throw new Error(
+        'No screenshot baselines found. Run `maestro test .maestro/golden-route-screenshots.yml` ' +
+          'on the target device matrix, review against the optical rubric, then commit baselines ' +
+          'to src/__tests__/__screenshots__/. A green build requires approved visual baselines (P0.6).'
+      );
     }
     // If the directory exists, verify it contains screenshots.
     const files = readdirSync(BASELINE_DIR).filter((f) => /\.(png|jpg|jpeg)$/i.test(f));
     expect(files.length).toBeGreaterThan(0);
+  });
+
+  // HARD gate — verify baselines cover every department golden route so a
+  // missing route screenshot is caught in CI.
+  it('baseline screenshots cover all department golden routes', () => {
+    if (!existsSync(BASELINE_DIR)) {
+      throw new Error(
+        'No screenshot baselines found. Run `maestro test .maestro/golden-route-screenshots.yml` ' +
+          'and commit baselines to src/__tests__/__screenshots__/ (P0.6).'
+      );
+    }
+    const files = readdirSync(BASELINE_DIR).filter((f) => /\.(png|jpg|jpeg)$/i.test(f));
+    const expectedRoutePrefixes = [
+      'golden-home',
+      'golden-search',
+      'golden-pdp',
+      'golden-sell',
+      'golden-profile',
+      'golden-settings',
+      'golden-inbox',
+      'golden-chat',
+      'golden-auction',
+      'golden-seller-hub',
+      'golden-coown',
+      'golden-poster',
+    ];
+    const missing = expectedRoutePrefixes.filter(
+      (prefix) => !files.some((f) => f.startsWith(prefix))
+    );
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing golden-route baselines: ${missing.join(', ')}. ` +
+          'Re-run the Maestro flow and commit the missing screenshots (P0.6).'
+      );
+    }
   });
 });
 

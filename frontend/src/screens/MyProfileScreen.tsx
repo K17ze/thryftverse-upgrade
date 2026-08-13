@@ -22,7 +22,9 @@ import Reanimated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useStore } from '../store/useStore';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -123,6 +125,11 @@ export default function MyProfileScreen() {
     completionPercent: { color: colors.textMuted },
     completionCta: { backgroundColor: colors.brand },
     completionCtaText: { color: colors.textInverse },
+    growthCard: { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
+    growthTitle: { color: colors.textPrimary },
+    growthRow: { borderColor: colors.borderSubtle },
+    growthRowTitle: { color: colors.textPrimary },
+    growthRowSub: { color: colors.textMuted },
     portfolioPreview: { backgroundColor: colors.surfaceAlt },
     portfolioLabel: { color: colors.textSecondary },
     portfolioHoldingTitle: { color: colors.textPrimary },
@@ -321,30 +328,39 @@ export default function MyProfileScreen() {
 
   const allOwnedListings = React.useMemo(() => listings.filter((item) => item.sellerId === profileUserId), [listings, profileUserId]);
 
-  // Profile completion — drives the progress prompt. Based on the presence of
-  // the core profile facets a buyer expects: bio, avatar, cover, listings, and
-  // an audience (followers). Each contributes equally to the percentage.
+  // Profile completion — drives the progress prompt. Completion measures ONLY
+  // identity fields the user can complete directly: display name, bio, profile
+  // photo and cover. Audience growth (followers) and first listing are NOT
+  // profile-completion requirements — they are growth tasks surfaced separately
+  // below the identity hero so a user is never told their profile is
+  // "incomplete" because nobody has followed them or they haven't listed yet.
   const completion = React.useMemo(() => {
     const checks = [
+      Boolean(user.displayName?.trim()),
       Boolean(user.bio?.trim()),
       Boolean(displayAvatar),
       Boolean(displayCover),
-      allOwnedListings.length > 0,
-      followCounts.followerCount > 0,
     ];
     const done = checks.filter(Boolean).length;
     return { percent: Math.round((done / checks.length) * 100), done, total: checks.length };
-  }, [user.bio, displayAvatar, displayCover, allOwnedListings.length, followCounts.followerCount]);
+  }, [user.displayName, user.bio, displayAvatar, displayCover]);
 
-  // First missing facet → the CTA label + EditProfile focus. When only the
-  // audience is missing, route to analytics (a truthful "grow audience" path).
-  const completionCta = React.useMemo<{ label: string; focus?: 'avatar' | 'cover'; dest: 'EditProfile' | 'CreatorAnalyticsDashboard' }>(() => {
-    if (!user.bio?.trim()) return { label: 'Add bio', dest: 'EditProfile' };
-    if (!displayAvatar) return { label: 'Add photo', focus: 'avatar', dest: 'EditProfile' };
-    if (!displayCover) return { label: 'Add cover', focus: 'cover', dest: 'EditProfile' };
-    if (allOwnedListings.length === 0) return { label: 'List an item', dest: 'EditProfile' };
-    return { label: 'Grow audience', dest: 'CreatorAnalyticsDashboard' };
-  }, [user.bio, displayAvatar, displayCover, allOwnedListings.length]);
+  // Once every direct identity field is filled the profile is "sufficiently
+  // complete" and the completion card is permanently removed from the ordinary
+  // profile view (it does not reappear on later visits).
+  const profileSufficientlyComplete = completion.percent >= 100;
+
+  // First missing identity facet → the CTA label + EditProfile focus. Every
+  // completion CTA routes to EditProfile because every remaining gap is a
+  // direct profile field. Listing/audience growth CTAs live in the separate
+  // growth-tasks section below the identity hero.
+  const completionCta = React.useMemo<{ label: string; focus?: 'avatar' | 'cover' }>(() => {
+    if (!user.displayName?.trim()) return { label: 'Add name' };
+    if (!user.bio?.trim()) return { label: 'Add bio' };
+    if (!displayAvatar) return { label: 'Add photo', focus: 'avatar' };
+    if (!displayCover) return { label: 'Add cover', focus: 'cover' };
+    return { label: 'Edit profile' };
+  }, [user.displayName, user.bio, displayAvatar, displayCover]);
 
   const [completionDismissed, setCompletionDismissed] = React.useState(false);
   // Re-show the prompt when completion improves so progress is celebrated once.
@@ -355,7 +371,17 @@ export default function MyProfileScreen() {
     }
     prevPercentRef.current = completion.percent;
   }, [completion.percent]);
-  const showCompletionPrompt = !completionDismissed && completion.percent < 100;
+  const showCompletionPrompt =
+    !profileSufficientlyComplete && !completionDismissed && completion.percent < 100;
+
+  // Growth tasks — first listing and audience growth are surfaced outside the
+  // identity hero as optional onboarding prompts. They are NOT profile-
+  // completion requirements. Each CTA routes to a truthful destination:
+  // "List your first item" → Sell, "Grow your audience" → creator analytics.
+  const showFirstListingGrowth = allOwnedListings.length === 0;
+  const showAudienceGrowth = followCounts.followerCount === 0;
+  const [growthDismissed, setGrowthDismissed] = React.useState(false);
+  const showGrowthPrompt = !growthDismissed && (showFirstListingGrowth || showAudienceGrowth);
 
   // Parallax scroll for cover
   const scrollY = useSharedValue(0);
@@ -650,11 +676,7 @@ export default function MyProfileScreen() {
                 style={[styles.completionCta, t.completionCta]}
                 onPress={() => {
                   haptic.light();
-                  if (completionCta.dest === 'EditProfile') {
-                    navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
-                  } else {
-                    navigation.navigate('CreatorAnalyticsDashboard');
-                  }
+                  navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={completionCta.label}
@@ -662,6 +684,62 @@ export default function MyProfileScreen() {
                 <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
                 <Ionicons name="chevron-forward" size={14} color={colors.textInverse} />
               </AnimatedPressable>
+            </View>
+          ) : null}
+
+          {/* ── GROWTH TASKS — optional onboarding prompts outside the identity hero ── */}
+          {/* First listing and audience growth are NOT profile-completion
+              requirements. They are surfaced here as optional, dismissible
+              growth prompts with truthful destinations (Sell / analytics). */}
+          {showGrowthPrompt ? (
+            <View style={[styles.growthCard, t.growthCard]}>
+              <View style={styles.growthHead}>
+                <Text style={[styles.growthTitle, t.growthTitle]}>Grow on Thryftverse</Text>
+                <AnimatedPressable
+                  style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
+                  onPress={() => { haptic.light(); setGrowthDismissed(true); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss growth prompts"
+                >
+                  <Ionicons name="close" size={15} color={colors.textMuted} />
+                </AnimatedPressable>
+              </View>
+
+              {showFirstListingGrowth ? (
+                <AnimatedPressable
+                  style={[styles.growthRow, t.growthRow]}
+                  onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="List your first item"
+                  accessibilityHint="Opens the sell flow to create your first listing"
+                >
+                  <View style={styles.growthRowText}>
+                    <Text style={[styles.growthRowTitle, t.growthRowTitle]}>List your first item</Text>
+                    <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                      Photograph and publish an item to start selling.
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </AnimatedPressable>
+              ) : null}
+
+              {showAudienceGrowth ? (
+                <AnimatedPressable
+                  style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
+                  onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Grow your audience"
+                  accessibilityHint="Opens creator analytics with audience growth tools"
+                >
+                  <View style={styles.growthRowText}>
+                    <Text style={[styles.growthRowTitle, t.growthRowTitle]}>Grow your audience</Text>
+                    <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                      Share your profile and create content to attract followers.
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </AnimatedPressable>
+              ) : null}
             </View>
           ) : null}
 
@@ -755,7 +833,7 @@ export default function MyProfileScreen() {
                 </Text>
                 <AnimatedPressable
                   style={[styles.listingsEmptyCta, t.listingsEmptyCta]}
-                  onPress={() => navigation.navigate('MainTabs')}
+                  onPress={() => navigation.navigate('Sell')}
                   accessibilityRole="button"
                   accessibilityLabel="Start selling"
                   hitSlop={1}
@@ -792,7 +870,7 @@ export default function MyProfileScreen() {
                         <CachedImage
                           uri={item.images?.[0] ?? ''}
                           style={styles.gridImage}
-                          containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
+                          containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
                           contentFit="cover"
                         />
                         {item.isSold ? (
@@ -820,7 +898,7 @@ export default function MyProfileScreen() {
           <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
             {looksLoading ? (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                <Text style={{ color: colors.textMuted, fontSize: Type.body.size }}>Loading looks...</Text>
+                <Text style={{ color: colors.textMuted, fontSize: TypographyV2.body.size }}>Loading looks...</Text>
               </View>
             ) : myLooks.length === 0 ? (
               <EmptyState
@@ -927,7 +1005,7 @@ const myProfileStyles = StyleSheet.create({
     marginBottom: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md - 2,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
   },
   awayBannerTextWrap: {
@@ -935,14 +1013,14 @@ const myProfileStyles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   awayBannerTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
   },
   awayBannerSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
 });
 
@@ -993,7 +1071,7 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
   },
   portfolioHeader: {
     flexDirection: 'row',
@@ -1002,9 +1080,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   portfolioLabel: {
-    fontSize: Type.metaElevated.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   portfolioHoldings: {
     flexDirection: 'row',
@@ -1019,7 +1097,7 @@ const styles = StyleSheet.create({
   portfolioHoldingImage: {
     width: 48,
     height: 48,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     flexShrink: 0,
   },
   portfolioHoldingInfo: {
@@ -1027,20 +1105,20 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   portfolioHoldingTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   portfolioHoldingUnits: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   topUtilityVisible: {
     width: Space.xl - 2,
     height: Space.xl - 2,
-    borderRadius: Radius.xl,
+    borderRadius: RadiusRoleValue.standalonePanel,
     backgroundColor: 'rgba(0,0,0,0.42)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',
@@ -1059,7 +1137,7 @@ const styles = StyleSheet.create({
   coverEditVisible: {
     width: Space.xl + 2,
     height: Space.xl + 2,
-    borderRadius: Radius.xxl,
+    borderRadius: RadiusRoleValue.dominantPanel,
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.24)',
@@ -1074,7 +1152,7 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
     paddingLeft: Space.smMd,
     paddingRight: Space.xs + 1,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     backgroundColor: 'rgba(0,0,0,0.72)',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1089,8 +1167,8 @@ const styles = StyleSheet.create({
   },
   coverFailureText: {
     flexShrink: 1,
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size,
   },
   coverFailureAction: {
     minWidth: Space.xxl + 4,
@@ -1100,8 +1178,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   coverFailureActionText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size,
   },
 
   // Collapsed header
@@ -1118,9 +1196,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   floatingHeaderTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
   },
 
   // Listings grid
@@ -1132,13 +1210,13 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   gridHeaderCount: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   gridHeaderAction: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   grid: {
     flexDirection: 'row',
@@ -1150,7 +1228,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   gridImageWrap: {
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -1165,19 +1243,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   soldText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold,
     letterSpacing: LetterSpacing.caps + 0.18,
   },
   gridPrice: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold,
     marginTop: Space.xs + 1,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   gridBrand: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
     marginTop: 1,
   },
 
@@ -1190,15 +1268,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   listingsEmptyTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
   },
   listingsEmptyBody: {
     maxWidth: 280,
-    fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     textAlign: 'center',
   },
   listingsEmptyCta: {
@@ -1206,11 +1284,11 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: Space.md + 2,
     justifyContent: 'center',
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
   },
   listingsEmptyCtaText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
   },
 
   // About — flat editorial rows, flagship elevated
@@ -1218,9 +1296,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   aboutSectionTitle: {
-    fontSize: Type.metaElevated.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
     paddingTop: Space.md + 4,
     paddingBottom: Space.sm,
@@ -1234,19 +1312,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   aboutLabel: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
     textTransform: 'uppercase',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   aboutValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   aboutEmpty: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
     textAlign: 'center',
     paddingVertical: Space.xl + Space.sm,
   },
@@ -1270,14 +1348,14 @@ const styles = StyleSheet.create({
     gap: Space.xs / 4,
   },
   statValue: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   statLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
   },
   statDivider: {
     width: StyleSheet.hairlineWidth,
@@ -1301,8 +1379,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   trustBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
     letterSpacing: 0.1,
   },
   trustBadgeSep: {
@@ -1316,7 +1394,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
     gap: Space.md,
   },
@@ -1331,14 +1409,14 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   completionTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
   },
   completionPercent: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
     letterSpacing: 0.1,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
@@ -1349,16 +1427,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: -Space.xs / 2,
     marginRight: -Space.xs / 2,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   completionTrack: {
     height: 4,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     overflow: 'hidden',
   },
   completionFill: {
     height: '100%',
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   completionCta: {
     flexDirection: 'row',
@@ -1366,12 +1444,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     minHeight: 44,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     paddingHorizontal: Space.md,
   },
   completionCtaText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
     letterSpacing: 0.1,
+  },
+
+  // Growth tasks — optional onboarding prompts (first listing / audience)
+  growthCard: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Space.sm,
+  },
+  growthHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  growthTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+  },
+  growthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  growthRowLast: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  growthRowText: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  growthRowTitle: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight,
+  },
+  growthRowSub: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
 });

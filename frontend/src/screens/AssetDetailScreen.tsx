@@ -17,7 +17,9 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Type, Typography, Radius, DockConstants, Stroke, Control, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numeric } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
   fetchCoOwnAssetById,
   fetchCoOwnOrderBook,
@@ -1776,10 +1778,10 @@ const styles = StyleSheet.create({
   },
   // Trust chip text uses captionElevated for quiet, professional readability.
   coOwnTrustChipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Market status row (inside transaction surface) ──
   // Per spec 11_COOWN: "Standardize market-state color and shape semantics."
@@ -1797,32 +1799,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
   },
-  // Status dot — 8pt, Radius.sm, semantic color only.
+  // Status dot — 8pt, RadiusRoleValue.compactControl, semantic color only.
   marketStatusDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
   },
   // Status text — captionElevated (13/18/400) for quiet readability.
   marketStatusText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // Stale indicator — warning color, captionElevated.
   marketStatusStale: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // Rights/spread indicator — captionElevated for quiet metadata.
   marketStatusRights: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Market book row (bid/ask inside transaction surface) ──
   // ── Market book row (bid/ask inside transaction surface) ──
@@ -1846,17 +1848,17 @@ const styles = StyleSheet.create({
   },
   // Market book labels — captionElevated for quiet hierarchy.
   marketBookLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // Market book values — Numeric.priceList (20/24/700) with tabular-nums.
   // Per spec 11_COOWN: "Values: Type.priceList or Numeric.priceLarge."
   marketBookValue: {
     fontSize: Numeric.priceList.size,
     lineHeight: Numeric.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
     letterSpacing: Numeric.priceList.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
@@ -1873,15 +1875,15 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   marketSecondaryLabel: {
-    fontSize: Type.metaElevated.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
   },
   marketSecondaryValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.body.lineHeight,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Fundamentals — stacked layout (per spec 03_COOWN §1) ──
@@ -1902,10 +1904,10 @@ const styles = StyleSheet.create({
   },
   // Fundamentals label — captionElevated for quiet hierarchy.
   fundamentalsLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     flexShrink: 0,
   },
   // Fundamentals value — bodyEmphasis (15/21/600) with tabular-nums.
@@ -1913,10 +1915,10 @@ const styles = StyleSheet.create({
   // Using bodyEmphasis for compact fundamentals rows; priceList is used
   // for the main market values above.
   fundamentalsValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
     textAlign: 'right',
     flexShrink: 1,
@@ -1944,9 +1946,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   riskDisclosureSheetTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.subtitle.lineHeight,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
   },
   riskDisclosureSheetScroll: {
     flex: 1,
@@ -1972,10 +1974,10 @@ const styles = StyleSheet.create({
   },
   // Trust chip text uses captionElevated for quiet, professional readability.
   trustChipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Audit trail — calm, professional history ──
   // Per spec 11_COOWN: 24pt between sections. Space.lg (24px) top margin
@@ -1987,10 +1989,10 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   auditTrailTitle: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.xs,
   },
@@ -2003,14 +2005,14 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   auditTrailEvent: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     textTransform: 'capitalize',
   },
   auditTrailDate: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Viewer position header — calm, professional ownership display ──
@@ -2034,12 +2036,12 @@ const styles = StyleSheet.create({
   refreshBtn: {
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: Stroke.standard,
   },
   refreshBtnText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   viewerPositionCopy: {
     gap: Space.xs,
@@ -2048,7 +2050,7 @@ const styles = StyleSheet.create({
   viewerPositionValue: {
     fontSize: Numeric.priceList.size,
     lineHeight: Numeric.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
     letterSpacing: Numeric.priceList.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
     flexShrink: 1,
@@ -2056,16 +2058,16 @@ const styles = StyleSheet.create({
   viewerPositionMarketValue: {
     fontSize: Numeric.priceLarge.size,
     lineHeight: Numeric.priceLarge.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
     letterSpacing: Numeric.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // Position meta — captionElevated for quiet, professional labels.
   viewerPositionMeta: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Supply summary ──
   // ── Supply summary — calm, professional allocation display ──
@@ -2087,39 +2089,39 @@ const styles = StyleSheet.create({
   },
   // Supply metric labels — captionElevated for quiet hierarchy.
   supplyMetricLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   supplyUnits: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   supplyAllocated: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   allocationBar: {
     height: Space.sm,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     overflow: 'hidden',
   },
   allocationFill: {
     height: '100%',
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   // Supply holders — quiet metadata, 16pt from allocation bar.
   supplyHolders: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginTop: Space.md,
   },
   // ── Rights summary ──
@@ -2132,10 +2134,10 @@ const styles = StyleSheet.create({
   // Critical statement uses bodyEmphasis (15/21/600) for clear hierarchy.
   // This is the most important risk fact the user needs to understand.
   rightsCriticalStatement: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   // ── Unavailable exit row (truthful disabled state) ──
   unavailableRow: {
@@ -2153,22 +2155,22 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   unavailableRowLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
     flexShrink: 1,
   },
   unavailableRowSummary: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   // ── Dock state badge — calm, professional status ──
   // Uses bodyEmphasis (15/21/600) for clear hierarchy in the dock.
   dockStateBadge: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   // ── Discovery — 24pt section spacing per spec 11_COOWN ──
   recommendationSection: {
@@ -2187,8 +2189,8 @@ const priceAlertStyles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
+    borderTopLeftRadius: RadiusRoleValue.standalonePanel,
+    borderTopRightRadius: RadiusRoleValue.standalonePanel,
     padding: Space.lg,
     paddingBottom: Space.xl,
   },
@@ -2201,7 +2203,7 @@ const priceAlertStyles = StyleSheet.create({
   headerIcon: {
     width: Control.hit,
     height: Control.hit,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2209,17 +2211,17 @@ const priceAlertStyles = StyleSheet.create({
     flex: 1,
   },
   sheetTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     marginBottom: Space.xs - 2,
   },
   // Sheet subtitle — captionElevated for quiet, professional explanation.
   sheetSubtitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   conditionRow: {
     flexDirection: 'row',
@@ -2233,34 +2235,34 @@ const priceAlertStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: Stroke.standard,
   },
   // Condition text uses body (14/20/400) for clear readability.
   conditionText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   // Input label — captionElevated for quiet hierarchy.
   inputLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginBottom: Space.xs,
   },
   // Price input — tabular-nums for stable numeric entry.
   input: {
     borderWidth: Stroke.standard,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
     marginBottom: Space.lg,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },

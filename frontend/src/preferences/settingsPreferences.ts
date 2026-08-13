@@ -35,6 +35,13 @@ export interface SettingsPreferences {
    * Defaults to false (analytics enabled) to preserve prior behaviour.
    */
   analyticsOptOut: boolean;
+  /**
+   * Developer mode — when true, the "Advanced & developer" section is
+   * revealed in Settings. Enabled by tapping the version number 7 times
+   * on the About screen. Persisted so the preference survives app restarts.
+   * Defaults to false so ordinary consumers never see developer tooling.
+   */
+  developerMode: boolean;
 }
 
 export interface PushNotificationDefinition {
@@ -94,6 +101,7 @@ export const DEFAULT_SETTINGS_PREFERENCES: SettingsPreferences = {
   mySizes: [],
   filterPresets: [],
   analyticsOptOut: false,
+  developerMode: false,
 };
 
 export function buildDefaultPushNotificationToggles(keys: readonly string[]): PushNotificationToggles {
@@ -156,6 +164,10 @@ export async function getStoredSettingsPreferences(): Promise<SettingsPreference
         typeof parsed.analyticsOptOut === 'boolean'
           ? parsed.analyticsOptOut
           : DEFAULT_SETTINGS_PREFERENCES.analyticsOptOut,
+      developerMode:
+        typeof parsed.developerMode === 'boolean'
+          ? parsed.developerMode
+          : DEFAULT_SETTINGS_PREFERENCES.developerMode,
     };
   } catch {
     return DEFAULT_SETTINGS_PREFERENCES;

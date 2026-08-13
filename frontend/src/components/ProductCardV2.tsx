@@ -50,6 +50,12 @@ interface ProductCardV2Props {
    * (LIST_RENDERING_POLICY.md §5.1 / audit §Caching/prefetch)
    */
   downscaleWidth?: number;
+  /**
+   * TestID for Maestro/automation semantic selectors. When provided,
+   * passes through to the underlying Pressable so Maestro flows can
+   * tapOn by id instead of brittle coordinate taps (P0.6).
+   */
+  testID?: string;
 }
 
 function ProductCardV2Base({
@@ -62,6 +68,7 @@ function ProductCardV2Base({
   enableEntranceAnimation = true,
   onPressSeller,
   downscaleWidth,
+  testID,
   // `onMessageSeller` remains in the interface so existing callers
   // (SearchScreen, PinterestMasonryGrid) keep type-checking, but the
   // chat action is intentionally not rendered on the card — messaging
@@ -157,6 +164,7 @@ function ProductCardV2Base({
         accessibilityRole="none"
         accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
+        testID={testID}
       >
         {showPlaceholder ? (
           // Premium placeholder — matches Thryftverse visual language via

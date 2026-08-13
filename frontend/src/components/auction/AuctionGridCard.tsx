@@ -27,6 +27,12 @@ interface Props {
   cardWidth?: number;
   /** Price label for accessibility only */
   priceLabel?: string;
+  /**
+   * TestID for Maestro/automation semantic selectors. When provided,
+   * passes through to the underlying Pressable so Maestro flows can
+   * tapOn by id instead of brittle coordinate taps (P0.6).
+   */
+  testID?: string;
 }
 
 export function AuctionGridCard({
@@ -44,6 +50,7 @@ export function AuctionGridCard({
   onPress,
   cardWidth,
   priceLabel,
+  testID,
 }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -63,6 +70,7 @@ export function AuctionGridCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${priceLabel ?? ''} ${izeText}, ${countdownText}, ${bidCount} bids`}
+      testID={testID}
     >
       <View style={styles.imageWrap}>
         <CachedImage

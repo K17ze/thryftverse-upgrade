@@ -87,6 +87,8 @@ export interface SearchApiResult {
     seller?: ListingSeller | null;
     brand?: string | null;
     size?: string | null;
+    condition?: string | null;
+    category?: string | null;
   }>;
   fallback?: boolean;
   error?: string;

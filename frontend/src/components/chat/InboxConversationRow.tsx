@@ -32,6 +32,12 @@ export interface InboxConversationRowProps {
   onPress: () => void;
   onLongPress?: () => void;
   accessibilityHint?: string;
+  /**
+   * TestID for Maestro/automation semantic selectors. When provided,
+   * passes through to the underlying Pressable so Maestro flows can
+   * tapOn by id instead of brittle coordinate taps (P0.6).
+   */
+  testID?: string;
 }
 
 function InboxConversationRowBase({
@@ -51,6 +57,7 @@ function InboxConversationRowBase({
   onPress,
   onLongPress,
   accessibilityHint,
+  testID,
 }: InboxConversationRowProps) {
   const { colors } = useAppTheme();
   const { isEnabled } = useMotionConfig();
@@ -102,6 +109,7 @@ function InboxConversationRowBase({
       accessibilityLabel={accessibilityParts.join(', ')}
       accessibilityRole="button"
       accessibilityHint={accessibilityHint ?? 'Opens the conversation thread. Long press for quick actions'}
+      testID={testID}
     >
       <View style={[styles.row, unread && styles.rowUnread]}>
         <View style={styles.avatarWrap}>{avatarElement}</View>

@@ -58,7 +58,13 @@ interface MediaAsset {
   mediaType: 'image' | 'video';
   width: number;
   height: number;
-  duration?: number;
+  /**
+   * Video duration in milliseconds, normalized at the boundary.
+   * The legacy expo-media-library API returns duration in seconds; it is
+   * converted to milliseconds here so all downstream logic uses one
+   * consistent unit.
+   */
+  durationMs?: number;
 }
 
 export interface CreatorEntryScreenProps {
@@ -129,7 +135,9 @@ export function CreatorEntryScreen({
         mediaType: a.mediaType === 'video' ? 'video' : 'image',
         width: a.width,
         height: a.height,
-        duration: a.duration ? Math.round(a.duration) : undefined,
+        // Legacy expo-media-library returns duration in seconds; normalize
+        // to milliseconds at the boundary.
+        durationMs: a.duration != null ? Math.round(a.duration * 1000) : undefined,
       }));
 
       setAssets((prev) => reset ? mapped : [...prev, ...mapped]);
@@ -249,7 +257,7 @@ export function CreatorEntryScreen({
         mediaUri: asset.uri,
         mediaType: asset.mediaType,
         contentFit: 'cover',
-        videoDurationMs: asset.duration,
+        videoDurationMs: asset.durationMs,
         opacity: 1,
       },
     }));
@@ -382,11 +390,14 @@ export function CreatorEntryScreen({
                 {item.mediaType === 'video' && (
                   <View style={styles.videoBadge}>
                     <Ionicons name="play" size={12} color="#fff" />
-                    {item.duration && (
-                      <Text style={styles.videoDuration}>
-                        {Math.floor(item.duration / 60)}:{String(item.duration % 60).padStart(2, '0')}
-                      </Text>
-                    )}
+                    {item.durationMs != null && (() => {
+                      const totalSeconds = Math.floor(item.durationMs / 1000);
+                      return (
+                        <Text style={styles.videoDuration}>
+                          {Math.floor(totalSeconds / 60)}:{String(totalSeconds % 60).padStart(2, '0')}
+                        </Text>
+                      );
+                    })()}
                   </View>
                 )}
                 {isSelected && (

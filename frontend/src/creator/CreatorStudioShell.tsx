@@ -21,9 +21,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, FontFamily } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useAppTheme } from '../theme/ThemeContext';
 import { CreatorProvider, useCreator } from './CreatorContext';
+import type { CreatorInitialMedia } from '../navigation/types';
 import type { CreatorLayer } from './composition';
 import { CreatorCanvas } from './CreatorCanvas';
 import { CreatorLayersSheet } from './CreatorLayersSheet';
@@ -821,9 +824,17 @@ export function CreatorStudioScreen() {
   const templateId = route.params?.templateId as string | undefined;
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
   const initialMediaUri = route.params?.initialMediaUri as string | undefined;
+  const initialMedia = route.params?.initialMedia as CreatorInitialMedia[] | undefined;
 
   return (
-    <CreatorProvider initialType={initialType} draftId={draftId} templateId={templateId} sourceDocumentId={sourceDocumentId} initialMediaUri={initialMediaUri}>
+    <CreatorProvider
+      initialType={initialType}
+      draftId={draftId}
+      templateId={templateId}
+      sourceDocumentId={sourceDocumentId}
+      initialMediaUri={initialMediaUri}
+      initialMedia={initialMedia}
+    >
       <CreatorStudioInner />
     </CreatorProvider>
   );
@@ -875,7 +886,7 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   topCenter: {
     flexDirection: 'row',
@@ -885,13 +896,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   titleText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
     color: '#fff',
   },
   doneText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
     color: '#fff',
   },
   topRight: {
@@ -931,15 +942,15 @@ const styles = StyleSheet.create({
   },
   // ── Publish button (premium pill) ──
   publishBtn: {
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
   publishBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
   },
   // ── Page segment bars (Instagram-style story progress) ──
   pageSegmentsContainer: {
@@ -960,19 +971,19 @@ const styles = StyleSheet.create({
   },
   pageSegmentTrack: {
     height: 3,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'rgba(255,255,255,0.25)',
     overflow: 'hidden',
     flexDirection: 'row',
   },
   pageSegmentFill: {
     height: 3,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   pageSegmentAdd: {
     width: 22,
     height: 22,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -990,12 +1001,12 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
   canvasLoadingText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
+    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.body.size,
     color: 'rgba(255,255,255,0.85)',
   },
   // ── Empty canvas hint ──
@@ -1007,14 +1018,14 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   canvasEmptyHintTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
     color: 'rgba(255,255,255,0.45)',
     marginTop: Space.sm,
   },
   canvasEmptyHintBody: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size,
     color: 'rgba(255,255,255,0.3)',
     textAlign: 'center',
   },
@@ -1022,7 +1033,7 @@ const styles = StyleSheet.create({
   unsavedDot: {
     width: 7,
     height: 7,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: '#C9A46A',
     marginLeft: -Space.xs,
     marginTop: Space.xs + 2,
@@ -1053,8 +1064,8 @@ const styles = StyleSheet.create({
   },
   bottomRailGlass: {
     flex: 1,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
+    borderTopLeftRadius: RadiusRoleValue.standalonePanel,
+    borderTopRightRadius: RadiusRoleValue.standalonePanel,
     overflow: 'hidden',
     paddingTop: Space.md,
   },
@@ -1104,10 +1115,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   safeZoneLabelText: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     fontSize: 9,
     color: '#C9A46A',
     letterSpacing: 0.3,
@@ -1130,19 +1141,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 4,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
   opacitySliderFill: {
     height: 4,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     backgroundColor: '#C9A46A',
   },
   opacitySliderThumb: {
     position: 'absolute',
     width: 18,
     height: 18,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: '#fff',
     marginLeft: -9,
     shadowColor: '#000',
@@ -1152,8 +1163,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   opacityLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
+    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.body.size,
     color: 'rgba(255,255,255,0.8)',
     minWidth: 36,
     textAlign: 'right',

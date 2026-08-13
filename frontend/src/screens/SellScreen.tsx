@@ -16,7 +16,9 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants, Radius, Stroke, Type, Control } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -1841,9 +1843,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   navTitle: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
   },
   navDraftStatus: {
     minWidth: Space.xl + Space.sm,
@@ -1855,8 +1857,8 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   navDraftText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
 
   /* -- scroll -- */
@@ -1872,7 +1874,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginTop: Space.sm,
     padding: Space.md,
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: Stroke.standard,
   },
   autofillHeader: {
@@ -1883,16 +1885,16 @@ const styles = StyleSheet.create({
   },
   autofillTitle: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   autofillDesc: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginBottom: Space.sm,
   },
   autofillChips: {
@@ -1904,23 +1906,23 @@ const styles = StyleSheet.create({
   autofillChip: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: Stroke.hairline,
     minWidth: Space.xxl + Space.lg,
     maxWidth: Space.xxl + Space.xxl + Space.sm,
   },
   autofillChipLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
     textTransform: 'uppercase',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   autofillChipValue: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginTop: Space.xs,
   },
   autofillApplyBtn: {
@@ -1929,15 +1931,15 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: Stroke.standard,
     alignSelf: 'flex-start',
   },
   autofillApplyText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   sectionSpacing: {
     paddingTop: Space.lg,
@@ -1948,11 +1950,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   sectionHeading: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.bold,
     textTransform: 'uppercase',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
     marginBottom: Space.sm,
   },
 
@@ -1961,20 +1963,20 @@ const styles = StyleSheet.create({
   fieldGroup: {
     paddingVertical: Space.sm,
   },
-  /* Labels: Type.bodyEmphasis — clear, legible, heavier than input text. */
+  /* Labels: TypographyV2.bodyStrong — clear, legible, heavier than input text. */
   fieldLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     marginBottom: Space.xs,
   },
-  /* Inputs: Type.body — comfortable reading weight. */
+  /* Inputs: TypographyV2.body — comfortable reading weight. */
   fieldInput: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
     paddingVertical: Space.sm,
     paddingHorizontal: 0,
     minHeight: Control.hit + Space.sm,
@@ -1984,18 +1986,18 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     paddingTop: Space.sm,
   },
-  /* Hints: Type.captionElevated — supportive but recessed. */
+  /* Hints: TypographyV2.meta — supportive but recessed. */
   fieldHelper: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginTop: Space.xs,
   },
   fieldError: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
     marginTop: Space.xs,
   },
   hairline: {
@@ -2015,10 +2017,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pickerValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   pickerPlaceholder: {
   },
@@ -2031,19 +2033,19 @@ const styles = StyleSheet.create({
     minHeight: Control.hit + Space.sm,
   },
   currencySymbol: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: FontFamily.semibold,
     marginRight: Space.xs,
   },
   priceInput: {
-    fontSize: Type.priceLarge.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: FontFamily.bold,
     minWidth: Space.xxl + Space.lg + Space.sm,
     padding: 0,
   },
   discountPreview: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
     marginTop: Space.xs,
   },
   soldCompsHint: {
@@ -2054,13 +2056,13 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   soldCompsText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
     flex: 1,
   },
   soldCompsAction: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
 
   /* -- toggles -- */
@@ -2076,18 +2078,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: Control.hit,
   },
   togglePillActive: {
   },
   toggleText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
   },
   toggleTextActive: {
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
   },
 
   /* -- tags -- */
@@ -2104,22 +2106,22 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     borderWidth: StyleSheet.hairlineWidth,
   },
   tagText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   tagInput: {
     flex: 1,
     minWidth: Space.xxl + Space.lg,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
     paddingVertical: Space.xs,
   },
 
@@ -2132,7 +2134,7 @@ const styles = StyleSheet.create({
   authThumb: {
     width: Space.xxl + Space.xs,
     height: Space.xxl + Space.xs,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     overflow: 'hidden',
   },
   authThumbImage: {
@@ -2152,7 +2154,7 @@ const styles = StyleSheet.create({
   authAddBtn: {
     width: Space.xxl + Space.xs,
     height: Space.xxl + Space.xs,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: Stroke.standard,
     borderStyle: 'dashed',
     alignItems: 'center',
@@ -2169,8 +2171,8 @@ const styles = StyleSheet.create({
   },
   inlineErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
 
   /* -- compact review summary (auction/co_own) -- */
@@ -2185,10 +2187,10 @@ const styles = StyleSheet.create({
   },
   reviewSummaryText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 
   /* -- photo guidance (flat inline, no card chrome per §4 surface budget) -- */
@@ -2201,17 +2203,17 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   photoGuideTitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   photoGuideMin: {
     flex: 1,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   photoGuideTips: {
     flexDirection: 'row',
@@ -2226,10 +2228,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   photoGuideTip: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 
   /* -- contextual authenticity prompts -- */
@@ -2247,10 +2249,10 @@ const styles = StyleSheet.create({
   },
   contextualPromptText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 
   /* -- price suggestion block -- */
@@ -2275,9 +2277,9 @@ const styles = StyleSheet.create({
     gap: Space.xs + 1,
   },
   proceedsLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
     marginTop: 0,
   },
   proceedsRight: {
@@ -2286,15 +2288,15 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   proceedsAmount: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   proceedsFeeHint: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
     marginTop: 0,
   },
 
@@ -2306,10 +2308,10 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   fieldRequiredHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 
   /* -- expandable quality tips (fixed above footer) -- */
@@ -2334,8 +2336,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   qualityBarTier: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   qualityTipsToggle: {
     flexDirection: 'row',
@@ -2345,8 +2347,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   qualityTipsLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   qualityTipsRow: {
     flexDirection: 'row',
@@ -2370,13 +2372,13 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   qualityTipBullet: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold,
   },
   qualityTipsText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight - 1,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight - 1,
   },
 });

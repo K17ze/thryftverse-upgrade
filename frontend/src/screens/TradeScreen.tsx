@@ -36,7 +36,9 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import {
@@ -730,7 +732,7 @@ const styles = StyleSheet.create({
   // Per spec 11_COOWN: "Clean, calm, trustworthy." Alert uses subtle
   // semantic background, not aggressive red. 24pt section spacing.
   alertCard: {
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     padding: Space.lg,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.lg,
@@ -745,19 +747,19 @@ const styles = StyleSheet.create({
   },
   // Alert title uses bodyEmphasis (15/21/600) for clear hierarchy.
   alertTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     flexShrink: 1,
     minWidth: 0,
   },
   // Alert text uses body (14/20/400) for readable explanation.
   alertText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   // ── Illustrative banner — calm market status indicator ──
   // Per spec 11_COOWN: "Calm presentation." Subtle background, not aggressive.
@@ -769,16 +771,16 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.lg,
   },
   illustrativeBannerText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Unified order ticket — the one dominant panel ──
   // Per AGENTS.md §4: one dominant non-media panel above the fold.
@@ -786,7 +788,7 @@ const styles = StyleSheet.create({
   // trustworthy. 24pt section spacing. Generous internal padding (24pt).
   // Hairline border, not heavy chrome.
   ticketCard: {
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.lg,
     gap: Space.md,
@@ -821,27 +823,27 @@ const styles = StyleSheet.create({
   },
   // Context labels use captionElevated for quiet hierarchy.
   contextLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // Context values use numericMeta with tabular-nums — per spec 11_COOWN:
   // "Monetary and unit quantities never change width erratically."
   contextValue: {
     fontSize: Numeric.numericMeta.size,
     lineHeight: Numeric.numericMeta.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     letterSpacing: Numeric.numericMeta.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Input labels — captionElevated for quiet, professional hierarchy ──
   // Per Design.md: "Labels: Type.captionElevated."
   inputLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Limit row — label + capped pill ──
   limitRow: {
@@ -856,31 +858,31 @@ const styles = StyleSheet.create({
   modePill: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     flexShrink: 0,
   },
   modePillText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.bold,
     letterSpacing: LetterSpacing.wide + 0.28,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // Max link — quiet, professional quick-fill action. Tabular-nums.
   maxLink: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     alignSelf: 'flex-start',
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // Market hint — calm, professional explanation text.
   marketHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   submitBtn: {
     flex: 1,
@@ -893,10 +895,10 @@ const styles = StyleSheet.create({
   // Per spec 11_COOWN: "Financial error never resolves via toast alone."
   // Shows the reason inline below the button.
   submitDisabledReason: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textAlign: 'center',
   },
   thinMarketDock: {
@@ -912,14 +914,14 @@ const styles = StyleSheet.create({
   durationChip: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: StyleSheet.hairlineWidth,
   },
   durationText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.body.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
 });

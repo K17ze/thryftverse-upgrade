@@ -22,7 +22,8 @@
  * unit types must be added here before they can be rendered.
  */
 
-import type { Listing } from '../data/mockData';
+import type { DiscoveryListingSummary, ListingLike } from './DiscoveryListingSummary';
+import { mapListingToDiscoverySummary } from './DiscoveryListingSummary';
 import type { PosterStory } from '../services/postersApi';
 
 // ============================================================================
@@ -58,7 +59,7 @@ export interface DiscoveryFeedUnitBase {
  */
 export interface ListingFeedUnit extends DiscoveryFeedUnitBase {
   type: 'listing';
-  listing: Listing;
+  listing: DiscoveryListingSummary;
   /** Media URI for the primary image/video. */
   mediaUri: string;
   /** Poster frame for video (undefined for image). */
@@ -126,6 +127,37 @@ export type DiscoveryFeedUnit =
   | PosterFeedUnit
   | EditorialFeedUnit
   | RecommendationBreakFeedUnit;
+
+// ============================================================================
+// LISTING FEED-UNIT BUILDER
+// ============================================================================
+
+/**
+ * Builds a `ListingFeedUnit` from any listing-like source (mock-data
+ * `Listing` or backend listing payload). The source is mapped through the
+ * production `DiscoveryListingSummary` contract so the feed unit never
+ * carries a raw mock-data type.
+ *
+ * @param source  Any listing-like object.
+ * @param mediaUri  Primary media URI for the tile.
+ * @param aspectRatio  Reserved aspect ratio (width / height).
+ * @param stateMarker  Optional single state marker (auction/co-own/sold).
+ */
+export function buildListingFeedUnit(
+  source: ListingLike,
+  mediaUri: string,
+  aspectRatio: number,
+  stateMarker?: ListingFeedUnit['stateMarker'],
+): ListingFeedUnit {
+  return {
+    id: `listing:${source.id}`,
+    type: 'listing',
+    listing: mapListingToDiscoverySummary(source),
+    mediaUri,
+    aspectRatio,
+    stateMarker,
+  };
+}
 
 // ============================================================================
 // PRODUCT TILE METADATA BUDGET

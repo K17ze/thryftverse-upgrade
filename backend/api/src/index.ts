@@ -18823,6 +18823,10 @@ async function computeSearchResults(
     created_at: string;
     rank_score: string;
     seller_username: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    category: string | null;
   }>(
     `
       SELECT
@@ -18834,7 +18838,11 @@ async function computeSearchResults(
         l.image_url,
         l.created_at::text,
         ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1))::text AS rank_score,
-        u.username AS seller_username
+        u.username AS seller_username,
+        l.brand,
+        l.size,
+        l.condition,
+        l.category
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       WHERE l.status = 'active'
@@ -18870,6 +18878,13 @@ async function computeSearchResults(
         imageUrl: row.image_url,
         rank: Number(row.rank_score),
         createdAt: row.created_at,
+        // Commerce facts are passed through as-is (including null). The
+        // frontend renders only known facts and never fabricates a brand,
+        // size, or condition (audit P0.4).
+        brand: row.brand,
+        size: row.size,
+        condition: row.condition,
+        category: row.category,
         seller: row.seller_username
           ? {
               id: row.seller_id,
@@ -18894,10 +18909,15 @@ async function computeSearchResults(
     image_url: string | null;
     created_at: string;
     seller_username: string | null;
+    brand: string | null;
+    size: string | null;
+    condition: string | null;
+    category: string | null;
   }>(
     `
       SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp::text, l.image_url, l.created_at::text,
-        u.username AS seller_username
+        u.username AS seller_username,
+        l.brand, l.size, l.condition, l.category
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       WHERE l.status = 'active'
@@ -18934,6 +18954,12 @@ async function computeSearchResults(
       imageUrl: row.image_url,
       rank: 0,
       createdAt: row.created_at,
+      // Commerce facts passed through as-is (including null) so the
+      // frontend renders only known facts (audit P0.4).
+      brand: row.brand,
+      size: row.size,
+      condition: row.condition,
+      category: row.category,
       seller: row.seller_username
         ? {
             id: row.seller_id,

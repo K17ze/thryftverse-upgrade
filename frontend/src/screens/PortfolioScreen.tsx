@@ -13,7 +13,9 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type, Typography, Stroke, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, FontFamily, Stroke, LetterSpacing, Numeric } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { haptics } from '../utils/haptics';
@@ -510,7 +512,7 @@ export default function PortfolioScreen() {
                   styles.portfolioTabText,
                   {
                     color: activePortfolioTab === 'positions' ? colors.textPrimary : colors.textSecondary,
-                    fontFamily: activePortfolioTab === 'positions' ? Typography.family.semibold : Typography.family.regular,
+                    fontFamily: activePortfolioTab === 'positions' ? FontFamily.semibold : FontFamily.regular,
                   },
                 ]}>
                   Positions
@@ -527,7 +529,7 @@ export default function PortfolioScreen() {
                   styles.portfolioTabText,
                   {
                     color: activePortfolioTab === 'insights' ? colors.textPrimary : colors.textSecondary,
-                    fontFamily: activePortfolioTab === 'insights' ? Typography.family.semibold : Typography.family.regular,
+                    fontFamily: activePortfolioTab === 'insights' ? FontFamily.semibold : FontFamily.regular,
                   },
                 ]}>
                   Insights
@@ -835,7 +837,7 @@ const styles = StyleSheet.create({
   // Calm financial presentation: flat canvas, hairline border, generous padding.
   // 24pt section spacing after the card (Space.lg).
   summaryCard: {
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.lg,
     paddingHorizontal: Space.lg,
@@ -845,15 +847,15 @@ const styles = StyleSheet.create({
   // Label uses captionElevated per Design.md financial UI spec — quiet,
   // professional, not competing with the value below.
   summaryLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   summaryValue: {
     fontSize: Numeric.priceLarge.size,
     lineHeight: Numeric.priceLarge.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontFamily: FontFamily.bold,
     letterSpacing: Numeric.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
@@ -876,15 +878,15 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   summaryStatLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
   },
   summaryStatValue: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Allocation card — calm, professional breakdown ──
@@ -913,10 +915,10 @@ const styles = StyleSheet.create({
     marginRight: Space.sm,
   },
   portfolioTabText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   // ── Position insight (calm replacement for gamification cards) ──
   // ── Position insight — calm, factual summary ──
@@ -936,25 +938,25 @@ const styles = StyleSheet.create({
   },
   // Insight label uses captionElevated for quiet readability.
   insightLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   insightTitle: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.body.letterSpacing,
     minWidth: 0,
   },
   // Allocation title uses subtitle (17/24/600) — clear section header per
   // Design.md type scale. Subtitle uses captionElevated for quiet metadata.
   allocationTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   allocationHeader: {
     flexDirection: 'row',
@@ -964,10 +966,10 @@ const styles = StyleSheet.create({
   },
   // Allocation subtitle uses captionElevated for quiet metadata.
   allocationSubtitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginTop: Space.xs / 2,
     marginBottom: Space.xs,
   },
@@ -993,25 +995,25 @@ const styles = StyleSheet.create({
   },
   barLabel: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   barPct: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   barTrack: {
     height: Space.xs,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     overflow: 'hidden',
   },
   barFill: {
     height: Space.xs,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
   },
   sectionRow: {
     flexDirection: 'row',
@@ -1038,7 +1040,7 @@ const styles = StyleSheet.create({
   realisedIcon: {
     width: Space.xl + Space.xs,
     height: Space.xl + Space.xs,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1047,20 +1049,20 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   realisedLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   realisedCaption: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   realisedAmount: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Watchlist row — calm navigation, 24pt section spacing ──
@@ -1075,7 +1077,7 @@ const styles = StyleSheet.create({
   watchlistIcon: {
     width: Space.xl + Space.xs,
     height: Space.xl + Space.xs,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1084,30 +1086,30 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   watchlistTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   watchlistSub: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // Section title uses subtitle (17/24/600) — clear section header.
   // Section links use captionElevated for quiet, professional navigation.
   sectionTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   sectionLink: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Rights card — calm, professional, 24pt section spacing ──
   rightsCard: {
@@ -1122,10 +1124,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   rightsTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   rightsList: {
     gap: Space.xs,
@@ -1137,10 +1139,10 @@ const styles = StyleSheet.create({
   },
   rightsText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Today's change row — tabular numerics for stable alignment ──
   // Per spec 11_COOWN: "Monetary and unit quantities never change width
@@ -1152,24 +1154,24 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   todayChangeValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   todayChangePct: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.body.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   todayChangeTime: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Data quality note — calm, professional warning ──
@@ -1180,15 +1182,15 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     marginTop: Space.sm,
   },
   dataQualityText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
 });

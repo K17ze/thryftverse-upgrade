@@ -60,7 +60,9 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 
 
 
-import { TypeStyles, Radius, Type, Space, Control, Stroke } from '../theme/designTokens';
+import { Space, Control, Stroke, FontFamily } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 
@@ -746,6 +748,7 @@ export default function InboxScreen() {
           });
         }}
         onLongPress={() => handleQuickActions(item.id)}
+        testID={index === 0 ? 'golden-inbox-first-conversation' : undefined}
       />
     );
 
@@ -963,13 +966,13 @@ export default function InboxScreen() {
 
               <View key={i} style={styles.skeletonRow}>
 
-                <SkeletonLoader width={56} height={56} borderRadius={Radius.full} />
+                <SkeletonLoader width={56} height={56} borderRadius={RadiusRoleValue.pillAvatar} />
 
                 <View style={styles.skeletonText}>
 
-                  <SkeletonLoader width="70%" height={16} borderRadius={Radius.sm} />
+                  <SkeletonLoader width="70%" height={16} borderRadius={RadiusRoleValue.compactControl} />
 
-                  <SkeletonLoader width="40%" height={14} borderRadius={Radius.sm} />
+                  <SkeletonLoader width="40%" height={14} borderRadius={RadiusRoleValue.compactControl} />
 
                 </View>
 
@@ -1275,22 +1278,22 @@ const styles = StyleSheet.create({
 
   headerTitle: {
 
-    fontSize: Type.title.size,
+    fontSize: TypographyV2.screenTitle.size,
 
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: FontFamily.bold,
 
 
-    letterSpacing: Type.title.letterSpacing,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
 
-    lineHeight: Type.title.lineHeight,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
 
   },
 
   headerSubtitle: {
 
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.body.size,
 
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: FontFamily.regular,
 
 
   },
@@ -1311,7 +1314,7 @@ const styles = StyleSheet.create({
 
     height: Space.xxl,
 
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
 
 
     justifyContent: 'center',
@@ -1332,16 +1335,16 @@ const styles = StyleSheet.create({
 
     paddingVertical: Space.sm + 2,
 
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
 
 
   },
 
   newMessageBtnText: {
 
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.body.size,
 
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
 
 
   },
@@ -1349,7 +1352,7 @@ const styles = StyleSheet.create({
   searchWrap: {
 
 
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
 
     paddingHorizontal: Space.md,
 
@@ -1366,17 +1369,17 @@ const styles = StyleSheet.create({
   filterChip: {
     paddingVertical: Space.xs + 1,
     paddingHorizontal: Space.sm + Space.xs,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: StyleSheet.hairlineWidth,
   },
   filterChipActive: {
   },
   filterChipText: {
-    fontSize: Type.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   filterChipTextActive: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
   },
 
   listContent: {
@@ -1422,7 +1425,7 @@ const styles = StyleSheet.create({
 
     height: Space.xxl + Space.sm,
 
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
 
 
     alignItems: 'center',
@@ -1435,9 +1438,9 @@ const styles = StyleSheet.create({
 
   groupAvatarText: {
 
-    fontSize: Type.subtitle.size,
+    fontSize: TypographyV2.sectionTitle.size,
 
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: FontFamily.bold,
 
 
   },
@@ -1454,7 +1457,7 @@ const styles = StyleSheet.create({
 
     height: Control.iconCompact,
 
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
 
 
     borderWidth: Stroke.emphasis,
@@ -1492,18 +1495,18 @@ const styles = StyleSheet.create({
 
   nameText: {
 
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
 
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
 
 
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: TypographyV2.body.letterSpacing,
 
   },
 
   nameUnread: {
 
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: FontFamily.bold,
 
   },
 
@@ -1525,9 +1528,9 @@ const styles = StyleSheet.create({
 
   memberCount: {
 
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
 
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
 
 
   },
@@ -1535,11 +1538,11 @@ const styles = StyleSheet.create({
   snippet: {
 
 
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.body.size,
 
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: FontFamily.regular,
 
-    lineHeight: Type.caption.lineHeight,
+    lineHeight: TypographyV2.body.lineHeight,
 
     flex: 1,
 
@@ -1548,27 +1551,27 @@ const styles = StyleSheet.create({
   snippetUnread: {
 
 
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
 
   },
 
   unreadDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
   },
   unreadPill: {
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2,
     marginLeft: Space.xs,
   },
   unreadPillText: {
-    fontSize: Type.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   timeUnread: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
   },
   rowMeta: {
     alignItems: 'flex-end',
@@ -1585,7 +1588,7 @@ const styles = StyleSheet.create({
   contextThumb: {
     width: Space.lg + Space.xs,
     height: Space.lg + Space.xs,
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     borderWidth: StyleSheet.hairlineWidth,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1615,15 +1618,15 @@ const styles = StyleSheet.create({
 
     paddingVertical: Space.xs / 2,
 
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
 
   },
 
   draftBadgeText: {
 
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
 
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
 
 
   },
@@ -1637,7 +1640,7 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   requestListingText: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
   },
   swipeRightGroup: {
 
@@ -1668,7 +1671,7 @@ const styles = StyleSheet.create({
 
     width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
 
     flex: 1,
 
@@ -1683,7 +1686,7 @@ const styles = StyleSheet.create({
 
     width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
 
     flex: 1,
 
@@ -1698,7 +1701,7 @@ const styles = StyleSheet.create({
 
     width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
 
     flex: 1,
 
@@ -1713,7 +1716,7 @@ const styles = StyleSheet.create({
 
     width: Space.xxl + Space.lg,
 
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
 
     flex: 1,
 
@@ -1722,7 +1725,7 @@ const styles = StyleSheet.create({
   requestRowSurface: {
 
 
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
 
     marginHorizontal: Space.md,
 
@@ -1733,7 +1736,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     marginHorizontal: Space.md,
     marginVertical: Space.xs,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
   },
   requestRowInner: {
     flexDirection: 'row',
@@ -1765,7 +1768,7 @@ const styles = StyleSheet.create({
 
     paddingVertical: Space.sm + 2,
 
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
 
 
     borderWidth: StyleSheet.hairlineWidth,
@@ -1775,9 +1778,9 @@ const styles = StyleSheet.create({
 
   requestBtnDeclineText: {
 
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.body.size,
 
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
 
 
   },
@@ -1792,7 +1795,7 @@ const styles = StyleSheet.create({
 
     paddingVertical: Space.sm + 2,
 
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
 
 
   },
@@ -1817,7 +1820,7 @@ const styles = StyleSheet.create({
   requestsAvatar: {
     width: Control.chrome,
     height: Control.chrome,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1835,7 +1838,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
 
 
-    borderRadius: Radius.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
 
   },
 
@@ -1845,7 +1848,7 @@ const styles = StyleSheet.create({
 
     height: Space.lg,
 
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
 
 
     justifyContent: 'center',
@@ -1856,9 +1859,9 @@ const styles = StyleSheet.create({
 
   requestsBadgeText: {
 
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.body.size,
 
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: FontFamily.bold,
 
 
   },
@@ -1866,26 +1869,26 @@ const styles = StyleSheet.create({
   requestsIconWrap: {
     width: Space.xxl,
     height: Space.xxl,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     justifyContent: 'center',
     alignItems: 'center',
   },
   requestsBannerText: {
-    fontSize: Type.body.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   requestsBannerSub: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
     marginTop: Space.xs / 2,
   },
 
   requestBtnAcceptText: {
 
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.body.size,
 
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
 
 
   },
@@ -1913,13 +1916,13 @@ const styles = StyleSheet.create({
   },
 
   errorBannerTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
   },
 
   errorBannerSub: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
   },
 
   errorBannerRetryBtn: {
@@ -1930,9 +1933,9 @@ const styles = StyleSheet.create({
   errorBannerRetry: {
 
 
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.body.size,
 
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: FontFamily.semibold,
 
   },
 

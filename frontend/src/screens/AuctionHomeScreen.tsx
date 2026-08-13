@@ -1422,7 +1422,7 @@ export default function AuctionHomeScreen() {
                 onPersonalAction={featuredPersonalAction ? () => navigateToDetail(featured.id) : undefined}
               />
               <View style={styles.supportingRow}>
-                {supporting.map((item) => {
+                {supporting.map((item, supportIdx) => {
                   const timing = resolveAuctionTiming(item, secondClock);
                   const urgency = resolveUrgency(timing);
                   const valueLockup = formatValueLockup(item.currentBidGbp || item.startingBidGbp);
@@ -1446,6 +1446,7 @@ export default function AuctionHomeScreen() {
                       viewerState={item.viewerState}
                       onPress={() => navigateToDetail(item.id)}
                       cardWidth={gridCardWidth}
+                      testID={supportIdx === 0 ? 'golden-auction-first-card' : undefined}
                     />
                   );
                 })}

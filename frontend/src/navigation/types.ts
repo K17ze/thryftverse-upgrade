@@ -27,6 +27,24 @@ export type NativeStackScreenProps<ParamList extends Record<string, any | undefi
 export type NativeStackNavigationProp<ParamList extends Record<string, any | undefined>, RouteName extends keyof ParamList = keyof ParamList> =
   RNNativeStackNavigationProp<ParamList, RouteName>;
 
+// ---------------------------------------------------------------------------
+// Creator initial media acquisition payload (P0.1)
+// ---------------------------------------------------------------------------
+// A typed, source-agnostic description of media acquired at the entry point
+// (camera capture, ImagePicker multi-select, etc.) and passed into the
+// CreatorStudio route. Every selected asset is preserved in deterministic
+// order with its kind, dimensions and (for video) duration in milliseconds.
+export type CreatorInitialMedia = {
+  id: string;
+  uri: string;
+  kind: 'image' | 'video';
+  width?: number;
+  height?: number;
+  /** Video duration in milliseconds (normalized at the boundary). */
+  durationMs?: number;
+  mimeType?: string;
+};
+
 export type RootStackParamList = {
   // Age gate — shown before onboarding/auth on first launch (18+ marketplace).
   AgeVerification: undefined;
@@ -196,7 +214,17 @@ export type RootStackParamList = {
     draftId?: string;
     templateId?: string;
     sourceDocumentId?: string;
+    /**
+     * Backward-compatible single-asset entry point (camera capture, legacy
+     * callers). Prefer `initialMedia` for multi-asset acquisition.
+     */
     initialMediaUri?: string;
+    /**
+     * Typed multi-asset acquisition payload. When present, every asset is
+     * seeded as a media layer in deterministic order, preserving kind,
+     * dimensions and video duration.
+     */
+    initialMedia?: CreatorInitialMedia[];
     startBlank?: boolean;
     openTemplates?: boolean;
   };

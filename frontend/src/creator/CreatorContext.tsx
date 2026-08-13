@@ -14,6 +14,7 @@ import { CreatorAnalytics } from './creatorAnalytics';
 import { getTemplateById } from './templates';
 import { createStableId } from '../utils/createStableId';
 import { haptics } from '../utils/haptics';
+import type { CreatorInitialMedia } from '../navigation/types';
 
 export interface CreatorContextValue {
   document: CreatorDocument;
@@ -80,14 +81,62 @@ export interface CreatorProviderProps {
   draftId?: string;
   templateId?: string;
   sourceDocumentId?: string;
+  /**
+   * Backward-compatible single-asset entry point. The asset is seeded as a
+   * single image media layer. Prefer `initialMedia` for multi-asset or
+   * video-aware acquisition.
+   */
   initialMediaUri?: string;
+  /**
+   * Typed multi-asset acquisition payload. Every asset is seeded as a media
+   * layer in deterministic order, preserving kind, dimensions and video
+   * duration (in ms). When both `initialMedia` and `initialMediaUri` are
+   * provided, `initialMedia` takes precedence.
+   */
+  initialMedia?: CreatorInitialMedia[];
 }
 
-export function CreatorProvider({ children, initialType, draftId, templateId, sourceDocumentId, initialMediaUri }: CreatorProviderProps) {
+export function CreatorProvider({ children, initialType, draftId, templateId, sourceDocumentId, initialMediaUri, initialMedia }: CreatorProviderProps) {
   const initialDoc = useMemo(() => createEmptyDocument(initialType), [initialType]);
   const [document, setDocumentState] = useState<CreatorDocument>(initialDoc);
-  // Seed initial captured/selected media as a layer if provided
+  // Seed initial captured/selected media as layers. When `initialMedia` is
+  // provided (typed multi-asset payload), every asset is seeded in
+  // deterministic order, preserving kind, dimensions and video duration.
+  // Otherwise, fall back to the legacy single-URI `initialMediaUri` path
+  // (treated as an image layer) for backward compatibility with existing
+  // single-asset entry points (e.g. camera capture).
   useEffect(() => {
+    if (initialMedia && initialMedia.length > 0) {
+      setDocumentState((prev) => {
+        let doc = prev;
+        initialMedia.forEach((asset, i) => {
+          const mediaLayer: CreatorLayer = {
+            id: createStableId('media'),
+            type: 'media',
+            x: 0.5,
+            y: 0.5,
+            width: 1,
+            height: 1,
+            scale: 1,
+            rotation: 0,
+            zIndex: i,
+            locked: false,
+            hidden: false,
+            opacity: 1,
+            payload: {
+              mediaUri: asset.uri,
+              mediaType: asset.kind,
+              contentFit: 'cover',
+              videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
+              opacity: 1,
+            },
+          };
+          doc = addLayerToPage(doc, 0, mediaLayer);
+        });
+        return doc;
+      });
+      return;
+    }
     if (!initialMediaUri) return;
     const mediaLayer: CreatorLayer = {
       id: createStableId('media'),
@@ -111,7 +160,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     };
     setDocumentState((prev) => addLayerToPage(prev, 0, mediaLayer));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMediaUri]);
+  }, [initialMediaUri, initialMedia]);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [canUndo, setCanUndo] = useState(false);

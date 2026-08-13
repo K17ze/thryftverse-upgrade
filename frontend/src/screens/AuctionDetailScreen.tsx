@@ -26,7 +26,9 @@ import { parseApiError } from '../lib/apiClient';
 import { requestPushPermissionOnce } from '../lib/pushPermission';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Space, Radius, Typography, Type, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
   getAuctionDetail,
   placeAuctionBid,
@@ -416,6 +418,7 @@ export default function AuctionDetailScreen() {
       winnerBidderId: auction.winnerBidderId,
       lifecycle: auction.lifecycle,
       terminalReason: auction.terminalReason,
+      fulfilment: auction.fulfilment ?? null,
     };
   }, [auction]);
 
@@ -623,6 +626,42 @@ export default function AuctionDetailScreen() {
     terminalAmountGbp != null
       ? formatFromFiat(terminalAmountGbp, 'GBP')
       : 'Amount unavailable';
+
+  // ── Truthful terminal sale-state labels (audit P0.5) ──
+  // `ended` is not `settled`. Derive the sale title from the authoritative
+  // effective state + backend payment status so the body never says "Sold"
+  // (implying settlement) for an auction that has only ended.
+  const isPaymentConfirmed = auctionFulfilment?.paymentStatus === 'paid';
+  const hasValidWinner = auction != null && auction.winnerBidderId != null && auction.bidCount > 0;
+  const sellerSaleTitle = !hasValidWinner
+    ? 'Ended without bids'
+    : isSettled
+      ? 'Sold'
+      : isPaymentConfirmed
+        ? 'Sold · settlement pending'
+        : 'Sold · awaiting payment';
+  const winnerSubtitle = isSettled
+    ? (auctionFulfilment?.buyerNextAction
+        ? auctionFulfilment.buyerNextAction
+        : auctionFulfilment?.fulfilmentStatus
+          ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+          : 'Fulfilment details are not available yet.')
+    : isPaymentConfirmed
+      ? 'Payment confirmed · settlement pending'
+      : (auctionFulfilment?.buyerNextAction
+          ? auctionFulfilment.buyerNextAction
+          : 'Complete payment to secure your win.');
+  const sellerSubtitle = !hasValidWinner
+    ? 'No bids were received.'
+    : (auctionFulfilment?.sellerNextAction
+        ? auctionFulfilment.sellerNextAction
+        : isSettled
+          ? (auctionFulfilment?.fulfilmentStatus
+              ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+              : 'Fulfilment details are not available yet.')
+          : isPaymentConfirmed
+            ? 'Payment confirmed · settlement pending.'
+            : 'Awaiting buyer payment.');
 
   // Compute scroll bottom padding from dock geometry + safe area so the
   // sticky dock never covers the last content row.
@@ -933,11 +972,7 @@ export default function AuctionDetailScreen() {
                   {terminalAmountText}
                 </Text>
                 <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  {auctionFulfilment?.buyerNextAction
-                    ? auctionFulfilment.buyerNextAction
-                    : auctionFulfilment?.fulfilmentStatus
-                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
-                      : 'Fulfilment details are not available yet.'}
+                  {winnerSubtitle}
                 </Text>
               </>
             )}
@@ -959,22 +994,25 @@ export default function AuctionDetailScreen() {
                 </Pressable>
               </>
             )}
-            {viewerState === 'seller' && auction.bidCount > 0 && (
+            {viewerState === 'seller' && hasValidWinner && (
               <>
-                <Text style={[styles.terminalResultTitleSold, { color: colors.success }]}>Sold</Text>
+                <Text
+                  style={[
+                    styles.terminalResultTitleSold,
+                    { color: isSettled ? colors.success : isPaymentConfirmed ? colors.brand : colors.warning },
+                  ]}
+                >
+                  {sellerSaleTitle}
+                </Text>
                 <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {terminalAmountText}
                 </Text>
                 <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  {auctionFulfilment?.sellerNextAction
-                    ? auctionFulfilment.sellerNextAction
-                    : auctionFulfilment?.fulfilmentStatus
-                      ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
-                      : 'Fulfilment details are not available yet.'}
+                  {sellerSubtitle}
                 </Text>
               </>
             )}
-            {viewerState === 'seller' && auction.bidCount === 0 && (
+            {viewerState === 'seller' && !hasValidWinner && (
               <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Ended without bids</Text>
             )}
             {viewerState === 'not_participating' && (
@@ -1771,26 +1809,26 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   bidActivityLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
   },
   bidActivityBidder: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   bidActivityAmount: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   bidActivityEmpty: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
     paddingVertical: Space.sm,
   },
   bidActivityViewAll: {
@@ -1800,9 +1838,9 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   bidActivityViewAllText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   // ── Item details rows (per spec 02_AUCTION §5) ──
   itemDetailRow: {
@@ -1813,20 +1851,20 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   itemDetailLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   itemDetailValue: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   descriptionText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 4,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 4,
+    fontFamily: FontFamily.regular,
   },
   // ── Terminal result — one compact module ──
   // Per Design.md between-group spacing: 24px after media for a
@@ -1839,34 +1877,34 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   terminalResultTitleWon: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   terminalResultTitleLost: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   terminalResultTitleSold: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   terminalResultValue: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.priceHero.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   terminalResultNote: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   // ── Transaction surface internal rows ──
   transactionBidActivityRow: {
@@ -1879,16 +1917,16 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   transactionBidActivityLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
   },
   transactionBidActivityValue: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   transactionMinRow: {
@@ -1899,16 +1937,16 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   transactionMinLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.semibold,
     textTransform: 'uppercase',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   transactionMinValue: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   transactionReserveRow: {
@@ -1918,17 +1956,17 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   transactionReserveHint: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.regular,
     flexShrink: 1,
   },
   // Progressive reserve guidance — 2026 Catawiki benchmark pattern.
   // Flat text, no card. Warning color signals "close but not there yet."
   transactionReserveProgress: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
     flexShrink: 1,
   },
   transactionStatusRow: {
@@ -1942,10 +1980,10 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
   },
   sheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
   },
   sheetSubtitle: {},
   sheetScroll: {
@@ -1962,30 +2000,30 @@ const styles = StyleSheet.create({
   ruleNumber: {
     width: Space.xl,
     height: Space.xl,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     marginTop: 2,
   },
   ruleNumberText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.bold,
   },
   ruleContent: {
     flex: 1,
     gap: Space.xs,
   },
   ruleTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   ruleDescription: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   // ── Shared-shell reconstruction styles ──
   stateBadgeOverlay: {
@@ -2002,7 +2040,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: 3,
-    borderRadius: Radius.full,
+    borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   livePollDot: {
@@ -2013,9 +2051,9 @@ const styles = StyleSheet.create({
   },
   livePollText: {
     color: '#ffffff',
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   // ── Seller identity extension ──
   // Tight rhythm: the seller row follows the transaction surface
@@ -2029,9 +2067,9 @@ const styles = StyleSheet.create({
     borderTopColor: 'transparent', // overridden inline with theme color
   },
   viewerStateLine: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   descriptionBlock: {
     paddingHorizontal: Space.md,
@@ -2039,8 +2077,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   dockStateBadge: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
     letterSpacing: LetterSpacing.normal,
   },
   overflowRow: {
@@ -2052,8 +2090,8 @@ const styles = StyleSheet.create({
     minHeight: Space.xxl,
   },
   overflowRowText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium,
   },
   discoverLinkInline: {
     flexDirection: 'row',
@@ -2065,9 +2103,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   discoverLinkInlineText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
   },
   // ── Bid history sheet rows ──
   bidList: {
@@ -2088,20 +2126,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   viewerBadge: {
-    borderRadius: Radius.sm,
+    borderRadius: RadiusRoleValue.compactControl,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2,
   },
   viewerBadgeText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   bidderName: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   bidRowInfo: {
     flexDirection: 'column',
@@ -2113,9 +2151,9 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   bidRelativeTime: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: FontFamily.regular,
     fontVariant: ['tabular-nums'],
   },
   bidRowRight: {
@@ -2124,21 +2162,21 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   bidAmount: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
   topBidLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   noBidsText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   subSectionError: {
     flexDirection: 'row',
@@ -2146,12 +2184,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
   },
   subSectionErrorText: {},
   retryText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
 });
