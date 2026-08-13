@@ -88,6 +88,7 @@ function CreatorStudioInner() {
   const [showTemplates, setShowTemplates] = useState(Boolean(route.params?.openTemplates));
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showSafeZone, setShowSafeZone] = useState(false);
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
   const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
   const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
@@ -367,13 +368,58 @@ function CreatorStudioInner() {
             </Text>
           </View>
         )}
+
+        {/* ── Safe zone overlay ────────────────────────────────────────── */}
+        {/* Toggled from the overflow menu. Shows the safe-zone guides so the
+            creator can verify their composition won't be occluded by the
+            top bar (BlurView + page segments), bottom tool dock, or device
+            safe-area insets (notch / dynamic island / home indicator).
+            The overlay is non-interactive (pointerEvents none) and uses
+            dashed amber outlines so it reads as a guide, not a selection. */}
+        {showSafeZone && (
+          <View style={styles.safeZoneOverlay} pointerEvents="none">
+            {/* Top safe zone — covers the BlurView top bar + page segments */}
+            <View style={[styles.safeZoneTop, { top: 0, height: insets.top + 56 }]}>
+              <View style={styles.safeZoneLabel}>
+                <Ionicons name="shield-outline" size={10} color="#C9A46A" />
+                <Text style={styles.safeZoneLabelText}>Top chrome</Text>
+              </View>
+            </View>
+            {/* Bottom safe zone — covers the tool dock + home indicator */}
+            <View style={[styles.safeZoneBottom, { bottom: 0, height: insets.bottom + 120 }]}>
+              <View style={styles.safeZoneLabel}>
+                <Ionicons name="shield-outline" size={10} color="#C9A46A" />
+                <Text style={styles.safeZoneLabelText}>Tool dock</Text>
+              </View>
+            </View>
+            {/* Safe content area indicator — dashed border on the safe region */}
+            <View
+              style={[
+                styles.safeZoneContent,
+                {
+                  top: insets.top + 56,
+                  bottom: insets.bottom + 120,
+                },
+              ]}
+            />
+          </View>
+        )}
       </View>
 
-      {/* ── Top bar — transparent floating, gradient scrim (Instagram pattern) ── */}
+      {/* ── Top bar — BlurView backdrop + subtle gradient scrim (Snapchat 2026 / TikTok pattern) ── */}
+      {/* Native blur on iOS makes canvas content visible underneath while keeping
+          controls readable. On Android, BlurView falls back to a semi-transparent
+          fill, so a subtle gradient overlay ensures legibility on both platforms. */}
       <View style={[styles.topBarContainer, { paddingTop: insets.top }]}>
-        <LinearGradient
-          colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0)']}
+        <BlurView
+          intensity={20}
+          tint="dark"
           style={styles.topBarScrim}
+        />
+        {/* Subtle gradient overlay for text legibility over bright canvas content */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
+          style={styles.topBarScrimOverlay}
         />
         <View style={[styles.topBar, { backgroundColor: 'transparent', borderBottomColor: 'transparent' }]}>
           <View style={styles.topBarRow}>
@@ -384,6 +430,8 @@ function CreatorStudioInner() {
                   onPress={() => { haptic.light(); selectLayer(null); }}
                   style={styles.topBtn}
                   accessibilityLabel="Done"
+                  accessibilityHint="Deselects the current layer and exits selection mode"
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Text style={[styles.doneText, { color: '#fff' }]}>Done</Text>
                 </PressScale>
@@ -396,9 +444,11 @@ function CreatorStudioInner() {
 
                 <View style={styles.topRight}>
                   <PressScale
-                    onPress={() => setShowOverflow(true)}
+                    onPress={() => { haptic.light(); setShowOverflow(true); }}
                     style={styles.topBtn}
                     accessibilityLabel="More options"
+                    accessibilityHint="Opens the overflow menu with undo, redo, preview and more"
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
                   </PressScale>
@@ -412,6 +462,8 @@ function CreatorStudioInner() {
                     onPress={handleBack}
                     style={styles.topBtn}
                     accessibilityLabel="Close editor"
+                    accessibilityHint="Closes the studio, offers to save draft if there are unsaved changes"
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <Ionicons name="close" size={26} color="#fff" />
                   </PressScale>
@@ -430,8 +482,10 @@ function CreatorStudioInner() {
                     disabled={!canUndo}
                     style={[styles.topBtn, { opacity: canUndo ? 1 : 0.3 }]}
                     accessibilityLabel="Undo"
+                    accessibilityHint="Reverts the last edit"
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canUndo }}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <Ionicons name="arrow-undo" size={22} color="#fff" />
                   </PressScale>
@@ -440,8 +494,10 @@ function CreatorStudioInner() {
                     disabled={!canRedo}
                     style={[styles.topBtn, { opacity: canRedo ? 1 : 0.3 }]}
                     accessibilityLabel="Redo"
+                    accessibilityHint="Reapplies the last undone edit"
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canRedo }}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <Ionicons name="arrow-redo" size={22} color="#fff" />
                   </PressScale>
@@ -449,10 +505,12 @@ function CreatorStudioInner() {
 
                 <View style={styles.topRightGroup}>
                   <PressScale
-                    onPress={() => setShowPublish(true)}
+                    onPress={() => { haptic.medium(); setShowPublish(true); }}
                     style={[styles.publishBtn, { backgroundColor: colors.brand }]}
                     accessibilityLabel="Next"
+                    accessibilityHint="Opens the publish sheet to review and publish your creation"
                     scale={0.97}
+                    hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
                   >
                     <Text style={[styles.publishBtnText, { color: '#fff' }]}>Next</Text>
                   </PressScale>
@@ -479,8 +537,10 @@ function CreatorStudioInner() {
                 onLongPress={() => setPageMenuIndex(i)}
                 style={styles.pageSegmentTarget}
                 accessibilityLabel={`Page ${i + 1}`}
+                accessibilityHint="Switches to this page. Long press for page options."
+                accessibilityRole="button"
                 accessibilityState={{ selected: i === activePageIndex }}
-                hitSlop={{ top: 8, bottom: 8 }}
+                hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
               >
                 <View style={styles.pageSegmentTrack}>
                   <View
@@ -498,10 +558,11 @@ function CreatorStudioInner() {
             {/* Add page — compact + at end of segment row */}
             {document.pages.length < 10 && (
               <PressScale
-                onPress={() => { selectLayer(null); addPage(); }}
+                onPress={() => { haptic.light(); selectLayer(null); addPage(); }}
                 style={styles.pageSegmentAdd}
                 accessibilityLabel="Add page"
-                hitSlop={8}
+                accessibilityHint="Adds a new page to the story"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name="add" size={14} color="rgba(255,255,255,0.8)" />
               </PressScale>
@@ -593,6 +654,8 @@ function CreatorStudioInner() {
         onTemplates={() => { setShowTemplates(true); setShowOverflow(false); }}
         onDrafts={() => { navigation.navigate('CreatorDraftList'); setShowOverflow(false); }}
         onSettings={() => { setShowSettings(true); setShowOverflow(false); }}
+        safeZoneVisible={showSafeZone}
+        onToggleSafeZone={() => { setShowSafeZone((p) => !p); setShowOverflow(false); }}
       />
 
       {/* ── Sheets ────────────────────────────────────────────────────── */}
@@ -784,6 +847,16 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   topBarScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 140,
+    zIndex: -1,
+  },
+  // Subtle gradient overlay on top of BlurView for text legibility.
+  // Lighter than the previous gradient — the BlurView provides the backdrop.
+  topBarScrimOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -984,6 +1057,60 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius.xl,
     overflow: 'hidden',
     paddingTop: Space.md,
+  },
+  // ── Safe zone overlay ──
+  // Dashed amber outlines showing areas occluded by chrome (top bar, tool
+  // dock) and the safe content region between them. Non-interactive.
+  safeZoneOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 45,
+  },
+  safeZoneTop: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(201,164,106,0.06)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201,164,106,0.4)',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 4,
+  },
+  safeZoneBottom: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(201,164,106,0.06)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(201,164,106,0.4)',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 4,
+  },
+  safeZoneContent: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(201,164,106,0.25)',
+    borderStyle: 'dashed',
+  },
+  safeZoneLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  safeZoneLabelText: {
+    fontFamily: Typography.family.medium,
+    fontSize: 9,
+    color: '#C9A46A',
+    letterSpacing: 0.3,
   },
   // ── Opacity bar ──
   opacityBar: {

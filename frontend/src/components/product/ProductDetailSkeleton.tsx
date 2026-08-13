@@ -48,6 +48,15 @@ export function ProductDetailSkeleton() {
         <View style={[styles.line, styles.bodyLine, block]} />
         <View style={[styles.line, styles.bodyLineShort, block]} />
       </View>
+
+      {/* Sticky dock skeleton — matches the CommerceDetailStateDock
+          geometry at the bottom of the screen. Per AGENTS.md §14:
+          skeletons should resemble the final layout to avoid
+          loading → populated geometry shift. */}
+      <View style={[styles.dock, { backgroundColor: colors.background, borderTopColor: colors.borderSubtle }]}>
+        <View style={[styles.line, styles.dockPrice, block]} />
+        <View style={[styles.line, styles.dockBtn, block]} />
+      </View>
     </View>
   );
 }
@@ -144,5 +153,26 @@ const styles = StyleSheet.create({
   bodyLineShort: {
     width: '78%',
     height: 13,
+  },
+  dock: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  dockPrice: {
+    width: 80,
+    height: 22,
+  },
+  dockBtn: {
+    width: 120,
+    height: 36,
+    borderRadius: Radius.sm,
   },
 });

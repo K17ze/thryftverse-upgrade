@@ -23,7 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -126,8 +126,8 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <View style={styles.heroCard}>
                 <View style={styles.heroTop}>
-                  <View style={styles.heroIconWrap}>
-                    <Ionicons name="document-text" size={22} color={colors.textInverse} />
+                  <View style={[styles.heroIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+                    <Ionicons name="document-text" size={22} color={colors.brand} />
                   </View>
                   <View style={styles.heroYearWrap}>
                     <Text style={styles.heroYear}>Tax Year {doc.taxYear}</Text>
@@ -250,7 +250,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
             <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(400)}>
               <View style={styles.disclaimerCard}>
                 <View style={styles.disclaimerIconWrap}>
-                  <Ionicons name="information-circle" size={18} color={colors.textMuted} />
+                  <Ionicons name="information-circle" size={18} color={colors.textSecondary} />
                 </View>
                 <View style={styles.disclaimerTextWrap}>
                   <Text style={styles.disclaimerTitle}>For information only</Text>
@@ -305,8 +305,8 @@ function createStyles(colors: ThemeColors) {
     heroIconWrap: {
       width: Control.hit,
       height: Control.hit,
-      borderRadius: Radius.full,
-      backgroundColor: colors.brand,
+      borderRadius: Radius.lg,
+      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -318,9 +318,11 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: Type.subtitle.letterSpacing,
     },
     heroPeriod: {
-      fontSize: Type.caption.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       marginTop: Space.xs / 2,
     },
     heroPnlWrap: {
@@ -329,17 +331,18 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
     },
     heroPnlLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: Type.metaElevated.size,
+      fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: LetterSpacing.caps,
+      letterSpacing: Type.metaElevated.letterSpacing,
     },
     heroPnlValue: {
       fontSize: Type.priceLarge.size,
       fontFamily: Typography.family.bold,
       fontVariant: ['tabular-nums'],
       letterSpacing: Type.priceLarge.letterSpacing,
+      lineHeight: Type.priceLarge.lineHeight,
     },
     heroPnlBadge: {
       flexDirection: 'row',
@@ -350,8 +353,9 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xs - 1,
     },
     heroPnlBadgeText: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.semibold,
+      letterSpacing: Type.captionElevated.letterSpacing,
     },
 
     // Section headers
@@ -361,11 +365,12 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs,
     },
     sectionTitle: {
-      fontSize: Type.meta.size,
+      fontSize: Type.metaElevated.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       textTransform: 'uppercase',
-      letterSpacing: LetterSpacing.caps,
+      letterSpacing: Type.metaElevated.letterSpacing,
+      lineHeight: Type.metaElevated.lineHeight,
       opacity: 0.7,
     },
 
@@ -380,7 +385,7 @@ function createStyles(colors: ThemeColors) {
     summaryRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: Space.sm + 2,
+      paddingVertical: Space.smMd,
       gap: Space.sm,
     },
     summaryRowBorder: {
@@ -395,16 +400,20 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     summaryLabel: {
-      fontSize: Type.body.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       flex: 1,
     },
     summaryValue: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: Type.priceList.size,
+      fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
+      letterSpacing: Type.priceList.letterSpacing,
+      lineHeight: Type.priceList.lineHeight,
     },
 
     // Breakdown cards
@@ -419,25 +428,31 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: Space.sm + 2,
+      paddingVertical: Space.smMd,
     },
     breakdownInfo: { flex: 1 },
     breakdownAsset: {
-      fontSize: Type.caption.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
     },
     breakdownMeta: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       marginTop: Space.xs / 2,
     },
     breakdownValue: {
-      fontSize: Type.body.size,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      lineHeight: Type.bodyEmphasis.lineHeight,
     },
 
     // Disclaimer — elevated card
@@ -461,21 +476,26 @@ function createStyles(colors: ThemeColors) {
     },
     disclaimerTextWrap: { flex: 1 },
     disclaimerTitle: {
-      fontSize: Type.caption.size,
+      fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      lineHeight: Type.bodyEmphasis.lineHeight,
       marginBottom: Space.xs / 2,
     },
     disclaimerText: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
-      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
     },
     generatedAt: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       textAlign: 'center',
       marginTop: Space.md,
     },

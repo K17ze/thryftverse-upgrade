@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -62,6 +62,30 @@ export default function BottomControlBar({
     }
   };
 
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible recent photo thumbnails on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderRecentPhotoItem = useCallback(
+    ({ item, index }: { item: (typeof recentPhotos)[number]; index: number }) => (
+      <AnimatedPressable
+        style={styles.photoThumb}
+        onPress={() => {
+          haptic.light();
+          onRecentPhotoPress(item.uri ?? '');
+        }}
+        scaleValue={0.92}
+        activeOpacity={0.85}
+        hapticFeedback="light"
+        accessibilityLabel={`Recent photo ${index + 1}`}
+        accessibilityHint="Selects this photo from your recent photos"
+        accessibilityRole="button"
+      >
+        <Image source={{ uri: item.uri ?? '' }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      </AnimatedPressable>
+    ),
+    [styles, haptic, onRecentPhotoPress]
+  );
+
   return (
     <View style={styles.container} pointerEvents="box-none">
       {/* Gallery strip + camera flip */}
@@ -115,23 +139,7 @@ export default function BottomControlBar({
           horizontal
           data={recentPhotos.slice(0, 10)}
           keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => (
-            <AnimatedPressable
-              style={styles.photoThumb}
-              onPress={() => {
-                haptic.light();
-                onRecentPhotoPress(item.uri ?? '');
-              }}
-              scaleValue={0.92}
-              activeOpacity={0.85}
-              hapticFeedback="light"
-              accessibilityLabel={`Recent photo ${index + 1}`}
-              accessibilityHint="Selects this photo from your recent photos"
-              accessibilityRole="button"
-            >
-              <Image source={{ uri: item.uri ?? '' }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            </AnimatedPressable>
-          )}
+          renderItem={renderRecentPhotoItem}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.photoStrip}
           decelerationRate="fast"

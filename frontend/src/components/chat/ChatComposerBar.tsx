@@ -10,7 +10,7 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import {
@@ -199,7 +199,7 @@ export function ChatComposerBar({
           accessibilityRole="button"
           disabled={disabled || isSending || isVoiceRecording}
         >
-          <Ionicons name="add-circle-outline" size={26} color={colors.textSecondary} />
+          <Ionicons name="add-outline" size={26} color={colors.textSecondary} />
         </AnimatedPressable>
 
         {isVoiceRecording ? (
@@ -256,7 +256,7 @@ export function ChatComposerBar({
             disabled={!canSend}
           >
             {isSending ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
+              <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
               <Ionicons name="arrow-up" size={20} color={canSend ? colors.textInverse : colors.textMuted} />
             )}
@@ -291,19 +291,19 @@ export function ChatComposerBar({
 
 const createStyles = (colors: any) => StyleSheet.create({
   root: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
   safetyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    backgroundColor: `${colors.danger}08`,
+    paddingVertical: Space.xs + 1,
+    backgroundColor: `${colors.danger}06`,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: `${colors.danger}20`,
+    borderBottomColor: `${colors.danger}18`,
   },
   safetyBannerText: {
     flex: 1,
@@ -318,9 +318,9 @@ const createStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: `${colors.danger}12`,
-    borderBottomWidth: 1,
-    borderBottomColor: `${colors.danger}30`,
+    backgroundColor: `${colors.danger}0A`,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: `${colors.danger}25`,
   },
   dangerBannerContent: {
     flexDirection: 'row',
@@ -332,7 +332,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   dangerBannerText: {
     flex: 1,
     fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: Typography.family.semibold,
     color: colors.danger,
     lineHeight: 16,
   },
@@ -342,9 +342,9 @@ const createStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: `${colors.warning}10`,
-    borderBottomWidth: 1,
-    borderBottomColor: `${colors.warning}30`,
+    backgroundColor: `${colors.warning}0A`,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: `${colors.warning}25`,
   },
   cautionBannerContent: {
     flexDirection: 'row',
@@ -356,26 +356,26 @@ const createStyles = (colors: any) => StyleSheet.create({
   cautionBannerText: {
     flex: 1,
     fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: Typography.family.semibold,
     color: colors.warning,
     lineHeight: 16,
   },
   attachmentStrip: {
-    maxHeight: 52,
+    maxHeight: 48,
   },
   attachmentStripContent: {
     flexDirection: 'row',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 2,
+    paddingVertical: Space.xs + 1,
   },
   attachmentChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 6,
-    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm + 1,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -386,21 +386,21 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: colors.textSecondary,
   },
   quickReplyStrip: {
-    maxHeight: 52,
+    maxHeight: 48,
   },
   quickReplyContent: {
     flexDirection: 'row',
-    gap: Space.xs,
+    gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
+    paddingVertical: Space.xs + 1,
   },
   quickReplyChip: {
-    maxWidth: 210,
-    minHeight: 44,
+    maxWidth: 200,
+    minHeight: 36,
     justifyContent: 'center',
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
+    paddingVertical: Space.sm - 1,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -416,9 +416,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: Space.md,
-    paddingVertical: Platform.OS === 'ios' ? 8 : 6,
-    gap: Space.xs + 2,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Platform.OS === 'ios' ? Space.sm : 6,
+    gap: Space.xs,
   },
   bannerDivider: {
     height: StyleSheet.hairlineWidth,
@@ -440,12 +440,10 @@ const createStyles = (colors: any) => StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT + 24,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   charCount: {
     fontSize: Type.meta.size,
-    fontFamily: TypeStyles.metadata.fontFamily,
+    fontFamily: Typography.family.medium,
     textAlign: 'right',
     paddingTop: 2,
     paddingBottom: 2,
@@ -464,12 +462,14 @@ const createStyles = (colors: any) => StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT,
   },
   sendBtn: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginBottom: 2,
   },
   sendBtnActive: {
     backgroundColor: colors.brand,

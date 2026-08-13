@@ -346,7 +346,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           {status === 'empty' && (
             <View style={styles.emptyStateWrap}>
               <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="sparkles-outline" size={28} color={colors.textMuted} />
+                <Ionicons name="git-network-outline" size={28} color={colors.textMuted} />
               </View>
               <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
                 No topics yet

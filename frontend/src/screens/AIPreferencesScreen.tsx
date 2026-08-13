@@ -1,14 +1,18 @@
 /**
- * AIPreferencesScreen — central control surface for AI-powered features.
+ * AIPreferencesScreen — central control surface for assisted features.
  *
- * Lets the user enable or disable every AI surface in ThryftVerse: listing
- * suggestions, photo enhancement, search autocomplete, chat agents, Smart
- * Sell auto-negotiation, confidence indicators, and algorithm transparency.
+ * Lets the user enable or disable every suggestion surface in ThryftVerse:
+ * listing suggestions, photo enhancement, search autocomplete, chat agents,
+ * auto-negotiation, confidence indicators, and algorithm transparency.
  *
  * Per AGENTS.md §11 (Truthful UI): preferences are persisted locally only in
  * demo mode, so a "Demo mode" indicator is always shown. We never claim the
  * toggles affect a live backend — they update the session profile and the
  * indicator makes clear the data is illustrative.
+ *
+ * Anti-AI art direction (audit §01): all labels are phrased around benefit,
+ * not implementation technology. No "AI" prefix on feature names — the user
+ * cares about what the feature does, not how it works internally.
  *
  * Design (per AGENTS.md §4):
  * - Flat composition, hairline separators, no card-on-card
@@ -39,7 +43,7 @@ import { Control, Space, Radius, Type, Typography } from '../theme/designTokens'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPreferences'>;
 
-// Demo mode flag — the AI preference service is mock in this build.
+// Demo mode flag — the preference service is mock in this build.
 const AI_PREFERENCES_DEMO_MODE = true;
 
 export default function AIPreferencesScreen({ navigation }: Props) {
@@ -88,8 +92,8 @@ export default function AIPreferencesScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="AI Preferences"
-          subtitle="AI settings"
+          title="Listing suggestions"
+          subtitle="Preferences"
           onBack={() => navigation.goBack()}
         />
       }
@@ -103,24 +107,24 @@ export default function AIPreferencesScreen({ navigation }: Props) {
         >
           <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
           <Text style={styles.demoBannerText}>
-            AI preferences are saved on this device only in demo mode.
+            Preferences are saved on this device only in demo mode.
           </Text>
         </View>
       )}
 
-      {/* ── Hero summary — AI posture with active count ── */}
+      {/* ── Hero summary — posture with active count ── */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: masterEnabled && activeCount > 0 ? colors.brand : colors.surfaceAlt }]}>
-              <Ionicons name="sparkles" size={20} color={masterEnabled && activeCount > 0 ? colors.textInverse : colors.textMuted} />
+              <Ionicons name="settings-outline" size={20} color={masterEnabled && activeCount > 0 ? colors.textInverse : colors.textMuted} />
             </View>
             <View style={styles.heroText}>
               <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {masterEnabled ? `${activeCount} of 6 AI features on` : 'AI features off'}
+                {masterEnabled ? `${activeCount} of 6 features on` : 'All features off'}
               </Text>
               <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {activeCount === 6 ? 'All AI features enabled' : activeCount === 0 ? 'No AI features active' : 'Some AI features paused'}
+                {activeCount === 6 ? 'All features enabled' : activeCount === 0 ? 'No features active' : 'Some features paused'}
               </Text>
             </View>
           </View>
@@ -145,8 +149,8 @@ export default function AIPreferencesScreen({ navigation }: Props) {
         <SettingsSection title="Master control" noCard>
           <SettingsRow
             icon="power-outline"
-            title="Enable AI features"
-            subtitle="Turn all AI-powered features on or off"
+            title="Enable suggestions"
+            subtitle="Turn all assisted features on or off"
             toggleValue={masterEnabled}
             onToggle={handleMasterToggle}
             isFirst
@@ -157,11 +161,11 @@ export default function AIPreferencesScreen({ navigation }: Props) {
 
       {/* ── Feature toggles ── */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-        <SettingsSection title="AI features" noCard>
+        <SettingsSection title="Features" noCard>
           <SettingsRow
             icon="bulb-outline"
-            title="AI Listing Suggestions"
-            subtitle="Get AI-generated titles, descriptions and price suggestions"
+            title="Listing suggestions"
+            subtitle="Get suggested titles, descriptions and price estimates"
             toggleValue={listingSuggestions}
             onToggle={toggleWithHaptic(setListingSuggestions)}
             disabled={!masterEnabled}
@@ -169,15 +173,15 @@ export default function AIPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="image-outline"
-            title="AI Photo Enhancement"
-            subtitle="Receive AI photo editing suggestions for your listings"
+            title="Photo enhancement"
+            subtitle="Receive photo editing suggestions for your listings"
             toggleValue={photoEnhancement}
             onToggle={toggleWithHaptic(setPhotoEnhancement)}
             disabled={!masterEnabled}
           />
           <SettingsRow
             icon="search-outline"
-            title="AI Search Autocomplete"
+            title="Search autocomplete"
             subtitle="Show autocomplete suggestions while you search"
             toggleValue={searchAutocomplete}
             onToggle={toggleWithHaptic(setSearchAutocomplete)}
@@ -185,24 +189,24 @@ export default function AIPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="chatbubble-ellipses-outline"
-            title="AI Chat Agents"
-            subtitle="Enable AI agents to assist in your conversations"
+            title="Chat agents"
+            subtitle="Enable agents to assist in your conversations"
             toggleValue={chatAgents}
             onToggle={toggleWithHaptic(setChatAgents)}
             disabled={!masterEnabled}
           />
           <SettingsRow
             icon="trending-up-outline"
-            title="Smart Sell"
-            subtitle="Allow AI to auto-negotiate offers on your behalf"
+            title="Auto-negotiate offers"
+            subtitle="Allow agents to negotiate offers on your behalf"
             toggleValue={smartSell}
             onToggle={toggleWithHaptic(setSmartSell)}
             disabled={!masterEnabled}
           />
           <SettingsRow
             icon="stats-chart-outline"
-            title="AI Confidence Display"
-            subtitle="Show confidence indicators on AI suggestions"
+            title="Confidence indicators"
+            subtitle="Show confidence indicators on suggestions"
             toggleValue={confidenceDisplay}
             onToggle={toggleWithHaptic(setConfidenceDisplay)}
             disabled={!masterEnabled}
@@ -225,15 +229,15 @@ export default function AIPreferencesScreen({ navigation }: Props) {
         </SettingsSection>
       </Reanimated.View>
 
-      {/* ── AI Data Usage — inline explanation ── */}
+      {/* ── Data usage — inline explanation ── */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
         <View style={styles.dataUsageBlock}>
           <View style={styles.dataUsageHeader}>
             <Ionicons name="server-outline" size={18} color={colors.textSecondary} />
-            <Text style={[styles.dataUsageTitle, { color: colors.textPrimary }]}>AI Data Usage</Text>
+            <Text style={[styles.dataUsageTitle, { color: colors.textPrimary }]}>Data usage</Text>
           </View>
           <Text style={[styles.dataUsageBody, { color: colors.textSecondary }]}>
-            AI features use your listing content, search queries and chat messages to generate suggestions. In demo mode this data stays on your device and is never sent to a server or shared with third parties. Disabling a feature stops that data from being processed for suggestions.
+            These features use your listing content, search queries and chat messages to generate suggestions. In demo mode this data stays on your device and is never sent to a server or shared with third parties. Disabling a feature stops that data from being processed for suggestions.
           </Text>
         </View>
       </Reanimated.View>

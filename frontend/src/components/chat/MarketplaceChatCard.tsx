@@ -135,6 +135,7 @@ export function MarketplaceChatCard({
     const discountPct = offer.originalPrice > offer.price
       ? Math.round(((offer.originalPrice - offer.price) / offer.originalPrice) * 100)
       : 0;
+    const isPending = !isMe && (status === undefined || status === 'pending') && !isExpired;
     return (
       <View style={[styles.offerBlock, isMe && styles.offerBlockMe]}>
         {senderLabel && !isMe ? (
@@ -148,15 +149,14 @@ export function MarketplaceChatCard({
         )}
         <View style={styles.offerPriceRow}>
           <View style={styles.offerPriceIdentity}>
-            <Ionicons name="pricetag-outline" size={15} color={colors.textMuted} />
             <Text style={styles.offerPrice} numberOfLines={1}>{priceLabel}</Text>
             <Text style={styles.offerStrike} numberOfLines={1}>{origLabel}</Text>
+            {discountPct >= 5 ? (
+              <View style={styles.offerDiscountBadge}>
+                <Text style={styles.offerDiscountText}>-{discountPct}%</Text>
+              </View>
+            ) : null}
           </View>
-          {discountPct >= 5 ? (
-            <View style={styles.offerDiscountBadge}>
-              <Text style={styles.offerDiscountText}>-{discountPct}%</Text>
-            </View>
-          ) : null}
         </View>
         {/* Expiry countdown — live timer */}
         {showCountdown ? (
@@ -169,30 +169,30 @@ export function MarketplaceChatCard({
         ) : null}
         {status === 'declined' && (
           <View style={styles.offerStatusRow}>
-            <Ionicons name="close-circle-outline" size={12} color={colors.danger} />
+            <Ionicons name="close-circle-outline" size={13} color={colors.danger} />
             <Text style={[styles.offerStatusText, { color: colors.danger }]}>Declined</Text>
           </View>
         )}
         {status === 'accepted' && (
           <View style={styles.offerStatusRow}>
-            <Ionicons name="checkmark-circle-outline" size={12} color={colors.success} />
+            <Ionicons name="checkmark-circle-outline" size={13} color={colors.success} />
             <Text style={[styles.offerStatusText, { color: colors.success }]}>Accepted</Text>
           </View>
         )}
         {status === 'expired' && (
           <View style={styles.offerStatusRow}>
-            <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
             <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>Expired</Text>
           </View>
         )}
         {!status && isMe && (
           <View style={styles.offerStatusRow}>
-            <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
             <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>Waiting for response</Text>
           </View>
         )}
         {/* Action buttons — only show when pending and not expired */}
-        {!isMe && (status === undefined || status === 'pending') && !isExpired && (
+        {isPending && (
           <View style={styles.offerActions}>
             <AnimatedPressable style={styles.offerPass} onPress={onDecline} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light" accessibilityRole="button" accessibilityLabel="Decline offer">
               <Text style={styles.offerPassText} numberOfLines={1}>Pass</Text>
@@ -294,25 +294,25 @@ function StatusBadge({ tone, label, icon }: { tone: 'positive' | 'negative' | 'n
 
 const createStyles = (colors: any) => StyleSheet.create({
   offerBlock: {
-    width: '88%',
-    maxWidth: 352,
+    width: '85%',
+    maxWidth: 340,
     minWidth: 0,
-    gap: Space.xs,
-    backgroundColor: colors.surfaceAlt,
+    gap: Space.xs + 1,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.border,
-    padding: Space.sm + 2,
+    padding: Space.md - 2,
     marginHorizontal: Space.md,
   },
   offerBlockMe: {
     alignSelf: 'flex-end',
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.surface,
   },
   offerSender: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: colors.textMuted,
+    color: colors.textSecondary,
   },
   offerPriceRow: {
     flexDirection: 'row',
@@ -324,13 +324,15 @@ const createStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
+    alignItems: 'baseline',
+    gap: Space.xs + 1,
   },
   offerPrice: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.priceList.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
   },
   offerStrike: {
     fontSize: Type.caption.size,
@@ -340,10 +342,10 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexShrink: 1,
   },
   offerDiscountBadge: {
-    backgroundColor: `${colors.success}18`,
+    backgroundColor: `${colors.success}15`,
     borderRadius: Radius.sm,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     marginLeft: 2,
   },
   offerDiscountText: {
@@ -355,7 +357,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   offerStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
   offerStatusText: {
     fontSize: Type.caption.size,
@@ -377,49 +379,50 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
+    paddingHorizontal: Space.sm - 1,
+    paddingVertical: Space.xs + 1,
+    borderRadius: Radius.full,
     alignSelf: 'flex-start',
   },
   offerExpiryText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.2,
+    fontVariant: ['tabular-nums'],
   },
   offerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    marginTop: Space.xs + 2,
-    paddingTop: Space.xs,
+    gap: Space.xs,
+    marginTop: Space.sm - 1,
+    paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
   offerPass: {
     flex: 1,
     minWidth: 0,
-    minHeight: 44,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
     borderRadius: Radius.md,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surfaceAlt,
   },
   offerPassText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
+    color: colors.textSecondary,
   },
   offerCounter: {
     flex: 1,
     minWidth: 0,
-    minHeight: 44,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
     borderRadius: Radius.md,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surfaceAlt,
   },
   offerCounterText: {
     fontSize: Type.caption.size,
@@ -427,14 +430,14 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: colors.textPrimary,
   },
   offerAccept: {
-    flex: 1.25,
+    flex: 1.3,
     minWidth: 0,
-    minHeight: 44,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.textPrimary,
+    borderRadius: Radius.md,
+    backgroundColor: colors.brand,
   },
   offerAcceptText: {
     fontSize: Type.caption.size,
@@ -444,22 +447,22 @@ const createStyles = (colors: any) => StyleSheet.create({
   statusInline: {
     alignSelf: 'center',
     width: '100%',
-    maxWidth: 352,
+    maxWidth: 340,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.sm,
+    gap: Space.sm + 1,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm + 2,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   statusInlineIcon: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -488,7 +491,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: Space.xs,
     alignSelf: 'center',
     maxWidth: '85%',
-    paddingVertical: Space.xs,
+    paddingVertical: Space.xs + 1,
     paddingHorizontal: Space.md,
   },
   noticeInlineText: {
@@ -500,10 +503,10 @@ const createStyles = (colors: any) => StyleSheet.create({
   systemEvent: {
     alignSelf: 'center',
     width: '100%',
-    maxWidth: 352,
+    maxWidth: 340,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.sm,
+    gap: Space.sm + 1,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm + 2,
     backgroundColor: colors.surface,
@@ -512,10 +515,10 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderColor: colors.border,
   },
   systemEventIcon: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -549,7 +552,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    paddingHorizontal: Space.xs,
+    paddingHorizontal: Space.xs + 1,
     paddingVertical: 2,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,

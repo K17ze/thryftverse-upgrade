@@ -165,7 +165,7 @@ export default function PersonalisationScreen() {
           <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.heroRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="sparkles" size={18} color={colors.textInverse} />
+                <Ionicons name="options-outline" size={18} color={colors.textInverse} />
               </View>
               <View style={styles.heroText}>
                 <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>

@@ -7,7 +7,7 @@ import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Numeric } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -274,13 +274,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  // ── Content padding — 24pt top for calm breathing room ──
+  // Per spec 11_COOWN: "24pt between sections." The confirmation surface
+  // should feel calm and deliberate — this is the final decision point.
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
+    paddingTop: Space.lg,
   },
+  // ── Risk disclosure — 32pt from the receipt for clear separation ──
+  // Per spec 11_COOWN: "Financial disclosures should be reachable before
+  // order confirmation." The risk disclosure is visually separated from
+  // the receipt to ensure the user reviews it before confirming.
   riskWrap: {
-    marginTop: Space.lg,
+    marginTop: Space.xl,
   },
+  // ── Dock row — calm, professional confirm/cancel actions ──
+  // Per spec 11_COOWN: "Buy/sell action is impossible to confuse."
+  // Cancel is secondary (quiet), Confirm is primary (dominant).
+  // 8pt gap between buttons. Compact mode stacks vertically.
   dockRow: {
     width: '100%',
     minWidth: 0,

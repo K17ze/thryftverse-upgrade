@@ -608,7 +608,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 AI_PHOTO_DEMO_MODE ? 'Preview enhancement in demo mode' : 'Apply enhancement'
               }
               accessibilityHint="Applies the selected enhancement to the photo"
-              icon={<Ionicons name="sparkles" size={16} color={colors.textInverse} />}
+              icon={<Ionicons name="color-filter-outline" size={16} color={colors.textInverse} />}
               style={styles.footerPrimaryBtn}
             />
           </View>

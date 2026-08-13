@@ -43,17 +43,21 @@ import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /* ΓöÇΓöÇ New Discover Components ΓöÇΓöÇ */
-import { HeroCarousel, HeroItem } from '../components/discover/HeroCarousel';
 import { EditorialSection } from '../components/discover/EditorialSection';
-import { FeaturedBoardCard, FeaturedBoard } from '../components/discover/FeaturedBoardCard';
-import { EditorialImageRow, EditorialImage } from '../components/discover/EditorialImageRow';
 import { Typography, Radius } from '../theme/designTokens';
 import { CATEGORIES } from '../constants/categories';
+import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GlobalSearch'>;
 
 const RECENT_SEARCHES_KEY = '@thryftverse_recent_searches';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Masonry column width — matches the grid layout (paddingHorizontal: 20,
+// gap: 8). Used to compute deterministic image heights from real aspect
+// ratios so there is zero layout shift when media loads (audit §02:
+// skeleton aspect parity; image errors preserve card geometry).
+const MASONRY_COL_WIDTH = (SCREEN_WIDTH - 20 * 2 - 8) / 2;
 
 interface RankedListing {
   id: string;
@@ -68,6 +72,8 @@ interface RankedListing {
   createdAt?: string;
   score: number;
   reason: string;
+  /** Media height/width ratio — reserved before image load to prevent reflow. */
+  mediaHeightRatio: number;
 }
 
 type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
@@ -81,138 +87,24 @@ const DISCOVER_SORT_OPTIONS: BrowseSortOption[] = [
   'Ending soon',
 ];
 
-// Colorful backgrounds for "Top Searches" cards
-const TOP_SEARCH_CARDS = [
-  { label: 'Summer Fits', color: '#E8D5C4', textColor: '#5C3D2E', image: '' },
-  { label: 'Y2K Style', color: '#D4E6F1', textColor: '#2E4A62', image: '' },
-  { label: 'Streetwear', color: '#D5DBDB', textColor: '#2C3E50', image: '' },
-  { label: 'Vintage', color: '#FADBD8', textColor: '#6E2C3D', image: '' },
-  { label: 'Techwear', color: '#D6EAF8', textColor: '#1B4F72', image: '' },
-  { label: 'Minimal', color: '#E8DAEF', textColor: '#4A235A', image: '' },
-];
-
-// Trending categories ΓÇö derived from the app's canonical category tree so
-// pills map to real browse destinations. Shown in the focus state (Depop/Vinted
-// pattern) with category emoji icons.
+// Trending categories — derived from the app's canonical category tree so
+// pills map to real browse destinations. Shown in both the focus and resting
+// states (Depop/Vinted pattern) with category emoji icons. No hardcoded
+// editorial "Top Searches" cards — the discover landing only renders real
+// backend data, real recent/saved searches, and the canonical category tree
+// (audit: Global P0 — remove production sample editorial constants and
+// empty-URI rendering).
 const TRENDING_CATEGORIES: { label: string; icon: string; query: string }[] = CATEGORIES.slice(0, 8).map((cat) => ({
   label: cat.name,
   icon: cat.emoji,
   query: cat.id,
 }));
 
-/* ΓöÇΓöÇ Editorial seed data ΓöÇΓöÇ */
-const HERO_ITEMS: HeroItem[] = [
-  {
-    id: 'hero1',
-    type: 'video',
-    uri: '',
-    posterUri: '',
-    sponsor: 'H&M',
-    title: 'H&M Summer 2026',
-    ctaLabel: 'Visit',
-  },
-  {
-    id: 'hero2',
-    type: 'image',
-    uri: '',
-    title: 'Escape to Indian Hills',
-    ctaLabel: 'Explore',
-  },
-  {
-    id: 'hero3',
-    type: 'image',
-    uri: '',
-    sponsor: 'Nike',
-    title: 'Streetwear Essentials',
-    ctaLabel: 'Shop',
-  },
-];
-
-const FEATURED_BOARDS: FeaturedBoard[] = [
-  {
-    id: 'board1',
-    title: 'Escape to Indian hills',
-    subtitle: 'Pinterest India',
-    meta: '41 Pins \u2022 11mo',
-    isVerified: true,
-    images: [
-      '',
-      '',
-      '',
-    ],
-  },
-  {
-    id: 'board2',
-    title: 'Gaming room inspo',
-    subtitle: 'Pinterest Man',
-    meta: '65 Pins \u2022 5mo',
-    isVerified: true,
-    images: [
-      '',
-      '',
-      '',
-    ],
-  },
-  {
-    id: 'board3',
-    title: 'Streetwear essentials',
-    subtitle: 'Editors Pick',
-    meta: '28 Pins \u2022 Hot',
-    isVerified: false,
-    images: [
-      '',
-      '',
-      '',
-    ],
-  },
-];
-
-const EDITORIAL_SECTIONS: { id: string; kicker: string; title: string; images: EditorialImage[] }[] = [
-  {
-    id: 'sec1',
-    kicker: 'Ideas for you',
-    title: 'Shirt dress outfit',
-    images: [
-      { id: 'e1-1', uri: '', aspectRatio: 1.4 },
-      { id: 'e1-2', uri: '', aspectRatio: 1.2 },
-      { id: 'e1-3', uri: '', aspectRatio: 1.5 },
-      { id: 'e1-4', uri: '', aspectRatio: 1.1 },
-    ],
-  },
-  {
-    id: 'sec2',
-    kicker: 'Ideas for you',
-    title: 'YSL runway',
-    images: [
-      { id: 'e2-1', uri: '', aspectRatio: 1.3 },
-      { id: 'e2-2', uri: '', aspectRatio: 1.1 },
-      { id: 'e2-3', uri: '', aspectRatio: 1.4 },
-      { id: 'e2-4', uri: '', aspectRatio: 1.2 },
-    ],
-  },
-  {
-    id: 'sec3',
-    kicker: 'Ideas for you',
-    title: "Men's formal style",
-    images: [
-      { id: 'e3-1', uri: '', aspectRatio: 1.35 },
-      { id: 'e3-2', uri: '', aspectRatio: 1.15 },
-      { id: 'e3-3', uri: '', aspectRatio: 1.25 },
-      { id: 'e3-4', uri: '', aspectRatio: 1.45 },
-    ],
-  },
-  {
-    id: 'sec4',
-    kicker: 'Ideas for you',
-    title: 'Tom ford suit',
-    images: [
-      { id: 'e4-1', uri: '', aspectRatio: 1.2 },
-      { id: 'e4-2', uri: '', aspectRatio: 1.4 },
-      { id: 'e4-3', uri: '', aspectRatio: 1.1 },
-      { id: 'e4-4', uri: '', aspectRatio: 1.3 },
-    ],
-  },
-];
+// Editorial seed data has been removed. The discover landing now relies
+// entirely on real backend listings, real recent/saved searches, and the
+// canonical category tree. Server-driven editorial units can be added here
+// when a backend editorial schema is available (see backlog: Search →
+// server-driven editorial schema).
 
 function buildAffinitySet(values: string[]) {
   const counts = new Map<string, number>();
@@ -318,6 +210,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               createdAt: item.createdAt,
               score: item.rank,
               reason: result.fallback ? 'Fuzzy match' : 'Search match',
+              // Backend results don't carry media dimensions — use the
+              // canonical 3:4 portrait fallback (listingMediaGeometry default).
+              mediaHeightRatio: 4 / 3,
             })),
           );
         }
@@ -408,6 +303,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           createdAt: listing.createdAt,
           score,
           reason: reasons[0] ?? 'Recommended from current market momentum',
+          mediaHeightRatio: resolveListingMediaHeightRatio(listing),
         };
       })
       .filter((listing) => {
@@ -418,11 +314,15 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       .slice(0, 20);
   }, [affinityProfile.brandSet, affinityProfile.categorySet, affinityProfile.subcategorySet, listings, queryTokens, wishlistIds, normalizedQuery, backendSearchResults]);
 
+  // Explore tags — derived from the canonical category tree + real affinity
+  // brands. No hardcoded editorial strings; every tag maps to a real browse
+  // destination (audit: Global P0 — remove production sample editorial
+  // constants; Search → real recent/saved/trending inputs).
   const trendingTags = useMemo(() => {
     const affinityBrands = [...affinityProfile.brandSet];
     const queryBoost = normalizedQuery ? [normalizedQuery] : [];
-    const suggestedCategories = ['women', 'men', 'shoes', 'accessories', 'vintage', 'streetwear'];
-    return [...new Set([...queryBoost, ...affinityBrands, ...suggestedCategories])].slice(0, 8);
+    const categoryIds = CATEGORIES.map((cat) => cat.id);
+    return [...new Set([...queryBoost, ...affinityBrands, ...categoryIds])].slice(0, 8);
   }, [affinityProfile.brandSet, normalizedQuery]);
 
   const activeFilterCount =
@@ -449,6 +349,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       createdAt: listing.createdAt,
       score: 0,
       reason: '',
+      mediaHeightRatio: resolveListingMediaHeightRatio(listing),
     }));
 
     const filtered = sourceListings.filter((listing) => {
@@ -695,21 +596,27 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     </View>
   );
 
-  const masonryColumn1 = discoverListings.filter((_, i) => i % 2 === 0);
-  const masonryColumn2 = discoverListings.filter((_, i) => i % 2 === 1);
-
-  /* ΓöÇΓöÇ Editorial helpers ΓöÇΓöÇ */
-  const handleEditorialImagePress = (id: string) => {
-    navigation.push('ItemDetail', { itemId: id });
-  };
-
-  const handleBoardPress = (boardId: string) => {
-    const board = FEATURED_BOARDS.find((b) => b.id === boardId);
-    if (board) {
-      setQuery(board.title.split(' ')[0]);
-      handleSearchSubmit();
+  // True masonry: assign each item to the shortest column by cumulative
+  // height, matching the PinterestMasonryGrid strategy (audit §02 — one
+  // masonry implementation). Uses the real mediaHeightRatio so column
+  // balancing is deterministic and matches the final render.
+  const { masonryColumn1, masonryColumn2 } = useMemo(() => {
+    const col1: RankedListing[] = [];
+    const col2: RankedListing[] = [];
+    let h1 = 0;
+    let h2 = 0;
+    for (const listing of discoverListings) {
+      const itemHeight = MASONRY_COL_WIDTH * listing.mediaHeightRatio + 40; // 40 ≈ price overlay
+      if (h1 <= h2) {
+        col1.push(listing);
+        h1 += itemHeight + 8; // 8 = gap
+      } else {
+        col2.push(listing);
+        h2 += itemHeight + 8;
+      }
     }
-  };
+    return { masonryColumn1: col1, masonryColumn2: col2 };
+  }, [discoverListings]);
 
   const isDiscoverLanding = !normalizedQuery;
 
@@ -928,36 +835,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </Reanimated.View>
                 ) : (
                 <>
-                {/* Hero Carousel ΓÇö only when real imagery exists */}
-                {HERO_ITEMS.some((h) => h.uri.trim().length > 0) && (
-                  <HeroCarousel items={HERO_ITEMS.filter((h) => h.uri.trim().length > 0)} autoPlayInterval={6000} />
-                )}
-
-                {/* Explore featured boards ΓÇö only when real imagery exists */}
-                {FEATURED_BOARDS.some((b) => b.images.some((img) => img.trim().length > 0)) && (
-                  <EditorialSection
-                    kicker="Explore featured boards"
-                    title="Ideas you might like"
-                    style={{ marginTop: 12 }}
-                  >
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.boardsScroll}
-                    >
-                      {FEATURED_BOARDS.filter((b) => b.images.some((img) => img.trim().length > 0)).map((board) => (
-                        <FeaturedBoardCard
-                          key={board.id}
-                          board={{
-                            ...board,
-                            onPress: () => handleBoardPress(board.id),
-                          }}
-                        />
-                      ))}
-                    </ScrollView>
-                  </EditorialSection>
-                )}
-
                 {/* Recent searches */}
                 {recentSearches.length > 0 && (
                   <EditorialSection kicker="Your history" title="Recent searches">
@@ -1039,19 +916,19 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </EditorialSection>
                 )}
 
-                {/* Suggested categories */}
+                {/* Suggested categories — canonical category tree, no editorial seed */}
                 <EditorialSection title="Suggested categories">
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topSearchesScroll}>
-                    {TOP_SEARCH_CARDS.map((card, idx) => (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingFocusScroll}>
+                    {TRENDING_CATEGORIES.map((cat, idx) => (
                       <AnimatedPressable
                         key={idx}
-                        style={[styles.topSearchCard, { backgroundColor: card.color }]}
-                        onPress={() => handlePillPress(card.label)}
+                        style={[styles.trendingFocusPill, t.trendingFocusPill]}
+                        onPress={() => handlePillPress(cat.query)}
+                        accessibilityLabel={`Search ${cat.label} category`}
+                        accessibilityRole="button"
                       >
-                        <CachedImage uri={card.image} style={styles.topSearchCardImage} contentFit="cover" />
-                        <View style={styles.topSearchCardOverlay}>
-                          <Text style={[styles.topSearchCardText, { color: card.textColor }]}>{card.label}</Text>
-                        </View>
+                        <Text style={styles.trendingFocusIcon}>{cat.icon}</Text>
+                        <Text style={[styles.trendingFocusText, t.trendingFocusText]}>{cat.label}</Text>
                       </AnimatedPressable>
                     ))}
                   </ScrollView>
@@ -1068,25 +945,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </ScrollView>
                 </EditorialSection>
 
-                {/* Editorial image rows ΓÇö only when real imagery exists */}
-                {EDITORIAL_SECTIONS.filter((s) => s.images.some((img) => img.uri.trim().length > 0)).map((section) => (
-                  <EditorialSection
-                    key={section.id}
-                    kicker={section.kicker}
-                    title={section.title}
-                    onSearchPress={() => {
-                      setQuery(section.title);
-                      handleSearchSubmit();
-                    }}
-                  >
-                    <EditorialImageRow
-                      images={section.images.filter((img) => img.uri.trim().length > 0)}
-                      onPressImage={handleEditorialImagePress}
-                      sharedTransitionPrefix={`editorial-${section.id}`}
-                    />
-                  </EditorialSection>
-                ))}
-
                 {/* Discover masonry grid at bottom of landing */}
                 <EditorialSection
                   kicker="Ideas for you"
@@ -1096,43 +954,53 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   {discoverListings.length > 0 ? (
                     <View style={styles.masonryGrid}>
                       <View style={styles.masonryColumn}>
-                        {masonryColumn1.map((listing, i) => (
+                        {masonryColumn1.map((listing) => (
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
                               <CachedImage
                                 uri={listing.image}
-                                style={[styles.masonryImg, { height: [260, 340, 200, 300][i % 4] }]}
+                                style={[styles.masonryImg, { height: Math.round(MASONRY_COL_WIDTH * listing.mediaHeightRatio) }]}
                                 contentFit="cover"
                               />
                             </SharedTransitionView>
+                            <View style={styles.resultOverlay}>
+                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                            </View>
                           </AnimatedPressable>
                         ))}
                       </View>
                       <View style={styles.masonryColumn}>
-                        {masonryColumn2.map((listing, i) => (
+                        {masonryColumn2.map((listing) => (
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
                               <CachedImage
                                 uri={listing.image}
-                                style={[styles.masonryImg, { height: [340, 200, 280, 240][i % 4] }]}
+                                style={[styles.masonryImg, { height: Math.round(MASONRY_COL_WIDTH * listing.mediaHeightRatio) }]}
                                 contentFit="cover"
                               />
                             </SharedTransitionView>
+                            <View style={styles.resultOverlay}>
+                              <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
+                            </View>
                           </AnimatedPressable>
                         ))}
                       </View>
                     </View>
                   ) : (
                     <View style={[styles.recoEmptyState, t.recoEmptyState]}>
-                      <Ionicons name="sparkles-outline" size={18} color={colors.textMuted} />
+                      <Ionicons name="images-outline" size={18} color={colors.textMuted} />
                       <Text style={[styles.recoEmptyText, t.recoEmptyText]}>
                         {hasActiveDiscoverFilters
                           ? 'No picks match your current filters. Adjust or clear them.'
@@ -1241,16 +1109,18 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   {discoverListings.length > 0 ? (
                     <View style={styles.masonryGrid}>
                       <View style={styles.masonryColumn}>
-                        {masonryColumn1.map((listing, i) => (
+                        {masonryColumn1.map((listing) => (
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
                               <CachedImage
                                 uri={listing.image}
-                                style={[styles.masonryImg, { height: [260, 340, 200, 300][i % 4] }]}
+                                style={[styles.masonryImg, { height: Math.round(MASONRY_COL_WIDTH * listing.mediaHeightRatio) }]}
                                 contentFit="cover"
                               />
                             </SharedTransitionView>
@@ -1262,16 +1132,18 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         ))}
                       </View>
                       <View style={styles.masonryColumn}>
-                        {masonryColumn2.map((listing, i) => (
+                        {masonryColumn2.map((listing) => (
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
+                            accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
                               <CachedImage
                                 uri={listing.image}
-                                style={[styles.masonryImg, { height: [340, 200, 280, 240][i % 4] }]}
+                                style={[styles.masonryImg, { height: Math.round(MASONRY_COL_WIDTH * listing.mediaHeightRatio) }]}
                                 contentFit="cover"
                               />
                             </SharedTransitionView>
@@ -1475,33 +1347,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
   },
 
-  // Top searches cards
-  topSearchesScroll: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  topSearchCard: {
-    width: 140,
-    height: 170,
-    borderRadius: Radius.xxl,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  topSearchCardImage: {
-    ...StyleSheet.absoluteFill,
-    opacity: 0.35,
-  },
-  topSearchCardOverlay: {
-    ...StyleSheet.absoluteFill,
-    justifyContent: 'flex-end',
-    padding: 14,
-  },
-  topSearchCardText: {
-    fontSize: 15,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
-  },
-
   // Trending
   trendingScroll: {
     paddingHorizontal: 16,
@@ -1538,12 +1383,6 @@ const styles = StyleSheet.create({
   trendingFocusText: {
     fontSize: 13,
     fontFamily: Typography.family.medium,
-  },
-
-  // Featured boards
-  boardsScroll: {
-    paddingHorizontal: 16,
-    gap: 14,
   },
 
   // Filter bar

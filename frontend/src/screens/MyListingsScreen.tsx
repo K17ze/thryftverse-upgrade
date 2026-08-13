@@ -144,6 +144,19 @@ export default function MyListingsScreen() {
     };
   }, [listings]);
 
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible listing rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderListingItem = useCallback(
+    ({ item }: { item: ListingApiItem }) => (
+      <ListingRow
+        item={item}
+        onPress={() => navigation.push('ManageListing', { itemId: item.id })}
+      />
+    ),
+    [navigation],
+  );
+
   if (isLoading) {
     return (
       <FlagshipScreen header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}>
@@ -276,12 +289,7 @@ export default function MyListingsScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
           ListHeaderComponent={renderHeader}
-          renderItem={({ item }) => (
-            <ListingRow
-              item={item}
-              onPress={() => navigation.push('ManageListing', { itemId: item.id })}
-            />
-          )}
+          renderItem={renderListingItem}
           // Performance: long seller lists; FlashList v2 handles recycling
           // automatically.
         />

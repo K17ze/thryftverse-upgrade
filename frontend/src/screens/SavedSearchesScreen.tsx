@@ -330,7 +330,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
 
             {totalNewMatches > 0 && (
               <View style={styles.newMatchesBanner}>
-                <Ionicons name="sparkles" size={16} color={colors.brand} />
+                <Ionicons name="notifications-outline" size={16} color={colors.brand} />
                 <Text style={styles.newMatchesText}>
                   {totalNewMatches} new {totalNewMatches === 1 ? 'match' : 'matches'} across your saved searches
                 </Text>

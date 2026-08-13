@@ -13,8 +13,9 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, AspectRatio } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -28,6 +29,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
   const { collectionId } = route.params;
   const haptic = useHaptic();
   const { show } = useToast();
+  const { formatFromFiat } = useFormattedPrice();
 
   const collections = useStore((state) => state.collections);
   const removeFromCollectionOnApi = useStore((state) => state.removeFromCollectionOnApi);
@@ -110,7 +112,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
         onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}`}
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}`}
       >
         {item.images?.[0] ? (
           <CachedImage uri={item.images[0]} style={styles.thumb} contentFit="cover" />
@@ -123,6 +125,9 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           <BodyEmphasis numberOfLines={1}>{item.title}</BodyEmphasis>
           <Caption color={colors.textMuted}>{item.brand}</Caption>
         </View>
+        <Text style={styles.rowPrice} numberOfLines={1}>
+          {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+        </Text>
         <AnimatedPressable
           style={styles.removeBtn}
           onPress={() => handleRemove(item.id, item.title)}
@@ -166,6 +171,11 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
 }
 
 function createStyles(colors: ThemeColors) {
+  // 3:4 portrait thumbnail — media-first scanning matches the closet mosaic
+  // geometry so the management surface feels continuous with the collection
+  // detail grid (AGENTS.md §4 media storytelling, §14 state completeness).
+  const THUMB_W = Space.xxl + Space.sm; // 56pt
+  const THUMB_H = Math.round(THUMB_W / AspectRatio.portrait); // ~75pt
   return StyleSheet.create({
     listContent: {
       paddingHorizontal: Space.md,
@@ -174,22 +184,22 @@ function createStyles(colors: ThemeColors) {
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm + 6,
-      paddingVertical: Space.md,
+      gap: Space.md,
+      paddingVertical: Space.smMd,
     },
     rowRemoving: {
       opacity: 0.5,
     },
     thumb: {
-      width: Space.xxl + Space.sm,
-      height: Space.xxl + Space.sm,
+      width: THUMB_W,
+      height: THUMB_H,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
       overflow: 'hidden',
     },
     thumbEmpty: {
-      width: Space.xxl + Space.sm,
-      height: Space.xxl + Space.sm,
+      width: THUMB_W,
+      height: THUMB_H,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
@@ -201,20 +211,24 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       gap: Space.xs / 2,
     },
+    rowPrice: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+      letterSpacing: Type.body.letterSpacing,
+    },
     removeBtn: {
       width: Space.xl + Space.sm,
       height: Space.xl + Space.sm,
       borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
+      backgroundColor: 'transparent',
       justifyContent: 'center',
       alignItems: 'center',
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
     },
     separator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginLeft: 72,
+      marginLeft: THUMB_W + Space.md,
     },
   });
 }

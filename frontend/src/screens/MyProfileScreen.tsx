@@ -470,8 +470,10 @@ export default function MyProfileScreen() {
     ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
     : undefined;
 
-  const GRID_GAP = 8;
-  const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP) / 2;
+  const GRID_GAP = 4;
+  const GRID_COLS = 3;
+  const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+  const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait — Poshmark 2026 standard
 
   return (
     <View style={[styles.container, t.container]}>
@@ -633,12 +635,12 @@ export default function MyProfileScreen() {
                   </Text>
                 </View>
                 <AnimatedPressable
-                  style={styles.completionDismiss}
+                  style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
                   onPress={() => { haptic.light(); setCompletionDismissed(true); }}
                   accessibilityRole="button"
                   accessibilityLabel="Dismiss profile completion prompt"
                 >
-                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                  <Ionicons name="close" size={15} color={colors.textMuted} />
                 </AnimatedPressable>
               </View>
               <View style={[styles.completionTrack, t.completionTrack]}>
@@ -658,7 +660,7 @@ export default function MyProfileScreen() {
                 accessibilityLabel={completionCta.label}
               >
                 <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
-                <Ionicons name="chevron-forward" size={15} color={colors.textInverse} />
+                <Ionicons name="chevron-forward" size={14} color={colors.textInverse} />
               </AnimatedPressable>
             </View>
           ) : null}
@@ -696,7 +698,10 @@ export default function MyProfileScreen() {
             >
               <View style={styles.portfolioHeader}>
                 <Text style={[styles.portfolioLabel, t.portfolioLabel]}>CO-OWN PORTFOLIO</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 }}>
+                  <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>View all</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+                </View>
               </View>
               <View style={styles.portfolioHoldings}>
                 {coOwnHoldings.slice(0, 3).map((h) => (
@@ -781,13 +786,13 @@ export default function MyProfileScreen() {
                       accessibilityLabel={`Manage ${item.title}`}
                     >
                       <SharedTransitionView
-                        style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_WIDTH * 1.25 }]}
+                        style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
                         sharedTransitionTag={`image-${item.id}-0`}
                       >
                         <CachedImage
                           uri={item.images?.[0] ?? ''}
                           style={styles.gridImage}
-                          containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.md }}
+                          containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
                           contentFit="cover"
                         />
                         {item.isSold ? (
@@ -801,11 +806,6 @@ export default function MyProfileScreen() {
                       </Text>
                       {item.brand ? (
                         <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
-                      ) : null}
-                      {(item.size || item.condition) ? (
-                        <Text style={[styles.gridMeta, t.gridMeta]} numberOfLines={1}>
-                          {[item.size, item.condition].filter(Boolean).join(' · ')}
-                        </Text>
                       ) : null}
                     </AnimatedPressable>
                   ))}
@@ -825,7 +825,7 @@ export default function MyProfileScreen() {
             ) : myLooks.length === 0 ? (
               <EmptyState
                 density="compact"
-                icon="sparkles-outline"
+                icon="images-outline"
                 title="No Looks yet"
                 subtitle="Create your first Look to showcase your style."
                 ctaLabel="Create Look"
@@ -863,7 +863,10 @@ export default function MyProfileScreen() {
               <View style={styles.aboutContainer}>
                 <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
                   <Text style={[styles.aboutLabel, t.aboutLabel]}>Website</Text>
-                  <Text style={[styles.aboutValue, t.aboutValue]}>{user.website}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs }}>
+                    <Text style={[styles.aboutValue, t.aboutValue, { flexShrink: 1 }]} numberOfLines={1}>{user.website}</Text>
+                    <Ionicons name="open-outline" size={13} color={colors.textMuted} />
+                  </View>
                 </View>
               </View>
             ) : null}
@@ -921,9 +924,9 @@ const myProfileStyles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm + 2,
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md - 2,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
@@ -932,12 +935,14 @@ const myProfileStyles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   awayBannerTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   awayBannerSub: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    lineHeight: Type.caption.lineHeight,
   },
 });
 
@@ -982,50 +987,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // ── Co-Own portfolio preview ──
+  // ── Co-Own portfolio preview — flagship elevated card ──
   portfolioPreview: {
     marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    padding: Space.md,
+    marginTop: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
     borderRadius: Radius.lg,
   },
   portfolioHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
   },
   portfolioLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.caps,
+    fontSize: Type.metaElevated.size,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   portfolioHoldings: {
     flexDirection: 'row',
-    gap: Space.sm,
+    gap: Space.md,
   },
   portfolioHoldingCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: Space.xs + 2,
   },
   portfolioHoldingImage: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     borderRadius: Radius.md,
     flexShrink: 0,
   },
   portfolioHoldingInfo: {
     flexShrink: 1,
+    gap: 2,
   },
   portfolioHoldingTitle: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    lineHeight: Type.caption.lineHeight,
   },
   portfolioHoldingUnits: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
+    lineHeight: Type.meta.lineHeight,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   topUtilityVisible: {
     width: Space.xl - 2,
@@ -1123,7 +1133,8 @@ const styles = StyleSheet.create({
   },
   gridHeaderCount: {
     fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   gridHeaderAction: {
     fontSize: Type.captionElevated.size,
@@ -1133,10 +1144,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    gap: 4,
   },
   gridCard: {
-    marginBottom: Space.smMd,
+    marginBottom: Space.sm,
   },
   gridImageWrap: {
     borderRadius: Radius.md,
@@ -1154,37 +1165,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   soldText: {
-    fontSize: Type.body.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
     letterSpacing: LetterSpacing.caps + 0.18,
   },
   gridPrice: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.bold,
-    marginTop: Space.xs + 2,
+    marginTop: Space.xs + 1,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   gridBrand: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 4,
-  },
-  gridMeta: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 4,
+    marginTop: 1,
   },
 
   // Listings empty state — compact in-grid prompt, not full blank page
   listingsEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.xl,
+    paddingVertical: Space.xl + Space.sm,
     paddingHorizontal: Space.md,
     gap: Space.sm,
   },
   listingsEmptyTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   listingsEmptyBody: {
     maxWidth: 280,
@@ -1195,7 +1203,7 @@ const styles = StyleSheet.create({
   },
   listingsEmptyCta: {
     marginTop: Space.xs + 2,
-    minHeight: Control.hit - 2,
+    minHeight: 44,
     paddingHorizontal: Space.md + 2,
     justifyContent: 'center',
     borderRadius: Radius.lg,
@@ -1205,29 +1213,31 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
 
-  // About — flat editorial rows
+  // About — flat editorial rows, flagship elevated
   aboutContainer: {
     paddingHorizontal: Space.md,
   },
   aboutSectionTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.bold,
-    paddingTop: Space.md + 2,
-    paddingBottom: Space.xs,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+    paddingTop: Space.md + 4,
+    paddingBottom: Space.sm,
   },
   aboutRow: {
-    paddingVertical: Space.md - 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Space.xs,
   },
   aboutRowLast: {
     borderBottomWidth: 0,
   },
   aboutLabel: {
-    fontSize: Type.meta.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps - 0.12,
-    marginBottom: Space.xs,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   aboutValue: {
     fontSize: Type.body.size,
@@ -1238,7 +1248,7 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
-    paddingVertical: Space.xl,
+    paddingVertical: Space.xl + Space.sm,
   },
 
   // Stats row — followers / following / listings / sales
@@ -1300,15 +1310,15 @@ const styles = StyleSheet.create({
     height: Space.sm + Space.xxs,
   },
 
-  // Profile completion prompt
+  // Profile completion prompt — flagship elevated card
   completionCard: {
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: Space.sm,
+    gap: Space.md,
   },
   completionHead: {
     flexDirection: 'row',
@@ -1318,24 +1328,28 @@ const styles = StyleSheet.create({
   },
   completionHeadText: {
     flex: 1,
-    gap: Space.xs / 4,
+    gap: Space.xs / 2,
   },
   completionTitle: {
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   completionPercent: {
     fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0.1,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   completionDismiss: {
-    width: Control.hit - Space.sm,
-    height: Control.hit - Space.sm,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: -Space.xs / 2,
     marginRight: -Space.xs / 2,
+    borderRadius: Radius.full,
   },
   completionTrack: {
     height: 4,
@@ -1350,13 +1364,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs / 2,
-    minHeight: Control.hit - 4,
+    gap: Space.xs,
+    minHeight: 44,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
   },
   completionCtaText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    letterSpacing: 0.1,
   },
 });

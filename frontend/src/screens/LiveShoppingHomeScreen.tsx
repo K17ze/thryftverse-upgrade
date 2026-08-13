@@ -676,8 +676,9 @@ function useStyles() {
         },
         sectionCount: {
           fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
+          fontFamily: Typography.family.semibold,
           color: colors.textMuted,
+          fontVariant: ['tabular-nums'],
         },
         noLiveStrip: {
           flexDirection: 'row',
@@ -752,9 +753,11 @@ function useStyles() {
           fontFamily: Typography.family.semibold,
           color: '#FFFFFF',
           letterSpacing: -0.1,
+          fontVariant: ['tabular-nums'],
         },
         viewerChipTextCompact: {
           fontSize: Type.meta.size - 1,
+          fontVariant: ['tabular-nums'],
         },
         featuredBottomArea: {
           position: 'absolute',
@@ -799,8 +802,8 @@ function useStyles() {
           fontSize: Type.bodyLarge.size,
           fontFamily: Typography.family.bold,
           color: '#FFFFFF',
-          letterSpacing: Type.priceList.letterSpacing,
-          lineHeight: Type.bodyLarge.size + 5,
+          letterSpacing: Type.bodyLarge.letterSpacing,
+          lineHeight: Type.bodyLarge.lineHeight,
         },
         featuredBidRow: {
           flexDirection: 'row',
@@ -809,16 +812,20 @@ function useStyles() {
           marginTop: Space.xs / 2,
         },
         featuredBidLabel: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.regular,
+          fontSize: Type.metaElevated.size,
+          lineHeight: Type.metaElevated.lineHeight,
+          fontFamily: Typography.family.semibold,
           color: 'rgba(255,255,255,0.7)',
-          letterSpacing: 0.2,
+          letterSpacing: Type.metaElevated.letterSpacing,
+          textTransform: 'uppercase',
         },
         featuredBidValue: {
-          fontSize: Type.bodyLarge.size,
+          fontSize: Type.priceList.size,
+          lineHeight: Type.priceList.lineHeight,
           fontFamily: Typography.family.bold,
           color: '#FFFFFF',
-          letterSpacing: Type.bodyLarge.letterSpacing,
+          letterSpacing: Type.priceList.letterSpacing,
+          fontVariant: ['tabular-nums'],
         },
         // Upcoming row
         upcomingRow: {
@@ -861,6 +868,7 @@ function useStyles() {
           fontFamily: Typography.family.semibold,
           color: colors.brand,
           letterSpacing: -0.1,
+          fontVariant: ['tabular-nums'],
         },
         upcomingSellerRow: {
           flexDirection: 'row',
@@ -877,8 +885,8 @@ function useStyles() {
           fontSize: Type.bodyEmphasis.size,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-          lineHeight: Type.bodyEmphasis.size + 4,
+          letterSpacing: Type.bodyEmphasis.letterSpacing,
+          lineHeight: Type.bodyEmphasis.lineHeight,
         },
         upcomingMetaRow: {
           flexDirection: 'row',
@@ -888,9 +896,10 @@ function useStyles() {
         },
         upcomingMetaText: {
           fontSize: Type.meta.size,
-          fontFamily: Typography.family.regular,
+          fontFamily: Typography.family.medium,
           color: colors.textMuted,
           letterSpacing: Type.captionElevated.letterSpacing,
+          fontVariant: ['tabular-nums'],
         },
         notifyBtn: {
           flexDirection: 'row',
@@ -925,8 +934,9 @@ function useStyles() {
         },
         endedHintText: {
           fontSize: Type.caption.size,
-          fontFamily: Typography.family.regular,
+          fontFamily: Typography.family.medium,
           color: colors.textMuted,
+          fontVariant: ['tabular-nums'],
         },
       }),
     [colors],

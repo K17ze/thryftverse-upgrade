@@ -165,7 +165,7 @@ export function SmartSellCard({
         <View style={styles.headerText}>
           <View style={styles.titleRow}>
             <Ionicons
-              name="sparkles"
+              name="trending-up-outline"
               size={20}
               color={colors.brand}
               style={styles.titleIcon}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily } from '../../theme/designTokens';
 export interface FlagshipFormSectionProps {
   title?: string;
   description?: string;
@@ -51,13 +51,12 @@ const styles = StyleSheet.create({
     marginBottom: Space.lg,
   },
   sectionTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    fontSize: Type.metaElevated.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: 0.3,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
-    lineHeight: Type.meta.lineHeight,
+    lineHeight: Type.metaElevated.lineHeight,
   },
   sectionDescription: {
     fontSize: Type.caption.size,

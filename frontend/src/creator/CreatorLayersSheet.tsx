@@ -253,11 +253,11 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>{reorderMode ? 'Reorder Layers' : 'Layers'}</Text>
         {reorderMode ? (
-          <PressScale onPress={handleExitReorder} style={styles.doneBtn} accessibilityLabel="Done reordering" accessibilityRole="button">
+          <PressScale onPress={handleExitReorder} style={styles.doneBtn} accessibilityLabel="Done reordering" accessibilityHint="Exits reorder mode" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
           </PressScale>
         ) : (
-          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityRole="button">
+          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityHint="Closes the layers panel" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         )}
@@ -408,7 +408,7 @@ function LayerRow({
         accessibilityLabel="Drag handle, long press to reorder"
         accessibilityHint="Long press then use arrows to move this layer"
         accessibilityRole="button"
-        hitSlop={4}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Ionicons
           name="menu-outline"
@@ -424,7 +424,7 @@ function LayerRow({
         accessibilityLabel={`Layer ${getLayerDisplayName(layer)}${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
         accessibilityHint={reorderMode ? 'Use arrows to reorder this layer' : 'Double tap to select, long press to reorder'}
         accessibilityRole="button"
-        hitSlop={8}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Reanimated.View style={[styles.thumbnail, { backgroundColor: `${getLayerColor(layer.type, colors)}20` }, layer.hidden && styles.thumbnailHidden, thumbAnimatedStyle]}>
           {thumbSource ? (
@@ -467,7 +467,7 @@ function LayerRow({
               style={styles.actionBtnLarge}
               accessibilityLabel="Move layer up"
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="chevron-up" size={26} color={colors.brand} />
             </PressScale>
@@ -476,7 +476,7 @@ function LayerRow({
               style={styles.actionBtnLarge}
               accessibilityLabel="Move layer down"
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="chevron-down" size={26} color={colors.brand} />
             </PressScale>
@@ -488,7 +488,7 @@ function LayerRow({
               style={styles.actionBtn}
               accessibilityLabel="Move layer up"
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="chevron-up" size={22} color={colors.textSecondary} />
             </PressScale>
@@ -497,7 +497,7 @@ function LayerRow({
               style={styles.actionBtn}
               accessibilityLabel="Move layer down"
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="chevron-down" size={22} color={colors.textSecondary} />
             </PressScale>
@@ -506,7 +506,7 @@ function LayerRow({
               style={styles.actionBtn}
               accessibilityLabel={layer.hidden ? 'Show layer' : 'Hide layer'}
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textSecondary} />
             </PressScale>
@@ -515,7 +515,7 @@ function LayerRow({
               style={styles.actionBtn}
               accessibilityLabel={layer.locked ? 'Unlock layer' : 'Lock layer'}
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons
                 name={layer.locked ? 'lock-closed' : 'lock-open-outline'}
@@ -529,7 +529,7 @@ function LayerRow({
               accessibilityLabel="More layer actions"
               accessibilityHint="Opens duplicate, delete and reorder options"
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
             </PressScale>
@@ -643,7 +643,7 @@ function LayerOverflowActionSheet({
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 400 }]} pointerEvents={layer ? 'auto' : 'none'}>
       <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close actions" accessibilityRole="button" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Close actions" accessibilityHint="Dismisses the layer actions sheet" accessibilityRole="button" />
       </Reanimated.View>
       <Reanimated.View
         style={[
@@ -673,7 +673,9 @@ function LayerOverflowActionSheet({
               overflowStyles.optionRow,
               { backgroundColor: pressed ? colors.surfaceAlt : 'transparent' },
             ]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel={opt.label}
+            accessibilityHint={opt.danger ? `Deletes the layer` : `Performs ${opt.label.toLowerCase()} on the layer`}
             accessibilityRole="button"
           >
             <Ionicons name={opt.icon} size={22} color={opt.danger ? colors.danger : colors.textPrimary} />
@@ -688,7 +690,9 @@ function LayerOverflowActionSheet({
             overflowStyles.cancelRow,
             { backgroundColor: pressed ? colors.surfaceAlt : 'transparent' },
           ]}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityLabel="Cancel"
+          accessibilityHint="Closes the layer actions sheet without taking action"
           accessibilityRole="button"
         >
           <Text style={[overflowStyles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>

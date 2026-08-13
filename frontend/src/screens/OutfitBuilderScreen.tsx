@@ -501,9 +501,9 @@ export default function OutfitBuilderScreen() {
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
             <View style={styles.aiCard}>
               <View style={styles.aiRow}>
-                <Ionicons name="sparkles" size={18} color={colors.brand} />
+                <Ionicons name="bulb-outline" size={18} color={colors.brand} />
                 <T.Caption color={colors.brand} style={{ fontFamily: Typography.family.bold }}>
-                  AI Suggestion
+                  Suggestion
                 </T.Caption>
               </View>
               <T.Body color={colors.textSecondary} style={{ marginBottom: Space.sm }}>

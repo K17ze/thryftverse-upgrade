@@ -65,7 +65,7 @@ import { BuyerProtectionStrip } from '../components/product';
 import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
-import { Space, Typography, Radius, Stroke, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Typography, Radius, Stroke, Type, Control, LetterSpacing, Numeric, Elevation } from '../theme/designTokens';
 import { createStableId } from '../utils/createStableId';
 import {
   configureStripeMobile,
@@ -79,7 +79,9 @@ type CheckoutStage =
   | 'idle'
   | 'creating_order'
   | 'opening_payment'
+  | 'authenticating'
   | 'awaiting_payment'
+  | 'payment_succeeded'
   | 'payment_pending'
   | 'payment_failed';
 
@@ -223,7 +225,9 @@ const STAGE_LABELS: Record<CheckoutStage, string> = {
   idle: '',
   creating_order: 'Creating your order…',
   opening_payment: 'Preparing payment…',
+  authenticating: 'Authenticating with your bank…',
   awaiting_payment: 'Confirming payment…',
+  payment_succeeded: 'Payment confirmed',
   payment_pending: 'Payment is still pending.',
   payment_failed: 'Payment failed. Try again.',
 };
@@ -246,9 +250,6 @@ export default function CheckoutScreen() {
     header: { borderBottomColor: colors.border },
     headerTitle: { color: colors.textPrimary },
     sectionDivider: { backgroundColor: colors.border },
-    priceBreakdownCard: {},
-    priceBreakdownTitle: { color: colors.textMuted },
-    priceDivider: { backgroundColor: colors.border },
     savingsBadge: { backgroundColor: `${colors.success}12` },
     savingsText: { color: colors.success },
     protectionIncludedText: { color: colors.success },
@@ -265,8 +266,6 @@ export default function CheckoutScreen() {
     hintText: { color: colors.textMuted },
     termsText: { color: colors.textMuted },
     footer: { borderTopColor: colors.border, backgroundColor: colors.background },
-    footerTotalLabel: { color: colors.textSecondary },
-    footerTotalPrice: { color: colors.textPrimary },
     payBtn: { backgroundColor: colors.brand },
     payBtnText: { color: colors.textInverse },
     signedOutTitle: { color: colors.textPrimary },
@@ -281,26 +280,16 @@ export default function CheckoutScreen() {
     partialDataActionText: { color: colors.warning },
     applePayBtn: { backgroundColor: colors.brand },
     applePayBtnText: { color: colors.textInverse },
-    paymentCard: { borderColor: colors.border, backgroundColor: colors.surface },
-    paymentCardWarning: { borderColor: colors.danger, backgroundColor: `${colors.danger}0A` },
-    paymentCardIcon: {},
-    paymentCardIconWarning: {},
-    paymentCardLabel: { color: colors.textMuted },
-    paymentCardTitle: { color: colors.textPrimary },
-    paymentCardSubtitle: { color: colors.textSecondary },
-    paymentCardChange: { color: colors.brand },
-    paymentCardWarningText: { color: colors.danger },
     compactSummaryRow: { color: colors.textSecondary },
     compactSummaryValue: { color: colors.textPrimary },
     compactSummaryTotalLabel: { color: colors.textPrimary },
     compactSummaryTotalValue: { color: colors.textPrimary },
     compactSummaryDivider: { backgroundColor: colors.border },
     breakdownChevronText: { color: colors.textMuted },
-    trustBadgeText: { color: colors.textMuted },
-    trustBadgeDot: { backgroundColor: colors.textMuted },
+    trustBadgeText: { color: colors.textSecondary },
+    trustBadgeDot: { backgroundColor: colors.border },
     breakdownSheetTitle: { color: colors.textPrimary },
     breakdownSheetLabel: { color: colors.textSecondary },
-    breakdownSheetValue: { color: colors.textPrimary },
     breakdownSheetDivider: { backgroundColor: colors.border },
     breakdownSheetTotalLabel: { color: colors.textPrimary },
     breakdownSheetTotalValue: { color: colors.textPrimary },
@@ -368,7 +357,7 @@ export default function CheckoutScreen() {
 
   const item = listings.find((l) => l.id === itemId);
 
-  const isSubmitting = stage === 'creating_order' || stage === 'opening_payment' || stage === 'awaiting_payment';
+  const isSubmitting = stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating' || stage === 'awaiting_payment';
   const isInteractionLocked = isSubmitting || isCancellingOrder;
 
   // --- Eligibility ---
@@ -780,6 +769,10 @@ export default function CheckoutScreen() {
         throw new Error(sheetInitializationError.message);
       }
 
+      // Set authenticating stage — the PaymentSheet may trigger 3DS/SCA
+      // challenge during presentation. This stage makes the authentication
+      // step visible to the user (audit 09: canonical payment state).
+      setStage('authenticating');
       const { error: sheetPresentationError } = await presentPaymentSheet();
       if (sheetPresentationError?.code === PaymentSheetError.Canceled) {
         setStage('idle');
@@ -818,6 +811,9 @@ export default function CheckoutScreen() {
       }
 
       if (settlementStatus === 'succeeded') {
+        // Brief success state so the user sees confirmation before navigation
+        // (audit 09: canonical payment state — succeeded is a visible state).
+        setStage('payment_succeeded');
         showSuccess('Payment completed', 'Your payment was successful.');
         pendingIntentIdRef.current = null;
         isSubmittingRef.current = false;
@@ -1363,8 +1359,6 @@ export default function CheckoutScreen() {
           onPressMessage={resolvedSeller.id ? () => { haptics.tap(); handleMessageSeller(); } : undefined}
         />
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
-
         {/* 3. Delivery address */}
         <CheckoutSelectionRow
           label="Delivery address"
@@ -1403,77 +1397,36 @@ export default function CheckoutScreen() {
           accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, 'GBP')}`}
         />
 
-        {/* 5. Payment method card */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.paymentCard,
-            t.paymentCard,
-            !savedPaymentMethod && styles.paymentCardWarning,
-            !savedPaymentMethod && t.paymentCardWarning,
-            pressed && styles.paymentCardPressed,
-          ]}
+        {/* 5. Payment method — unified with address/delivery row family */}
+        <CheckoutSelectionRow
+          label="Payment method"
+          title={savedPaymentMethod ? savedPaymentMethod.label : 'No payment method'}
+          subtitle={savedPaymentMethod?.details ?? undefined}
+          actionLabel={savedPaymentMethod ? 'Change' : 'Add'}
           onPress={handlePaymentPress}
-          accessibilityRole="button"
+          icon={savedPaymentMethod?.type === 'apple_pay' ? 'logo-apple' : 'card-outline'}
+          isFilled={!!savedPaymentMethod}
+          warningText={
+            !savedPaymentMethod && !allowCardPayments && checkoutCapabilities
+              ? 'Cards unavailable in your region'
+              : undefined
+          }
+          errorText={suppressPaymentError ? undefined : (paymentError ?? undefined)}
           accessibilityLabel={
             savedPaymentMethod
               ? `Payment method: ${savedPaymentMethod.label}${savedPaymentMethod.details ? `, ${savedPaymentMethod.details}` : ''}. Change payment method.`
               : 'Add payment method'
           }
           accessibilityHint="Add or change your payment method"
-        >
-          <View style={styles.paymentCardLeft}>
-            <View style={[styles.paymentCardIcon, t.paymentCardIcon, !savedPaymentMethod && styles.paymentCardIconWarning, !savedPaymentMethod && t.paymentCardIconWarning]}>
-              <Ionicons
-                name={savedPaymentMethod?.type === 'apple_pay' ? 'logo-apple' : 'card-outline'}
-                size={18}
-                color={savedPaymentMethod ? colors.brand : colors.danger}
-              />
-            </View>
-            <View style={styles.paymentCardTextCol}>
-              <Text style={[styles.paymentCardLabel, t.paymentCardLabel]}>Payment method</Text>
-              {savedPaymentMethod ? (
-                <>
-                  <Text style={[styles.paymentCardTitle, t.paymentCardTitle]} numberOfLines={1}>
-                    {savedPaymentMethod.label}
-                  </Text>
-                  {savedPaymentMethod.details ? (
-                    <Text style={[styles.paymentCardSubtitle, t.paymentCardSubtitle]} numberOfLines={1}>
-                      {savedPaymentMethod.details}
-                    </Text>
-                  ) : null}
-                </>
-              ) : (
-                <Text style={[styles.paymentCardWarningText, t.paymentCardWarningText]}>
-                  {!allowCardPayments && checkoutCapabilities
-                    ? 'Cards unavailable in your region'
-                    : 'No payment method — tap to add'}
-                </Text>
-              )}
-              {suppressPaymentError ? null : paymentError ? (
-                <View style={styles.paymentCardErrorRow}>
-                  <Ionicons name="alert-circle-outline" size={12} color={colors.danger} />
-                  <Text style={[styles.paymentCardWarningText, t.paymentCardWarningText]}>{paymentError}</Text>
-                </View>
-              ) : null}
-            </View>
-          </View>
-          <View style={styles.paymentCardRight}>
-            <Text style={[styles.paymentCardChange, t.paymentCardChange]}>
-              {savedPaymentMethod ? 'Change' : 'Add'}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-          </View>
-        </Pressable>
+        />
         </Reanimated.View>
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
-
-        {/* 5b. Buyer protection strip — BEFORE price breakdown per Design.md:
-            "Trust information must appear before the irreversible payment step."
-            2026 research (Baymard): trust badges near the payment CTA lift
-            conversion up to 32% vs footer placement. Placing this above the
-            order summary ensures the user sees escrow protection before
-            reviewing costs and tapping Pay. */}
+        {/* 5b. Buyer protection strip — the single authored trust moment,
+            placed after selection rows and before the price breakdown.
+            Per Design.md: "Trust information must appear before the
+            irreversible payment step." The footer trust badges were removed
+            to avoid duplicate trust signalling — this strip carries the
+            escrow narrative; the breakdown sheet has the full policy. */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <View style={styles.protectionStripWrap}>
           <BuyerProtectionStrip compact />
@@ -1519,27 +1472,14 @@ export default function CheckoutScreen() {
           </View>
         )}
 
-        {/* 7. Transaction feedback */}
+        {/* 7. Transaction feedback — canonical PaymentStateBanner (audit P0) */}
         {stage !== 'idle' ? (
-          <View style={styles.feedbackRow}>
-            {isSubmitting ? (
-              <ActivityIndicator size="small" color={colors.brand} />
-            ) : stage === 'payment_failed' ? (
-              <Ionicons name="alert-circle" size={16} color={colors.danger} />
-            ) : stage === 'payment_pending' ? (
-              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-            ) : null}
-            <Text
-              style={[
-                styles.feedbackText,
-                t.feedbackText,
-                stage === 'payment_failed' && t.feedbackTextError,
-              ]}
-              accessibilityLiveRegion="polite"
-            >
-              {STAGE_LABELS[stage]}
-            </Text>
-          </View>
+          <PaymentStateBanner
+            stage={stage}
+            label={STAGE_LABELS[stage]}
+            colors={colors}
+            reducedMotion={reducedMotionEnabled}
+          />
         ) : null}
 
         {orderError ? (
@@ -1616,15 +1556,23 @@ export default function CheckoutScreen() {
           </View>
         </Pressable>
 
-        {/* Trust badges — reduce anxiety at the payment moment */}
+        {/* Trust badges — compact reassurance signals at the payment CTA
+            moment. Upgraded: icon-in-circle badges with clear visual weight,
+            separated by a hairline divider. Complements the BuyerProtectionStrip
+            above (which carries the detailed escrow narrative); these are
+            quick-scan trust signals right where anxiety peaks. */}
         <View style={styles.trustBadges}>
           <View style={styles.trustBadgeItem}>
-            <Ionicons name="lock-closed" size={12} color={colors.success} />
+            <View style={[styles.trustBadgeIcon, { backgroundColor: `${colors.success}14` }]}>
+              <Ionicons name="lock-closed" size={12} color={colors.success} />
+            </View>
             <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Secure payment</Text>
           </View>
-          <View style={[styles.trustBadgeDot, t.trustBadgeDot]} />
+          <View style={[styles.trustBadgeDivider, t.trustBadgeDot]} />
           <View style={styles.trustBadgeItem}>
-            <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
+            <View style={[styles.trustBadgeIcon, { backgroundColor: `${colors.success}14` }]}>
+              <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
+            </View>
             <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Buyer protection</Text>
           </View>
         </View>
@@ -1668,7 +1616,7 @@ export default function CheckoutScreen() {
             }}
           >
             {isSubmitting ? (
-              <ActivityIndicator size="small" color={colors.textInverse} />
+              <PulsingDot color={colors.textInverse} reducedMotion={reducedMotionEnabled} />
             ) : (
               <Ionicons name="lock-closed" size={16} color={colors.textInverse} />
             )}
@@ -1678,7 +1626,7 @@ export default function CheckoutScreen() {
       </View>
 
       {/* Non-blocking progress overlay — keeps checkout visible (§14) */}
-      {(stage === 'creating_order' || stage === 'opening_payment') && (
+      {(stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating') && (
         <CheckoutProgressOverlay
           label={STAGE_LABELS[stage]}
           colors={colors}
@@ -1753,6 +1701,200 @@ export default function CheckoutScreen() {
     </SafeAreaView>
   );
 }
+
+// ===========================================================================
+// PulsingDot — replaces ActivityIndicator in buttons with a calm pulsing dot.
+// Respects reduced motion (static dot when enabled).
+// ===========================================================================
+function PulsingDot({
+  color,
+  reducedMotion,
+  size = 8,
+}: {
+  color: string;
+  reducedMotion: boolean;
+  size?: number;
+}) {
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.3, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+    return () => {
+      opacity.value = 1;
+    };
+  }, [opacity, reducedMotion]);
+
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Reanimated.View
+      style={[
+        { width: size, height: size, borderRadius: Radius.full, backgroundColor: color },
+        reducedMotion ? undefined : dotStyle,
+      ]}
+    />
+  );
+}
+
+// ===========================================================================
+// PaymentStateBanner — canonical payment state component (§14, audit P0).
+// Replaces the generic ActivityIndicator with a state-specific banner that
+// has a colored accent bar, a pulsing dot (not spinner) for active states,
+// and state-specific icons for failed/pending states.
+// ===========================================================================
+function PaymentStateBanner({
+  stage,
+  label,
+  colors,
+  reducedMotion,
+}: {
+  stage: CheckoutStage;
+  label: string;
+  colors: ThemeColors;
+  reducedMotion: boolean;
+}) {
+  const dotOpacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (reducedMotion || stage === 'idle') return;
+    if (stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating' || stage === 'awaiting_payment') {
+      dotOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        false,
+      );
+    }
+    return () => {
+      dotOpacity.value = 1;
+    };
+  }, [dotOpacity, reducedMotion, stage]);
+
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: dotOpacity.value,
+  }));
+
+  const config = useMemo(() => {
+    switch (stage) {
+      case 'creating_order':
+      case 'opening_payment':
+      case 'authenticating':
+      case 'awaiting_payment':
+        return {
+          accentColor: colors.brand,
+          icon: null as React.ReactNode,
+          showDot: true,
+        };
+      case 'payment_succeeded':
+        return {
+          accentColor: colors.success,
+          icon: <Ionicons name="checkmark-circle" size={16} color={colors.success} />,
+          showDot: false,
+        };
+      case 'payment_failed':
+        return {
+          accentColor: colors.danger,
+          icon: <Ionicons name="alert-circle" size={16} color={colors.danger} />,
+          showDot: false,
+        };
+      case 'payment_pending':
+        return {
+          accentColor: colors.textMuted,
+          icon: <Ionicons name="time-outline" size={16} color={colors.textMuted} />,
+          showDot: false,
+        };
+      default:
+        return {
+          accentColor: colors.brand,
+          icon: null as React.ReactNode,
+          showDot: false,
+        };
+    }
+  }, [stage, colors]);
+
+  return (
+    <View
+      style={[
+        paymentBannerStyles.container,
+        {
+          backgroundColor: `${config.accentColor}0A`,
+          borderColor: `${config.accentColor}20`,
+        },
+      ]}
+      accessibilityLiveRegion="polite"
+      accessibilityRole="alert"
+    >
+      <View style={[paymentBannerStyles.accentBar, { backgroundColor: config.accentColor }]} />
+      <View style={paymentBannerStyles.content}>
+        {config.showDot ? (
+          <Reanimated.View
+            style={[paymentBannerStyles.dot, { backgroundColor: config.accentColor }, reducedMotion ? undefined : dotStyle]}
+          />
+        ) : (
+          config.icon
+        )}
+        <Text
+          style={[
+            paymentBannerStyles.label,
+            {
+              color: stage === 'payment_failed' ? colors.danger : stage === 'payment_succeeded' ? colors.success : colors.textSecondary,
+            },
+          ]}
+          numberOfLines={2}
+        >
+          {label}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const paymentBannerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderRadius: Radius.md,
+    borderWidth: Stroke.hairline,
+    overflow: 'hidden',
+    marginTop: Space.sm,
+  },
+  accentBar: {
+    width: 3,
+    flexShrink: 0,
+  },
+  content: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
+    flexShrink: 0,
+  },
+  label: {
+    flex: 1,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+  },
+});
 
 // ===========================================================================
 // Non-blocking progress overlay — shown during order creation / payment setup
@@ -1937,27 +2079,6 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     marginVertical: Space.sm,
   },
-  priceBreakdownCard: {
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    marginTop: Space.sm,
-  },
-  priceBreakdownHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    marginBottom: Space.sm + 2,
-  },
-  priceBreakdownTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps,
-  },
-  priceDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
   savingsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2113,6 +2234,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
+    ...Elevation.floating,
   },
   compactSummary: {
     paddingVertical: Space.sm,
@@ -2124,11 +2246,13 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs + 1,
   },
   compactSummaryLabel: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
   },
   compactSummaryVal: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
   },
@@ -2148,12 +2272,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   compactSummaryTotalLabel: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   compactSummaryTotalValue: {
-    fontSize: Type.title.size,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   breakdownChevron: {
@@ -2170,22 +2297,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xs + 1,
+    paddingVertical: Space.xs,
   },
   trustBadgeItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
   },
+  trustBadgeIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   trustBadgeText: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.caption.letterSpacing,
   },
-  trustBadgeDot: {
-    width: 3,
-    height: 3,
-    borderRadius: Radius.full,
-    opacity: 0.3,
+  trustBadgeDivider: {
+    width: 1,
+    height: 12,
   },
   footerPayRow: {
     flexDirection: 'row',
@@ -2193,73 +2327,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
     paddingTop: Space.xs,
-  },
-  paymentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
-    marginTop: Space.sm,
-  },
-  paymentCardPressed: {
-    opacity: 0.7,
-  },
-  paymentCardWarning: {
-    borderWidth: Stroke.emphasis,
-  },
-  paymentCardLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 2,
-  },
-  paymentCardIcon: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paymentCardIconWarning: {
-  },
-  paymentCardTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  paymentCardLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps,
-  },
-  paymentCardTitle: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
-  },
-  paymentCardSubtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
-  paymentCardWarningText: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
-  },
-  paymentCardErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.xs,
-  },
-  paymentCardRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  paymentCardChange: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
   },
   breakdownSheetContent: {
     paddingHorizontal: Space.md,
@@ -2301,17 +2368,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     lineHeight: Type.body.lineHeight,
   },
-  footerTotalCol: {
-    flex: 1,
-  },
-  footerTotalLabel: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
-  },
-  footerTotalPrice: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-  },
   payBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -2321,8 +2377,8 @@ const styles = StyleSheet.create({
     minWidth: 180,
     paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
-    borderRadius: Radius.sm,
-    minHeight: Space.xxl,
+    borderRadius: Radius.full,
+    minHeight: 52,
   },
   applePayBtn: {
     flexDirection: 'row',
@@ -2330,13 +2386,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     minWidth: 140,
-    height: Space.xxl,
-    borderRadius: Radius.sm,
+    height: 52,
+    borderRadius: Radius.full,
     marginBottom: Space.xs,
   },
   applePayBtnText: {
-    fontSize: Type.subtitle.size,
-    fontWeight: '600',
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
   },
   payBtnDisabled: {
     opacity: 0.5,
@@ -2346,7 +2402,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   payBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
   },
   signedOutContainer: {

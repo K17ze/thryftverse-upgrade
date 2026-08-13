@@ -540,10 +540,16 @@ export default function WalletScreen({ navigation }: Props) {
 
         {/* ── Seller wallet: pending vs available with release countdown ── */}
         {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
-          <View style={[styles.sellerWalletCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sellerWalletTitle, { color: colors.textPrimary }]}>
-              Selling balance
-            </Text>
+          <View style={[styles.sellerWalletCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.sellerWalletHeader}>
+              <Text style={[styles.sellerWalletTitle, { color: colors.textPrimary }]}>
+                Selling balance
+              </Text>
+              <View style={[styles.sellerWalletChip, { backgroundColor: colors.brand + '12' }]}>
+                <Ionicons name="pricetag-outline" size={11} color={colors.brand} />
+                <Text style={[styles.sellerWalletChipText, { color: colors.brand }]}>Sale proceeds</Text>
+              </View>
+            </View>
 
             <View style={styles.sellerBalanceRow}>
               <View style={styles.sellerBalanceItem}>
@@ -1017,13 +1023,36 @@ const styles = StyleSheet.create({
   },
   sellerWalletCard: {
     borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
-    marginTop: Space.md,
+    marginTop: Space.lg,
+  },
+  sellerWalletHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Space.sm,
+    gap: Space.sm,
   },
   sellerWalletTitle: {
-    fontSize: Type.body.size,
-    fontWeight: '600',
-    marginBottom: Space.sm,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  sellerWalletChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  sellerWalletChipText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.meta.letterSpacing,
   },
   sellerBalanceRow: {
     flexDirection: 'row',
@@ -1038,13 +1067,19 @@ const styles = StyleSheet.create({
     marginVertical: Space.xs,
   },
   sellerBalanceLabel: {
-    fontSize: Type.caption.size,
-    fontWeight: '500',
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginBottom: Space.xs / 2,
   },
+  // Seller balance values use priceList with tabular-nums per spec
   sellerBalanceValue: {
-    fontSize: Type.title.size,
-    fontWeight: '700',
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   pendingToggle: {
     flexDirection: 'row',
@@ -1055,8 +1090,10 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   pendingToggleText: {
-    fontSize: Type.caption.size,
-    fontWeight: '500',
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   pendingBreakdownList: {
     gap: Space.xs,
@@ -1074,21 +1111,31 @@ const styles = StyleSheet.create({
   },
   pendingItemTitle: {
     fontSize: Type.body.size,
-    fontWeight: '500',
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.body.letterSpacing,
   },
   pendingItemMeta: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs / 2,
   },
   pendingItemAmount: {
-    fontSize: Type.body.size,
-    fontWeight: '600',
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
+  // 24pt section spacing between major sections per spec
   actionRow: {
     flexDirection: 'row',
     gap: Space.sm,
     marginTop: Space.lg,
   },
+  // Sections after the main wallet breakdown use 24pt (Space.lg) spacing
   actionBtn: { flex: 1 },
 
   // ── Flow cards (inline Add / Redeem) ──
@@ -1097,7 +1144,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.sm,
-    marginTop: Space.md,
+    marginTop: Space.lg,
   },
   flowHeader: {
     flexDirection: 'row',
@@ -1111,10 +1158,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   flowHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   tabRow: {
     flexDirection: 'row',
@@ -1137,17 +1184,17 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   inputLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs,
   },
   balanceHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   amountInput: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -1165,10 +1212,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   summaryLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   summaryValue: {
     fontSize: Type.body.size,
@@ -1204,10 +1251,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   quickActionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
 
   // ── Transaction history ──
@@ -1218,17 +1265,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.xs,
     marginBottom: Space.sm,
   },
+  // Section title uses subtitle for clear hierarchy — not a tiny uppercase label
   txHistoryTitle: {
     fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.2,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   txHistorySeeAll: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
 
   // ── Safeguarding info ──
@@ -1245,16 +1295,16 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   infoTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   infoBody: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   safeguardingLinksRow: {
     flexDirection: 'row',

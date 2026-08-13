@@ -78,6 +78,10 @@ export interface OverflowMenuProps {
   onTemplates: () => void;
   onDrafts: () => void;
   onSettings: () => void;
+  /** Whether the safe-zone overlay is currently visible */
+  safeZoneVisible: boolean;
+  /** Toggle the safe-zone overlay on the canvas */
+  onToggleSafeZone: () => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────
@@ -98,6 +102,8 @@ export function OverflowMenu({
   onTemplates,
   onDrafts,
   onSettings,
+  safeZoneVisible,
+  onToggleSafeZone,
 }: OverflowMenuProps) {
   const { colors } = useAppTheme();
 
@@ -141,6 +147,12 @@ export function OverflowMenu({
           label="Preview"
           colors={colors}
           onPress={onPreview}
+        />
+        <OverflowItem
+          icon={safeZoneVisible ? 'shield-checkmark-outline' : 'shield-outline'}
+          label={safeZoneVisible ? 'Safe Zone On' : 'Safe Zone'}
+          colors={colors}
+          onPress={onToggleSafeZone}
         />
         <OverflowItem
           icon="at-outline"

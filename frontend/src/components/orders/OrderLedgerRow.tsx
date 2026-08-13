@@ -68,11 +68,14 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
     statusKey === 'in transit' ? 'shipped' : statusKey
   );
 
-  const accessibilityLabel = `${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${trackingLine ? `, ${trackingLine}` : ''}${nextAction ? `, Next: ${nextAction}` : ''}`;
+  // Short order number for scannable reference — first 8 chars uppercased
+  const shortOrderNumber = order.id.slice(0, 8).toUpperCase();
+
+  const accessibilityLabel = `Order ${shortOrderNumber}, ${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${trackingLine ? `, ${trackingLine}` : ''}${nextAction ? `, Next: ${nextAction}` : ''}`;
 
   return (
     <Pressable
-      style={styles.row}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={onPress}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       accessibilityRole="button"
@@ -86,20 +89,27 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
       />
 
       <View style={styles.content}>
-        <View style={styles.statusRow}>
-          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-          <Text style={[styles.statusText, { color: statusColor }]} numberOfLines={1}>
-            {statusLabel}
-          </Text>
+        {/* Top row: status badge + order number */}
+        <View style={styles.topRow}>
+          <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.statusText, { color: statusColor }]} numberOfLines={1}>
+              {statusLabel}
+            </Text>
+          </View>
+          <Text style={styles.orderNumber}>#{shortOrderNumber}</Text>
         </View>
 
+        {/* Item title */}
         <Text style={styles.title} numberOfLines={2}>{order.title}</Text>
 
-        <Text style={styles.total}>{formattedTotal}</Text>
-
-        <Text style={styles.context} numberOfLines={1}>
-          {cancelled ? (dateLabel ? `Cancelled · ${dateLabel}` : 'Cancelled') : contextLine}
-        </Text>
+        {/* Bottom row: context (verb · counterparty · date) + total */}
+        <View style={styles.bottomRow}>
+          <Text style={styles.context} numberOfLines={1}>
+            {cancelled ? (dateLabel ? `Cancelled · ${dateLabel}` : 'Cancelled') : contextLine}
+          </Text>
+          <Text style={styles.total}>{formattedTotal}</Text>
+        </View>
 
         {trackingLine && (
           <Text style={styles.tracking} numberOfLines={1}>
@@ -151,7 +161,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
 
 export const OrderLedgerRow = memo(OrderLedgerRowImpl);
 
-const THUMB_SIZE = 88;
+const THUMB_SIZE = 80;
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
@@ -161,6 +171,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
     minHeight: 44,
     gap: Space.md,
+  },
+  rowPressed: {
+    opacity: 0.7,
   },
   thumbContainer: {
     width: THUMB_SIZE,
@@ -176,11 +189,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     gap: Space.xs / 2 + 1,
   },
-  statusRow: {
+  // Top row: status badge (left) + order number (right)
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
+    justifyContent: 'space-between',
+    gap: Space.sm,
     marginBottom: Space.xs / 2,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
   },
   statusDot: {
     width: 6,
@@ -188,9 +211,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.sm,
   },
   statusText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: 0.3,
+    letterSpacing: Type.captionElevated.letterSpacing,
+  },
+  // Order number — monospace-feel reference, muted
+  orderNumber: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.meta.letterSpacing,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
   },
   title: {
     fontSize: Type.bodyEmphasis.size,
@@ -198,21 +231,35 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
     lineHeight: 20,
   },
-  total: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    marginTop: 1,
-  },
-  context: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
+  // Bottom row: context (left) + total (right) — scannable financial summary
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
     marginTop: 2,
   },
-  tracking: {
-    fontSize: Type.caption.size,
+  total: {
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  context: {
+    flex: 1,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.textMuted,
+  },
+  tracking: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
     marginTop: 1,
   },
@@ -249,8 +296,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: Space.xs,
   },
   nextActionText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.brand,
   },
 });

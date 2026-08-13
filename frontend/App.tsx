@@ -30,6 +30,7 @@ import { TabScrollProvider } from './src/context/TabScrollContext';
 import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
+import { AccessibilityPreferencesProvider } from './src/context/AccessibilityPreferencesContext';
 import { ToastContainer } from './src/components/Toast';
 import { AppErrorBoundary, initSentry, installGlobalErrorHandler, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
 import { registerAppNavigationRef } from './src/platform/monitoring/appNavigation';
@@ -458,21 +459,24 @@ export default function App() {
 
   if (showBrandedSplash) {
     return (
-      <ThemeProvider>
-        <BrandedSplash
-          onFinish={() => {
-            setShowBrandedSplash(false);
-            // EAS Observe: the branded splash has dismissed and the real app
-            // surface is about to mount. The first markInteractive() records
-            // the TTI metric; later calls are ignored.
-            markInteractive({ surface: 'splash_resolved' });
-          }}
-        />
-      </ThemeProvider>
+      <AccessibilityPreferencesProvider>
+        <ThemeProvider>
+          <BrandedSplash
+            onFinish={() => {
+              setShowBrandedSplash(false);
+              // EAS Observe: the branded splash has dismissed and the real app
+              // surface is about to mount. The first markInteractive() records
+              // the TTI metric; later calls are ignored.
+              markInteractive({ surface: 'splash_resolved' });
+            }}
+          />
+        </ThemeProvider>
+      </AccessibilityPreferencesProvider>
     );
   }
 
   return (
+    <AccessibilityPreferencesProvider>
     <ThemeProvider>
     <AppErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -527,5 +531,6 @@ export default function App() {
       </GestureHandlerRootView>
     </AppErrorBoundary>
     </ThemeProvider>
+    </AccessibilityPreferencesProvider>
   );
 }

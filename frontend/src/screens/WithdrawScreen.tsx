@@ -644,7 +644,19 @@ export default function WithdrawScreen() {
           </Reanimated.View>
 
         <View style={styles.footer}>
-          <Text style={styles.feeText}>Withdrawals are processed from completed sale proceeds in 3-5 working days.</Text>
+          {/* Estimated arrival — clear, prominent disclosure per spec */}
+          <View style={[styles.arrivalRow, { borderColor: colors.border }]}>
+            <View style={styles.arrivalLeft}>
+              <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+              <Text style={[styles.arrivalLabel, { color: colors.textSecondary }]}>
+                Estimated arrival
+              </Text>
+            </View>
+            <Text style={[styles.arrivalValue, { color: colors.textPrimary }]}>
+              3–5 working days
+            </Text>
+          </View>
+          <Text style={styles.feeText}>Withdrawals are processed from completed sale proceeds.</Text>
           <AppButton
             title={
               isWithdrawing
@@ -696,7 +708,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     marginTop: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.lg,
   },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   heroIcon: {
@@ -708,13 +720,17 @@ function createStyles(colors: ThemeColors) {
   },
   heroText: { flex: 1 },
   heroTitle: {
-    fontSize: Type.title.size - 2,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   heroSubtitle: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs / 2,
   },
 
@@ -723,24 +739,127 @@ function createStyles(colors: ThemeColors) {
   amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Space.xl + Space.xl - 8, marginBottom: Space.sm + Space.xs },
   currencySymbol: { fontSize: Type.priceLarge.size + 16, fontFamily: Typography.family.bold, color: colors.textPrimary, marginRight: Space.sm },
   amountInput: { fontSize: Type.priceLarge.size + 28, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2, fontVariant: ['tabular-nums'] },
-  availableText: { textAlign: 'center', fontSize: Type.body.size, fontFamily: Typography.family.medium, color: colors.textSecondary, marginBottom: Space.sm },
-  policyLabel: { textAlign: 'center', fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.textMuted, marginBottom: Space.xs },
-  policyHint: { textAlign: 'center', fontSize: Type.caption.size, fontFamily: Typography.family.medium, color: colors.textMuted, marginBottom: Space.lg + Space.xs },
-  balanceError: { textAlign: 'center', marginTop: Space.xs, marginBottom: Space.md + 4, fontSize: Type.caption.size, fontFamily: Typography.family.semibold, color: colors.danger },
-  sectionTitle: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: LetterSpacing.caps + 0.38, marginBottom: Space.sm + Space.xs },
+  availableText: {
+    textAlign: 'center',
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.textSecondary,
+    marginBottom: Space.sm,
+    fontVariant: ['tabular-nums'],
+  },
+  policyLabel: {
+    textAlign: 'center',
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.textMuted,
+    marginBottom: Space.xs,
+  },
+  policyHint: {
+    textAlign: 'center',
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.textMuted,
+    marginBottom: Space.lg + Space.xs,
+  },
+  balanceError: {
+    textAlign: 'center',
+    marginTop: Space.xs,
+    marginBottom: Space.md + 4,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.danger,
+  },
+  sectionTitle: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    marginBottom: Space.sm + Space.xs,
+  },
 
   bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: Space.md, borderRadius: Radius.lg, marginBottom: Space.smMd, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.subtle },
   bankLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   bankIcon: { width: Space.xl + Space.xl - 4, height: Space.xl + Space.xl - 4, borderRadius: Radius.xxl, alignItems: 'center', justifyContent: 'center' },
-  bankName: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, marginBottom: Space.xs },
-  bankDetails: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  bankName: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    color: colors.textPrimary,
+    marginBottom: Space.xs,
+  },
+  bankDetails: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.textSecondary,
+  },
 
   addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + Space.xs },
-  addBankText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.brand },
-  railHintText: { fontSize: Type.caption.size, fontFamily: Typography.family.medium, color: colors.textMuted, paddingVertical: Space.sm + Space.xs },
+  addBankText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.brand,
+  },
+  railHintText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.textMuted,
+    paddingVertical: Space.sm + Space.xs,
+  },
 
   footer: { paddingVertical: Space.md + 4, borderTopWidth: Stroke.standard, borderTopColor: colors.border, backgroundColor: colors.background },
-  feeText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center', marginBottom: Space.md },
+  // Estimated arrival row — clear disclosure per spec
+  arrivalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    marginBottom: Space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  arrivalLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+  },
+  arrivalLabel: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
+  },
+  arrivalValue: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    fontVariant: ['tabular-nums'],
+  },
+  feeText: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: Space.md,
+  },
   primaryBtn: { backgroundColor: colors.textPrimary, height: Space.xl + Space.xl + 8, borderRadius: Space.lg + 4, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.background, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },

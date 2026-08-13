@@ -12,7 +12,7 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
 import { updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 
@@ -164,6 +164,43 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </SettingsSection>
       </Reanimated.View>
 
+      {/* Safety tips — empowering, not frightening.
+          Psychology (§27.7 trust architecture): a marketplace that visibly
+          educates users on safe trading practices builds reflective trust.
+          This section makes safety actionable rather than buried. Research
+          (TechVinta 2026): "surface a Report link on every surface" and
+          "buyer/seller protection" are core trust pillars. */}
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(280)}>
+        <View style={[styles.safetyTipsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.safetyTipsHeader}>
+            <View style={[styles.safetyTipsIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
+              <Ionicons name="shield-checkmark" size={18} color={colors.commerceTrust} />
+            </View>
+            <Text style={[styles.safetyTipsTitle, { color: colors.textPrimary }]}>Trading safely</Text>
+          </View>
+          <View style={styles.safetyTipsList}>
+            <View style={styles.safetyTipItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={[styles.safetyTipText, { color: colors.textSecondary }]}>
+                Keep all payments and messages on ThryftVerse for buyer protection
+              </Text>
+            </View>
+            <View style={styles.safetyTipItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={[styles.safetyTipText, { color: colors.textSecondary }]}>
+                Check seller ratings and verification badges before buying
+              </Text>
+            </View>
+            <View style={styles.safetyTipItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={[styles.safetyTipText, { color: colors.textSecondary }]}>
+                Report suspicious listings or users — our team reviews every report
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Reanimated.View>
+
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
       <SettingsSection title="Data & analytics" noCard>
         <SettingsRow
@@ -237,6 +274,45 @@ function createStyles(colors: ThemeColors) {
     postureBadgeText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
+    },
+    // Safety tips card
+    safetyTipsCard: {
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      padding: Space.md,
+      marginBottom: Space.md,
+    },
+    safetyTipsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 2,
+      marginBottom: Space.sm + 2,
+    },
+    safetyTipsIcon: {
+      width: Control.chrome + Space.xs,
+      height: Control.chrome + Space.xs,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    safetyTipsTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+    },
+    safetyTipsList: {
+      gap: Space.sm,
+    },
+    safetyTipItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.sm,
+    },
+    safetyTipText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight + 2,
     },
   });
 }

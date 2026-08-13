@@ -36,7 +36,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import {
@@ -715,18 +715,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  // ── Content padding — 24pt top for calm breathing room ──
+  // Per spec 11_COOWN: "24pt between sections." The trade surface should
+  // feel calm and deliberate, not cramped.
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
+    paddingTop: Space.lg,
   },
+  // ── Buy/Sell selector — 24pt section spacing after ──
   sideSwitcher: {
-    marginBottom: Space.md,
+    marginBottom: Space.lg,
   },
+  // ── Alert card — calm, professional warning surface ──
+  // Per spec 11_COOWN: "Clean, calm, trustworthy." Alert uses subtle
+  // semantic background, not aggressive red. 24pt section spacing.
   alertCard: {
     borderRadius: Radius.lg,
-    padding: Space.md,
+    padding: Space.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.md,
+    marginBottom: Space.lg,
   },
   alertRow: {
     flexDirection: 'row',
@@ -736,44 +743,60 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexShrink: 1,
   },
+  // Alert title uses bodyEmphasis (15/21/600) for clear hierarchy.
   alertTitle: {
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
     flexShrink: 1,
     minWidth: 0,
   },
+  // Alert text uses body (14/20/400) for readable explanation.
   alertText: {
     fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
     lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
   },
+  // ── Illustrative banner — calm market status indicator ──
+  // Per spec 11_COOWN: "Calm presentation." Subtle background, not aggressive.
+  // Uses semantic colors (success/warning) only for status truth.
+  // 24pt section spacing after.
   illustrativeBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.xs,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.md,
+    marginBottom: Space.lg,
   },
   illustrativeBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
-  // ── Unified order ticket ──
+  // ── Unified order ticket — the one dominant panel ──
+  // Per AGENTS.md §4: one dominant non-media panel above the fold.
+  // Per spec 11_COOWN: "One-dimensional decision surface." Calm, clear,
+  // trustworthy. 24pt section spacing. Generous internal padding (24pt).
+  // Hairline border, not heavy chrome.
   ticketCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm,
-    marginBottom: Space.md,
+    padding: Space.lg,
+    gap: Space.md,
+    marginBottom: Space.lg,
   },
+  // ── Ticket divider — hairline separator between sections ──
+  // Per AGENTS.md stroke grammar: separators are hairline.
   ticketDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.xs,
+    marginVertical: Space.sm,
   },
   ticketRow: {
     flexDirection: 'row',
@@ -783,9 +806,12 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: Space.xs,
   },
+  // ── Context column — compact market context beside quantity ──
+  // Per spec 11_COOWN: "Calm, clear, professional." Context values use
+  // Numeric.numericMeta (13/18/600) with tabular-nums for stable alignment.
   ticketContextCol: {
     width: Space.xxl * 2 + Space.xs,
-    gap: Space.xs,
+    gap: Space.sm,
     paddingTop: Space.sm,
   },
   contextItem: {
@@ -793,22 +819,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  // Context labels use captionElevated for quiet hierarchy.
   contextLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: LetterSpacing.wide + 0.08,
-    textTransform: 'uppercase',
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
+  // Context values use numericMeta with tabular-nums — per spec 11_COOWN:
+  // "Monetary and unit quantities never change width erratically."
   contextValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Numeric.numericMeta.size,
+    lineHeight: Numeric.numericMeta.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Numeric.numericMeta.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // ── Input labels — captionElevated for quiet, professional hierarchy ──
+  // Per Design.md: "Labels: Type.captionElevated."
   inputLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: LetterSpacing.wide + 0.08,
-    textTransform: 'uppercase',
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
+  // ── Limit row — label + capped pill ──
   limitRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -816,6 +851,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: Space.sm,
   },
+  // Capped pill — semantic truth, not decoration. Shows the order is
+  // price-protected, which is a material fact for the user.
   modePill: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
@@ -824,17 +861,26 @@ const styles = StyleSheet.create({
   },
   modePillText: {
     fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: LetterSpacing.wide + 0.28,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // Max link — quiet, professional quick-fill action. Tabular-nums.
   maxLink: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     alignSelf: 'flex-start',
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // Market hint — calm, professional explanation text.
   marketHint: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   submitBtn: {
     flex: 1,
@@ -843,23 +889,29 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: Space.xs,
   },
+  // ── Submit disabled reason — calm, professional feedback ──
+  // Per spec 11_COOWN: "Financial error never resolves via toast alone."
+  // Shows the reason inline below the button.
   submitDisabledReason: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
     textAlign: 'center',
   },
   thinMarketDock: {
     width: '100%',
   },
-  // ── Phase 2.5: duration selector ──
+  // ── Duration selector — calm, professional chips ──
+  // Per spec 11_COOWN: "Clean, calm, trustworthy." Selected state uses
+  // colors.brand fill, unselected uses surfaceAlt. Tabular-nums for text.
   durationRow: {
     flexDirection: 'row',
     gap: Space.sm,
   },
   durationChip: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
   },
@@ -868,5 +920,6 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke } from '../../theme/designTokens';
 import type { SellerTrustSummary } from '../../platform/product';
 
 interface ReputationMetric {
@@ -59,6 +59,15 @@ export interface SellerReputationCardProps {
   seller: SellerTrustSummary | null;
 }
 
+/**
+ * Seller reputation metrics — flat editorial rows, no card container.
+ *
+ * 2026 flagship pattern:
+ *   section label: quiet, uppercase, muted
+ *   metric rows: icon (muted) + label (body) + value (bodyEmphasis, right-aligned)
+ *   progress bar: thin, success-colored, only when a numeric ratio exists
+ *   hairline separators between rows — spacing gaps, not containers
+ */
 export function SellerReputationCard({ seller }: SellerReputationCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -74,13 +83,15 @@ export function SellerReputationCard({ seller }: SellerReputationCardProps) {
     >
       <Text style={styles.title}>Seller reputation</Text>
       <View style={styles.metricsList}>
-        {metrics.map((metric) => (
+        {metrics.map((metric, index) => (
           <View
             key={metric.label}
-            style={styles.metricRow}
+            style={[styles.metricRow, index > 0 && styles.metricRowSeparated]}
             accessibilityLabel={`${metric.label}: ${metric.value}`}
           >
-            <Ionicons name={metric.icon} size={15} color={colors.textMuted} />
+            <View style={styles.metricIconWrap}>
+              <Ionicons name={metric.icon} size={16} color={colors.textSecondary} />
+            </View>
             <View style={styles.metricBody}>
               <View style={styles.metricLabelRow}>
                 <Text style={styles.metricLabel}>{metric.label}</Text>
@@ -108,66 +119,78 @@ export function SellerReputationCard({ seller }: SellerReputationCardProps) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: {
-      marginTop: Space.sm,
-      marginHorizontal: Space.md,
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      padding: Space.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderSubtle,
-    },
-    title: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-      letterSpacing: 0.2,
-      marginBottom: Space.sm,
-    },
-    metricsList: {
-      gap: Space.sm,
-    },
-    metricRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    metricBody: {
-      flex: 1,
-      minWidth: 0,
-      gap: 5,
-    },
-    metricLabelRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: Space.sm,
-    },
-    metricLabel: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    metricValue: {
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-    },
-    progressTrack: {
-      height: 3,
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.full,
-      overflow: 'hidden',
-    },
-    progressFill: {
-      height: '100%',
-      backgroundColor: colors.success,
-      borderRadius: Radius.full,
-    },
+  container: {
+    marginTop: Space.sm + 2,
+    marginHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+  },
+  title: {
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: Type.metaElevated.letterSpacing,
+    marginBottom: Space.sm,
+  },
+  metricsList: {
+    gap: Space.sm,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm + 2,
+  },
+  metricRowSeparated: {
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
+  metricIconWrap: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  metricBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: Space.xs + 1,
+  },
+  metricLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  metricLabel: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    color: colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  metricValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  progressTrack: {
+    height: 3,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.success,
+    borderRadius: Radius.full,
+  },
   });
 }

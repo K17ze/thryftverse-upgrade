@@ -178,7 +178,7 @@ export function CreatorCanvas({
       {renderBackground()}
 
       {mode === 'edit' && (
-        <Pressable style={styles.backgroundPressLayer} onPress={onCanvasPress} accessibilityLabel="Canvas background, tap to deselect" accessibilityRole="button" />
+        <Pressable style={styles.backgroundPressLayer} onPress={onCanvasPress} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Canvas background, tap to deselect" accessibilityHint="Taps the canvas to deselect the current layer" accessibilityRole="button" />
       )}
 
       {visibleLayers.map((layer) => (
@@ -325,6 +325,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
   // Smart alignment guides — vertical/horizontal pixel positions where the
   // dragged layer's edges/centre align with a sibling's edges/centre.
   const [smartGuides, setSmartGuides] = useState<{ vertical: number[]; horizontal: number[] }>({ vertical: [], horizontal: [] });
+  // Center guide visibility — only show center lines when the layer's center
+  // is within 8pt of the canvas center (Canva/Figma/Instagram Stories pattern)
+  const [centerGuideVisible, setCenterGuideVisible] = useState(false);
   // Guide appearance animation — spring scale + fade
   const guideOpacity = useSharedValue(0);
   // Throttle: last position at which smart guides were computed, to avoid
@@ -414,13 +417,14 @@ const LayerRenderer = React.memo(function LayerRenderer({
     normX = Math.max(minX, Math.min(maxX, normX));
     normY = Math.max(minY, Math.min(maxY, normY));
 
-    translateX.value = withTiming(normX * canvasWidth, { duration: reducedMotion ? 0 : 100 });
-    translateY.value = withTiming(normY * canvasHeight, { duration: reducedMotion ? 0 : 100 });
+    // Spring settle for natural position commit (flagship 2026: spring physics)
+    translateX.value = withSpring(normX * canvasWidth, spring.settle);
+    translateY.value = withSpring(normY * canvasHeight, spring.settle);
 
     if (snappedX || snappedY) haptic.light();
     setShowGuides(false);
     setSmartGuides({ vertical: [], horizontal: [] });
-    setSmartGuides({ vertical: [], horizontal: [] });
+    setCenterGuideVisible(false);
 
     onTransformChange?.(layer.id, { x: normX, y: normY });
   }, [canvasWidth, canvasHeight, layer.id, layer.width, layer.height, layer.scale, onTransformChange, translateX, translateY, reducedMotion, haptic]);
@@ -437,8 +441,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
       haptic.light();
     }
 
-    scaleSV.value = withTiming(clampedScale, { duration: reducedMotion ? 0 : 100 });
-    rotationSV.value = withTiming(snappedRotation, { duration: reducedMotion ? 0 : 100 });
+    // Spring settle for natural transform commit (flagship 2026: spring physics)
+    scaleSV.value = withSpring(clampedScale, spring.settle);
+    rotationSV.value = withSpring(snappedRotation, spring.settle);
     onTransformChange?.(layer.id, { scale: clampedScale, rotation: snappedRotation });
   }, [layer.id, onTransformChange, scaleSV, rotationSV, reducedMotion, haptic]);
 
@@ -535,10 +540,14 @@ const LayerRenderer = React.memo(function LayerRenderer({
     [mode, handleLongPress]
   );
 
+  // ── Simultaneous gestures (Instagram Stories / Canva pattern) ──
+  // Pan, pinch, and rotation all work together simultaneously so the user
+  // can drag + resize + rotate a layer in one fluid motion. Tap,
+  // double-tap, and long-press race with the transform gestures so they
+  // don't fire mid-drag.
   const composedGesture = useMemo(
     () => Gesture.Race(
-      Gesture.Simultaneous(pinchGesture, rotationGesture),
-      panGesture,
+      Gesture.Simultaneous(panGesture, pinchGesture, rotationGesture),
       doubleTapGesture,
       longPressGesture,
       tapGesture,
@@ -612,6 +621,11 @@ const LayerRenderer = React.memo(function LayerRenderer({
         }
       }
       setSmartGuides({ vertical: Array.from(vertical), horizontal: Array.from(horizontal) });
+      // Center guide: show when the layer's center is within 8pt of canvas center
+      const centerThreshold = 8;
+      const nearCenterX = Math.abs(cx - canvasWidth / 2) < centerThreshold;
+      const nearCenterY = Math.abs(cy - canvasHeight / 2) < centerThreshold;
+      setCenterGuideVisible(nearCenterX || nearCenterY);
     },
     [layer.width, layer.height, layer.scale, canvasWidth, canvasHeight, siblingLayers],
   );
@@ -694,7 +708,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
               <Text style={[styles.gestureBadgeText, { color: colors.textPrimary }]}>{gestureBadge}</Text>
             </View>
           )}
-          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} smartGuides={smartGuides} />}
+          {showGuides && <AlignmentGuides canvasWidth={canvasWidth} canvasHeight={canvasHeight} colors={colors} smartGuides={smartGuides} centerGuideVisible={centerGuideVisible} />}
         </Reanimated.View>
       </GestureDetector>
     );
@@ -1832,45 +1846,54 @@ function AlignmentGuides({
   canvasHeight,
   colors,
   smartGuides,
+  centerGuideVisible,
 }: {
   canvasWidth: number;
   canvasHeight: number;
   colors: ReturnType<typeof useAppTheme>['colors'];
   smartGuides?: { vertical: number[]; horizontal: number[] };
+  centerGuideVisible?: boolean;
 }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Horizontal centre line — 1.5px, brand color at 50% opacity */}
-      <View style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        top: canvasHeight / 2 - 0.75,
-        height: 1.5,
-        backgroundColor: colors.brand,
-        opacity: 0.5,
-      }} />
-      {/* Vertical centre line */}
-      <View style={{
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        left: canvasWidth / 2 - 0.75,
-        width: 1.5,
-        backgroundColor: colors.brand,
-        opacity: 0.5,
-      }} />
-      {/* Center dot at intersection */}
-      <View style={{
-        position: 'absolute',
-        left: canvasWidth / 2 - 3,
-        top: canvasHeight / 2 - 3,
-        width: 6,
-        height: 6,
-        borderRadius: Radius.full,
-        backgroundColor: colors.brand,
-        opacity: 0.6,
-      }} />
+      {/* Center-line guides — appear only when the layer's center is within
+          8pt of canvas center (Canva/Figma/Instagram Stories pattern).
+          1pt guide line with colors.brand at 50% opacity. */}
+      {centerGuideVisible && (
+        <>
+          {/* Horizontal centre line — 1px, brand color at 50% opacity */}
+          <View style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: canvasHeight / 2 - 0.5,
+            height: 1,
+            backgroundColor: colors.brand,
+            opacity: 0.5,
+          }} />
+          {/* Vertical centre line */}
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: canvasWidth / 2 - 0.5,
+            width: 1,
+            backgroundColor: colors.brand,
+            opacity: 0.5,
+          }} />
+          {/* Center dot at intersection */}
+          <View style={{
+            position: 'absolute',
+            left: canvasWidth / 2 - 3,
+            top: canvasHeight / 2 - 3,
+            width: 6,
+            height: 6,
+            borderRadius: Radius.full,
+            backgroundColor: colors.brand,
+            opacity: 0.6,
+          }} />
+        </>
+      )}
       {/* Safe-zone edges — 1px dashed, muted at 25% opacity */}
       <View style={{ position: 'absolute', left: 0, right: 0, top: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: canvasHeight * SAFE_MARGIN, height: 1, backgroundColor: colors.textMuted, opacity: 0.25 }} />

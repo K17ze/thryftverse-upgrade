@@ -83,6 +83,7 @@ export function CreatorTemplateBrowser({
 
   const handleApply = useCallback(
     (template: CreatorTemplate) => {
+      haptic.medium();
       if (hasExistingWork) {
         Alert.alert(
           'Replace current work?',
@@ -93,6 +94,7 @@ export function CreatorTemplateBrowser({
               text: 'Replace',
               style: 'destructive',
               onPress: () => {
+                haptic.warning();
                 onApply(template);
                 onClose();
               },
@@ -104,7 +106,7 @@ export function CreatorTemplateBrowser({
         onClose();
       }
     },
-    [hasExistingWork, onApply, onClose],
+    [hasExistingWork, onApply, onClose, haptic],
   );
 
   const handleCategoryChange = useCallback((cat: TemplateCategory | 'all') => {
@@ -113,9 +115,10 @@ export function CreatorTemplateBrowser({
   }, [haptic]);
 
   const handleClearSearch = useCallback(() => {
+    haptic.selection();
     setSearchQuery('');
     searchInputRef.current?.focus();
-  }, []);
+  }, [haptic]);
 
   const renderFeaturedItem = useCallback(
     ({ item }: { item: CreatorTemplate }) => {
@@ -128,7 +131,9 @@ export function CreatorTemplateBrowser({
           onPress={() => handleApply(item)}
           style={({ pressed }) => [styles.featuredCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
           accessibilityLabel={`Apply featured template ${item.name}`}
+          accessibilityHint={`Replaces the current canvas with the ${item.name} template`}
           accessibilityRole="button"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <View style={styles.featuredPreviewWrap}>
             <CreatorCanvas
@@ -139,7 +144,7 @@ export function CreatorTemplateBrowser({
               mode="preview"
             />
             <View style={styles.featuredBadge}>
-              <Ionicons name="star" size={10} color="#1a1a1a" />
+              <Ionicons name="star" size={10} color={colors.textPrimary} />
               <Text style={styles.featuredBadgeText}>Featured</Text>
             </View>
           </View>
@@ -167,7 +172,9 @@ export function CreatorTemplateBrowser({
           onPress={() => handleApply(item)}
           style={({ pressed }) => [styles.templateCard, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
           accessibilityLabel={`Apply template ${item.name}`}
+          accessibilityHint={`Replaces the current canvas with the ${item.name} template`}
           accessibilityRole="button"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <View style={styles.previewContainer}>
             <CreatorCanvas
@@ -194,6 +201,8 @@ export function CreatorTemplateBrowser({
           onPress={onClose}
           style={styles.closeBtn}
           accessibilityLabel="Close templates"
+          accessibilityHint="Closes the template browser"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="close" size={22} color={colors.textSecondary} />
         </PressScale>
@@ -218,8 +227,9 @@ export function CreatorTemplateBrowser({
               onPress={handleClearSearch}
               style={styles.searchClearBtn}
               accessibilityLabel="Clear search"
+              accessibilityHint="Clears the search query"
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </Pressable>
@@ -245,8 +255,9 @@ export function CreatorTemplateBrowser({
                 pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
               ]}
               accessibilityLabel={`Filter by ${cat.label}`}
+              accessibilityHint={`Shows ${cat.label} templates`}
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Text style={[styles.categoryChipText, isActive ? styles.categoryChipTextActive : styles.categoryChipTextInactive]}>
                 {cat.label}
@@ -390,7 +401,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.xl,
     padding: Space.md,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
@@ -409,7 +420,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: 'rgba(201,164,106,0.95)',
+    backgroundColor: `${colors.antiqueGold}F2`,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: Radius.full,
@@ -417,7 +428,7 @@ function createStyles(colors: ThemeColors) {
   featuredBadgeText: {
     fontFamily: Typography.family.semibold,
     fontSize: 9,
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     letterSpacing: 0.3,
   },
   featuredInfo: {

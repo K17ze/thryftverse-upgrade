@@ -43,6 +43,33 @@ interface CachedImageProps {
    * focal positioning when supported safely."
    */
   focalPoint?: { x: number; y: number };
+  /**
+   * Video playback control. For video sources, when true the video plays
+   * (muted, looped); when false it shows the poster frame / placeholder.
+   * Defaults to false so cards/thumbnails never autoplay — pass true from a
+   * viewability-driven surface (e.g. MediaPreview) to play when visible.
+   */
+  shouldPlay?: boolean;
+  /** Loop video playback (default true for ambient preview surfaces). */
+  isLooping?: boolean;
+  /** Show a small play glyph over video poster frames (default false). */
+  showPlayBadge?: boolean;
+  /**
+   * Image resolution policy: target display width in pixels.
+   *
+   * When set, the component appends CDN resize parameters to the URI for
+   * supported providers (Cloudinary, Imgix, Supabase Storage) so grid
+   * thumbnails do not download full-resolution images. This reduces
+   * memory usage and decode time on long feeds (audit §Caching/prefetch:
+   * "avoid loading full-resolution media for grid thumbnails").
+   *
+   * Pass the pixel width of the tile/card (e.g. `downscaleWidth={180}`).
+   * Leave undefined for detail/gallery surfaces that need full resolution.
+   *
+   * For providers not in the supported list, the prop is a no-op and the
+   * original URI is used as-is.
+   */
+  downscaleWidth?: number;
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
@@ -63,6 +90,10 @@ export function CachedImage({
   onError,
   onLoad,
   focalPoint,
+  shouldPlay = false,
+  isLooping = true,
+  showPlayBadge = false,
+  downscaleWidth,
 }: CachedImageProps) {
   const { colors } = useAppTheme();
   const [loaded, setLoaded] = useState(false);
@@ -119,11 +150,49 @@ export function CachedImage({
     ? { top: `${Math.round(focalPoint.y * 100)}%`, left: `${Math.round(focalPoint.x * 100)}%` }
     : undefined;
 
+  // Image resolution policy: append CDN resize parameters for thumbnails.
+  // Avoids downloading full-resolution images for small grid tiles (audit
+  // §Caching/prefetch / LIST_RENDERING_POLICY.md §5.1).
+  // Supported: Cloudinary (/upload/ → /upload/w_<width>/), Imgix (?w=),
+  // Supabase Storage (?width=). Others pass through unchanged.
   const sourceUri = React.useMemo(() => {
-    if (!cacheBuster || !uri) return uri;
-    const separator = uri.includes('?') ? '&' : '?';
-    return `${uri}${separator}cb=${encodeURIComponent(cacheBuster)}`;
-  }, [uri, cacheBuster]);
+    if (!uri) return uri;
+    let result = uri;
+
+    // Apply downscale for supported CDNs
+    if (downscaleWidth && downscaleWidth > 0) {
+      // Cloudinary: /upload/ → /upload/w_<width>,f_auto,q_auto/
+      if (/cloudinary\.com|res\.cloudinary\.com/i.test(uri)) {
+        result = uri.replace(
+          /\/upload\//i,
+          `/upload/w_${downscaleWidth},f_auto,q_auto/`,
+        );
+      }
+      // Imgix: append ?w=<width>&auto=format,compress
+      else if (/imgix\.net/i.test(uri)) {
+        const sep = uri.includes('?') ? '&' : '?';
+        result = `${uri}${sep}w=${downscaleWidth}&auto=format,compress`;
+      }
+      // Supabase Storage: append ?width=<width>
+      else if (/supabase\.co\/storage/i.test(uri)) {
+        const sep = uri.includes('?') ? '&' : '?';
+        result = `${uri}${sep}width=${downscaleWidth}`;
+      }
+      // AWS CloudFront with Lambda edge: append ?w=<width> (common pattern)
+      else if (/cloudfront\.net/i.test(uri) && !uri.includes('?w=')) {
+        const sep = uri.includes('?') ? '&' : '?';
+        result = `${uri}${sep}w=${downscaleWidth}`;
+      }
+    }
+
+    // Apply cache buster
+    if (cacheBuster) {
+      const separator = result.includes('?') ? '&' : '?';
+      result = `${result}${separator}cb=${encodeURIComponent(cacheBuster)}`;
+    }
+
+    return result;
+  }, [uri, cacheBuster, downscaleWidth]);
 
   const nativeResizeMode = React.useMemo(() => {
     switch (contentFit) {
@@ -216,9 +285,9 @@ export function CachedImage({
             source={{ uri: sourceUri }}
             style={[styles.image, style as StyleProp<ViewStyle>]}
             resizeMode={ResizeMode.COVER}
-            shouldPlay={false}
+            shouldPlay={shouldPlay && isVisible}
             isMuted
-            isLooping={false}
+            isLooping={isLooping}
             usePoster={!!previewUri}
             posterSource={previewUri ? { uri: previewUri } : undefined}
             onLoad={handleLoad}
@@ -250,6 +319,16 @@ export function CachedImage({
           />
         )}
       </Reanimated.View>
+
+      {/* Subtle play badge for video poster frames in tiny cards — no native
+          video chrome (audit §Media pipeline / AGENTS §15). */}
+      {isVideoSource && showPlayBadge && !shouldPlay && (
+        <View pointerEvents="none" style={styles.playBadge}>
+          <View style={[styles.playBadgeCircle, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
+            <Ionicons name="play" size={14} color="#fff" />
+          </View>
+        </View>
+      )}
       </>
       )}
     </View>
@@ -263,5 +342,19 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  playBadge: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playBadgeCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
 });

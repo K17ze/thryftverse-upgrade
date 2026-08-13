@@ -275,9 +275,10 @@ export function CreatorToolDock({
               onPress={toggleSecondary}
               style={styles.expandToggle}
               accessibilityLabel={secondaryExpanded ? 'Show fewer tools' : 'Show more tools'}
+              accessibilityHint="Expands or collapses the secondary tool tray"
               accessibilityRole="button"
               accessibilityState={{ expanded: secondaryExpanded }}
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons
                 name={secondaryExpanded ? 'chevron-back-outline' : 'chevron-forward-outline'}
@@ -368,7 +369,8 @@ export function CreatorToolDock({
           onPress={handleMore}
           style={styles.actionBtn}
           accessibilityLabel="More options"
-          hitSlop={12}
+          accessibilityHint="Opens the overflow menu with undo, redo, preview and more"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="ellipsis-horizontal" size={24} color={floating ? colors.textInverse : colors.textSecondary} />
         </PressScale>
@@ -377,8 +379,9 @@ export function CreatorToolDock({
           onPress={handlePublish}
           style={[styles.publishBtn, { backgroundColor: colors.brand }]}
           accessibilityLabel="Next"
+          accessibilityHint="Opens the publish sheet to review and publish your creation"
           scale={0.97}
-          hitSlop={16}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={[styles.publishBtnText, { color: colors.textInverse }]}>Next</Text>
         </PressScale>

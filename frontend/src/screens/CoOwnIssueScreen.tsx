@@ -137,12 +137,21 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
           />
         </Reanimated.View>
 
-        {/* Note */}
+        {/* Note — trust card */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(150)} style={styles.note}>
-          <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-          <Text style={[styles.noteText, { color: colors.textMuted }]}>
-            Your report will be submitted through the Help & Support flow. Use the description above when contacting support.
-          </Text>
+          <View style={[styles.noteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.noteIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="information-circle" size={16} color={colors.textSecondary} />
+            </View>
+            <View style={styles.noteTextWrap}>
+              <Text style={[styles.noteTitle, { color: colors.textPrimary }]}>
+                How this works
+              </Text>
+              <Text style={[styles.noteText, { color: colors.textMuted }]}>
+                Your report will be submitted through the Help & Support flow. Use the description above when contacting support.
+              </Text>
+            </View>
+          </View>
         </Reanimated.View>
       </ScrollView>
 
@@ -177,24 +186,28 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm + 2,
-    marginBottom: Space.md,
+    marginBottom: Space.lg,
   },
   assetContextLabel: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   assetContextText: {
     flex: 1,
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   sectionLabel: {
-    fontSize: Type.meta.size,
+    fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
     textTransform: 'uppercase',
     letterSpacing: Type.metaElevated.letterSpacing,
+    lineHeight: Type.metaElevated.lineHeight,
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -210,19 +223,42 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   categoryLabel: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   note: {
-    flexDirection: 'row',
-    gap: Space.sm,
     marginTop: Space.lg,
-    alignItems: 'flex-start',
+  },
+  noteCard: {
+    flexDirection: 'row',
+    gap: Space.md,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+  },
+  noteIconWrap: {
+    width: Space.xl - Space.xs,
+    height: Space.xl - Space.xs,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noteTextWrap: {
+    flex: 1,
+  },
+  noteTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    marginBottom: Space.xs / 2,
   },
   noteText: {
-    flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     lineHeight: Type.captionElevated.lineHeight,
   },
 });

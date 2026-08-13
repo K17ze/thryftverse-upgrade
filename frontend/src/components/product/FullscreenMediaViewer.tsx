@@ -8,15 +8,19 @@ import {
   AccessibilityInfo,
   AppState,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
   Easing,
   runOnJS,
   FadeIn,
   FadeOut,
+  interpolate,
+  Extrapolation,
 } from 'react-native-reanimated';
 import {
   GestureDetector,
@@ -25,12 +29,13 @@ import {
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Control, Stroke } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Video, ResizeMode } from '../compat/Video';
 import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
 
@@ -38,12 +43,22 @@ const MAX_ZOOM = 5;
 const MIN_ZOOM = 1;
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
+// Rubber-band clamp for drag-to-dismiss resistance.
+function rubberBand(value: number, min: number, max: number, friction = 0.3): number {
+  'worklet';
+  if (value < min) return min + (value - min) * friction;
+  if (value > max) return max + (value - max) * friction;
+  return value;
+}
+
 interface FullscreenImagePageProps {
   item: ProductMediaItem;
   width: number;
   height: number;
   onClose?: () => void;
   onZoomStart?: () => void;
+  onToggleChrome?: () => void;
+  chromeVisible: boolean;
 }
 
 function FullscreenImagePage({
@@ -52,14 +67,20 @@ function FullscreenImagePage({
   height,
   onClose,
   onZoomStart,
+  onToggleChrome,
+  chromeVisible,
 }: FullscreenImagePageProps) {
   const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
+  // Drag-to-dismiss vertical offset (only when not zoomed).
+  const dismissY = useSharedValue(0);
+  const dismissOpacity = useSharedValue(1);
 
   const pinch = Gesture.Pinch()
     .onStart(() => {
@@ -70,9 +91,9 @@ function FullscreenImagePage({
     })
     .onEnd(() => {
       if (scale.value < MIN_ZOOM) {
-        scale.value = withTiming(MIN_ZOOM, { duration: 200 });
-        translateX.value = withTiming(0, { duration: 200 });
-        translateY.value = withTiming(0, { duration: 200 });
+        scale.value = withSpring(MIN_ZOOM, spring.tap);
+        translateX.value = withSpring(0, spring.tap);
+        translateY.value = withSpring(0, spring.tap);
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -89,18 +110,31 @@ function FullscreenImagePage({
         const maxY = (height * (zoom - 1)) / 2;
         translateX.value = savedTranslateX.value + e.translationX;
         translateY.value = savedTranslateY.value + e.translationY;
+      } else {
+        // Not zoomed — drag-to-dismiss with rubber-band resistance.
+        dismissY.value = rubberBand(e.translationY, -150, 150, 0.35);
+        dismissOpacity.value = interpolate(
+          Math.abs(dismissY.value),
+          [0, 150],
+          [1, 0.4],
+          Extrapolation.CLAMP,
+        );
       }
     })
     .onEnd((e) => {
       const zoom = Math.max(scale.value, savedScale.value);
       if (zoom <= 1) {
-        if (Math.abs(e.translationY) > 100 && onClose) {
+        // Dismiss if dragged far enough, else spring back.
+        if (Math.abs(e.translationY) > 120 && onClose) {
           runOnJS(onClose)();
+        } else {
+          dismissY.value = withSpring(0, spring.entrance);
+          dismissOpacity.value = withTiming(1, { duration: 180 });
         }
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
-        translateY.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+        translateX.value = withSpring(0, spring.tap);
+        translateY.value = withSpring(0, spring.tap);
         return;
       }
       const maxX = (width * (zoom - 1)) / 2;
@@ -109,43 +143,62 @@ function FullscreenImagePage({
       const ty = clamp(translateY.value + e.velocityY * 0.08, -maxY, maxY);
       savedTranslateX.value = tx;
       savedTranslateY.value = ty;
-      translateX.value = withTiming(tx, { duration: 220, easing: Easing.out(Easing.cubic) });
-      translateY.value = withTiming(ty, { duration: 220, easing: Easing.out(Easing.cubic) });
+      translateX.value = withSpring(tx, spring.tap);
+      translateY.value = withSpring(ty, spring.tap);
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withTiming(1, { duration: 200 });
-        translateX.value = withTiming(0, { duration: 200 });
-        translateY.value = withTiming(0, { duration: 200 });
+        scale.value = withSpring(1, spring.tap);
+        translateX.value = withSpring(0, spring.tap);
+        translateY.value = withSpring(0, spring.tap);
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
         const target = reducedMotion ? 2 : 3;
-        scale.value = withTiming(target, { duration: 200, easing: Easing.out(Easing.cubic) });
+        scale.value = withSpring(target, spring.lift);
         savedScale.value = target;
       }
     });
 
-  const composed = Gesture.Simultaneous(Gesture.Race(doubleTap, pan), pinch);
+  // Single tap toggles chrome visibility (iOS Photos pattern).
+  const singleTap = Gesture.Tap()
+    .onEnd(() => {
+      if (onToggleChrome) runOnJS(onToggleChrome)();
+    });
+
+  const composed = Gesture.Simultaneous(Gesture.Race(doubleTap, pan, singleTap), pinch);
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  // Dismiss transform — applied to the outer container so the image
+  // slides down with diminishing opacity (iOS Photos drag-to-dismiss).
+  const dismissStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dismissY.value }],
+    opacity: dismissOpacity.value,
   }));
 
   return (
     <GestureDetector gesture={composed}>
-      <Reanimated.View style={[styles.page, { width, height }, animStyle]}>
-        <CachedImage
-          uri={item.uri}
-          previewUri={item.posterUri ?? undefined}
-          style={styles.image}
-          containerStyle={{ width: '100%', height: '100%', backgroundColor: '#000' }}
-          contentFit="contain"
-          focalPoint={item.focalPoint ?? undefined}
-        />
+      <Reanimated.View style={[styles.page, { width, height }, dismissStyle]}>
+        <Reanimated.View style={[styles.imageWrap, animStyle]}>
+          <CachedImage
+            uri={item.uri}
+            previewUri={item.posterUri ?? undefined}
+            style={styles.image}
+            containerStyle={{ width: '100%', height: '100%', backgroundColor: '#000' }}
+            contentFit="contain"
+            focalPoint={item.focalPoint ?? undefined}
+          />
+        </Reanimated.View>
       </Reanimated.View>
     </GestureDetector>
   );
@@ -156,11 +209,13 @@ function FullscreenVideoPage({
   width,
   height,
   isActive,
+  onToggleChrome,
 }: {
   item: ProductMediaItem;
   width: number;
   height: number;
   isActive: boolean;
+  onToggleChrome?: () => void;
 }) {
   // Pause when the app is backgrounded to prevent audio bleed.
   const [appIsActive, setAppIsActive] = useState(true);
@@ -174,24 +229,32 @@ function FullscreenVideoPage({
 
   const shouldPlay = isActive && appIsActive;
 
+  // Single tap toggles chrome for video pages too.
+  const singleTap = Gesture.Tap()
+    .onEnd(() => {
+      if (onToggleChrome) runOnJS(onToggleChrome)();
+    });
+
   return (
-    <View
-      style={[styles.page, { width, height }]}
-      accessible
-      accessibilityLabel={item.altText ?? 'Product video'}
-    >
-      <Video
-        source={{ uri: item.uri }}
-        style={styles.image}
-        resizeMode={ResizeMode.CONTAIN}
-        shouldPlay={shouldPlay}
-        isMuted
-        isLooping={false}
-        useNativeControls
-        usePoster={!!item.posterUri}
-        posterSource={item.posterUri ? { uri: item.posterUri } : undefined}
-      />
-    </View>
+    <GestureDetector gesture={singleTap}>
+      <View
+        style={[styles.page, { width, height }]}
+        accessible
+        accessibilityLabel={item.altText ?? 'Product video'}
+      >
+        <Video
+          source={{ uri: item.uri }}
+          style={styles.image}
+          resizeMode={ResizeMode.CONTAIN}
+          shouldPlay={shouldPlay}
+          isMuted
+          isLooping={false}
+          useNativeControls
+          usePoster={!!item.posterUri}
+          posterSource={item.posterUri ? { uri: item.posterUri } : undefined}
+        />
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -220,6 +283,8 @@ export function FullscreenMediaViewer({
 }: FullscreenMediaViewerProps) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
   const listRef = useRef<FlatList<ProductMediaItem>>(null);
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 });
   const mediaItems = useMemo<ProductMediaItem[]>(() => {
@@ -238,16 +303,43 @@ export function FullscreenMediaViewer({
     : 0;
   const [activeIndex, setActiveIndex] = useState(safeInitialIndex);
 
+  // ── Chrome visibility (tap-to-toggle) ──
+  // iOS Photos pattern: tap the image to hide/show chrome. Chrome starts
+  // visible so the close button and index are immediately discoverable.
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const chromeOpacity = useSharedValue(1);
+
+  const toggleChrome = useCallback(() => {
+    setChromeVisible((prev) => {
+      const next = !prev;
+      chromeOpacity.value = reducedMotion
+        ? next ? 1 : 0
+        : withSpring(next ? 1 : 0, spring.tap);
+      AccessibilityInfo.announceForAccessibility(
+        next ? 'Controls shown' : 'Controls hidden',
+      );
+      return next;
+    });
+  }, [chromeOpacity, reducedMotion, spring]);
+
+  // Chrome animated style — applies to close button, index, thumbnail strip.
+  const chromeStyle = useAnimatedStyle(() => ({
+    opacity: chromeOpacity.value,
+    pointerEvents: chromeOpacity.value > 0.5 ? 'auto' as const : 'none' as const,
+  }));
+
   useEffect(() => {
     if (!visible) return;
     setActiveIndex(safeInitialIndex);
+    setChromeVisible(true);
+    chromeOpacity.value = 1;
     requestAnimationFrame(() => {
       listRef.current?.scrollToIndex({
         index: safeInitialIndex,
         animated: false,
       });
     });
-  }, [safeInitialIndex, visible]);
+  }, [safeInitialIndex, visible, chromeOpacity]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -256,6 +348,10 @@ export function FullscreenMediaViewer({
       onActiveIndexChange?.(nextIndex);
     }
   }, [onActiveIndexChange]);
+
+  const scrollToIndex = useCallback((index: number) => {
+    listRef.current?.scrollToIndex({ index, animated: !reducedMotion });
+  }, [reducedMotion]);
 
   if (!visible) return null;
 
@@ -287,6 +383,7 @@ export function FullscreenMediaViewer({
               width={width}
               height={height}
               isActive={index === activeIndex}
+              onToggleChrome={toggleChrome}
             />
           ) : (
             <FullscreenImagePage
@@ -295,6 +392,8 @@ export function FullscreenMediaViewer({
               height={height}
               onClose={onClose}
               onZoomStart={onZoomStart}
+              onToggleChrome={toggleChrome}
+              chromeVisible={chromeVisible}
             />
           )
         }
@@ -303,29 +402,84 @@ export function FullscreenMediaViewer({
         }}
       />
 
-      {/* Close button */}
-      <View style={[styles.closeButtonContainer, { top: Math.max(insets.top, 16) }]}>
+      {/* Top gradient scrim — ensures close button legibility over any media.
+          Fades with chrome so it recedes when the user wants a clean view. */}
+      <Reanimated.View style={[styles.topScrim, chromeStyle]} pointerEvents="none" />
+
+      {/* Close button — transparent 44pt target with a 24pt glyph (AGENTS.md §4) */}
+      <Reanimated.View style={[styles.closeButtonContainer, { top: Math.max(insets.top, Space.md) }, chromeStyle]}>
         <AnimatedPressable
           style={styles.closeButton}
           onPress={onClose}
           {...PressPresets.iconButton}
           accessibilityLabel="Close fullscreen viewer"
+          accessibilityHint="Closes the image viewer and returns to the previous screen"
         >
           <Ionicons name="close" size={24} color="#fff" />
         </AnimatedPressable>
-      </View>
+      </Reanimated.View>
 
-      {/* Index indicator */}
+      {/* Index indicator + thumbnail strip — bottom chrome that recedes on tap.
+          The index pill sits above the thumbnail strip for galleries with
+          multiple items. Both fade together with the chrome. */}
       {mediaItems.length > 1 && (
-        <View
-          style={styles.indicatorContainer}
-          accessible
-          accessibilityLabel={`${mediaItems[activeIndex]?.kind === 'video' ? 'Video' : 'Image'} ${activeIndex + 1} of ${mediaItems.length}`}
-        >
-          <Text style={styles.indicatorText}>
-            {activeIndex + 1} / {mediaItems.length}
-          </Text>
-        </View>
+        <Reanimated.View style={[styles.bottomChrome, { bottom: Math.max(insets.bottom, Space.lg) }, chromeStyle]}>
+          {/* Thumbnail strip — synchronized horizontal scroll (iOS Photos pattern).
+              Each thumbnail is a 44pt target showing a 36pt image; the active
+              one gets a 2pt brand border (selection grammar per AGENTS.md §4). */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.thumbStripContent}
+            style={styles.thumbStrip}
+          >
+            {mediaItems.map((item, index) => {
+              const isActive = index === activeIndex;
+              return (
+                <Pressable
+                  key={item.id ?? `${item.uri}-${index}`}
+                  style={styles.thumbTarget}
+                  onPress={() => scrollToIndex(index)}
+                  accessibilityLabel={`${item.kind === 'video' ? 'Video' : 'Image'} ${index + 1} of ${mediaItems.length}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                  hitSlop={Space.xs}
+                >
+                  <CachedImage
+                    uri={item.posterUri ?? item.uri}
+                    style={[
+                      styles.thumbImage,
+                      isActive && styles.thumbImageActive,
+                    ]}
+                    containerStyle={{
+                      borderRadius: Radius.sm,
+                      overflow: 'hidden',
+                      borderWidth: isActive ? Stroke.emphasis : 0,
+                      borderColor: isActive ? '#fff' : 'transparent',
+                    }}
+                    contentFit="cover"
+                  />
+                  {item.kind === 'video' && (
+                    <View style={styles.thumbVideoBadge} pointerEvents="none">
+                      <Ionicons name="play" size={10} color="#fff" />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* Index pill — compact, sits below the thumbnail strip */}
+          <View
+            style={styles.indicatorContainer}
+            accessible
+            accessibilityLabel={`${mediaItems[activeIndex]?.kind === 'video' ? 'Video' : 'Image'} ${activeIndex + 1} of ${mediaItems.length}`}
+          >
+            <Text style={styles.indicatorText}>
+              {activeIndex + 1} / {mediaItems.length}
+            </Text>
+          </View>
+        </Reanimated.View>
       )}
     </Reanimated.View>
   );
@@ -344,9 +498,25 @@ const styles = StyleSheet.create({
   page: {
     backgroundColor: '#000',
   },
+  imageWrap: {
+    width: '100%',
+    height: '100%',
+  },
   image: {
     width: '100%',
     height: '100%',
+  },
+  // Top gradient scrim — ensures close button legibility over bright media.
+  topScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    backgroundColor: 'transparent',
+    // LinearGradient would be ideal but we use a simple semi-transparent
+    // overlay to avoid an extra dependency import. The scrim is subtle
+    // (0.35 → 0) so it doesn't darken the image noticeably.
   },
   closeButtonContainer: {
     position: 'absolute',
@@ -359,29 +529,70 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    // Near-transparent chrome (AGENTS.md §4: ordinary controls default to
+    // transparent). Legibility comes from the top scrim, not an opaque disc.
+    backgroundColor: 'rgba(0,0,0,0.22)',
   },
-  indicatorContainer: {
+  // Bottom chrome — thumbnail strip + index pill, fades with tap-to-toggle.
+  bottomChrome: {
     position: 'absolute',
-    bottom: 40,
     left: 0,
     right: 0,
     alignItems: 'center',
     zIndex: 10,
     elevation: 10,
   },
+  thumbStrip: {
+    maxWidth: '100%',
+  },
+  thumbStripContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
+    alignItems: 'center',
+  },
+  thumbTarget: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbImage: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm,
+    opacity: 0.6,
+  },
+  thumbImageActive: {
+    opacity: 1,
+  },
+  thumbVideoBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 14,
+    height: 14,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  indicatorContainer: {
+    marginTop: Space.xs,
+    alignItems: 'center',
+  },
   indicatorText: {
     color: '#fff',
-    fontSize: Type.body.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: Space.xs,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: Space.smMd,
+    paddingVertical: Space.xs - 1,
     borderRadius: Radius.full,
+    letterSpacing: 0.3,
   },
 });

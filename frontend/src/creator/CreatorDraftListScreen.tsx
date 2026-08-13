@@ -15,9 +15,11 @@ import Reanimated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
-  withRepeat,
+  withDelay,
   runOnJS,
   Easing,
+  interpolate,
+  Extrapolation,
   useReducedMotion,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -585,7 +587,10 @@ function DraftCard({
   );
 }
 
-// ── Empty state with breathing icon ────────────────────────────────
+// ── Empty state — static icon with one-shot entrance fade ──────────
+// Per AGENTS.md §17, continuous pulsing/breathing is prohibited on
+// empty states. A restrained entrance fade replaces the old breathing
+// animation for a calmer, more premium empty-state.
 interface EmptyDraftsStateProps {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -594,25 +599,23 @@ interface EmptyDraftsStateProps {
 }
 
 function EmptyDraftsState({ colors, styles, reduceMotion, onCreate }: EmptyDraftsStateProps) {
-  // Breathing animation: scale 1.0 → 1.05 → 1.0, loop, 2s
-  const breatheScale = useSharedValue(1);
+  const { spring } = useMotionConfig();
+  const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
 
   useEffect(() => {
-    if (reduceMotion) return;
-    breatheScale.value = withRepeat(
-      withSpring(1.05, Motion.spring.lift),
-      -1,
-      true,
-    );
-  }, [breatheScale, reduceMotion]);
+    if (!reduceMotion) {
+      entranceSV.value = withDelay(100, withSpring(1, spring.entrance));
+    }
+  }, [reduceMotion, spring, entranceSV]);
 
-  const breatheStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: breatheScale.value }],
+  const entranceStyle = useAnimatedStyle(() => ({
+    opacity: entranceSV.value,
+    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [12, 0], Extrapolation.CLAMP) }],
   }));
 
   return (
     <View style={styles.emptyState}>
-      <Reanimated.View style={breatheStyle}>
+      <Reanimated.View style={entranceStyle}>
         <Ionicons name="document-outline" size={56} color={colors.textMuted} />
       </Reanimated.View>
       <Text style={styles.emptyTitle}>No drafts yet</Text>

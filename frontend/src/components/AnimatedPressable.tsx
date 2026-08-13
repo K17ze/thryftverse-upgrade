@@ -13,8 +13,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
-import { Motion } from '../theme/motionTokens';
-import { hapticForScale, triggerHaptic, HapticType } from '../utils/haptics';
+import { hapticForScale, triggerHaptic } from '../utils/haptics';
 import { HapticPatterns } from '../utils/hapticPatterns';
 
 type HapticFeedbackStyle = 'none' | 'light' | 'medium' | 'heavy' | 'selection';
@@ -49,6 +48,20 @@ const AnimatedNativePressable = Reanimated.createAnimatedComponent(Pressable);
  */
 const DEFAULT_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 
+/**
+ * AnimatedPressable — the canonical pressable surface for ThryftVerse.
+ *
+ * Every tap feels native via:
+ *   - spring-based scale feedback (0.97–0.985 per AGENTS §17, §27.9)
+ *   - slight opacity response on press
+ *   - haptic grammar gated by platform + reduced-motion (useHaptic)
+ *   - 44pt hit target via default hitSlop
+ *   - accessibility role/label/state
+ *
+ * Reduced motion: the spring is critically damped (settles instantly) and the
+ * opacity timing collapses to 0ms, so the press still communicates state
+ * change without visible travel (AGENTS §17, §27.2).
+ */
 export function AnimatedPressable({
   children,
   onPress,
@@ -68,7 +81,7 @@ export function AnimatedPressable({
   ...rest
 }: Props) {
   const haptic = useHaptic();
-  const { spring, isEnabled } = useMotionConfig();
+  const { spring, duration, isEnabled } = useMotionConfig();
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
@@ -116,6 +129,11 @@ export function AnimatedPressable({
     [accessibilityState, disabled]
   );
 
+  // Press feedback timing: opacity uses the touch duration (80ms) so the
+  // highlight arrives within the 100ms feedback budget (AGENTS §27.2).
+  // Under reduced motion this collapses to 0ms via `duration.touch`.
+  const pressOpacityMs = isEnabled ? duration.touch : 0;
+
   return (
     <AnimatedNativePressable
       style={[style, animStyle]}
@@ -131,9 +149,7 @@ export function AnimatedPressable({
           scale.value = withSpring(scaleValue, spring.press);
         }
         if (typeof activeOpacity === 'number') {
-          opacity.value = withTiming(activeOpacity, {
-            duration: isEnabled ? Motion.duration.fast : 0,
-          });
+          opacity.value = withTiming(activeOpacity, { duration: pressOpacityMs });
         }
         if (!disabled) {
           triggerHapticFeedback();
@@ -147,9 +163,7 @@ export function AnimatedPressable({
           scale.value = withSpring(1, spring.press);
         }
         if (typeof activeOpacity === 'number') {
-          opacity.value = withTiming(1, {
-            duration: isEnabled ? Motion.duration.fast : 0,
-          });
+          opacity.value = withTiming(1, { duration: pressOpacityMs });
         }
         if (onPressOut) {
           onPressOut(event);

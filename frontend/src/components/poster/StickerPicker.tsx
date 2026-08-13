@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -493,6 +493,27 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
     [haptic]
   );
 
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible emoji cells on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderEmojiItem = useCallback(
+    ({ item, index }: { item: string; index: number }) => (
+      <EmojiCell
+        emoji={item}
+        index={index}
+        isFav={isFavorite(item)}
+        reducedMotion={reducedMotion}
+        colors={colors}
+        onPress={(emoji) => {
+          haptic.light();
+          handleStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
+        }}
+        onLongPress={(emoji) => toggleFavorite(emoji)}
+      />
+    ),
+    [isFavorite, reducedMotion, colors, haptic, handleStickerSelect, toggleFavorite]
+  );
+
   const handleMentionSubmit = () => {
     const text = mentionInput.trim().replace(/^@/, '');
     if (text) {
@@ -751,20 +772,7 @@ export default function StickerPicker({ visible, onClose, onStickerSelect }: Sti
                     data={filteredEmojis}
                     numColumns={4}
                     keyExtractor={(item, index) => `${item}_${index}`}
-                    renderItem={({ item, index }) => (
-                      <EmojiCell
-                        emoji={item}
-                        index={index}
-                        isFav={isFavorite(item)}
-                        reducedMotion={reducedMotion}
-                        colors={colors}
-                        onPress={(emoji) => {
-                          haptic.light();
-                          handleStickerSelect({ id: `emoji_${Date.now()}`, type: 'emoji', content: emoji });
-                        }}
-                        onLongPress={(emoji) => toggleFavorite(emoji)}
-                      />
-                    )}
+                    renderItem={renderEmojiItem}
                   />
                 </View>
               ) : (

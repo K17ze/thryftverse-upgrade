@@ -156,6 +156,7 @@ maestro test .maestro/ --output .maestro/screenshots
 | Navigation | `navigation-flow.yml` | Home → Explore → Create → Inbox → Profile | `false` |
 | Search | `search-flow.yml` | Explore → type "vintage denim" → results | `false` |
 | Item detail | `item-detail-flow.yml` | Explore → Browse → first item → detail | `false` |
+| Golden-route screenshots | `golden-route-screenshots.yml` | All golden routes (audit 15) — screenshot baseline capture | `false` |
 
 ---
 

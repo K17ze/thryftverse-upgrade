@@ -71,6 +71,308 @@ export interface StateActionConfig {
   viewerTreatment: 'calm' | 'warning' | 'restrained' | 'result' | 'subdued' | 'seller' | 'none';
 }
 
+// ── Unified AuctionPresentationState view model (audit 08 P0) ──
+// A single canonical type that maps (effectiveState × viewerState) to the
+// complete UI presentation: state label, color key, viewer message, primary
+// and secondary CTAs, dock treatment, urgency level, and accessibility hint.
+// This consolidates resolveStateAction + resolveViewerContextMessage +
+// resolveViewerStatePresentation into one view model so the detail screen,
+// home cards, and seller centre all derive from the same source of truth.
+
+export type AuctionPresentationLabel =
+  | 'Scheduled'
+  | 'Live'
+  | 'Ending'
+  | 'Won'
+  | 'Lost'
+  | 'No sale'
+  | 'Cancelled'
+  | 'Settled'
+  | 'Watching'
+  | 'Leading'
+  | 'Outbid'
+  | 'Your auction';
+
+export type AuctionPresentationColorKey =
+  | 'brand'
+  | 'success'
+  | 'danger'
+  | 'warning'
+  | 'textPrimary'
+  | 'textSecondary'
+  | 'textMuted';
+
+export type AuctionUrgencyLevel = 'none' | 'restrained' | 'elevated' | 'final';
+
+export interface AuctionPresentationState {
+  /** Human-readable lifecycle label (e.g. "Live", "Ending", "Won") */
+  stateLabel: AuctionPresentationLabel;
+  /** Semantic color key for the state label and dock accent */
+  colorKey: AuctionPresentationColorKey;
+  /** Viewer-specific context message (null when not applicable) */
+  viewerMessage: string | null;
+  /** Treatment style for the viewer context banner */
+  viewerTreatment: 'calm' | 'warning' | 'restrained' | 'result' | 'subdued' | 'seller' | 'none';
+  /** Primary CTA derived from state */
+  primaryAction: PrimaryAction;
+  /** Secondary CTA derived from state */
+  secondaryAction: SecondaryAction;
+  /** Forbidden actions for this state */
+  forbidden: ForbiddenAction[];
+  /** Urgency level for motion/color restraint (audit: "semantic urgency, not more drama") */
+  urgency: AuctionUrgencyLevel;
+  /** Whether bid controls should be visible */
+  showBidControls: boolean;
+  /** Whether a live indicator dot should pulse */
+  showLiveIndicator: boolean;
+  /** Accessibility hint summarising the state for screen readers */
+  accessibilityHint: string;
+}
+
+/**
+ * Resolve the complete presentation state for an auction.
+ * This is the canonical view model — the detail screen, home cards, and
+ * seller centre should all derive their UI from this single function.
+ */
+export function resolveAuctionPresentationState(
+  effectiveState: AuctionEffectiveState,
+  viewerState: AuctionViewerState,
+  auction: AuctionDetailInput,
+  countdownStage: 'upcoming' | 'plenty' | 'moderate' | 'urgent' | 'final' | 'ended' = 'plenty',
+): AuctionPresentationState {
+  const actionConfig = resolveStateAction(effectiveState, viewerState, auction);
+  const isFinalMinutes = countdownStage === 'final';
+  const isSeller = viewerState === 'seller';
+
+  // ── Cancelled ──
+  if (effectiveState === 'cancelled') {
+    return {
+      stateLabel: 'Cancelled',
+      colorKey: 'textMuted',
+      viewerMessage: actionConfig.viewerMessage,
+      viewerTreatment: 'subdued',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: 'Auction cancelled. No bidding available.',
+    };
+  }
+
+  // ── Settled ──
+  if (effectiveState === 'settled') {
+    if (viewerState === 'won') {
+      return {
+        stateLabel: 'Settled',
+        colorKey: 'success',
+        viewerMessage: 'You won this auction',
+        viewerTreatment: 'result',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'You won this auction. Tap to view result and complete payment.',
+      };
+    }
+    if (isSeller) {
+      return {
+        stateLabel: 'Settled',
+        colorKey: 'brand',
+        viewerMessage: 'This is your auction',
+        viewerTreatment: 'seller',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'Your auction has settled. Tap to view outcome.',
+      };
+    }
+    return {
+      stateLabel: 'Settled',
+      colorKey: 'textMuted',
+      viewerMessage: null,
+      viewerTreatment: 'subdued',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: 'Auction settled.',
+    };
+  }
+
+  // ── Ended ──
+  if (effectiveState === 'ended') {
+    if (viewerState === 'won') {
+      return {
+        stateLabel: 'Won',
+        colorKey: 'success',
+        viewerMessage: 'You won this auction',
+        viewerTreatment: 'result',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'You won this auction. Tap to view result and complete payment.',
+      };
+    }
+    if (viewerState === 'lost') {
+      return {
+        stateLabel: 'Lost',
+        colorKey: 'textMuted',
+        viewerMessage: 'You did not win this auction',
+        viewerTreatment: 'subdued',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'You did not win. Tap to view similar items.',
+      };
+    }
+    if (isSeller) {
+      const sold = auction.bidCount > 0;
+      return {
+        stateLabel: sold ? 'Settled' : 'No sale',
+        colorKey: sold ? 'success' : 'textMuted',
+        viewerMessage: sold ? 'Your auction has ended' : 'No bids were received',
+        viewerTreatment: 'seller',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: sold ? 'Your auction sold. Tap to view outcome.' : 'No bids received. Tap to review.',
+      };
+    }
+    const sold = auction.bidCount > 0;
+    return {
+      stateLabel: sold ? 'Settled' : 'No sale',
+      colorKey: 'textMuted',
+      viewerMessage: sold
+        ? `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'}`
+        : 'Auction ended · no bids',
+      viewerTreatment: 'subdued',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: sold ? 'Auction sold.' : 'Auction ended with no bids.',
+    };
+  }
+
+  // ── Upcoming ──
+  if (effectiveState === 'upcoming') {
+    if (isSeller) {
+      return {
+        stateLabel: 'Scheduled',
+        colorKey: 'textSecondary',
+        viewerMessage: 'This is your auction',
+        viewerTreatment: 'seller',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'Your auction is scheduled. Tap to view details.',
+      };
+    }
+    return {
+      stateLabel: 'Scheduled',
+      colorKey: 'textSecondary',
+      viewerMessage: auction.isWatched ? 'Watching — we’ll notify you when it goes live' : null,
+      viewerTreatment: auction.isWatched ? 'restrained' : 'none',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: auction.isWatched ? 'Watching. You will be notified when this auction goes live. Tap to manage.' : 'Tap to get notified when this auction goes live.',
+    };
+  }
+
+  // ── Live ──
+  const urgency: AuctionUrgencyLevel = isFinalMinutes ? 'final' : countdownStage === 'moderate' ? 'elevated' : 'restrained';
+
+  if (isSeller) {
+    return {
+      stateLabel: isFinalMinutes ? 'Ending' : 'Live',
+      colorKey: isFinalMinutes ? 'danger' : 'brand',
+      viewerMessage: 'This is your auction',
+      viewerTreatment: 'seller',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency,
+      showBidControls: false,
+      showLiveIndicator: true,
+      accessibilityHint: `Your auction is ${isFinalMinutes ? 'ending soon' : 'live'}. Tap to view performance.`,
+    };
+  }
+
+  if (viewerState === 'leading') {
+    return {
+      stateLabel: 'Leading',
+      colorKey: 'success',
+      viewerMessage: 'You are currently the highest bidder',
+      viewerTreatment: 'calm',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency,
+      showBidControls: true,
+      showLiveIndicator: true,
+      accessibilityHint: `You are leading. ${isFinalMinutes ? 'Auction ending soon.' : ''} Tap to increase your bid.`,
+    };
+  }
+
+  if (viewerState === 'outbid') {
+    return {
+      stateLabel: 'Outbid',
+      colorKey: 'danger',
+      viewerMessage: 'You have been outbid',
+      viewerTreatment: 'warning',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency,
+      showBidControls: true,
+      showLiveIndicator: true,
+      accessibilityHint: `You have been outbid. ${isFinalMinutes ? 'Auction ending soon.' : ''} Tap to bid again.`,
+    };
+  }
+
+  // live — watching or not_participating
+  return {
+    stateLabel: isFinalMinutes ? 'Ending' : 'Live',
+    colorKey: isFinalMinutes ? 'danger' : 'textPrimary',
+    viewerMessage: viewerState === 'watching' ? 'You are watching this auction' : null,
+    viewerTreatment: viewerState === 'watching' ? 'restrained' : 'none',
+    primaryAction: actionConfig.primary,
+    secondaryAction: actionConfig.secondary,
+    forbidden: actionConfig.forbidden,
+    urgency,
+    showBidControls: true,
+    showLiveIndicator: true,
+    accessibilityHint: `Auction ${isFinalMinutes ? 'ending soon' : 'live'}. Tap to place a bid.`,
+  };
+}
+
 export function resolveStateAction(
   effectiveState: AuctionEffectiveState,
   viewerState: AuctionViewerState,
@@ -179,10 +481,10 @@ export function resolveStateAction(
       };
     }
     return {
-      primary: { type: 'watchAuction', label: auction.isWatched ? 'Watching' : 'Watch auction' },
+      primary: { type: 'watchAuction', label: auction.isWatched ? 'Watching' : 'Notify me' },
       secondary: { type: 'share', label: 'Share' },
       forbidden: ['placeBid', 'buyNow'],
-      viewerMessage: auction.isWatched ? 'You are watching this auction' : null,
+      viewerMessage: auction.isWatched ? 'You are watching — we’ll notify you when it goes live' : null,
       viewerTreatment: auction.isWatched ? 'restrained' : 'none',
     };
   }
@@ -349,7 +651,7 @@ export function resolveViewerContextMessage(
 
   if (viewerState === 'watching' && effectiveState === 'upcoming') {
     return {
-      title: 'You are watching this auction',
+      title: 'Watching — we’ll notify you when it goes live',
       subtitle: null,
       treatment: 'restrained',
     };

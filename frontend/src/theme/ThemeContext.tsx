@@ -6,6 +6,7 @@ import {
   subscribeThemePreferenceChange,
   type ThemePreference,
 } from './themePreference';
+import { useAccessibilityPreferences } from '../context/AccessibilityPreferencesContext';
 
 export type ThemeMode = 'dark' | 'light';
 
@@ -14,8 +15,12 @@ export interface ThemeColors {
   surface: string;
   surfaceAlt: string;
   surfaceElevated: string;
+  /** Raised surface — between surface and surfaceElevated for clearer dark hierarchy */
+  surfaceRaised: string;
   brand: string;
   brandPressed: string;
+  /** Subtle brand tint — selected states, active tabs, focused fields */
+  brandSubtle: string;
   textPrimary: string;
   textSecondary: string;
   textMuted: string;
@@ -54,19 +59,21 @@ export interface ThemeColors {
 const DARK_COLORS: ThemeColors = {
   background: '#0A0A0A',
   surface: '#141414',
-  surfaceAlt: '#1F1F1F',
+  surfaceAlt: '#1C1C1C',
+  surfaceRaised: '#1F1F1F',
   surfaceElevated: '#242424',
   brand: '#F4F0E8',
   brandPressed: '#D8D0C3',
+  brandSubtle: 'rgba(244,240,232,0.08)',
   textPrimary: '#FFFFFF',
   textSecondary: '#A3A3A3',
   textMuted: '#7A7A7A', // WCAG 2.2 AA: 4.64:1 on #0A0A0A (was #666666 at 3.05:1)
   textInverse: '#000000',
   border: '#262626',
-  borderSubtle: '#333333',
+  borderSubtle: '#1E1E1E',
   danger: '#9b0202',
   success: '#215634',
-  warning: '#C9A46A',
+  warning: '#D49454', // Distinct from antiqueGold — warm amber, not gold
   coownUp: '#1C5631',
   coownDown: '#5F1616',
   social: '#9A6B7A',
@@ -89,10 +96,12 @@ const DARK_COLORS: ThemeColors = {
 const LIGHT_COLORS: ThemeColors = {
   background: '#FFFFFF',
   surface: '#F5F5F5',
-  surfaceAlt: '#EBEBEB',
+  surfaceAlt: '#EFEFEF',
+  surfaceRaised: '#F2F2F2',
   surfaceElevated: '#FFFFFF',
   brand: '#111111',
   brandPressed: '#333333',
+  brandSubtle: 'rgba(17,17,17,0.06)',
   textPrimary: '#000000',
   textSecondary: '#666666',
   textMuted: '#767676', // WCAG 2.2 AA: 4.65:1 on #FFFFFF (was #999999 at 2.85:1)
@@ -101,7 +110,7 @@ const LIGHT_COLORS: ThemeColors = {
   borderSubtle: '#F0F0F0',
   danger: '#9b0202',
   success: '#215634',
-  warning: '#8A6A3F',
+  warning: '#B8742E', // Distinct from antiqueGold — warm amber, not gold
   coownUp: '#1C5631',
   coownDown: '#5F1616',
   social: '#6B3245',
@@ -142,9 +151,46 @@ function getColorsForTheme(mode: ThemeMode): ThemeColors {
   return mode === 'light' ? LIGHT_COLORS : DARK_COLORS;
 }
 
+/**
+ * High-contrast color overrides — applied when the user enables the in-app
+ * high contrast accessibility setting. Strengthens text/background separation
+ * and border visibility without changing the overall palette identity.
+ *
+ * Per audit 12: "glass/material chrome remains legible under accessibility
+ * settings" and "do not encode state by color alone."
+ */
+function applyHighContrast(base: ThemeColors, isDark: boolean): ThemeColors {
+  if (isDark) {
+    return {
+      ...base,
+      // Strengthen text contrast on dark backgrounds
+      textPrimary: '#FFFFFF',
+      textSecondary: '#C4C4C4', // was #A3A3A3 — raised for WCAG AAA
+      textMuted: '#9A9A9A',     // was #7A7A7A — raised for stronger separation
+      // Strengthen borders for clearer structural separation
+      border: '#3A3A3A',        // was #262626
+      borderSubtle: '#2E2E2E',  // was #1E1E1E
+      // Strengthen surface separation
+      surface: '#181818',       // was #141414
+      surfaceAlt: '#222222',    // was #1C1C1C
+    };
+  }
+  return {
+    ...base,
+    // Strengthen text contrast on light backgrounds
+    textPrimary: '#000000',
+    textSecondary: '#4A4A4A', // was #666666 — raised for WCAG AAA
+    textMuted: '#5A5A5A',     // was #767676 — raised for stronger separation
+    // Strengthen borders
+    border: '#CCCCCC',        // was #E5E5E5
+    borderSubtle: '#DDDDDD',  // was #F0F0F0
+  };
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>('system');
   const [resolvedTheme, setResolvedTheme] = useState<ThemeMode>('dark');
+  const { highContrast } = useAccessibilityPreferences();
 
   // Initialize on mount
   useEffect(() => {
@@ -179,7 +225,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const colors = useMemo(() => getColorsForTheme(resolvedTheme), [resolvedTheme]);
+  const colors = useMemo(() => {
+    const base = getColorsForTheme(resolvedTheme);
+    return highContrast ? applyHighContrast(base, resolvedTheme === 'dark') : base;
+  }, [resolvedTheme, highContrast]);
 
   const setThemePreference = useCallback((preference: ThemePreference) => {
     applyThemePreference(preference);

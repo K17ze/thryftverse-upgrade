@@ -536,10 +536,10 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             >
               {/* AI confidence banner — truthful labelling (§11) */}
               <View style={[styles.confidenceBanner, { backgroundColor: `${colors.brand}10`, borderColor: `${colors.brand}30` }]}>
-                <Ionicons name="sparkles" size={16} color={colors.brand} />
+                <Ionicons name="document-text-outline" size={16} color={colors.brand} />
                 <View style={styles.confidenceTextWrap}>
                   <Text style={[styles.confidenceTitle, { color: colors.brand }]}>
-                    AI suggestions — review before publishing
+                    Suggestions — review before publishing
                   </Text>
                   <Text style={[styles.confidenceSub, { color: colors.textSecondary }]}>
                     Confidence {confidencePct}% · heuristic preview, not image recognition
@@ -815,7 +815,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             variant="primary"
             size="lg"
             accessibilityLabel="Publish AI-assisted listing"
-            icon={<Ionicons name="sparkles" size={18} color={colors.textInverse} />}
+            icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />}
           />
         </View>
       )}
@@ -895,7 +895,7 @@ function PhotoCaptureSection({
                 accessibilityLabel="Enhance photo"
                 accessibilityHint="Opens AI photo enhancement to improve this listing image"
               >
-                <Ionicons name="color-wand-outline" size={13} color={colors.brand} />
+                <Ionicons name="color-filter-outline" size={13} color={colors.brand} />
                 <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>Enhance</Text>
               </Pressable>
             </Reanimated.View>
@@ -982,7 +982,7 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
       style={[styles.analyzingCard, { backgroundColor: colors.surface, borderColor: `${colors.brand}30` }]}
     >
       <View style={styles.analyzingHeader}>
-        <Ionicons name="sparkles" size={18} color={colors.brand} />
+        <Ionicons name="analytics-outline" size={18} color={colors.brand} />
         <Text style={[styles.analyzingTitle, { color: colors.textPrimary }]}>Analyzing photos…</Text>
       </View>
 
@@ -1115,7 +1115,7 @@ function EmptyState({
       style={styles.emptyState}
     >
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="sparkles-outline" size={32} color={colors.textMuted} />
+        <Ionicons name="camera-outline" size={32} color={colors.textMuted} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
         Snap to list
@@ -1188,8 +1188,8 @@ function AIBadgeField({ label, colors, styles, style, children }: AIBadgeFieldPr
       <View style={styles.fieldLabelRow}>
         <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
         <View style={[styles.aiBadge, { backgroundColor: `${colors.brand}15` }]}>
-          <Ionicons name="sparkles" size={10} color={colors.brand} />
-          <Text style={[styles.aiBadgeText, { color: colors.brand }]}>AI</Text>
+          <Ionicons name="bulb-outline" size={10} color={colors.brand} />
+          <Text style={[styles.aiBadgeText, { color: colors.brand }]}>Suggested</Text>
         </View>
       </View>
       {children}

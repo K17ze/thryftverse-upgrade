@@ -200,7 +200,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         {smartSellEnabled && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(200)}>
             <ElevatedSurface variant="surface" style={styles.smartSellBanner}>
-              <Ionicons name="sparkles" size={18} color={colors.brand} />
+              <Ionicons name="trending-up-outline" size={18} color={colors.brand} />
               <View style={styles.smartSellBannerBody}>
                 <Text style={styles.smartSellBannerTitle}>Smart Sell enabled (demo)</Text>
                 <Text style={styles.smartSellBannerText}>

@@ -67,7 +67,7 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type ConvoItem = Conversation;
 
-type InboxSegment = MessagingSegment | 'unread' | 'archived';
+type InboxSegment = MessagingSegment | 'unread' | 'archived' | 'groups';
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
   const { colors } = useAppTheme();
@@ -296,7 +296,6 @@ export default function InboxScreen() {
     requestBtnDecline: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     requestBtnDeclineText: { color: colors.textPrimary },
     requestBtnAccept: { backgroundColor: colors.brand },
-    requestsBannerRule: { backgroundColor: colors.border },
     requestsAvatar: { backgroundColor: `${colors.brand}12` },
     requestsBannerInner: { backgroundColor: colors.surface },
     requestsBadge: { backgroundColor: colors.textPrimary },
@@ -309,7 +308,7 @@ export default function InboxScreen() {
     errorBannerTitle: { color: colors.danger },
     errorBannerSub: { color: colors.textMuted },
     errorBannerRetry: { color: colors.brand },
-    needsActionChip: { backgroundColor: 'transparent', borderColor: colors.border },
+    needsActionChip: { backgroundColor: `${colors.brand}0F`, borderColor: `${colors.brand}30` },
     needsActionText: { color: colors.brand },
   }), [colors]);
 
@@ -640,7 +639,10 @@ export default function InboxScreen() {
 
 
 
-  const renderItem = ({ item, index }: { item: ConvoItem; index: number }) => {
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible conversation rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderItem = useCallback(({ item, index }: { item: ConvoItem; index: number }) => {
     const isGroup = item.type === 'group';
     const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
     const displayTitle = isGroup
@@ -683,11 +685,11 @@ export default function InboxScreen() {
               <Text style={[styles.nameText, t.nameText, styles.nameUnread]}>{displayTitle}</Text>
               <Caption color={colors.textMuted}>{item.lastMessageTime}</Caption>
             </View>
-            <Caption color={colors.textSecondary} numberOfLines={1}>{item.lastMessage}</Caption>
+            <Text style={[styles.snippet, t.snippet]} numberOfLines={1}>{item.lastMessage}</Text>
             {item.itemId && (
               <View style={styles.requestListingContext}>
                 <ListingContextThumbnail itemId={item.itemId} />
-                <Caption color={colors.textSecondary} style={styles.requestListingText}>About a listing</Caption>
+                <Text style={[styles.requestListingText, { color: colors.textSecondary }]}>About a listing</Text>
               </View>
             )}
             <View style={styles.requestActions}>
@@ -772,7 +774,25 @@ export default function InboxScreen() {
         {!isRequest && <View style={[styles.rowSeparator, t.rowSeparator]} />}
       </View>
     );
-  };
+  }, [
+    currentUser,
+    participantNameLookup,
+    messageRequests,
+    mutedIds,
+    profileMediaOverrides,
+    styles,
+    t,
+    colors,
+    listings,
+    searchQuery,
+    markConversationRead,
+    navigation,
+    handleQuickActions,
+    handleDeclineRequest,
+    handleAcceptRequest,
+    handleToggleRead,
+    handleArchive,
+  ]);
 
 
 
@@ -870,7 +890,7 @@ export default function InboxScreen() {
 
         <MessagingSegmentRail
 
-          active={segment === 'unread' || segment === 'archived' ? 'all' : segment}
+          active={segment === 'unread' || segment === 'archived' || segment === 'groups' ? 'all' : segment}
 
           onChange={(s) => setSegment(s)}
 
@@ -966,7 +986,6 @@ export default function InboxScreen() {
             {segment === 'all' && messageRequests.length > 0 && (
 
               <View style={styles.requestsBanner}>
-                <View style={[styles.requestsBannerRule, t.requestsBannerRule]} />
                 <AnimatedPressable
                   onPress={() => navigation.navigate('MessageRequests')}
                   activeOpacity={0.85}
@@ -976,14 +995,14 @@ export default function InboxScreen() {
                   accessibilityRole="button"
                   style={styles.requestsBannerTap}
                 >
-                  <View style={styles.requestsAvatarStack}>
-                    <View style={[styles.requestsAvatar, t.requestsAvatar]}>
-                      <Ionicons name="mail-unread-outline" size={16} color={colors.brand} />
-                    </View>
+                  <View style={[styles.requestsAvatar, t.requestsAvatar]}>
+                    <Ionicons name="mail-unread-outline" size={18} color={colors.brand} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.requestsBannerText, t.requestsBannerText]}>Requests</Text>
-                    <Text style={[styles.requestsBannerSub, t.requestsBannerSub]}>{messageRequests.length} pending</Text>
+                    <Text style={[styles.requestsBannerText, t.requestsBannerText]}>Message Requests</Text>
+                    <Text style={[styles.requestsBannerSub, t.requestsBannerSub]}>
+                      {messageRequests.length} pending {messageRequests.length === 1 ? 'request' : 'requests'}
+                    </Text>
                   </View>
                   <View style={[styles.requestsBadge, t.requestsBadge]}>
                     <Text style={[styles.requestsBadgeText, t.requestsBadgeText]}>{messageRequests.length}</Text>
@@ -992,39 +1011,6 @@ export default function InboxScreen() {
                 </AnimatedPressable>
               </View>
 
-            )}
-
-            {segment === 'all' && (buyingUnreadCount > 0 || sellingUnreadCount > 0) && (
-              <View style={styles.needsActionRow}>
-                {buyingUnreadCount > 0 && (
-                  <AnimatedPressable
-                    style={[styles.needsActionChip, t.needsActionChip]}
-                    onPress={() => setSegment('buying')}
-                    activeOpacity={0.85}
-                    scaleValue={0.97}
-                    hapticFeedback="light"
-                    accessibilityLabel={`${buyingUnreadCount} unread buying conversations`}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="cart-outline" size={14} color={colors.brand} />
-                    <Text style={[styles.needsActionText, t.needsActionText]}>{buyingUnreadCount} buying</Text>
-                  </AnimatedPressable>
-                )}
-                {sellingUnreadCount > 0 && (
-                  <AnimatedPressable
-                    style={[styles.needsActionChip, t.needsActionChip]}
-                    onPress={() => setSegment('selling')}
-                    activeOpacity={0.85}
-                    scaleValue={0.97}
-                    hapticFeedback="light"
-                    accessibilityLabel={`${sellingUnreadCount} unread selling conversations`}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="pricetag-outline" size={14} color={colors.brand} />
-                    <Text style={[styles.needsActionText, t.needsActionText]}>{sellingUnreadCount} selling</Text>
-                  </AnimatedPressable>
-                )}
-              </View>
             )}
 
             <AnimatedFlashList
@@ -1264,16 +1250,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
+    paddingBottom: Space.xs / 2,
   },
 
   header: {
 
     paddingHorizontal: Space.md,
 
-    paddingTop: Space.sm,
+    paddingTop: Space.xs + 2,
 
-    paddingBottom: Space.sm,
+    paddingBottom: 0,
 
     gap: Space.sm,
 
@@ -1399,7 +1385,7 @@ const styles = StyleSheet.create({
 
     flexGrow: 1,
 
-    paddingTop: Space.sm,
+    paddingTop: Space.xs + 2,
 
   },
 
@@ -1747,15 +1733,16 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     marginHorizontal: Space.md,
     marginVertical: Space.xs,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
   },
   requestRowInner: {
     flexDirection: 'row',
-    gap: Space.md - 4,
+    gap: Space.sm,
     alignItems: 'center',
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     paddingLeft: Space.md - 2,
+    minHeight: 68,
   },
 
   requestActions: {
@@ -1816,11 +1803,6 @@ const styles = StyleSheet.create({
 
     marginBottom: Space.sm,
 
-  },
-  requestsBannerRule: {
-    height: StyleSheet.hairlineWidth,
-    marginBottom: Space.sm,
-    marginHorizontal: Space.md,
   },
   requestsBannerTap: {
     flexDirection: 'row',
@@ -1980,26 +1962,6 @@ const styles = StyleSheet.create({
 
     gap: Space.xs + 2,
 
-  },
-
-  needsActionRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
-  needsActionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.xs + 2,
-    paddingHorizontal: Space.sm + Space.xs,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  needsActionText: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
 
 });

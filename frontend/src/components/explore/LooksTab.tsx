@@ -65,16 +65,17 @@ function LookCard({
           {look.tags.map((tag) => {
             const isActive = activeTag === tag.id;
             return (
-              <Pressable
+              <View
                 key={tag.id}
                 style={[styles.tagWrap, { left: `${tag.x * 100}%`, top: `${tag.y * 100}%` }]}
-                onPress={(e) => {
-                  e.stopPropagation();
+                onStartShouldSetResponder={() => true}
+                onResponderGrant={() => {
                   setActiveTag(isActive ? null : tag.id);
                 }}
                 hitSlop={16}
                 accessibilityRole="button"
                 accessibilityLabel={tag.label || 'Tagged item'}
+                accessibilityHint="Toggles the product tag label"
               >
                 <View style={styles.tagDot} />
                 {isActive && (
@@ -82,7 +83,7 @@ function LookCard({
                     <Text style={styles.tagPillText} numberOfLines={1}>{tag.label || 'Untitled'}</Text>
                   </Reanimated.View>
                 )}
-              </Pressable>
+              </View>
             );
           })}
 

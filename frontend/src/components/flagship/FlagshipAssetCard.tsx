@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -137,7 +137,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   name: {
     fontSize: Type.body.size,
-    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
     lineHeight: 20,
   },
@@ -148,13 +148,13 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   unitPrice: {
     fontSize: Type.price.size,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   perUnit: {
     fontSize: Type.caption.size,
-    fontWeight: '400',
+    fontFamily: FontFamily.regular,
     color: colors.textSecondary,
   },
   ownershipRow: {
@@ -173,7 +173,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   ownershipText: {
     fontSize: Type.meta.size,
-    fontWeight: '500',
+    fontFamily: FontFamily.medium,
     color: colors.textSecondary,
   },
   actionBtn: {
@@ -188,7 +188,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   actionLabel: {
     fontSize: Type.meta.size,
-    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     color: colors.background,
   },
 });

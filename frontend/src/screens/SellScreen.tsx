@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants, Radius, Stroke, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Radius, Stroke, Type, Control } from '../theme/designTokens';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -24,7 +24,7 @@ import { CURRENCIES } from '../constants/currencies';
 import { useStore } from '../store/useStore';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useToast } from '../context/ToastContext';
-import { sanitizeDecimalInput, sanitizeIntegerInput } from '../utils/currencyAuthoringFlows';
+import { sanitizeDecimalInput, sanitizeIntegerInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
@@ -33,7 +33,7 @@ import { uploadMedia } from '../services/mediaUpload';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
-import { ListingModeSelector, ListingMode } from '../components/listing/ListingModeSelector';
+import { ListingModeSelector, ListingMode, getListingModeOptions, getListingModeFromLabel, getListingModeLabel } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
 import { calculateListingQuality } from '../utils/listingQuality';
 import { useListingAutofill } from '../hooks/useListingAutofill';
@@ -91,13 +91,10 @@ export default function SellScreen() {
     navHeader: { borderBottomColor: colors.border, backgroundColor: colors.background },
     navTitle: { color: colors.textPrimary },
     navDraftText: { color: colors.textMuted },
-    autofillCard: { backgroundColor: colors.surface, borderColor: `${colors.brand}20` },
-    autofillTitle: { color: colors.brand },
+    autofillBar: { backgroundColor: colors.surface },
+    autofillBarBorder: { borderColor: colors.border },
+    autofillLabel: { color: colors.textSecondary },
     autofillDesc: { color: colors.textMuted },
-    autofillChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
-    autofillChipLabel: { color: colors.textMuted },
-    autofillChipValue: { color: colors.textPrimary },
-    autofillApplyBtn: { backgroundColor: `${colors.brand}10` },
     autofillApplyText: { color: colors.brand },
     sectionHeading: { color: colors.textSecondary },
     fieldLabel: { color: colors.textMuted },
@@ -122,22 +119,26 @@ export default function SellScreen() {
     authThumb: { backgroundColor: colors.surfaceAlt },
     authAddBtn: { borderColor: colors.border, backgroundColor: colors.surface },
     inlineErrorText: { color: colors.danger },
-    photoGuideCard: { backgroundColor: colors.surface, borderColor: colors.border },
-    photoGuideTitle: { color: colors.textSecondary },
-    photoGuideTip: { color: colors.textMuted },
-    photoGuideMin: { color: colors.textMuted },
+    mediaHintText: { color: colors.textMuted },
     priceSuggestion: { color: colors.brand },
     priceMarketHigh: { color: colors.warning },
     priceMarketLow: { color: colors.textMuted },
     priceMarketGood: { color: colors.success },
     priceNoCompsHint: { color: colors.textMuted },
-    fieldValid: { color: colors.success },
-    fieldRequiredHint: { color: colors.textMuted },
     charCountWarn: { color: colors.warning },
-    qualityBarLabel: { color: colors.textPrimary },
-    qualityBarTier: { color: colors.textSecondary },
+    fieldRequiredHint: { color: colors.textMuted },
     qualityTipsText: { color: colors.textSecondary },
     qualityTipsLabel: { color: colors.brand },
+    qualityBarTier: { color: colors.textSecondary },
+    photoGuideTitle: { color: colors.textSecondary },
+    photoGuideMin: { color: colors.textMuted },
+    photoGuideTip: { color: colors.textMuted },
+    autofillCard: { backgroundColor: colors.surface, borderColor: colors.border },
+    autofillTitle: { color: colors.textPrimary },
+    autofillChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    autofillChipLabel: { color: colors.textMuted },
+    autofillChipValue: { color: colors.textPrimary },
+    autofillApplyBtn: { borderColor: colors.border, backgroundColor: colors.background },
   }), [colors]);
 
   const sellDraft = useStore((s) => s.sellDraft);
@@ -159,6 +160,13 @@ export default function SellScreen() {
   const [shippingMethod, setShippingMethod] = useState<'standard' | 'express' | null>(null);
   const [shippingPayer, setShippingPayer] = useState<'buyer' | 'seller' | null>(null);
 
+  // ── Transient "Saved" indicator ──
+  // Per audit 04: "visible 'Saved' only briefly; never spam toasts on every
+  // field." A subtle checkmark that appears for 1.5s after a draft save,
+  // then fades. Not a permanent text label.
+  const [draftSavedVisible, setDraftSavedVisible] = useState(false);
+  const draftSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [listingMode, setListingMode] = useState<ListingMode>('sell_now');
 
   const [coOwnEnabled, setCoOwnEnabled] = useState(false);
@@ -171,7 +179,7 @@ export default function SellScreen() {
   const [reservePrice, setReservePrice] = useState('');
   const [auctionDurationHours, setAuctionDurationHours] = useState(48);
 
-  const [pickerMode, setPickerMode] = useState<'Brand' | 'Size' | 'Condition' | 'Category' | null>(null);
+  const [pickerMode, setPickerMode] = useState<'Brand' | 'Size' | 'Condition' | 'Category' | 'Format' | null>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isPublishing, setIsPublishing] = useState(false);
@@ -199,8 +207,8 @@ export default function SellScreen() {
   // AI autofill suggestions from first photo filename
   const autofillSuggestion = useListingAutofill(mediaDraftItems);
   const [autofillDismissed, setAutofillDismissed] = useState(false);
-  const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(false);
   const [qualityTipsExpanded, setQualityTipsExpanded] = useState(false);
+  const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(true);
 
   // Reset dismiss when photos change (new photo -> new suggestions)
   useEffect(() => {
@@ -262,6 +270,10 @@ export default function SellScreen() {
   }, []);
 
   /* -- persist draft on change -- */
+  // Per audit 04: "save automatically; visible 'Saved' only briefly;
+  // never spam toasts on every field." The draft persists on every change,
+  // but the "Saved" indicator only flashes for 1.5s then fades — no toast.
+  const isInitialMountRef = useRef(true);
   useEffect(() => {
     updateSellDraft({
       photos,
@@ -287,7 +299,23 @@ export default function SellScreen() {
       offeringWindowHours,
       authPhotos,
     });
+    // Skip the transient flash on initial mount (draft restore) — only
+    // show "Saved" when the user actually edits a field.
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+    setDraftSavedVisible(true);
+    if (draftSavedTimerRef.current) clearTimeout(draftSavedTimerRef.current);
+    draftSavedTimerRef.current = setTimeout(() => setDraftSavedVisible(false), 1500);
   }, [photos, mediaDraftItems, title, desc, price, originalPrice, brand, size, condition, category, tags, listingMode, shippingMethod, shippingPayer, startingBid, reservePrice, auctionDurationHours, coOwnEnabled, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, updateSellDraft]);
+
+  // Cleanup the transient timer on unmount
+  useEffect(() => {
+    return () => {
+      if (draftSavedTimerRef.current) clearTimeout(draftSavedTimerRef.current);
+    };
+  }, []);
 
   /* -- co-own bidirectional math -- */
   useEffect(() => {
@@ -488,6 +516,24 @@ export default function SellScreen() {
       return reordered;
     });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  // ── Set as cover ──
+  // Per audit 04 P0: "Add cover-photo semantics and explicit reorder affordance."
+  // Moves the selected item to position 0 (cover) and shifts the previous
+  // cover and intervening items down. This is an explicit, discoverable
+  // action — not only achievable via drag reorder.
+  const handleSetCover = useCallback((itemId: string) => {
+    setMediaDraftItems((prev) => {
+      const idx = prev.findIndex((m) => m.id === itemId);
+      if (idx <= 0) return prev; // already cover or not found
+      const next = [...prev];
+      const [item] = next.splice(idx, 1);
+      next.unshift(item);
+      setPhotos(next.map((m) => m.publicUrl || m.uri));
+      return next;
+    });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
 
   const handlePriceChange = useCallback((text: string) => {
@@ -801,6 +847,8 @@ export default function SellScreen() {
         return ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'UK 6', 'UK 8', 'UK 10', 'UK 12', 'One Size'];
       case 'Condition':
         return CONDITION_OPTIONS;
+      case 'Format':
+        return getListingModeOptions();
       default:
         return [];
     }
@@ -812,17 +860,26 @@ export default function SellScreen() {
       case 'Brand': return brand;
       case 'Size': return size;
       case 'Condition': return condition;
+      case 'Format': return getListingModeLabel(listingMode);
       default: return '';
     }
-  }, [pickerMode, category, brand, size, condition]);
+  }, [pickerMode, category, brand, size, condition, listingMode]);
 
   const handlePickerSelect = useCallback((val: string) => {
     if (pickerMode === 'Category') { setCategory(val); updateSellDraft({ categoryId: val, subcategoryId: undefined }); }
     if (pickerMode === 'Brand') { setBrand(val); updateSellDraft({ brand: val }); }
     if (pickerMode === 'Size') { setSize(val); updateSellDraft({ size: val }); }
     if (pickerMode === 'Condition') { setCondition(val); updateSellDraft({ condition: val }); }
+    if (pickerMode === 'Format') {
+      const newMode = getListingModeFromLabel(val);
+      setListingMode(newMode);
+      updateSellDraft({ listingMode: newMode });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
     setPickerMode(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (pickerMode !== 'Format') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
   }, [pickerMode, updateSellDraft]);
 
   /* -- computed values -- */
@@ -900,8 +957,16 @@ export default function SellScreen() {
             <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
           <Text style={[styles.navTitle, t.navTitle]}>Create listing</Text>
+          {/* Transient "Saved" indicator — per audit 04: "visible 'Saved'
+              only briefly; never spam toasts on every field." A subtle
+              checkmark that fades after 1.5s. Not a permanent label. */}
           <View style={styles.navDraftStatus}>
-            <Text style={[styles.navDraftText, t.navDraftText]}>Draft saved</Text>
+            {draftSavedVisible ? (
+              <View style={styles.navDraftSavedRow}>
+                <Ionicons name="checkmark" size={12} color={colors.success} />
+                <Text style={[styles.navDraftText, { color: colors.success }]}>Saved</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -923,45 +988,101 @@ export default function SellScreen() {
             onReorder={handleReorderIds}
             onRemoveItem={removeItem}
             onRetryItem={handleRetryItem}
+            onSetCover={handleSetCover}
           />
 
-          {/* -- 2a. PHOTO UPLOAD GUIDANCE -- */}
-          <View style={[styles.photoGuideCard, t.photoGuideCard]}>
-            <Pressable
-              style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.6 }]}
-              onPress={() => setPhotoGuideCollapsed((v) => !v)}
-              accessibilityRole="button"
-              accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
-            >
-              <Ionicons name="camera-outline" size={15} color={colors.textSecondary} />
-              <Text style={[styles.photoGuideTitle, t.photoGuideTitle]}>Photo tips</Text>
-              <Text style={[styles.photoGuideMin, t.photoGuideMin]}>Min 3 photos recommended</Text>
-              <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={14} color={colors.textMuted} />
-            </Pressable>
-            {!photoGuideCollapsed && (
-              <View style={styles.photoGuideTips}>
-                <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="sunny-outline" size={13} color={colors.textMuted} />
-                  <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Good lighting</Text>
-                </View>
-                <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="cube-outline" size={13} color={colors.textMuted} />
-                  <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Show all angles</Text>
-                </View>
-                <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="leaf-outline" size={13} color={colors.textMuted} />
-                  <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Natural background</Text>
-                </View>
+          {/* -- 2a. PHOTO UPLOAD GUIDANCE (contextual, collapsible) -- */}
+          <Pressable
+            style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.6 }]}
+            onPress={() => setPhotoGuideCollapsed((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
+          >
+            <Ionicons name="camera-outline" size={15} color={colors.textSecondary} />
+            <Text style={[styles.photoGuideTitle, t.photoGuideTitle]}>Photo tips</Text>
+            <Text style={[styles.photoGuideMin, t.photoGuideMin]}>Min 3 photos recommended</Text>
+            <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={14} color={colors.textMuted} />
+          </Pressable>
+          {!photoGuideCollapsed && (
+            <View style={styles.photoGuideTips}>
+              <View style={styles.photoGuideTipRow}>
+                <Ionicons name="sunny-outline" size={13} color={colors.textMuted} />
+                <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Good lighting</Text>
               </View>
-            )}
-          </View>
+              <View style={styles.photoGuideTipRow}>
+                <Ionicons name="cube-outline" size={13} color={colors.textMuted} />
+                <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Show all angles</Text>
+              </View>
+              <View style={styles.photoGuideTipRow}>
+                <Ionicons name="leaf-outline" size={13} color={colors.textMuted} />
+                <Text style={[styles.photoGuideTip, t.photoGuideTip]}>Natural background</Text>
+              </View>
+            </View>
+          )}
 
-          {/* -- 2b. AI AUTOFILL SUGGESTIONS -- */}
+          {/* -- 2a-2. CONTEXTUAL AUTHENTICITY PROMPTS -- */}
+          {/* Per audit 04 P1: "Contextual authenticity prompts by category/value."
+              Per audit 04 media authenticity: prompts appear contextually based on
+              the current listing state, not as a permanent instructional card.
+              - After first image: "Add the back"
+              - After category known: "Show the size label"
+              - For luxury brands: "Add serial / stitching / receipt evidence"
+              - If condition has flaws: "Add a close-up of the flaw"
+              Only shows when relevant and dismissible. */}
+          {(() => {
+            const LUXURY_BRANDS = ['Gucci', 'Prada', 'Louis Vuitton', 'Chanel', 'Hermès', 'Dior', 'Balenciaga', 'Bottega Veneta', 'Saint Laurent', 'Burberry', 'Versace'];
+            const isLuxury = LUXURY_BRANDS.some((b) => brand.toLowerCase() === b.toLowerCase());
+            const hasFlaws = condition === 'Good' || condition === 'Satisfactory';
+            const photoCount = mediaDraftItems.length;
+
+            const prompts: { icon: React.ComponentProps<typeof Ionicons>['name']; text: string }[] = [];
+
+            // After first image: suggest adding the back
+            if (photoCount === 1) {
+              prompts.push({ icon: 'camera-outline', text: 'Add a photo of the back' });
+            }
+            // After 2 photos: suggest the side/detail
+            if (photoCount === 2) {
+              prompts.push({ icon: 'camera-outline', text: 'Add a side or detail shot' });
+            }
+            // After category known: show the size label
+            if (category && photoCount > 0 && photoCount < 5) {
+              prompts.push({ icon: 'pricetag-outline', text: 'Show the size label' });
+            }
+            // Luxury brand: add authentication evidence
+            if (isLuxury && photoCount > 0) {
+              prompts.push({ icon: 'shield-checkmark-outline', text: 'Add serial, stitching, or receipt evidence' });
+            }
+            // Condition with flaws: add close-up
+            if (hasFlaws && photoCount > 0) {
+              prompts.push({ icon: 'warning-outline', text: 'Add a close-up of any flaws' });
+            }
+
+            if (prompts.length === 0) return null;
+
+            // Show at most 2 prompts — contextual, not overwhelming
+            const visible = prompts.slice(0, 2);
+
+            return (
+              <View style={styles.contextualPrompts}>
+                {visible.map((prompt, i) => (
+                  <View key={i} style={styles.contextualPromptRow}>
+                    <Ionicons name={prompt.icon} size={14} color={colors.brand} />
+                    <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
+                      {prompt.text}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })()}
+
+          {/* -- 2b. SUGGESTED DETAILS (neutral, from photo filename) -- */}
           {autofillSuggestion.hasSuggestions && !autofillDismissed && (
             <View style={[styles.autofillCard, t.autofillCard]}>
               <View style={styles.autofillHeader}>
-                <Ionicons name="sparkles" size={16} color={colors.brand} />
-                <Text style={[styles.autofillTitle, t.autofillTitle]}>Suggested fields</Text>
+                <Ionicons name="image-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.autofillTitle, t.autofillTitle]}>Suggested details</Text>
                 <Pressable
                   hitSlop={8}
                   onPress={() => setAutofillDismissed(true)}
@@ -973,7 +1094,7 @@ export default function SellScreen() {
                 </Pressable>
               </View>
               <Text style={[styles.autofillDesc, t.autofillDesc]}>
-                Based on your photo filename. Tap to fill empty fields.
+                From your photos. Review and apply to empty fields.
               </Text>
               <View style={styles.autofillChips}>
                 {autofillSuggestion.title && (
@@ -1001,17 +1122,20 @@ export default function SellScreen() {
                 accessibilityLabel="Apply suggested fields"
                 accessibilityRole="button"
               >
-                <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
+                <Ionicons name="checkmark" size={16} color={colors.textPrimary} />
                 <Text style={[styles.autofillApplyText, t.autofillApplyText]}>Apply to empty fields</Text>
               </Pressable>
             </View>
           )}
 
-          {/* -- 3. LISTING MODE SELECTOR -- */}
+          {/* -- 3. LISTING FORMAT (compact disclosure row) -- */}
+          {/* Per audit 04: progressive disclosure, not three equal tabs.
+              The compact row opens the BottomSheetPicker to change format.
+              Only relevant fields render after selection. */}
           <View style={styles.sectionSpacing}>
             <ListingModeSelector
               mode={listingMode}
-              onChange={(m) => { setListingMode(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              onChange={() => { setPickerMode('Format'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             />
           </View>
 
@@ -1223,11 +1347,33 @@ export default function SellScreen() {
                     </View>
                   )}
 
-                  <View style={[styles.hairline, t.hairline]} />
-                </View>
+                  {/* ── Seller proceeds estimate ──
+                      Per audit 04 P1: "Add seller-proceeds preview beside price."
+                      Shows the estimated amount the seller will receive after
+                      platform fees. Uses the same fee structure as checkout
+                      (calculatePlatformChargeGbp). Only shows when price is valid.
+                      Per audit: "Price guidance explains source as market
+                      comparables, not artificial certainty." */}
+                  {hasValidPrice && numericPrice > 0 && (
+                    <View style={styles.proceedsRow}>
+                      <View style={styles.proceedsLeft}>
+                        <Ionicons name="wallet-outline" size={14} color={colors.textSecondary} />
+                        <Text style={[styles.proceedsLabel, t.fieldHelper]}>
+                          You receive
+                        </Text>
+                      </View>
+                      <View style={styles.proceedsRight}>
+                        <Text style={[styles.proceedsAmount, { color: colors.success }]}>
+                          {currencySymbol}{(numericPrice - calculatePlatformChargeGbp(numericPrice)).toFixed(2)}
+                        </Text>
+                        <Text style={[styles.proceedsFeeHint, t.fieldHelper]}>
+                          after {currencySymbol}{calculatePlatformChargeGbp(numericPrice).toFixed(2)} fee
+                        </Text>
+                      </View>
+                    </View>
+                  )}
 
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, t.fieldLabel]}>Original price (optional)</Text>
+                  <View style={[styles.hairline, t.hairline]} />
                   <View style={styles.priceInputRow}>
                     <Text style={[styles.currencySymbol, t.currencySymbol]}>{currencySymbol}</Text>
                     <TextInput
@@ -1265,6 +1411,30 @@ export default function SellScreen() {
                     />
                   </View>
                   {errors.startingBid ? <Text style={[styles.fieldError, t.fieldError]}>{errors.startingBid}</Text> : null}
+
+                  {/* ── Seller proceeds estimate (auction) ──
+                      Per audit 04 P1: "Add seller-proceeds preview beside price."
+                      For auctions, shows the minimum proceeds from the starting
+                      bid so sellers understand their floor payout. */}
+                  {hasValidStartingBid && numericStartingBid > 0 && (
+                    <View style={styles.proceedsRow}>
+                      <View style={styles.proceedsLeft}>
+                        <Ionicons name="wallet-outline" size={14} color={colors.textSecondary} />
+                        <Text style={[styles.proceedsLabel, t.fieldHelper]}>
+                          You receive (from starting bid)
+                        </Text>
+                      </View>
+                      <View style={styles.proceedsRight}>
+                        <Text style={[styles.proceedsAmount, { color: colors.success }]}>
+                          {currencySymbol}{(numericStartingBid - calculatePlatformChargeGbp(numericStartingBid)).toFixed(2)}
+                        </Text>
+                        <Text style={[styles.proceedsFeeHint, t.fieldHelper]}>
+                          after {currencySymbol}{calculatePlatformChargeGbp(numericStartingBid).toFixed(2)} fee
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
                   <View style={[styles.hairline, t.hairline]} />
                 </View>
 
@@ -1545,30 +1715,54 @@ export default function SellScreen() {
             </View>
           )}
 
+          {/* ── Compact review summary for high-value/auction/Co-Own ──
+              Per audit 04 P1: "Compact review state before publish for
+              high-value/auction/Co-Own." A flat inline summary row that
+              surfaces the key listing facts before the publish footer,
+              so sellers of complex formats can verify without scrolling
+              back up. Only renders for auction and co_own modes (sell_now
+              is simple enough that the Preview button suffices).
+              Flat inline — no card chrome (§4 surface budget). */}
+          {(listingMode === 'auction' || listingMode === 'co_own') && publishReady && (
+            <View style={styles.reviewSummaryRow}>
+              <Ionicons
+                name={listingMode === 'auction' ? 'hammer-outline' : 'people-outline'}
+                size={15}
+                color={colors.textSecondary}
+              />
+              <Text style={[styles.reviewSummaryText, { color: colors.textSecondary }]} numberOfLines={2}>
+                {listingMode === 'auction'
+                  ? `Auction · ${auctionDurationHours < 72 ? `${auctionDurationHours}h` : `${auctionDurationHours / 24}d`} · starts ${currencySymbol}${numericStartingBid.toFixed(0)}${reservePrice ? ` · reserve ${currencySymbol}${Number(sanitizeDecimalInput(reservePrice)).toFixed(0)}` : ''}`
+                  : `Co-Own · ${parsedShareCount || 0} shares · ${currencySymbol}${parsedSharePrice.toFixed(2)}/share${authPhotos.length > 0 ? ' · auth verified' : ''}`
+                }
+              </Text>
+            </View>
+          )}
+
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
 
-      {/* -- 8b. COMPACT LISTING QUALITY METER (fixed above publish footer) -- */}
-      {/* Inline indicator: color-coded dot + text. No panel chrome (§4 surface budget). */}
+      {/* -- 8b. EXPANDABLE QUALITY TIPS (fixed above publish footer) -- */}
+      {/* Per audit 04 P1: "Sticky publish footer shows readiness + primary CTA,
+          not a second dashboard." The quality SCORE now lives in the publish
+          footer's built-in readiness indicator. This surface retains only the
+          expandable "Tips to improve" section — no duplicate score display.
+          Flat inline, no panel chrome (§4 surface budget). */}
       <View style={styles.qualityBar}>
-        <View style={styles.qualityBarRow}>
+        <Pressable
+          hitSlop={8}
+          onPress={() => setQualityTipsExpanded((v) => !v)}
+          style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
+        >
           <View style={styles.qualityBarLeft}>
             <View style={[styles.qualityDot, { backgroundColor: qualityColor }]} />
-            <Text style={[styles.qualityBarLabel, t.qualityBarLabel]}>Listing quality</Text>
-            <Text style={[styles.qualityBarScore, { color: qualityColor }]}>{qualityResult.score}%</Text>
+            <Text style={[styles.qualityTipsLabel, t.qualityTipsLabel]}>Tips to improve</Text>
             <Text style={[styles.qualityBarTier, t.qualityBarTier]}>{qualityResult.tierLabel}</Text>
           </View>
-          <Pressable
-            hitSlop={8}
-            onPress={() => setQualityTipsExpanded((v) => !v)}
-            style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.6 }]}
-            accessibilityRole="button"
-            accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
-          >
-            <Text style={[styles.qualityTipsLabel, t.qualityTipsLabel]}>Tips to improve</Text>
-            <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} />
-          </Pressable>
-        </View>
+          <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} />
+        </Pressable>
         {qualityTipsExpanded && qualityResult.missingItems.length > 0 && (
           <View style={styles.qualityTipsRow}>
             {qualityResult.missingItems.slice(0, 6).map((item) => (
@@ -1592,6 +1786,10 @@ export default function SellScreen() {
       </View>
 
       {/* -- 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER -- */}
+      {/* Per audit 04 P1: "Sticky publish footer shows readiness + primary CTA,
+          not a second dashboard." The quality score is passed directly to the
+          footer's built-in readiness indicator, consolidating the two surfaces
+          into one coherent dock. */}
       <ListingPublishFooter
         mode={listingMode}
         isPublishing={isPublishing}
@@ -1601,6 +1799,9 @@ export default function SellScreen() {
         onPreview={handlePreview}
         onPublish={handlePublish}
         bottomInset={insets.bottom}
+        qualityScore={qualityResult.score}
+        qualityTierLabel={qualityResult.tierLabel}
+        qualityColor={qualityColor}
       />
 
       {/* -- picker -- */}
@@ -1648,9 +1849,14 @@ const styles = StyleSheet.create({
     minWidth: Space.xl + Space.sm,
     alignItems: 'flex-end',
   },
+  navDraftSavedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+  },
   navDraftText: {
     fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontFamily: Typography.family.semibold,
   },
 
   /* -- scroll -- */
@@ -1667,7 +1873,7 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     padding: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: Stroke.standard,
   },
   autofillHeader: {
     flexDirection: 'row',
@@ -1677,12 +1883,16 @@ const styles = StyleSheet.create({
   },
   autofillTitle: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   autofillDesc: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginBottom: Space.sm,
   },
   autofillChips: {
@@ -1695,19 +1905,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: Stroke.hairline,
     minWidth: Space.xxl + Space.lg,
     maxWidth: Space.xxl + Space.xxl + Space.sm,
   },
   autofillChipLabel: {
     fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
     textTransform: 'uppercase',
     letterSpacing: Type.metaElevated.letterSpacing,
   },
   autofillChipValue: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs,
   },
   autofillApplyBtn: {
@@ -1717,39 +1930,51 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
     alignSelf: 'flex-start',
   },
   autofillApplyText: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   sectionSpacing: {
-    paddingTop: Space.md,
+    paddingTop: Space.lg,
   },
+  /* Section spacing 24pt (Space.lg). Section heading is a restrained eyebrow. */
   sectionGroup: {
     paddingTop: Space.lg,
     paddingHorizontal: Space.md,
   },
   sectionHeading: {
-    fontSize: Type.meta.size,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.bold,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps,
+    letterSpacing: Type.metaElevated.letterSpacing,
     marginBottom: Space.sm,
   },
 
   /* -- fields -- */
+  /* Field spacing 16pt: paddingVertical 8 + hairline marginTop 8 = 16pt rhythm. */
   fieldGroup: {
     paddingVertical: Space.sm,
   },
+  /* Labels: Type.bodyEmphasis — clear, legible, heavier than input text. */
   fieldLabel: {
-    fontSize: Type.caption.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
     marginBottom: Space.xs,
   },
+  /* Inputs: Type.body — comfortable reading weight. */
   fieldInput: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
     paddingVertical: Space.sm,
     paddingHorizontal: 0,
     minHeight: Control.hit + Space.sm,
@@ -1759,13 +1984,17 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     paddingTop: Space.sm,
   },
+  /* Hints: Type.captionElevated — supportive but recessed. */
   fieldHelper: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs,
   },
   fieldError: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
     marginTop: Space.xs,
   },
@@ -1786,8 +2015,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pickerValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
   },
   pickerPlaceholder: {
   },
@@ -1878,13 +2109,17 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   tagInput: {
     flex: 1,
     minWidth: Space.xxl + Space.lg,
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
     paddingVertical: Space.xs,
   },
 
@@ -1938,34 +2173,52 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
 
-  /* -- photo guidance card -- */
-  photoGuideCard: {
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
+  /* -- compact review summary (auction/co_own) -- */
+  /* Per audit 04 P1: compact review state before publish for high-value
+     formats. Flat inline — no card chrome (§4 surface budget). */
+  reviewSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Space.sm,
   },
+  reviewSummaryText: {
+    flex: 1,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
+  },
+
+  /* -- photo guidance (flat inline, no card chrome per §4 surface budget) -- */
   photoGuideHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    minHeight: Control.hit,
   },
   photoGuideTitle: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   photoGuideMin: {
     flex: 1,
     fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
   },
   photoGuideTips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm + 2,
-    marginTop: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
   },
   photoGuideTipRow: {
     flexDirection: 'row',
@@ -1973,14 +2226,76 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   photoGuideTip: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
+  },
+
+  /* -- contextual authenticity prompts -- */
+  /* Per audit 04 P1: contextual prompts by category/value.
+     Flat inline — no card chrome (§4 surface budget). */
+  contextualPrompts: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    gap: Space.xs,
+  },
+  contextualPromptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+  },
+  contextualPromptText: {
+    flex: 1,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
 
   /* -- price suggestion block -- */
   priceSuggestionBlock: {
     marginTop: Space.xs,
     gap: 0,
+  },
+
+  /* -- seller proceeds estimate -- */
+  /* Per audit 04 P1: seller-proceeds preview beside price.
+     Flat inline row — no card chrome (§4 surface budget). */
+  proceedsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.xs,
+    marginTop: Space.xs,
+  },
+  proceedsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+  },
+  proceedsLabel: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.medium,
+    marginTop: 0,
+  },
+  proceedsRight: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.xs,
+  },
+  proceedsAmount: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  proceedsFeeHint: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.regular,
+    marginTop: 0,
   },
 
   /* -- field validation -- */
@@ -1991,40 +2306,32 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   fieldRequiredHint: {
-    fontSize: Type.meta.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
 
-  /* -- compact quality bar (fixed above footer) -- */
-  /* Flat inline indicator — no surface, no border, no border radius (§4). */
+  /* -- expandable quality tips (fixed above footer) -- */
+  /* Flat inline — no surface, no border, no border radius (§4).
+     The quality SCORE lives in the publish footer; this surface
+     retains only the expandable tips toggle + content. */
   qualityBar: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
     gap: Space.xs,
   },
-  qualityBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   qualityBarLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
+    flex: 1,
   },
   qualityDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  qualityBarLabel: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
-  },
-  qualityBarScore: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.bold,
   },
   qualityBarTier: {
     fontSize: Type.meta.size,
@@ -2033,7 +2340,9 @@ const styles = StyleSheet.create({
   qualityTipsToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs / 2,
+    justifyContent: 'space-between',
+    minHeight: Control.hit,
+    gap: Space.xs,
   },
   qualityTipsLabel: {
     fontSize: Type.meta.size,

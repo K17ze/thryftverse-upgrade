@@ -379,8 +379,12 @@ void app.register(helmet, {
 
 // CORS — env-driven allowlist. Defaults to empty (no browser origins) which is
 // correct for a native-mobile API. Set CORS_ALLOWED_ORIGINS to enable web clients.
+// In development, when no origins are configured, allow all origins so the Expo
+// web target / browser preview can reach the API without extra env setup.
 void app.register(cors, {
-  origin: config.corsAllowedOrigins.length > 0 ? config.corsAllowedOrigins : false,
+  origin: config.corsAllowedOrigins.length > 0
+    ? config.corsAllowedOrigins
+    : config.nodeEnv === 'development' ? true : false,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',

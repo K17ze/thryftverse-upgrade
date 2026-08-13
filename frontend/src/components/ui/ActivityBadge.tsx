@@ -105,11 +105,13 @@ function buildVariantConfig(colors: ThemeColors): Record<ActivityBadgeVariant, {
 function PulsingDot({ color }: { color: string }) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const pulse = useSharedValue(1);
+  const pulse = useSharedValue(0.6);
 
   React.useEffect(() => {
+    // Restrained pulse — single subtle opacity cycle, not perpetual breathing.
+    // Per audit: "Delete perpetual empty-state breathing."
     pulse.value = withRepeat(
-      withTiming(0.3, { duration: 1000 }),
+      withTiming(1, { duration: 800 }),
       -1,
       true
     );
@@ -117,7 +119,6 @@ function PulsingDot({ color }: { color: string }) {
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: pulse.value,
-    transform: [{ scale: 1 + (1 - pulse.value) * 0.5 }],
   }));
 
   return (

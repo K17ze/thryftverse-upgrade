@@ -417,7 +417,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityRole="button"
           >
             <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
-              <Ionicons name="sparkles-outline" size={20} color={colors.brand} />
+              <Ionicons name="chatbubbles-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>
               <BodyEmphasis numberOfLines={1}>Chat with AI assistant</BodyEmphasis>

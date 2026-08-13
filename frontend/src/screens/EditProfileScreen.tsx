@@ -16,7 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Typography, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Typography, Radius, Type, Stroke, Control, LetterSpacing, DockConstants } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -586,10 +586,10 @@ function ProfileEditField({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  // ── Top-right Done button — visible pill ──
+  // ── Top-right Done button — visible pill, brand-filled when active ──
   saveBtn: {
     paddingHorizontal: Space.md,
-    height: Control.chrome - 2,
+    height: Control.chrome,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -611,25 +611,26 @@ function createStyles(colors: ThemeColors) {
     color: colors.textInverse,
   },
 
-  // ── Identity row ──
+  // ── Identity row — premium compact summary ──
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 2,
+    gap: Space.md,
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
+    paddingTop: Space.md + 2,
+    paddingBottom: Space.sm,
   },
   identityAvatar: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.xxl,
+    width: 52,
+    height: 52,
+    borderRadius: Radius.full,
   },
   identityAvatarText: {
     fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     textAlign: 'center',
-    lineHeight: Control.hit,
+    lineHeight: 52,
   },
   identityText: {
     flex: 1,
@@ -637,10 +638,11 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs / 4,
   },
   identityName: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   identityHandle: {
     fontSize: Type.caption.size,
@@ -653,25 +655,28 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
-    paddingBottom: 0,
+    paddingTop: 0,
+    paddingBottom: Space.sm,
+    lineHeight: Type.caption.lineHeight,
   },
 
-  // ── Sections — tighter spacing ──
+  // ── Sections — 24pt between groups, 16pt within ──
   sectionGroup: {
-    paddingTop: Space.md,
+    paddingTop: Space.lg,
     paddingHorizontal: Space.md,
   },
   sectionLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-    marginBottom: Space.sm - 2,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: Type.metaElevated.letterSpacing,
+    marginBottom: Space.sm,
   },
 
-  // ── Fields — subtle surface, clean border ──
+  // ── Fields — premium inputs with clear focus states ──
   fieldGroup: {
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
   },
   fieldGroupLast: {
     marginBottom: 0,
@@ -680,34 +685,36 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
-    marginBottom: Space.xs,
+    marginBottom: Space.xs + 2,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   fieldSurface: {
-    borderRadius: Radius.md + 2,
+    borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: Space.md - 2,
-    minHeight: Space.xxl,
+    backgroundColor: colors.input,
+    paddingHorizontal: Space.md,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
   },
   fieldSurfaceFocused: {
     borderColor: colors.brand,
-    borderWidth: Stroke.standard + Stroke.hairline,
+    borderWidth: Stroke.emphasis,
   },
   fieldSurfaceError: {
     borderColor: colors.danger,
+    borderWidth: Stroke.emphasis,
   },
   fieldSurfaceMultiline: {
     alignItems: 'flex-end',
     paddingVertical: Space.sm,
-    minHeight: Space.xxl + Space.xl,
+    minHeight: 104,
   },
   fieldInput: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     paddingVertical: Space.sm,
@@ -715,8 +722,8 @@ function createStyles(colors: ThemeColors) {
   },
   fieldInputMultiline: {
     flex: 1,
-    minHeight: Space.xxl + Space.sm,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    minHeight: 72,
+    lineHeight: Type.body.lineHeight,
     paddingVertical: 0,
   },
   fieldCounter: {
@@ -724,56 +731,57 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     paddingBottom: Space.xs / 2,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   fieldCounterError: {
     color: colors.danger,
   },
   fieldHelper: {
-    fontSize: Type.meta.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    marginTop: Space.xs + 1,
-    lineHeight: Type.meta.lineHeight + 1,
+    marginTop: Space.xs + 2,
+    lineHeight: Type.caption.lineHeight,
   },
   fieldError: {
-    fontSize: Type.meta.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
-    marginTop: Space.xs + 1,
-    lineHeight: Type.meta.lineHeight + 1,
+    marginTop: Space.xs + 2,
+    lineHeight: Type.caption.lineHeight,
   },
 
-  // ── Detail card (private details + security) ──
+  // ── Detail card (private details + security) — flat grouped rows ──
   detailCard: {
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     overflow: 'hidden',
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md - 2,
-    minHeight: Space.xxl,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    minHeight: 52,
   },
   detailRowTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md - 2,
-    minHeight: Space.xxl,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    minHeight: 52,
   },
   detailLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
   detailValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     flexShrink: 1,
@@ -792,108 +800,113 @@ function createStyles(colors: ThemeColors) {
   detailDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginHorizontal: Space.md - 2,
+    marginHorizontal: Space.md,
   },
 
-  // ── Status pills ──
+  // ── Status pills — semantic, not decorative ──
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: Space.xs - 1,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
   },
   statusPillVerified: {
-    backgroundColor: colors.surfaceAlt,
-    borderColor: colors.border,
+    backgroundColor: `${colors.success}14`,
+    borderColor: `${colors.success}30`,
   },
   statusPillUnverified: {
     backgroundColor: colors.surfaceAlt,
     borderColor: colors.border,
   },
   statusPillText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
+    letterSpacing: 0.15,
   },
 
-  // ── Pressable row (security) ──
+  // ── Pressable row (security) — flat rows with icon chips ──
   pressableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md - 2,
-    minHeight: Space.xxl + Space.xs,
-    gap: Space.sm,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    minHeight: 52,
+    gap: Space.sm + 2,
   },
   pressableRowPressed: {
     backgroundColor: colors.surfaceAlt,
   },
   rowIconChip: {
-    width: Control.chromeCompact,
-    height: Control.chromeCompact,
-    borderRadius: Radius.xl,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rowText: {
     flex: 1,
     minWidth: 0,
-    gap: Space.xs / 4,
+    gap: Space.xs / 2,
   },
   rowTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+    lineHeight: Type.body.lineHeight,
   },
   rowSubtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
+    lineHeight: Type.caption.lineHeight,
   },
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: Space.xs + 1,
   },
 
-  // ── Account control — prominent card ──
+  // ── Account control — prominent row ──
   accountCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.smMd,
-    paddingHorizontal: Space.md - 2,
+    gap: Space.sm + 2,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
-    minHeight: Space.xxl + Space.sm,
+    minHeight: 56,
   },
   accountIconWrap: {
-    width: Control.chrome,
-    height: Control.chrome,
-    borderRadius: Radius.xxl,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   accountText: {
     flex: 1,
     minWidth: 0,
-    gap: Space.xs / 4,
+    gap: Space.xs / 2,
   },
   accountTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
+    lineHeight: Type.body.lineHeight,
   },
   accountSubtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    lineHeight: Type.caption.lineHeight,
   },
 
   // ── Phone edit modal — premium bottom sheet ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalCard: {
@@ -904,8 +917,8 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.lg,
   },
   modalHandle: {
-    width: Control.chrome,
-    height: Space.xs,
+    width: 40,
+    height: 4,
     borderRadius: Radius.sm,
     backgroundColor: colors.border,
     alignSelf: 'center',
@@ -919,10 +932,11 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.subtitle.letterSpacing,
   },
   modalSubtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginBottom: Space.md + 2,
+    lineHeight: Type.caption.lineHeight,
   },
   modalActions: {
     flexDirection: 'row',
@@ -930,8 +944,8 @@ function createStyles(colors: ThemeColors) {
   },
   modalBtnSecondary: {
     flex: 1,
-    height: Space.xxl + Space.xs / 2,
-    borderRadius: Radius.md,
+    height: DockConstants.primaryButtonHeight,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
@@ -940,19 +954,19 @@ function createStyles(colors: ThemeColors) {
   },
   modalBtnPrimary: {
     flex: 1,
-    height: Space.xxl + Space.xs / 2,
-    borderRadius: Radius.md,
+    height: DockConstants.primaryButtonHeight,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.brand,
   },
   modalBtnSecondaryText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   modalBtnPrimaryText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },

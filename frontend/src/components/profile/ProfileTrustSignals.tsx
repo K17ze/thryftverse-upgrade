@@ -2,13 +2,17 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Type } from '../../theme/designTokens';
+import { Typography, Space, Type, Radius, Stroke } from '../../theme/designTokens';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS, deriveSellerBadges, SELLER_BADGES } from '../../platform/product';
 
 /**
  * Trust signal chip — icon + label, restrained.
  * Used in the trust metrics row on profile heroes.
+ *
+ * 2026 flagship: no bordered pills around every chip — spacing gaps
+ * provide rhythm. Icon 13pt (metadata band), label captionElevated.
+ * One dot separator between chips when in a horizontal row.
  */
 interface TrustChipProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -21,7 +25,7 @@ function TrustChip({ icon, label, tone = 'default', colors }: TrustChipProps & {
     tone === 'success' ? colors.success : tone === 'muted' ? colors.textMuted : colors.textSecondary;
   return (
     <View style={styles.chip}>
-      <Ionicons name={icon} size={12} color={color} />
+      <Ionicons name={icon} size={13} color={color} />
       <Text style={[styles.chipText, { color }]} numberOfLines={1}>{label}</Text>
     </View>
   );
@@ -50,6 +54,7 @@ export interface ProfileTrustSignalsProps {
  *   ✓ Verified · ★ 4.9 (47) · ⏱ Replies in 1h · 📦 Dispatches same day · ✓ 120 sales
  *
  * Only renders chips for which data is available. Renders null if no signals exist.
+ * Spacing gaps (not containers) separate chips — 2026 minimal trend.
  */
 export function ProfileTrustSignals({
   sellerTrust,
@@ -128,7 +133,10 @@ export function ProfileTrustSignals({
   return (
     <View style={[styles.container, align === 'center' && styles.containerCenter]}>
       {chips.map((chip, index) => (
-        <TrustChip key={`${chip.icon}-${index}`} {...chip} colors={colors} />
+        <React.Fragment key={`${chip.icon}-${index}`}>
+          {index > 0 ? <View style={styles.separator} /> : null}
+          <TrustChip {...chip} colors={colors} />
+        </React.Fragment>
       ))}
     </View>
   );
@@ -139,8 +147,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.xs,
+    gap: Space.sm,
+    marginTop: Space.sm,
   },
   containerCenter: {
     justifyContent: 'center',
@@ -151,8 +159,15 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   chipText: {
-    fontSize: Type.meta.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
+    lineHeight: Type.captionElevated.lineHeight,
+  },
+  separator: {
+    width: 3,
+    height: 3,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(128,128,128,0.35)',
   },
 });

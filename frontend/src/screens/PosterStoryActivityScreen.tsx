@@ -155,7 +155,10 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
     { key: 'replies' as const, label: 'Replies', count: summary.replyCount, icon: 'chatbubble-outline' as const },
   ];
 
-  const renderViewer = ({ item }: { item: ActivityData['viewers'][0] }) => (
+  // FlashList v2 performance: memoized render functions prevent full
+  // re-render of all visible activity rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderViewer = useCallback(({ item }: { item: ActivityData['viewers'][0] }) => (
     <View style={styles.row} accessibilityLabel={`@${item.username ?? item.userId} viewed ${item.viewedFrameCount} frame${item.viewedFrameCount !== 1 ? 's' : ''}`}>
       {item.avatar ? (
         <CachedImage
@@ -179,9 +182,9 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
         {formatRelativeTime(item.latestViewedAt)}
       </Text>
     </View>
-  );
+  ), [styles, formatRelativeTime]);
 
-  const renderReaction = ({ item }: { item: ActivityData['reactions'][0] }) => (
+  const renderReaction = useCallback(({ item }: { item: ActivityData['reactions'][0] }) => (
     <View style={styles.row} accessibilityLabel={`@${item.username ?? item.userId} reacted ${REACTION_LABELS[item.reaction] ?? item.reaction}`}>
       {item.avatar ? (
         <CachedImage
@@ -201,9 +204,9 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
       </View>
       <Text style={styles.reactionEmoji}>{REACTION_EMOJI[item.reaction] ?? '👍'}</Text>
     </View>
-  );
+  ), [styles]);
 
-  const renderReply = ({ item }: { item: ActivityData['replies'][0] }) => (
+  const renderReply = useCallback(({ item }: { item: ActivityData['replies'][0] }) => (
     <View style={styles.row} accessibilityLabel={`@${item.authorUsername ?? item.authorId} replied: ${item.body}`}>
       {item.authorAvatar ? (
         <CachedImage
@@ -225,7 +228,16 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
         {formatRelativeTime(item.createdAt)}
       </Text>
     </View>
-  );
+  ), [styles, formatRelativeTime]);
+
+  // FlashList v2 performance: memoized renderItem dispatches to the
+  // memoized render functions above, preventing full re-render of all
+  // visible activity rows on every parent state change.
+  const renderActivityItem = useCallback(({ item }: { item: ActivityItem; index: number }) => {
+    if ('viewedFrameCount' in item) return renderViewer({ item });
+    if ('reaction' in item) return renderReaction({ item });
+    return renderReply({ item });
+  }, [renderViewer, renderReaction, renderReply]);
 
   // ── Summary header card ──────────────────────────────────────────────
   // Instagram/Snapchat pattern: a compact metrics summary at the top of the
@@ -470,11 +482,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           if ('id' in item) return item.id;
           return item.userId;
         }}
-        renderItem={({ item }: { item: ActivityItem; index: number }) => {
-          if ('viewedFrameCount' in item) return renderViewer({ item });
-          if ('reaction' in item) return renderReaction({ item });
-          return renderReply({ item });
-        }}
+        renderItem={renderActivityItem}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl

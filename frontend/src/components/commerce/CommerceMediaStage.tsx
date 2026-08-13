@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,8 +25,10 @@ import {
 } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { Image as ExpoImage } from 'expo-image';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Type, Control } from '../../theme/designTokens';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -35,7 +37,6 @@ import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SharedTransitionImage } from '../SharedTransitionImage';
-import { Video, ResizeMode } from '../compat/Video';
 import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
 
 const MAX_ZOOM = 4;
@@ -225,22 +226,122 @@ function MediaPage({
   );
 }
 
+function formatVideoTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
 function VideoPage({
   item,
   width,
   height,
   isActive,
+  onOpenFullscreen,
 }: {
   item: ProductMediaItem;
   width: number;
   height: number;
   isActive: boolean;
+  onOpenFullscreen?: () => void;
 }) {
   // Pause video when the page is offscreen (scrolled away) or the app
   // is backgrounded. This prevents audio bleed and saves resources.
   const [appIsActive, setAppIsActive] = useState(true);
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
+  const reducedMotion = useReducedMotion();
+
+  // ── Custom video control state ──
+  // Bespoke minimal control layer replaces generic useNativeControls.
+  // Per audit 03: play/pause, mute, scrub only when meaningful, duration,
+  // full-screen. Controls auto-hide after 3s of inactivity, reappear on tap.
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userIsScrubbingRef = useRef(false);
+
+  const sourceUri = item.uri;
+  const shouldPlay = isActive && appIsActive;
+
+  const player = useVideoPlayer(sourceUri, (instance) => {
+    try {
+      instance.muted = true;
+      instance.loop = false;
+    } catch {
+      /* no-op */
+    }
+  });
+
+  // Sync play/pause with isActive and appIsActive
+  useEffect(() => {
+    if (!player) return;
+    try {
+      if (shouldPlay && isPlaying) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    } catch {
+      /* no-op */
+    }
+  }, [shouldPlay, isPlaying, player]);
+
+  // Sync mute state
+  useEffect(() => {
+    if (!player) return;
+    try {
+      player.muted = isMuted;
+    } catch {
+      /* no-op */
+    }
+  }, [isMuted, player]);
+
+  // Track playing state
+  useEffect(() => {
+    if (!player) return;
+    const sub = player.addListener?.('playingChange', ({ isPlaying: playing }: { isPlaying: boolean }) => {
+      setIsPlaying(playing);
+    });
+    return () => sub?.remove?.();
+  }, [player]);
+
+  // Track duration and current time for scrub bar
+  useEffect(() => {
+    if (!player) return;
+    const sub = player.addListener?.('statusChange', ({ status }: { status: string }) => {
+      if (status === 'readyToPlay') {
+        try {
+          setDuration(player.duration || 0);
+        } catch {
+          /* no-op */
+        }
+      }
+    });
+    return () => sub?.remove?.();
+  }, [player]);
+
+  // Poll current time for scrub bar (expo-video doesn't emit timeChange)
+  useEffect(() => {
+    if (!player || !shouldPlay) return;
+    const interval = setInterval(() => {
+      if (userIsScrubbingRef.current) return;
+      try {
+        setCurrentTime(player.currentTime || 0);
+        // Update duration if it wasn't set yet
+        if (duration === 0 && player.duration > 0) {
+          setDuration(player.duration);
+        }
+      } catch {
+        /* no-op */
+      }
+    }, 250);
+    return () => clearInterval(interval);
+  }, [player, shouldPlay, duration]);
 
   React.useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -249,7 +350,98 @@ function VideoPage({
     return () => subscription.remove();
   }, []);
 
-  const shouldPlay = isActive && appIsActive;
+  // ── Controls auto-hide ──
+  // Show controls on tap, auto-hide after 3s. Per Airbnb pattern:
+  // controls appear on interaction, fade when not needed.
+  const showControls = useCallback(() => {
+    setControlsVisible(true);
+    if (controlsTimerRef.current) {
+      clearTimeout(controlsTimerRef.current);
+    }
+    controlsTimerRef.current = setTimeout(() => {
+      if (isPlaying) setControlsVisible(false);
+    }, 3000);
+  }, [isPlaying]);
+
+  const hideControls = useCallback(() => {
+    setControlsVisible(false);
+    if (controlsTimerRef.current) {
+      clearTimeout(controlsTimerRef.current);
+    }
+  }, []);
+
+  // Auto-hide controls when video starts playing
+  useEffect(() => {
+    if (isPlaying && controlsVisible) {
+      showControls();
+    }
+  }, [isPlaying, controlsVisible, showControls]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (controlsTimerRef.current) {
+        clearTimeout(controlsTimerRef.current);
+      }
+    };
+  }, []);
+
+  const togglePlayPause = useCallback(() => {
+    setIsPlaying((prev) => {
+      const next = !prev;
+      if (next) {
+        AccessibilityInfo.announceForAccessibility('Video playing');
+      } else {
+        AccessibilityInfo.announceForAccessibility('Video paused');
+      }
+      return next;
+    });
+    showControls();
+  }, [showControls]);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => {
+      AccessibilityInfo.announceForAccessibility(prev ? 'Audio unmuted' : 'Audio muted');
+      return !prev;
+    });
+    showControls();
+  }, [showControls]);
+
+  const handleScrub = useCallback((value: number) => {
+    if (!player) return;
+    try {
+      player.currentTime = value;
+      setCurrentTime(value);
+    } catch {
+      /* no-op */
+    }
+  }, [player]);
+
+  const handleScrubStart = useCallback(() => {
+    userIsScrubbingRef.current = true;
+    showControls();
+  }, [showControls]);
+
+  const handleScrubEnd = useCallback(() => {
+    userIsScrubbingRef.current = false;
+    showControls();
+  }, [showControls]);
+
+  const handleVideoTap = useCallback(() => {
+    if (controlsVisible) {
+      hideControls();
+    } else {
+      showControls();
+    }
+  }, [controlsVisible, hideControls, showControls]);
+
+  const handleFullscreen = useCallback(() => {
+    onOpenFullscreen?.();
+  }, [onOpenFullscreen]);
+
+  const hasDuration = duration > 0;
+  const progress = hasDuration ? currentTime / duration : 0;
+  const showPoster = !!item.posterUri && !isPlaying && currentTime === 0;
 
   return (
     <View
@@ -257,20 +449,208 @@ function VideoPage({
       accessible
       accessibilityLabel={item.altText ?? 'Product video'}
     >
-      <Video
-        source={{ uri: item.uri }}
+      <VideoView
+        player={player}
         style={subComponentStyles.image}
-        resizeMode={item.fit === 'cover' ? ResizeMode.COVER : ResizeMode.CONTAIN}
-        shouldPlay={shouldPlay}
-        isMuted
-        isLooping={false}
-        useNativeControls
-        usePoster={!!item.posterUri}
-        posterSource={item.posterUri ? { uri: item.posterUri } : undefined}
+        contentFit={item.fit === 'cover' ? 'cover' : 'contain'}
+        nativeControls={false}
       />
+
+      {/* Poster image shown until video starts playing */}
+      {showPoster && item.posterUri && (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <ExpoImage
+            source={{ uri: item.posterUri }}
+            style={StyleSheet.absoluteFill}
+            contentFit={item.fit === 'cover' ? 'cover' : 'contain'}
+            cachePolicy="memory-disk"
+            recyclingKey={item.posterUri}
+          />
+        </View>
+      )}
+
+      {/* Tap layer to toggle controls */}
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={handleVideoTap}
+        accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
+        accessibilityRole="button"
+      />
+
+      {/* ── Bespoke minimal control layer ──
+          Per audit 03: play/pause, mute, scrub only when meaningful,
+          duration, full-screen. Auto-hides after 3s when playing. */}
+      {controlsVisible && (
+        <>
+          {/* Bottom gradient scrim for control legibility */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']}
+            locations={[0, 1]}
+            style={videoControlStyles.bottomScrim}
+            pointerEvents="none"
+          />
+
+          {/* Center play/pause button — only show when paused or on first load */}
+          {!isPlaying && (
+            <Pressable
+              style={videoControlStyles.centerPlayBtn}
+              onPress={togglePlayPause}
+              accessibilityLabel="Play video"
+              accessibilityRole="button"
+            >
+              <Ionicons name="play" size={32} color="#fff" />
+            </Pressable>
+          )}
+
+          {/* Bottom control bar */}
+          <View style={videoControlStyles.controlBar}>
+            {/* Play/pause */}
+            <Pressable
+              style={videoControlStyles.controlBtn}
+              onPress={togglePlayPause}
+              accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />
+            </Pressable>
+
+            {/* Scrub bar — only when duration is meaningful (> 0) */}
+            {hasDuration && (
+              <>
+                <Text style={videoControlStyles.timeText}>
+                  {formatVideoTime(currentTime)}
+                </Text>
+                <Pressable
+                  style={videoControlStyles.scrubTrack}
+                  onPress={(e) => {
+                    const trackWidth = width - 180; // approximate control bar width minus buttons
+                    const x = e.nativeEvent.locationX;
+                    handleScrub((x / trackWidth) * duration);
+                  }}
+                  onPressIn={handleScrubStart}
+                  onPressOut={handleScrubEnd}
+                  accessibilityLabel="Video progress"
+                  accessibilityRole="adjustable"
+                  accessibilityValue={{
+                    min: 0,
+                    max: Math.round(duration),
+                    now: Math.round(currentTime),
+                  }}
+                  hitSlop={{ top: 12, bottom: 12 }}
+                >
+                  <View style={videoControlStyles.scrubTrackBg}>
+                    <View style={[videoControlStyles.scrubTrackFill, { width: `${progress * 100}%` }]} />
+                    <View style={[videoControlStyles.scrubThumb, { left: `${progress * 100}%` }]} />
+                  </View>
+                </Pressable>
+                <Text style={videoControlStyles.timeText}>
+                  {formatVideoTime(duration)}
+                </Text>
+              </>
+            )}
+
+            {/* Mute toggle */}
+            <Pressable
+              style={videoControlStyles.controlBtn}
+              onPress={toggleMute}
+              accessibilityLabel={isMuted ? 'Unmute video' : 'Mute video'}
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color="#fff" />
+            </Pressable>
+
+            {/* Fullscreen */}
+            <Pressable
+              style={videoControlStyles.controlBtn}
+              onPress={handleFullscreen}
+              accessibilityLabel="Open video fullscreen"
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Ionicons name="expand" size={20} color="#fff" />
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
 }
+
+const videoControlStyles = StyleSheet.create({
+  bottomScrim: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  centerPlayBtn: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -28,
+    marginTop: -28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.sm,
+    paddingBottom: Space.sm,
+    gap: Space.xs,
+  },
+  controlBtn: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrubTrack: {
+    flex: 1,
+    height: Control.hit,
+    justifyContent: 'center',
+    paddingHorizontal: Space.xs,
+  },
+  scrubTrackBg: {
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    overflow: 'visible',
+  },
+  scrubTrackFill: {
+    height: '100%',
+    borderRadius: 1.5,
+    backgroundColor: '#fff',
+  },
+  scrubThumb: {
+    position: 'absolute',
+    top: -5,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    backgroundColor: '#fff',
+    marginLeft: -6.5,
+  },
+  timeText: {
+    color: '#fff',
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
+    minWidth: 32,
+    textAlign: 'center',
+  },
+});
 
 export interface CommerceMediaStageProps {
   images?: string[];
@@ -387,6 +767,26 @@ export function CommerceMediaStage({
     });
   }, [initialIndex, mediaItems.length]);
 
+  // ── Preload adjacent media ──
+  // Per audit 03 P0: "preload next image and video poster, not every full
+  // video." When the active page changes, prefetch the next image and the
+  // next video's poster (not the full video) so swipe-forward feels instant.
+  // expo-image's prefetch API warms the disk cache without rendering.
+  React.useEffect(() => {
+    if (mediaItems.length < 2) return;
+    const nextIdx = activeIndex + 1;
+    if (nextIdx >= mediaItems.length) return;
+    const nextItem = mediaItems[nextIdx];
+    if (nextItem.kind === 'video') {
+      // Only preload the poster, not the full video
+      if (nextItem.posterUri) {
+        ExpoImage.prefetch(nextItem.posterUri).catch(() => {});
+      }
+    } else if (nextItem.uri) {
+      ExpoImage.prefetch(nextItem.uri).catch(() => {});
+    }
+  }, [activeIndex, mediaItems]);
+
   const heroHeight = Math.min(screenHeight * heightFraction, screenWidth * 1.35);
 
   const heroStyle = useAnimatedStyle(() => {
@@ -471,7 +871,7 @@ export function CommerceMediaStage({
         viewabilityConfig={viewabilityConfig.current}
         renderItem={({ item, index }) =>
           item.kind === 'video' ? (
-            <VideoPage item={item} width={screenWidth} height={heroHeight} isActive={index === activeIndex} />
+            <VideoPage item={item} width={screenWidth} height={heroHeight} isActive={index === activeIndex} onOpenFullscreen={() => { dismissZoomHint(); onOpenFullscreen(index); }} />
           ) : (
             <MediaPage
               item={item}

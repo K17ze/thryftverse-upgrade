@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { getWalletLedger, type WalletLedgerItem } from '../../services/walletApi';
 import { formatRelativeTime, formatDayLabel } from '../../utils/dateFormat';
@@ -26,16 +26,19 @@ interface WalletTransactionHistoryProps {
   limit?: number;
 }
 
-const KIND_LABELS: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  MINT: { label: 'Top-up', icon: 'arrow-down-circle-outline' },
-  BURN: { label: 'Redemption', icon: 'arrow-up-circle-outline' },
-  CO_OWN_TRADE: { label: 'Co-Own trade', icon: 'swap-horizontal-outline' },
-  COMMERCE_ORDER: { label: 'Purchase', icon: 'bag-outline' },
-  COMMERCE_REFUND: { label: 'Refund', icon: 'return-up-back-outline' },
-  AUCTION_SETTLEMENT: { label: 'Auction win', icon: 'trophy-outline' },
-  PAYOUT: { label: 'Payout', icon: 'cash-outline' },
-  TRANSFER_SENT: { label: 'Transfer sent', icon: 'arrow-forward-outline' },
-  TRANSFER_RECEIVED: { label: 'Transfer received', icon: 'arrow-back-outline' },
+// Categorized transaction kinds with direction-aware icons.
+// Inflows use filled/downward glyphs; outflows use outline/upward glyphs.
+// This gives the list a clear visual rhythm: the eye reads direction first.
+const KIND_LABELS: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; direction: 'in' | 'out' | 'neutral' }> = {
+  MINT: { label: 'Top-up', icon: 'arrow-down-circle', direction: 'in' },
+  BURN: { label: 'Redemption', icon: 'arrow-up-circle-outline', direction: 'out' },
+  CO_OWN_TRADE: { label: 'Co-Own trade', icon: 'swap-horizontal', direction: 'neutral' },
+  COMMERCE_ORDER: { label: 'Purchase', icon: 'bag-outline', direction: 'out' },
+  COMMERCE_REFUND: { label: 'Refund', icon: 'return-up-back', direction: 'in' },
+  AUCTION_SETTLEMENT: { label: 'Auction win', icon: 'trophy', direction: 'in' },
+  PAYOUT: { label: 'Payout', icon: 'cash-outline', direction: 'out' },
+  TRANSFER_SENT: { label: 'Transfer sent', icon: 'arrow-forward-outline', direction: 'out' },
+  TRANSFER_RECEIVED: { label: 'Transfer received', icon: 'arrow-back', direction: 'in' },
 };
 
 function groupByDate(items: WalletLedgerItem[]): { title: string; data: WalletLedgerItem[] }[] {
@@ -92,22 +95,28 @@ export function WalletTransactionHistory({
   }, [fetchLedger]);
 
   const renderItem = useCallback(({ item }: { item: WalletLedgerItem }) => {
-    const kindInfo = KIND_LABELS[item.kind] ?? { label: item.kind, icon: 'ellipse-outline' as const };
+    const kindInfo = KIND_LABELS[item.kind] ?? { label: item.kind, icon: 'ellipse-outline' as const, direction: 'neutral' as const };
     const isPositive = item.amount > 0;
     const amountText = item.asset === '1ZE'
       ? `${isPositive ? '+' : ''}${item.amountDisplay.toFixed(3)} 1ZE`
       : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), 'GBP', { displayMode: 'fiat' })}`;
 
+    // Direction-aware icon color: inflows use success, outflows use textPrimary,
+    // neutral trades use brand. This pairs glyph + colour per AGENTS.md §13.
+    const iconColor = isPositive ? colors.success : kindInfo.direction === 'neutral' ? colors.brand : colors.textSecondary;
+    const iconBg = isPositive ? `${colors.success}15` : kindInfo.direction === 'neutral' ? `${colors.brand}15` : colors.surfaceAlt;
+    const amountColor = isPositive ? colors.success : colors.textPrimary;
+
     return (
-      <View style={styles.txRow}>
-        <View style={[styles.txIconWrap, { backgroundColor: isPositive ? `${colors.success}15` : `${colors.danger}15` }]}>
-          <Ionicons name={kindInfo.icon} size={18} color={isPositive ? colors.success : colors.danger} />
+      <View style={styles.txRow} accessibilityRole="text" accessibilityLabel={`${kindInfo.label}, ${amountText}, ${formatRelativeTime(item.createdAt)}`}>
+        <View style={[styles.txIconWrap, { backgroundColor: iconBg }]}>
+          <Ionicons name={kindInfo.icon} size={18} color={iconColor} />
         </View>
         <View style={styles.txContent}>
           <Text style={styles.txLabel} numberOfLines={1}>{kindInfo.label}</Text>
           <Text style={styles.txTime}>{formatRelativeTime(item.createdAt)}</Text>
         </View>
-        <Text style={[styles.txAmount, { color: isPositive ? colors.success : colors.textPrimary }]}>
+        <Text style={[styles.txAmount, { color: amountColor }]}>
           {amountText}
         </Text>
       </View>
@@ -188,10 +197,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     listContent: {
-      paddingHorizontal: Space.lg,
+      paddingHorizontal: Space.md,
     },
     loadingContainer: {
-      paddingHorizontal: Space.lg,
+      paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       gap: 0,
     },
@@ -201,8 +210,8 @@ function createStyles(colors: ThemeColors) {
     txRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: Space.md,
-      gap: Space.md,
+      paddingVertical: Space.sm + 2,
+      gap: Space.sm + 2,
       minHeight: 56,
     },
     txIconWrap: {
@@ -216,43 +225,53 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       gap: 2,
     },
+    // Labels use captionElevated per spec — clear, scannable metadata
     txLabel: {
-      fontSize: Type.body.size,
+      fontSize: Type.captionElevated.size,
+      lineHeight: Type.captionElevated.lineHeight,
       fontFamily: Typography.family.semibold,
+      letterSpacing: Type.captionElevated.letterSpacing,
       color: colors.textPrimary,
     },
     txTime: {
       fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
       color: colors.textMuted,
     },
+    // Amounts use priceList with tabular-nums per spec — financial numerics
     txAmount: {
-      fontSize: Type.body.size,
+      fontSize: Type.priceList.size,
+      lineHeight: Type.priceList.lineHeight,
       fontFamily: Typography.family.bold,
-      letterSpacing: -0.2,
+      letterSpacing: Type.priceList.letterSpacing,
+      fontVariant: ['tabular-nums'],
+      textAlign: 'right',
     },
     sectionHeader: {
-      paddingTop: Space.md,
-      paddingBottom: Space.xs,
+      paddingTop: Space.lg,
+      paddingBottom: Space.xs + 2,
       backgroundColor: colors.background,
     },
     sectionHeaderText: {
-      fontSize: Type.meta.size,
+      fontSize: Type.metaElevated.size,
+      lineHeight: Type.metaElevated.lineHeight,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: 1,
+      letterSpacing: Type.metaElevated.letterSpacing,
     },
     separator: {
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
+      backgroundColor: colors.borderSubtle,
       marginLeft: 52,
     },
     skeletonRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: Space.md,
-      gap: Space.md,
+      paddingVertical: Space.sm + 2,
+      gap: Space.sm + 2,
     },
     skeletonIcon: {
       width: 36,

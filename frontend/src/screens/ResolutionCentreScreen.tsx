@@ -18,6 +18,7 @@ import { useStore } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import type { SupportTicket } from '../store/useStore';
 
 type TicketFilter = 'all' | 'open' | 'resolved' | 'closed';
 
@@ -87,6 +88,38 @@ export default function ResolutionCentreScreen() {
         .sort((a, b) => b.updatedAt - a.updatedAt);
 
   const openCount = supportTickets.filter((t) => t.status === 'open').length;
+
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible ticket rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderTicketItem = useCallback(({ item, index }: { item: SupportTicket; index: number }) => {
+    const statusCfg = statusConfig[item.status] ?? statusConfig.open;
+    return (
+      <Reanimated.View entering={FadeInDown.duration(300).delay(Math.min(index, 8) * 40)}>
+        <Pressable
+          style={styles.ticketCard}
+          onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
+          accessibilityRole="button"
+          accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
+        >
+          <View style={[styles.statusIconWrap, { backgroundColor: `${statusCfg.color}15` }]}>
+            <Ionicons name={statusCfg.icon} size={18} color={statusCfg.color} />
+          </View>
+          <View style={styles.ticketInfo}>
+            <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
+            <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
+            <View style={styles.ticketMetaRow}>
+              <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
+                <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+              </View>
+              <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
+      </Reanimated.View>
+    );
+  }, [statusConfig, navigation, styles, colors.textMuted]);
 
   return (
     <FlagshipScreen
@@ -169,34 +202,7 @@ export default function ResolutionCentreScreen() {
           }
           // Performance: support ticket lists can grow long; FlashList v2
           // handles recycling automatically.
-          renderItem={({ item, index }) => {
-            const statusCfg = statusConfig[item.status] ?? statusConfig.open;
-            return (
-              <Reanimated.View entering={FadeInDown.duration(300).delay(Math.min(index, 8) * 40)}>
-                <Pressable
-                  style={styles.ticketCard}
-                  onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
-                >
-                  <View style={[styles.statusIconWrap, { backgroundColor: `${statusCfg.color}15` }]}>
-                    <Ionicons name={statusCfg.icon} size={18} color={statusCfg.color} />
-                  </View>
-                  <View style={styles.ticketInfo}>
-                    <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
-                    <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
-                    <View style={styles.ticketMetaRow}>
-                      <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
-                        <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
-                      </View>
-                      <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-                </Pressable>
-              </Reanimated.View>
-            );
-          }}
+          renderItem={renderTicketItem}
         />
       )}
     </FlagshipScreen>

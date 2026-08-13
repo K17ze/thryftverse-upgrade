@@ -137,7 +137,7 @@ const GROUPS: CategoryGroup[] = [
         key: 'marketing',
         label: 'Promotions and offers',
         description: 'Featured collections, seasonal campaigns',
-        icon: 'sparkles',
+        icon: 'pricetag-outline',
         iconColor: 'antiqueGold',
         defaultEnabled: false,
       },

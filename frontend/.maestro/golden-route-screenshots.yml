@@ -1,0 +1,211 @@
+# Maestro flow — golden-route screenshot capture for visual regression baseline.
+#
+# Captures first-viewport screenshots of every golden route defined in
+# audit 15 §Golden routes and visual-qa-gates.md §3. These screenshots
+# form the baseline set for the visual regression test plan
+# (src/__tests__/visualRegressionPlan.test.ts).
+#
+# Prerequisites:
+#   - Test build is already past onboarding and auth (see README.md).
+#   - App has real or seeded data so screens render in populated state.
+#
+# Usage:
+#   maestro test .maestro/golden-route-screenshots.yml --output .maestro/screenshots/golden-routes
+#
+# After capture, review screenshots and promote to baselines:
+#   cp -r .maestro/screenshots/golden-routes src/__tests__/__screenshots__/
+#
+# Device matrix (run once per device + theme):
+#   maestro test --device "iPhone 15" .maestro/golden-route-screenshots.yml
+#   maestro test --device "iPhone SE (3rd generation)" .maestro/golden-route-screenshots.yml
+#   maestro test --device "Pixel_7_API_33" .maestro/golden-route-screenshots.yml
+#
+# Audit 15 §Device matrix:
+#   - compact iPhone width
+#   - regular iPhone
+#   - large iPhone
+#   - older supported iPhone
+#   - mid-range Android
+#   - lower-memory Android
+#   Each in: light, dark, 100% text, 200% text, reduced motion, poor network.
+
+appId: ${MAESTRO_APP_ID}
+---
+# ── Core: Home ──
+- launchApp:
+    clearState: false
+- assertVisible:
+    label: "Home"
+    timeout: 5000
+- takeScreenshot: golden-home-populated
+
+# ── Core: Search ──
+- tapOn:
+    label: "Search listings"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-search-idle
+- inputText: "vintage denim"
+- takeScreenshot: golden-search-results
+- clearText
+- back
+
+# ── Core: PDP (fixed price) ──
+# Navigate to Browse, tap first item to open PDP
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    label: "Explore"
+    timeout: 5000
+- takeScreenshot: golden-browse-populated
+# Tap first visible product card to open ItemDetail
+- tapOn:
+    point: "50%, 40%"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-pdp-fixed
+- back
+
+# ── Core: Sell ──
+- tapOn:
+    label: "List an item"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-sell-empty
+- back
+
+# ── Core: Profile (self) ──
+- tapOn:
+    label: "Profile"
+- assertVisible:
+    label: "Profile"
+    timeout: 5000
+- takeScreenshot: golden-profile-self
+- takeScreenshot: golden-profile-shop
+
+# ── Core: Settings ──
+# Settings is typically accessed from Profile
+- tapOn:
+    text: "Settings"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-settings-root
+- back
+
+# ── Core: Inbox ──
+- tapOn:
+    label: "Inbox"
+- assertVisible:
+    label: "Inbox"
+    timeout: 5000
+- takeScreenshot: golden-inbox-populated
+
+# ── Core: Chat ──
+# Tap first conversation to open chat
+- tapOn:
+    point: "50%, 30%"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-chat-populated
+- back
+
+# ── Core: Checkout ──
+# Navigate to cart/bag and then checkout
+- tapOn:
+    label: "Home"
+- assertVisible:
+    label: "Home"
+    timeout: 3000
+# Checkout is reached from PDP — tap an item, then buy
+- tapOn:
+    point: "50%, 40%"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-pdp-buy-action
+- back
+
+# ── Auctions ──
+# Navigate to Auction Home via Explore or direct tab
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    label: "Explore"
+    timeout: 3000
+- takeScreenshot: golden-auction-home
+# Tap first auction to open detail
+- tapOn:
+    point: "50%, 50%"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-auction-detail
+- back
+
+# ── Seller Hub ──
+# Navigate to Seller Hub from Profile
+- tapOn:
+    label: "Profile"
+- assertVisible:
+    label: "Profile"
+    timeout: 3000
+- tapOn:
+    text: "Seller Hub"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-seller-hub-pending
+- back
+
+# ── Co-Own Hub ──
+# Navigate to Co-Own / Galleria
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    label: "Explore"
+    timeout: 3000
+- takeScreenshot: golden-coown-hub
+# Tap first asset to open detail
+- tapOn:
+    point: "50%, 40%"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-coown-asset-detail
+- back
+
+# ── Portfolio ──
+- tapOn:
+    label: "Profile"
+- assertVisible:
+    label: "Profile"
+    timeout: 3000
+- tapOn:
+    text: "Portfolio"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-coown-portfolio
+- back
+
+# ── Poster / Create ──
+- tapOn:
+    label: "Create"
+- runFlow:
+    when:
+      visible: "Allow"
+    commands:
+      - tapOn: "Allow"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+- takeScreenshot: golden-poster-camera
+- back
+
+# ── Done ──
+- takeScreenshot: golden-final-state

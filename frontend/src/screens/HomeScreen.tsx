@@ -8,10 +8,8 @@ import {
   RefreshControl,
   Modal,
   Pressable,
-  ImageStyle,
-  StyleProp,
-  ViewStyle,
   AppState,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -25,9 +23,7 @@ import Reanimated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from '../components/compat/Video';
-import { ImageContentFit } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -49,6 +45,8 @@ import { Motion } from '../theme/motionTokens';
 import { useBackendData } from '../context/BackendDataContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { MediaPreview as CanonicalMediaPreview } from '../components/MediaPreview';
+import { useViewabilityPlayback } from '../hooks/useViewabilityPlayback';
 import { HorizontalRail } from '../components/HorizontalRail';
 // Phase 3: Removed SyncStatusPill (status indicator clutter reduced)
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
@@ -93,7 +91,8 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const HEADER_EXPANDED = 58;
 const HEADER_COLLAPSED = 52;
-const GRID_GAP = 12; // 12pt — breathable discovery gutter (flagship spacing)
+// Design.md Component B: 8pt gutters for dense media/discovery surfaces.
+const GRID_GAP = Space.sm;
 // Missing media is not photography and should not dominate discovery like it is.
 // Keep the fallback compact while real assets continue to use their API geometry.
 const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
@@ -110,61 +109,13 @@ const SKELETON_HEIGHT_RATIOS = [1.25, 1.08, 1.32, 1.16] as const;
 // not need to be declared. `onEndReached` is a native FlashList prop (no `as
 // any` cast onto ScrollView). The animated wrapper lets Reanimated's scroll
 // handler drive the floating header collapse/expand.
-const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<
-  React.ComponentProps<typeof FlashList<ExploreTile>> & { ref?: React.Ref<any> }
->;
-
-interface MediaPreviewProps {
-  uri: string;
-  posterUri?: string;
-  style?: StyleProp<ImageStyle>;
-  containerStyle?: StyleProp<ViewStyle>;
-  contentFit?: ImageContentFit;
-  focalPoint?: { x: number; y: number };
-  autoPlay?: boolean;
-  muted?: boolean;
-  loop?: boolean;
-  isVisible?: boolean;
-}
-
-function MediaPreview({
-  uri,
-  posterUri,
-  style,
-  containerStyle,
-  contentFit = 'cover',
-  focalPoint,
-  autoPlay = false,
-  muted = true,
-  loop = true,
-  isVisible = true,
-}: MediaPreviewProps) {
-  if (isVideoUri(uri)) {
-    return (
-      <Video
-        source={{ uri }}
-        style={style as StyleProp<ViewStyle>}
-        resizeMode={ResizeMode.COVER}
-        shouldPlay={autoPlay}
-        isMuted={muted}
-        isLooping={loop}
-        usePoster={!!posterUri}
-        posterSource={posterUri ? { uri: posterUri } : undefined}
-      />
-    );
-  }
-
-  return (
-    <CachedImage
-      uri={uri}
-      style={style}
-      containerStyle={containerStyle}
-      contentFit={contentFit}
-      focalPoint={focalPoint}
-      isVisible={isVisible}
-    />
-  );
-}
+// On web: use plain FlashList (Reanimated 4.x crashes with createAnimatedComponent
+// on web — issue #9266). LIST_RENDERING_POLICY.md §2.5 web fallback.
+const AnimatedFlashList: any = Platform.OS === 'web'
+  ? FlashList
+  : Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<
+      React.ComponentProps<typeof FlashList<ExploreTile>> & { ref?: React.Ref<any> }
+    >;
 
 type StoryStatus = 'new-listing' | 'live-auction' | 'co-own-launching' | 'sold-recently';
 
@@ -244,20 +195,15 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
     return <CachedImage uri={firstFrame.mediaUrl} style={styles.posterImage} contentFit="cover" />;
   }
 
+  // Quiet text-only Poster preview — no decorative sparkle/orb. The caption
+  // is the artwork when no media is available (audit: anti-AI art direction).
   const backgroundColor = firstFrame?.backgroundColor ?? colors.surfaceAlt;
   return (
-    <LinearGradient
-      colors={[backgroundColor, '#111111']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.posterTextArtwork}
-    >
-      <View style={styles.posterTextArtworkOrb} />
-      <Ionicons name="sparkles-outline" size={14} color="rgba(255,255,255,0.72)" />
-      <Text style={styles.posterTextArtworkCopy} numberOfLines={4}>
+    <View style={[styles.posterTextArtwork, { backgroundColor }]}>
+      <Text style={styles.posterTextArtworkCopy} numberOfLines={5}>
         {firstFrame?.caption || 'Poster'}
       </Text>
-    </LinearGradient>
+    </View>
   );
 });
 
@@ -273,21 +219,20 @@ function ListingMediaPlaceholder({ category }: { category?: string }) {
         ? 'diamond-outline'
         : 'shirt-outline';
 
+  // Neutral fallback art — flat canvas + category icon, no decorative orbs
+  // or gradients (audit §01: anti-AI art direction; fallback art made neutral).
+  // Uses the same quiet surface tokens as the rest of the feed so a missing
+  // image recedes rather than becoming a decorative element.
   return (
-    <LinearGradient
-      colors={[colors.surfaceAlt, colors.background]}
-      start={{ x: 0.08, y: 0 }}
-      end={{ x: 1, y: 1 }}
+    <View
       style={styles.listingMediaPlaceholder}
       accessibilityLabel="Product image unavailable"
       accessibilityRole="image"
     >
-      <View style={styles.listingMediaPlaceholderOrbLarge} />
-      <View style={styles.listingMediaPlaceholderOrbSmall} />
       <View style={styles.listingMediaPlaceholderIcon}>
         <Ionicons name={icon} size={28} color={colors.textMuted} />
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -299,9 +244,10 @@ interface ExploreGridItemProps {
   onPress: (routeId: string | undefined) => void;
   onLongPress: (item: ExploreTile) => void;
   onPressSellerProfile: (sellerId: string) => void;
-  onPressSellerMessage: (sellerId: string, listingId: string) => void;
   sellerUsername?: string | null;
   sellerAvatar?: string | null;
+  /** Viewability-driven playback: only the most-visible video plays. */
+  shouldPlay?: boolean;
 }
 
 const ExploreGridItem = React.memo(function ExploreGridItem({
@@ -311,9 +257,9 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
   onPress,
   onLongPress,
   onPressSellerProfile,
-  onPressSellerMessage,
   sellerUsername,
   sellerAvatar,
+  shouldPlay = false,
 }: ExploreGridItemProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -351,16 +297,16 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
             sharedTransitionTag={sharedTag}
           >
             {item.mediaUri ? (
-              <MediaPreview
+              <CanonicalMediaPreview
                 uri={item.mediaUri}
                 posterUri={item.posterUri}
                 style={styles.exploreImage}
-                autoPlay={item.mediaType === 'video'}
-                loop
-                muted
+                shouldPlay={shouldPlay}
                 contentFit="cover"
                 focalPoint={getCategoryFocalPoint(item.category)}
                 isVisible
+                showPlayBadge
+                downscaleWidth={Math.round(tileWidth)}
               />
             ) : (
               <ListingMediaPlaceholder category={item.category} />
@@ -377,38 +323,29 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
       </View>
 
       {(sellerUsername || item.sellerId) && (
-        <View style={styles.exploreSellerRow}>
-          <AnimatedPressable
-            style={styles.exploreSellerChip}
-            onPress={() => item.sellerId && onPressSellerProfile(item.sellerId)}
-            accessibilityRole="button"
-            accessibilityLabel={sellerUsername ? `Seller: @${sellerUsername}` : 'Open seller profile'}
-          >
-            {sellerAvatar ? (
-              <CachedImage
-                uri={sellerAvatar}
-                style={styles.exploreSellerAvatar}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.exploreSellerAvatarFallback}>
-                <Ionicons name="person" size={12} color={colors.textMuted} />
-              </View>
-            )}
-            <Text style={styles.exploreSellerText} numberOfLines={1}>
-              @{sellerUsername ?? item.sellerId}
-            </Text>
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={styles.exploreMessageBtn}
-            onPress={() => item.sellerId && item.routeId && onPressSellerMessage(item.sellerId, item.routeId)}
-            accessibilityRole="button"
-            accessibilityLabel="Message seller"
-          >
-            <Ionicons name="chatbubble-outline" size={14} color={colors.textPrimary} />
-            <Text style={styles.exploreMessageText}>Chat</Text>
-          </AnimatedPressable>
-        </View>
+        <AnimatedPressable
+          style={styles.exploreSellerRow}
+          onPress={() => item.sellerId && onPressSellerProfile(item.sellerId)}
+          accessibilityRole="button"
+          accessibilityLabel={sellerUsername ? `Seller: @${sellerUsername}` : 'Open seller profile'}
+          accessibilityHint="Opens the seller's profile"
+        >
+          {sellerAvatar ? (
+            <CachedImage
+              uri={sellerAvatar}
+              style={styles.exploreSellerAvatar}
+              contentFit="cover"
+              downscaleWidth={64}
+            />
+          ) : (
+            <View style={styles.exploreSellerAvatarFallback}>
+              <Ionicons name="person" size={13} color={colors.textMuted} />
+            </View>
+          )}
+          <Text style={styles.exploreSellerText} numberOfLines={1}>
+            @{sellerUsername ?? item.sellerId}
+          </Text>
+        </AnimatedPressable>
       )}
     </View>
   );
@@ -434,6 +371,17 @@ export default function HomeScreen() {
   const [newListingIds, setNewListingIds] = React.useState<Set<string>>(() => new Set());
   const [feedMode, setFeedMode] = React.useState<'foryou' | 'following'>('foryou');
 
+  // Viewability-driven video autoplay: only the most-visible feed tile plays
+  // its video. Settlement delay (350ms) avoids spinning up players during fast
+  // scrolling. Offscreen items pause immediately, releasing decode resources
+  // (AGENTS.md §16, §27.8 — one active player across the surface).
+  const {
+    activeIndex: activePlaybackIndex,
+    viewabilityConfig: playbackViewabilityConfig,
+    onViewableItemsChanged: onPlaybackViewableItemsChanged,
+    reset: resetPlayback,
+  } = useViewabilityPlayback(350);
+
   const scrollY = useSharedValue(0);
   const lastScrollY = useSharedValue(0);
   // Crossfade opacity for feed content on tab switch (120ms = Motion.duration.fast).
@@ -455,7 +403,7 @@ export default function HomeScreen() {
 
   useScrollToTop(scrollRef);
 
-  const scrollHandler = useAnimatedScrollHandler({
+  const animatedScrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
 
@@ -480,6 +428,31 @@ export default function HomeScreen() {
       lastScrollY.value = e.contentOffset.y;
     },
   });
+
+  // Web fallback: plain JS scroll handler (Reanimated worklets not supported
+  // on web with createAnimatedComponent). LIST_RENDERING_POLICY.md §2.5.
+  const webScrollHandler = React.useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const offsetY = e.nativeEvent.contentOffset.y;
+    scrollY.value = offsetY;
+
+    const targetHeight = interpolate(
+      offsetY,
+      [0, 120],
+      [headerExpandedHeight, headerCollapsedHeight],
+      Extrapolation.CLAMP,
+    );
+    headerHeightSV.value = targetHeight;
+
+    if (offsetY > lastScrollY.value + 5 && offsetY > 80) {
+      tabBarVisible.value = false;
+    } else if (offsetY < lastScrollY.value - 5 || offsetY <= 0) {
+      tabBarVisible.value = true;
+    }
+
+    lastScrollY.value = offsetY;
+  }, [scrollY, headerHeightSV, headerExpandedHeight, headerCollapsedHeight, lastScrollY, tabBarVisible]);
+
+  const scrollHandler = Platform.OS === 'web' ? webScrollHandler : animatedScrollHandler;
 
   const headerHeightStyle = useAnimatedStyle(() => {
     return { height: headerHeightSV.value };
@@ -627,7 +600,10 @@ export default function HomeScreen() {
   const showFeedLoadingSkeleton = isSyncing && !lastError;
 
   const gridTileWidth = React.useMemo(
-    () => Math.floor((windowWidth - (Space.md * 2) - GRID_GAP) / 2),
+    // FlashList numColumns=2 gives each column windowWidth/2.
+    // flashListItem paddingHorizontal: Space.xs (4pt) → 8pt gutter, 4pt edge.
+    // Tile width = column width - 2 * padding = windowWidth/2 - Space.sm.
+    () => Math.floor((windowWidth - Space.sm * 2) / 2),
     [windowWidth],
   );
 
@@ -746,6 +722,9 @@ export default function HomeScreen() {
     feedOpacity.value = withTiming(1, {
       duration: reducedMotionEnabled ? 0 : Motion.duration.fast,
     });
+    // Reset viewability playback when the feed content swaps so a stale
+    // activeIndex does not cause a now-offscreen video to keep playing.
+    resetPlayback();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedMode]);
 
@@ -861,8 +840,8 @@ export default function HomeScreen() {
           style={styles.newListingsBanner}
           contentStyle={styles.newListingsBannerContent}
           titleStyle={styles.newListingsBannerText}
-          icon={<Ionicons name="sparkles-outline" size={13} color={colors.background} />}
-          trailingIcon={<Ionicons name="arrow-up" size={13} color={colors.background} />}
+          icon={<Ionicons name="arrow-up-circle-outline" size={14} color={colors.background} />}
+          trailingIcon={<Ionicons name="chevron-up" size={14} color={colors.background} />}
           iconContainerStyle={styles.newListingsBannerIconWrap}
           trailingIconContainerStyle={styles.newListingsBannerIconWrap}
           hapticFeedback="selection"
@@ -881,8 +860,16 @@ export default function HomeScreen() {
         {Array.from({ length: 4 }).map((_, index) => {
           const ratio = SKELETON_HEIGHT_RATIOS[index % SKELETON_HEIGHT_RATIOS.length];
           return (
-            <View key={`feed_loading_left_${index}`}>
-              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.sm} />
+            <View key={`feed_loading_left_${index}`} style={styles.skeletonTileWrap}>
+              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.lg} />
+              <View style={styles.skeletonMetaRow}>
+                <PremiumSkeletonTile width="70%" height={Type.captionElevated.lineHeight} borderRadius={Radius.sm} />
+                <PremiumSkeletonTile width="40%" height={Type.bodyLarge.lineHeight} borderRadius={Radius.sm} />
+              </View>
+              <View style={styles.skeletonSellerRow}>
+                <PremiumSkeletonTile width={24} height={24} borderRadius={Radius.full} />
+                <PremiumSkeletonTile width="45%" height={Type.meta.lineHeight} borderRadius={Radius.sm} />
+              </View>
             </View>
           );
         })}
@@ -891,8 +878,16 @@ export default function HomeScreen() {
         {Array.from({ length: 4 }).map((_, index) => {
           const ratio = SKELETON_HEIGHT_RATIOS[(index + 2) % SKELETON_HEIGHT_RATIOS.length];
           return (
-            <View key={`feed_loading_right_${index}`}>
-              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.sm} />
+            <View key={`feed_loading_right_${index}`} style={styles.skeletonTileWrap}>
+              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={Radius.lg} />
+              <View style={styles.skeletonMetaRow}>
+                <PremiumSkeletonTile width="70%" height={Type.captionElevated.lineHeight} borderRadius={Radius.sm} />
+                <PremiumSkeletonTile width="40%" height={Type.bodyLarge.lineHeight} borderRadius={Radius.sm} />
+              </View>
+              <View style={styles.skeletonSellerRow}>
+                <PremiumSkeletonTile width={24} height={24} borderRadius={Radius.full} />
+                <PremiumSkeletonTile width="45%" height={Type.meta.lineHeight} borderRadius={Radius.sm} />
+              </View>
             </View>
           );
         })}
@@ -917,15 +912,48 @@ export default function HomeScreen() {
     navigation.navigate('UserProfile', { userId: sellerId });
   }, [navigation, haptic]);
 
-  const handleSellerMessagePress = React.useCallback((sellerId: string, listingId: string) => {
-    haptic.light();
-    navigation.navigate('Chat', {
-      conversationId: `${sellerId}_${listingId}`,
-      focusQuery: '',
-      partnerUserId: sellerId,
-      itemId: listingId,
-    });
-  }, [navigation, haptic]);
+  // FlashList v2 performance: getItemType for heterogeneous row recycling.
+  // ExploreTile has type 'listing' | 'clip' — FlashList recycles cells of the
+  // same type, avoiding layout thrash when switching between item geometries.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.2)
+  const getItemType = React.useCallback(
+    (item: ExploreTile) => item.type,
+    [],
+  );
+
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible items on every parent state change (e.g. feed mode switch,
+  // wishlist toggle). Inline arrow functions are recreated every render.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderFeedItem = React.useCallback(
+    ({ item, index }: { item: ExploreTile; index: number }) => {
+      const listing = activeListings.find((l) => l.id === item.routeId);
+      return (
+        <View style={styles.flashListItem}>
+          <ExploreGridItem
+            item={item}
+            tileWidth={gridTileWidth}
+            formatPrice={formatFromFiat}
+            onPress={handleTilePress}
+            onLongPress={handleTileLongPress}
+            onPressSellerProfile={handleSellerProfilePress}
+            sellerUsername={listing?.seller?.username}
+            sellerAvatar={listing?.seller?.avatar}
+            shouldPlay={activePlaybackIndex === index}
+          />
+        </View>
+      );
+    },
+    [
+      activeListings,
+      gridTileWidth,
+      formatFromFiat,
+      handleTilePress,
+      handleTileLongPress,
+      handleSellerProfilePress,
+      activePlaybackIndex,
+    ],
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
@@ -987,48 +1015,20 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.feedContent, { paddingTop: headerExpandedHeight + Space.sm }]}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
+        viewabilityConfig={playbackViewabilityConfig}
+        onViewableItemsChanged={onPlaybackViewableItemsChanged}
         onEndReached={() => {
           if (hasMore && !isLoadingMore) void loadMoreListings();
         }}
         onEndReachedThreshold={0.5}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          const listing = activeListings.find((l) => l.id === item.routeId);
-          return (
-            <View style={styles.flashListItem}>
-              <ExploreGridItem
-                item={item}
-                tileWidth={gridTileWidth}
-                formatPrice={formatFromFiat}
-                onPress={handleTilePress}
-                onLongPress={handleTileLongPress}
-                onPressSellerProfile={handleSellerProfilePress}
-                onPressSellerMessage={handleSellerMessagePress}
-                sellerUsername={listing?.seller?.username}
-                sellerAvatar={listing?.seller?.avatar}
-              />
-            </View>
-          );
-        }}
-        overrideItemLayout={(layout) => {
+        keyExtractor={(item: ExploreTile) => item.id}
+        getItemType={getItemType}
+        renderItem={renderFeedItem}
+        overrideItemLayout={(layout: { span?: number }) => {
           layout.span = 1;
         }}
         ListHeaderComponent={
           <View>
-            {renderPosters()}
-
-            {renderNewListingsBanner()}
-
-            {lastError ? (
-              <SyncRetryBanner
-                message="Sync is unavailable. Showing cached items."
-                onRetry={() => void handleRefresh()}
-                isRetrying={isSyncing || refreshing}
-                telemetryContext="home_feed_sync"
-                containerStyle={styles.feedStatusBanner}
-              />
-            ) : null}
-
             <DiscoverySectionHeader
               kicker={feedMode === 'following' ? 'Latest from people you follow' : undefined}
               title="Explore"
@@ -1071,6 +1071,20 @@ export default function HomeScreen() {
               })}
             </View>
 
+            {renderPosters()}
+
+            {renderNewListingsBanner()}
+
+            {lastError ? (
+              <SyncRetryBanner
+                message="Sync is unavailable. Showing cached items."
+                onRetry={() => void handleRefresh()}
+                isRetrying={isSyncing || refreshing}
+                telemetryContext="home_feed_sync"
+                containerStyle={styles.feedStatusBanner}
+              />
+            ) : null}
+
             {showFeedLoadingSkeleton || showFollowingLoading ? (
               renderExploreLoadingState()
             ) : feedGridData.length === 0 ? (
@@ -1097,7 +1111,7 @@ export default function HomeScreen() {
                 <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
-                    icon="sparkles-outline"
+                    icon="cube-outline"
                     title="No drops live yet"
                     subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
                     ctaLabel="Browse all"
@@ -1151,14 +1165,13 @@ export default function HomeScreen() {
               accessibilityRole="none"
             >
               <View style={styles.peekMediaWrap}>
-                <MediaPreview
+                <CanonicalMediaPreview
                   uri={peekItem.mediaUri}
                   posterUri={peekItem.posterUri}
                   style={styles.peekMedia}
-                  autoPlay
-                  loop
-                  muted
+                  shouldPlay
                   contentFit="cover"
+                  showPlayBadge={false}
                 />
               </View>
 
@@ -1228,21 +1241,22 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   headerForeground: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   headerTitleWrap: {
     flex: 1,
-    paddingRight: 10,
+    paddingRight: Space.sm,
   },
+  // Brand title: subtitle token (17/24/600) — lighter header chrome per AGENTS.md §4.
   brandTitle: {
-    fontSize: 20,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.35,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
     color: colors.textPrimary,
-    lineHeight: 26,
   },
   brandSubtitle: {
     marginTop: 2,
@@ -1301,11 +1315,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   feedTab: {
     minWidth: 76,
     minHeight: 44,
-    paddingHorizontal: 2,
+    paddingHorizontal: Space.xxs,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: Space.xs + Space.xxs,
     position: 'relative',
   },
   feedTabLabel: {
@@ -1345,30 +1359,31 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.textPrimary,
   },
   newListingsBannerWrap: {
-    marginTop: 6,
-    marginBottom: 14,
-    paddingHorizontal: 16,
+    marginTop: Space.xs,
+    marginBottom: Space.sm + Space.xs,
+    paddingHorizontal: Space.md,
   },
   newListingsBanner: {
     alignSelf: 'center',
     minHeight: 40,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs + Space.xs,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
     borderWidth: 0,
   },
   newListingsBannerContent: {
-    gap: 7,
+    gap: Space.xs - Space.xxs,
   },
   newListingsBannerIconWrap: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   newListingsBannerText: {
-    fontSize: 12,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.background,
     letterSpacing: 0.2,
@@ -1378,29 +1393,31 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingHorizontal: 16,
+    marginBottom: Space.sm,
+    paddingHorizontal: Space.md,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    letterSpacing: -0.1,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   sectionHint: {
-    fontSize: 11,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     letterSpacing: 0.22,
   },
 
   storiesSection: {
-    paddingTop: 6,
-    paddingBottom: 10,
+    paddingTop: Space.xs + Space.xxs,
+    paddingBottom: Space.sm + Space.xs,
   },
   storiesScroll: {
-    paddingHorizontal: 16,
-    gap: 14,
+    paddingHorizontal: Space.md,
+    gap: Space.sm + Space.xs,
   },
   storyCreateWrap: {
     alignItems: 'center',
@@ -1483,8 +1500,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 12,
   },
   looksRail: {
-    paddingHorizontal: 16,
-    gap: 12,
+    paddingHorizontal: Space.md,
+    gap: Space.smMd,
   },
   lookCard: {
     width: SCREEN_WIDTH * 0.82,
@@ -1589,19 +1606,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
 
   postersSection: {
-    marginTop: 2,
+    marginTop: 0,
     paddingBottom: Space.sm,
   },
   posterSectionHeading: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
+    marginBottom: Space.sm,
   },
+  // Poster heading: subtitle token with semibold — quieter than bold, clear hierarchy.
   posterSectionTitle: {
     color: colors.textPrimary,
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.3,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
   postersScroll: {
     paddingHorizontal: Space.md,
@@ -1609,9 +1627,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
   },
   feedStatusBanner: {
-    marginTop: 10,
-    marginHorizontal: 16,
-    marginBottom: 2,
+    marginTop: Space.sm,
+    marginHorizontal: Space.md,
+    marginBottom: Space.xxs,
   },
   posterCard: {
     width: POSTER_CARD_WIDTH,
@@ -1649,15 +1667,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Space.sm,
     gap: Space.xs,
-  },
-  posterTextArtworkOrb: {
-    position: 'absolute',
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    top: -42,
-    right: -34,
-    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   posterTextArtworkCopy: {
     color: colors.textInverse,
@@ -1862,27 +1871,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-  },
-  listingMediaPlaceholderOrbLarge: {
-    position: 'absolute',
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    top: -76,
-    right: -64,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.28)',
-  },
-  listingMediaPlaceholderOrbSmall: {
-    position: 'absolute',
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    bottom: -44,
-    left: -30,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
   },
   listingMediaPlaceholderIcon: {
     width: 40,
@@ -1897,79 +1886,59 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreDetails: {
     paddingTop: Space.sm,
     paddingHorizontal: Space.xs,
-    gap: Space.xs,
+    gap: Space.xxs,
   },
+  // Title: captionElevated (13/18/400) — quiet, lets price dominate.
   exploreTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
     color: colors.textPrimary,
-    letterSpacing: -0.2,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
-  // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
+  // Price: bodyLarge (16/22/700) — clearly dominant over title.
   explorePrice: {
     color: colors.textPrimary,
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.2,
+    letterSpacing: Type.bodyLarge.letterSpacing,
   },
   exploreSellerRow: {
-    minHeight: 32,
-    marginTop: 2,
+    minHeight: 44,
+    marginTop: Space.xs,
     paddingHorizontal: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  exploreSellerChip: {
-    flex: 1,
-    minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: Space.xs,
-    paddingRight: Space.xs,
   },
-  exploreSellerAvatarWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
+  // Avatar: 24pt circle with subtle border — proper identity element.
   exploreSellerAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
   },
   exploreSellerAvatarFallback: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
   },
+  // Seller text: meta (11/14/500) — restrained, secondary to price/title.
   exploreSellerText: {
     flex: 1,
     color: colors.textSecondary,
-    fontSize: 12,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
-  },
-  exploreMessageBtn: {
-    minWidth: 44,
-    height: 44,
-    paddingHorizontal: Space.xs + 2,
-    flexDirection: 'row',
-    gap: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exploreMessageText: {
-    color: colors.textPrimary,
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.meta.letterSpacing,
   },
   videoBadge: {
     position: 'absolute',
@@ -1996,6 +1965,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreLoadingColumn: {
     flex: 1,
     gap: Space.sm,
+  },
+  // Skeleton tile wrapper: media + metadata lines matching final tile silhouette.
+  skeletonTileWrap: {
+    gap: Space.xs,
+  },
+  skeletonMetaRow: {
+    paddingHorizontal: Space.xs,
+    gap: Space.xxs,
+  },
+  skeletonSellerRow: {
+    paddingHorizontal: Space.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
   },
 
   peekBackdrop: {

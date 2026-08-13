@@ -275,7 +275,7 @@ export function CreatorEntryScreen({
         {/* "Aa" text-mode button — Instagram "Create" pattern, top-right */}
         <Pressable
           style={[styles.textModeBtn, { top: insets.top + 8, right: 12 }]}
-          hitSlop={8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           onPress={() => { haptic.light(); onBlankStart(); }}
           accessibilityLabel="Create text poster"
           accessibilityHint="Starts a blank text poster"
@@ -299,9 +299,11 @@ export function CreatorEntryScreen({
       >
         <Pressable
           style={styles.galleryBackBtn}
-          hitSlop={12}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           onPress={() => { haptic.selection(); setView('camera'); }}
           accessibilityLabel="Back to camera"
+          accessibilityHint="Switches back to the camera viewfinder"
+          accessibilityRole="button"
         >
           <Ionicons name="camera" size={22} color="#fff" />
         </Pressable>
@@ -314,16 +316,18 @@ export function CreatorEntryScreen({
           {selectedCount > 0 && (
             <Pressable
               style={styles.addBtn}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               onPress={handleAddSelected}
               accessibilityLabel={isPoster ? 'Create story' : 'Create collage'}
+              accessibilityHint={isPoster ? 'Creates a story from the selected photos' : 'Creates a collage from the selected photos'}
+              accessibilityRole="button"
             >
               <Text style={styles.addBtnText}>
                 {isPoster ? 'Create Story' : 'Create Look'}
               </Text>
             </Pressable>
           )}
-          <Pressable style={styles.topIconBtn} hitSlop={12} onPress={() => { haptic.light(); onClose(); }} accessibilityLabel="Close">
+          <Pressable style={styles.topIconBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} onPress={() => { haptic.light(); onClose(); }} accessibilityLabel="Close" accessibilityHint="Closes the creator entry screen" accessibilityRole="button">
             <Ionicons name="close" size={26} color="#fff" />
           </Pressable>
         </View>
@@ -341,7 +345,7 @@ export function CreatorEntryScreen({
           <Text style={styles.permissionText}>
             Select photos from your library for your {isPoster ? 'story' : 'collage'}.
           </Text>
-          <Pressable style={styles.permissionBtn} hitSlop={12} onPress={() => { haptic.light(); requestMediaPerm(); }}>
+          <Pressable style={styles.permissionBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} onPress={() => { haptic.light(); requestMediaPerm(); }} accessibilityLabel="Allow photo access" accessibilityHint="Grants permission to access your photo library" accessibilityRole="button">
             <Text style={styles.permissionBtnText}>Allow access</Text>
           </Pressable>
         </View>
@@ -349,7 +353,7 @@ export function CreatorEntryScreen({
         <View style={styles.centerState}>
           <Ionicons name="images-outline" size={48} color="rgba(255,255,255,0.3)" />
           <Text style={styles.permissionText}>No photos found</Text>
-          <Pressable style={styles.blankBtn} hitSlop={12} onPress={() => { haptic.selection(); setView('camera'); }}>
+          <Pressable style={styles.blankBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} onPress={() => { haptic.selection(); setView('camera'); }} accessibilityLabel="Use camera instead" accessibilityHint="Switches back to the camera viewfinder" accessibilityRole="button">
             <Text style={styles.blankBtnText}>Use camera instead</Text>
           </Pressable>
         </View>
@@ -368,9 +372,11 @@ export function CreatorEntryScreen({
             return (
               <Pressable
                 style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 onPress={() => toggleSelect(item)}
                 accessibilityLabel={`Select ${item.mediaType}${isSelected ? ', selected' : ''}`}
+                accessibilityHint={isSelected ? 'Deselects this photo' : 'Selects this photo for your creation'}
+                accessibilityRole="button"
               >
                 <Image source={{ uri: item.uri }} style={styles.thumbImage} resizeMode="cover" />
                 {item.mediaType === 'video' && (
@@ -412,7 +418,9 @@ export function CreatorEntryScreen({
                     style={styles.selectedThumbRemove}
                     onPress={() => { haptic.selection(); toggleSelect(asset); }}
                     accessibilityLabel="Remove from selection"
-                    hitSlop={8}
+                    accessibilityHint="Deselects this photo"
+                    accessibilityRole="button"
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <Ionicons name="close" size={12} color="#fff" />
                   </Pressable>
@@ -423,7 +431,7 @@ export function CreatorEntryScreen({
               {selectedCount} of {isPoster ? 10 : 6} selected
             </Text>
           </View>
-          <Pressable style={styles.addBtn} hitSlop={12} onPress={handleAddSelected} accessibilityLabel={isPoster ? 'Create story' : 'Create collage'}>
+          <Pressable style={styles.addBtn} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }} onPress={handleAddSelected} accessibilityLabel={isPoster ? 'Create story' : 'Create collage'} accessibilityHint={isPoster ? 'Creates a story from the selected photos' : 'Creates a collage from the selected photos'} accessibilityRole="button">
             <Text style={styles.addBtnText}>
               {isPoster ? 'Create Story' : 'Create Look'}
             </Text>

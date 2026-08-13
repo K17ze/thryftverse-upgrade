@@ -66,7 +66,7 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
 
 const styles = StyleSheet.create({
   lookCard: {},
-  lookImageWrap: { borderRadius: Radius.sm, overflow: 'hidden', position: 'relative' },
+  lookImageWrap: { borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
   lookImage: { width: '100%', height: '100%' },
   // Small video glyph — white circle with play triangle, subtle shadow
   videoGlyph: {

@@ -1,7 +1,20 @@
 /**
- * Design Tokens - Thryftverse Visual System
- * Based on Instagram/Depop/Vinted/Pinterest patterns
- * Use these instead of random inline values
+ * Design Tokens — Thryftverse Visual System
+ * Production Art Direction: Editorial + tactile + trustworthy + fashion-native + commerce-precise.
+ *
+ * Quality comes from composition, hierarchy, rhythm, contrast and restraint —
+ * not from shadows on every surface, cards around every element, gradients
+ * everywhere, glass effects, or excessive animation.
+ *
+ * Anti-AI principles:
+ * - No generic blue-purple gradients
+ * - No glassmorphism on content cards
+ * - No decorative orbs, sparkles, or breathing icons
+ * - No shadows on every surface
+ * - No card-on-card composition
+ * - Luxury from geometry and typography, not gold ornament
+ *
+ * Use these tokens instead of random inline values.
  */
 
 // ============================================================================
@@ -47,7 +60,7 @@ export const Radius = {
 } as const;
 
 // ============================================================================
-// TYPOGRAPHY (San Francisco / iOS style)
+// TYPOGRAPHY (Inter — editorial scale with clear relationships)
 // ============================================================================
 interface TypeStyle {
   size: number;
@@ -88,48 +101,64 @@ export const LetterSpacing = {
 } as const;
 
 // ============================================================================
-// SIMPLIFIED TYPOGRAPHY - 5 VARIANTS ONLY (Phase 1 Cleanup)
-// Reference: Luxury e-commerce uses strict hierarchy
+// SEMANTIC TYPOGRAPHY — Editorial type scale
+// One weight delta is normally enough to express hierarchy.
+// Prices and financial quantities use tabular figures (see Numeric below).
 // ============================================================================
 export const Type: Record<string, TypeStyle> = {
-  /** 24/32/700 - Hero titles, screen headers, profile names */
+  // ── Display / campaign ──
+  /** 32/38/700 — Auth hero, empty state titles, rare campaign statement */
+  display: { size: 32, lineHeight: 38, weight: '700', letterSpacing: -0.5 },
+
+  // ── Screen identity ──
+  /** 24/32/700 — Hero titles, screen headers, profile names */
   title: { size: 24, lineHeight: 32, weight: '700', letterSpacing: -0.6 },
+  /** 24/32/700 — Semantic alias: screen identity (maps to title) */
+  screenTitle: { size: 24, lineHeight: 32, weight: '700', letterSpacing: -0.6 },
 
-  /** 17/24/600 - Section titles, card headers, product names */
+  // ── Section / item titles ──
+  /** 17/24/600 — Section titles, card headers, product names */
   subtitle: { size: 17, lineHeight: 24, weight: '600', letterSpacing: -0.4 },
+  /** 17/24/600 — Semantic alias: major section (maps to subtitle) */
+  sectionTitle: { size: 17, lineHeight: 24, weight: '600', letterSpacing: -0.4 },
+  /** 18/24/600 — Product/person/conversation title in lists */
+  itemTitle: { size: 18, lineHeight: 24, weight: '600', letterSpacing: -0.3 },
 
-  /** 14/20/400 - Body text, descriptions, general content */
+  // ── Body ──
+  /** 14/20/400 — Body text, descriptions, general content */
   body: { size: 14, lineHeight: 20, weight: '400', letterSpacing: -0.2 },
-
-  /** 15/21/600 - Strong body, picker values, emphasized descriptions */
+  /** 15/21/600 — Strong body, picker values, emphasized descriptions */
   bodyEmphasis: { size: 15, lineHeight: 21, weight: '600', letterSpacing: 0 },
-
-  /** 16/22/700 - Card price hero, emphasized numeric values */
+  /** 15/21/600 — Semantic alias: emphasized body (maps to bodyEmphasis) */
+  bodyStrong: { size: 15, lineHeight: 21, weight: '600', letterSpacing: 0 },
+  /** 16/22/700 — Card price hero, emphasized numeric values */
   bodyLarge: { size: 16, lineHeight: 22, weight: '700', letterSpacing: -0.2 },
 
-  /** 14/20/600 - Button text, emphasized content, prices (LEGACY — prefer priceList for actual prices) */
+  // ── Price / financial ──
+  /** 14/20/600 — Button text, emphasized content, compact prices (LEGACY — prefer priceList for actual prices) */
   price: { size: 14, lineHeight: 20, weight: '600', letterSpacing: -0.2 },
-
-  /** 20/24/700 - Prices in lists, totals (ELEVATED per OVERALL spec) */
+  /** 20/24/700 — Prices in lists, totals */
   priceList: { size: 20, lineHeight: 24, weight: '700', letterSpacing: -0.3 },
-
-  /** 28/32/700 - Hero prices, checkout totals (ELEVATED per OVERALL spec) */
+  /** 28/32/700 — Hero prices, checkout totals */
   priceLarge: { size: 28, lineHeight: 32, weight: '700', letterSpacing: -0.5 },
+  /** 28/32/700 — Semantic alias: PDP/checkout total (maps to priceLarge) */
+  priceHero: { size: 28, lineHeight: 32, weight: '700', letterSpacing: -0.5 },
 
-  /** 12/16/400 - Captions, metadata, timestamps, hints */
+  // ── Caption / metadata ──
+  /** 12/16/400 — Captions, metadata, timestamps, hints */
   caption: { size: 12, lineHeight: 16, weight: '400', letterSpacing: 0 },
-
-  /** 13/18/400 - Metadata, timestamps, hints (ELEVATED per OVERALL spec) */
+  /** 13/18/400 — Metadata, timestamps, hints (elevated) */
   captionElevated: { size: 13, lineHeight: 18, weight: '400', letterSpacing: 0.1 },
-
-  /** 11/14/500 - Small metadata, seller handles */
+  /** 11/14/500 — Small metadata, seller handles */
   meta: { size: 11, lineHeight: 14, weight: '500', letterSpacing: 0.15 },
-
-  /** 11/14/600 - Labels, badges, section headers (ELEVATED per OVERALL spec) */
+  /** 11/14/600 — Labels, badges, section headers (elevated) */
   metaElevated: { size: 11, lineHeight: 14, weight: '600', letterSpacing: 0.5 },
+  /** 11/14/600 — Semantic alias: controls/field labels (maps to metaElevated) */
+  label: { size: 11, lineHeight: 14, weight: '600', letterSpacing: 0.5 },
 
-  /** 32/38/700 - Auth hero, empty state titles (ELEVATED per OVERALL spec) */
-  display: { size: 32, lineHeight: 38, weight: '700', letterSpacing: -0.5 },
+  // ── Numeric metadata ──
+  /** 13/18/600 — Bids, quantities, P&L (tabular figures via Numeric.numericMeta) */
+  numericMeta: { size: 13, lineHeight: 18, weight: '600', letterSpacing: 0 },
 } as const;
 
 // REMOVED (to reduce visual chaos):
@@ -231,7 +260,9 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
 };
 
 // ============================================================================
-// ELEVATION / SHADOWS
+// ELEVATION / SHADOWS — deliberate depth, not decoration
+// Use depth only to clarify hierarchy, touchability, or modal separation.
+// Avoid shadows on every card, cards inside cards, and decorative badges.
 // ============================================================================
 interface ShadowConfig {
   shadowColor: string;
@@ -242,7 +273,7 @@ interface ShadowConfig {
 }
 
 export const Elevation: Record<string, ShadowConfig> = {
-  /** No shadow - flat elements */
+  /** No shadow — flat elements, default utility structure */
   none: {
     shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
@@ -250,54 +281,57 @@ export const Elevation: Record<string, ShadowConfig> = {
     shadowRadius: 0,
     elevation: 0,
   },
-  /** Subtle - Cards, small elements (ELEVATED: softer, larger radius) */
+  /** Hairline — barely perceptible separation for grouped content.
+   *  Use for cards that need to float above a same-colour canvas. */
   subtle: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  /** Card — elevated cards, buttons. Deliberate but restrained. */
+  card: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  /** Card - Elevated cards, buttons (ELEVATED: refined values) */
-  card: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  /** Floating - FABs, overlays (ELEVATED: larger radius) */
+  /** Floating — FABs, sticky docks, overlays. Separates from scroll content. */
   floating: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
+    elevation: 6,
   },
-  /** Modal - Bottom sheets, dialogs (ELEVATED: premium feel) */
+  /** Modal — bottom sheets, dialogs. Clear material separation. */
   modal: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    elevation: 12,
   },
 } as const;
 
 // ============================================================================
-// ANIMATION DURATIONS
+// ANIMATION DURATIONS — semantic motion bands
+// Touch: 90–150ms | Micro state: 160–240ms | Sheet/route: 260–420ms
+// Celebratory: rare, under ~600ms
 // ============================================================================
 export const Duration = {
-  /** 0ms - Immediate */
+  /** 0ms — Immediate */
   instant: 0,
-  /** 150ms - Quick feedback (button press) */
-  fast: 150,
-  /** 250ms - Standard transitions */
-  normal: 250,
-  /** 400ms - Emphasis animations */
-  slow: 400,
-  /** 600ms - Hero/page transitions */
-  slower: 600,
+  /** 120ms — Touch acknowledgement (button press, toggle) */
+  fast: 120,
+  /** 200ms — Micro state transition (segment switch, sheet slide) */
+  normal: 200,
+  /** 320ms — Emphasis / route continuity (content crossfade, screen push) */
+  slow: 320,
+  /** 500ms — Hero/page transitions, rare celebratory motion */
+  slower: 500,
 } as const;
 
 // ============================================================================
@@ -433,6 +467,11 @@ export const Numeric = {
     ...Type.display,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // Numeric metadata — bids, quantities, P&L (13/18/600)
+  numericMeta: {
+    ...Type.numericMeta,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
   // Order book, depth, stats grids — compact mono feel
   mono: {
     size: 13,
@@ -466,6 +505,36 @@ export const Stroke = {
   standard: 1,
   /** Selection/focus only; never routine card decoration. */
   emphasis: 2,
+} as const;
+
+// ============================================================================
+// ICON GRAMMAR — one icon family, one optical size band, stable outline/filled rule
+// Ionicons is the single icon family. Filled state = selected/active/saved.
+// ============================================================================
+export const IconGrammar = {
+  /** Standard navigation/action glyph. 20–24pt optical band. */
+  standard: 22,
+  /** Compact inline glyph for metadata rows. 14–18pt optical band. */
+  metadata: 16,
+  /** Small badge/indicator glyph. 12–14pt optical band. */
+  badge: 12,
+  /** Hero/empty-state glyph. 28–32pt optical band. */
+  hero: 28,
+  /** Outline = default/resting state. Filled = selected/active/saved. */
+  filledStates: ['heart', 'bookmark', 'star', 'bookmark-outline', 'heart-outline'] as readonly string[],
+} as const;
+
+// ============================================================================
+// PRESS FEEDBACK — scale values for press interactions
+// Press scale: 0.97–0.985 per Design.md motion patterns
+// ============================================================================
+export const PressScale = {
+  /** Crisp tap — buttons, list rows */
+  tap: 0.97,
+  /** Gentle press — large surfaces, cards */
+  gentle: 0.985,
+  /** Icon-only press — controls with transparent background */
+  icon: 0.92,
 } as const;
 
 // ============================================================================

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Linking, View, Text, StyleSheet, Pressable } from 'react-native';
+import { Linking, View, Text, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -38,7 +38,7 @@ import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 import { useAppTheme as useTheme } from '../theme/ThemeContext';
 
-import { Space, Radius, Type, Elevation, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Type, Control, Typography, Elevation } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 interface DestinationMeta {
@@ -51,39 +51,55 @@ interface DestinationMeta {
 
 // Route metadata for search — searchTerms hold only additional synonyms not already
 // covered by the label or section title (the filter checks all three fields).
+// Section names mirror the visible settings grouping so search results stay
+// consistent with the browsable hierarchy.
 const ROUTE_METADATA: DestinationMeta[] = [
+  // ── Account ──
   { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor', section: 'Account', showSection: true },
-  { key: 'Verification', label: 'Verification & KYC', searchTerms: 'identity dac7 tax badge seller trust', section: 'Account', showSection: true },
-  { key: 'AccountControl', label: 'Account control', searchTerms: 'delete deactivate download export', section: 'Account', showSection: true },
+  { key: 'Verification', label: 'Verification & KYC', searchTerms: 'identity dac7 tax badge seller trust', section: 'Account' },
+  { key: 'ChangePassword', label: 'Change password', searchTerms: '2fa two factor security', section: 'Account' },
+  { key: 'ConnectedAccounts', label: 'Connected accounts', searchTerms: 'google apple oauth social login', section: 'Account' },
+  { key: 'ActiveSessions', label: 'Devices & sessions', searchTerms: 'login device security', section: 'Account' },
+  { key: 'AccountControl', label: 'Account control', searchTerms: 'delete deactivate download export security', section: 'Account' },
   { key: 'DataExport', label: 'Download my data', searchTerms: 'export gdpr', section: 'Account' },
   { key: 'DeleteAccount', label: 'Delete account', searchTerms: 'permanently erase gdpr remove', section: 'Account' },
-  { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'delivery shipping', section: 'Buying', showSection: true },
-  { key: 'Payments', label: 'Payment methods', searchTerms: 'card bank', section: 'Buying', showSection: true },
-  { key: 'Closet', label: 'Saved & collections', searchTerms: 'closet wishlist', section: 'Buying', showSection: true },
-  { key: 'Wallet', label: 'Payout account', searchTerms: 'wallet balance', section: 'Selling & payouts', showSection: true },
-  { key: 'BalanceHistory', label: 'Payout history', searchTerms: 'balance', section: 'Selling & payouts', showSection: true },
-  { key: 'Postage', label: 'Shipping preferences', searchTerms: 'postage carrier', section: 'Selling & payouts', showSection: true },
+  // ── Privacy & safety ──
   { key: 'PrivacySettings', label: 'Privacy & safety', searchTerms: 'controls visibility blocked', section: 'Privacy & safety', showSection: true },
-  { key: 'ChatSettings', label: 'Messages & notifications', searchTerms: 'chat messaging', section: 'Messages & notifications', showSection: true },
+  { key: 'ChatSettings', label: 'Chat privacy', searchTerms: 'who can message messaging', section: 'Privacy & safety' },
+  { key: 'DataPrivacy', label: 'Data & privacy', searchTerms: 'gdpr retention third party cookies', section: 'Privacy & safety' },
+  { key: 'BlockedUsers', label: 'Blocked users', searchTerms: 'block unblock', section: 'Privacy & safety' },
+  // ── Buying ──
+  { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'delivery shipping', section: 'Buying', showSection: true },
+  { key: 'Payments', label: 'Payment methods', searchTerms: 'card bank', section: 'Buying' },
+  { key: 'Closet', label: 'Saved & collections', searchTerms: 'closet wishlist', section: 'Buying' },
+  // ── Selling & payouts ──
+  { key: 'Wallet', label: 'Payout account', searchTerms: 'wallet balance', section: 'Selling & payouts', showSection: true },
+  { key: 'BalanceHistory', label: 'Payout history', searchTerms: 'balance', section: 'Selling & payouts' },
+  { key: 'Postage', label: 'Shipping preferences', searchTerms: 'postage carrier', section: 'Selling & payouts' },
+  // ── Notifications ──
+  { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push alerts', section: 'Notifications', showSection: true },
+  { key: 'EmailNotifications', label: 'Email preferences', searchTerms: '', section: 'Notifications' },
+  { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push offers price drop marketing quiet hours', section: 'Notifications' },
+  // ── Personalisation & appearance ──
   { key: 'Personalisation', label: 'Personalisation & appearance', searchTerms: 'theme currency language feed', section: 'Personalisation & appearance', showSection: true },
-  { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push alerts', section: 'Messages & notifications', showSection: true },
-  { key: 'EmailNotifications', label: 'Email preferences', searchTerms: '', section: 'Messages & notifications' },
-  { key: 'ConnectedAccounts', label: 'Connected accounts', searchTerms: 'google apple oauth social login', section: 'Security', showSection: true },
+  { key: 'AIPreferences', label: 'Listing suggestions', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell', section: 'Personalisation & appearance' },
+  { key: 'YourAlgorithm', label: 'Your feed', searchTerms: 'feed recommendations topics signals transparency algorithm', section: 'Personalisation & appearance' },
+  { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'carbon neutral packaging badges eco secondhand', section: 'Personalisation & appearance' },
+  // ── Accessibility ──
   { key: 'AccessibilitySettings', label: 'Accessibility', searchTerms: 'text size reduced motion high contrast screen reader', section: 'Personalisation & appearance' },
-  { key: 'AIPreferences', label: 'AI Preferences', searchTerms: 'listing suggestions photo enhancement autocomplete smart sell', section: 'AI & Agents', showSection: true },
-  { key: 'AIAgentIntegration', label: 'AI API Integration', searchTerms: 'openai anthropic claude gemini endpoint byok provider credentials', section: 'AI & Agents' },
-  { key: 'BotDirectory', label: 'Agent Directory', searchTerms: 'bot assistant browse catalogue deploy', section: 'AI & Agents' },
-  { key: 'CustomBots', label: 'My Agents', searchTerms: 'custom bots created deployed manage draft published', section: 'AI & Agents' },
-  { key: 'BotBuilder', label: 'Create Agent', searchTerms: 'bot builder automation instructions model trigger', section: 'AI & Agents' },
-  { key: 'YourAlgorithm', label: 'Your Algorithm', searchTerms: 'feed recommendations topics signals transparency', section: 'AI & Agents' },
-  { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'carbon neutral packaging badges eco secondhand', section: 'Preferences' },
-  { key: 'DataPrivacy', label: 'Data & Privacy', searchTerms: 'gdpr retention third party cookies', section: 'Account' },
-  { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push offers price drop marketing quiet hours', section: 'Messages & notifications' },
-  { key: 'CoOwnPriceAlerts', label: 'Co-Own price alerts', searchTerms: 'notifications', section: 'Co-Own', showSection: true },
+  // ── Co-Own ──
+  { key: 'CoOwnPriceAlerts', label: 'Price alerts', searchTerms: 'notifications', section: 'Co-Own', showSection: true },
   { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'recurring orders', section: 'Co-Own' },
   { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'statements cgt', section: 'Co-Own' },
-  { key: 'HelpSupport', label: 'Help', searchTerms: 'support faq contact', section: 'Help', showSection: true },
-  { key: 'About', label: 'About Thryftverse', searchTerms: 'version', section: 'Help', showSection: true },
+  // ── Help & about ──
+  { key: 'HelpSupport', label: 'Help', searchTerms: 'support faq contact', section: 'Help & about', showSection: true },
+  { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Help & about' },
+  { key: 'About', label: 'About Thryftverse', searchTerms: 'version', section: 'Help & about' },
+  // ── Advanced & developer (agent/API settings isolated from ordinary settings) ──
+  { key: 'AIAgentIntegration', label: 'Provider credentials', searchTerms: 'openai anthropic claude gemini endpoint byok provider credentials api', section: 'Advanced & developer', showSection: true },
+  { key: 'BotDirectory', label: 'Automation & agents', searchTerms: 'bot assistant browse catalogue deploy', section: 'Advanced & developer' },
+  { key: 'CustomBots', label: 'My agents', searchTerms: 'custom bots created deployed manage draft published', section: 'Advanced & developer' },
+  { key: 'BotBuilder', label: 'Create agent', searchTerms: 'bot builder automation instructions model trigger', section: 'Advanced & developer' },
 ];
 
 export default function SettingsScreen({ navigation }: Props) {
@@ -273,17 +289,15 @@ export default function SettingsScreen({ navigation }: Props) {
   const displayName = currentUser?.displayName ?? currentUser?.username ?? 'Not signed in';
   const username = currentUser?.username ?? '';
 
-  const verificationBadges: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string; verified: boolean }[] = [];
-  if (currentUser?.emailVerified) {
-    verificationBadges.push({ icon: 'mail', label: 'Email verified', color: colors.success, verified: true });
-  } else {
-    verificationBadges.push({ icon: 'mail-outline', label: 'Email not verified', color: colors.textMuted, verified: false });
-  }
-  if (currentUser?.phone) {
-    verificationBadges.push({ icon: 'call', label: 'Phone added', color: colors.success, verified: true });
-  } else {
-    verificationBadges.push({ icon: 'call-outline', label: 'No phone', color: colors.textMuted, verified: false });
-  }
+  // ── Verification badges — surfaced on the identity hero card ──
+  const verificationBadges: { icon: keyof typeof Ionicons.glyphMap; label: string; color: string; verified: boolean }[] = [
+    {
+      icon: 'mail' as const,
+      label: 'Email',
+      color: colors.success,
+      verified: !!currentUser?.emailVerified,
+    },
+  ].filter((b) => b.verified);
 
   const notificationSummary = `${pushEnabledCount}/${pushTotalCount} categories`;
 
@@ -356,7 +370,7 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── ACCOUNT SUMMARY CARD — profile, verification status, quick actions ── */}
+      {/* ── IDENTITY CARD — profile, verification status, quick actions ── */}
       <View style={[styles.identityHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <AnimatedPressable
           onPress={() => navigation.navigate('EditProfile', {})}
@@ -400,10 +414,10 @@ export default function SettingsScreen({ navigation }: Props) {
           <View style={styles.identityBadges}>
             {verificationBadges.map((badge, i) => (
               <View key={i} style={[styles.identityBadge, { backgroundColor: `${badge.color}15` }]}>
-                <Ionicons name={badge.icon} size={11} color={badge.color} />
+                <Ionicons name={badge.icon} size={12} color={badge.color} />
                 <Text style={[styles.identityBadgeText, { color: badge.color }]}>{badge.label}</Text>
                 {badge.verified ? (
-                  <Ionicons name="checkmark-circle" size={10} color={badge.color} />
+                  <Ionicons name="checkmark-circle" size={11} color={badge.color} />
                 ) : null}
               </View>
             ))}
@@ -420,11 +434,11 @@ export default function SettingsScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Edit profile"
           >
-            <Ionicons name="create-outline" size={15} color={colors.textPrimary} />
+            <Ionicons name="create-outline" size={16} color={colors.textPrimary} />
             <Text style={[styles.identityQuickBtnText, { color: colors.textPrimary }]}>Edit profile</Text>
           </AnimatedPressable>
           <AnimatedPressable
-            style={[styles.identityQuickBtn, styles.identityQuickBtnPrimary, { backgroundColor: `${colors.brand}15`, borderColor: `${colors.brand}40` }]}
+            style={[styles.identityQuickBtn, { backgroundColor: `${colors.brand}15`, borderColor: `${colors.brand}40` }]}
             onPress={() => navigation.navigate('Verification')}
             activeOpacity={0.8}
             scaleValue={0.97}
@@ -432,7 +446,7 @@ export default function SettingsScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Verify identity"
           >
-            <Ionicons name="shield-checkmark-outline" size={15} color={colors.brand} />
+            <Ionicons name="shield-checkmark-outline" size={16} color={colors.brand} />
             <Text style={[styles.identityQuickBtnText, { color: colors.brand }]}>Verify identity</Text>
           </AnimatedPressable>
         </View>
@@ -449,27 +463,10 @@ export default function SettingsScreen({ navigation }: Props) {
           isFirst
         />
         <SettingsRow
-          icon="location-outline"
-          title="Saved addresses"
-          subtitle={savedAddress ? '1 saved' : 'None saved'}
-          onPress={() => navigation.navigate('SavedAddresses')}
-        />
-        <SettingsRow
-          icon="card-outline"
-          title="Payment methods"
-          subtitle={savedPaymentMethod ? savedPaymentMethod.label : 'None saved'}
-          onPress={() => navigation.navigate('Payments')}
-        />
-        <SettingsRow
           icon="key-outline"
           title="Change password"
           subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
           onPress={() => navigation.navigate('ChangePassword')}
-        />
-        <SettingsRow
-          icon="phone-portrait-outline"
-          title="Devices & sessions"
-          onPress={() => navigation.navigate('ActiveSessions')}
         />
         <SettingsRow
           icon="link-outline"
@@ -478,16 +475,9 @@ export default function SettingsScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('ConnectedAccounts')}
         />
         <SettingsRow
-          icon="eye-outline"
-          title="Privacy & safety"
-          subtitle="Visibility, blocked users"
-          onPress={() => navigation.navigate('PrivacySettings')}
-        />
-        <SettingsRow
-          icon="lock-closed-outline"
-          title="Data & Privacy"
-          subtitle="Download, delete, privacy controls"
-          onPress={() => navigation.navigate('DataPrivacy')}
+          icon="phone-portrait-outline"
+          title="Devices & sessions"
+          onPress={() => navigation.navigate('ActiveSessions')}
         />
         <SettingsRow
           icon="shield-outline"
@@ -498,32 +488,80 @@ export default function SettingsScreen({ navigation }: Props) {
         <SettingsRow
           icon="download-outline"
           title="Download my data"
-          subtitle="Export a copy of your account data"
+          subtitle="Export your account data"
           onPress={() => navigation.navigate('DataExport')}
         />
         <SettingsRow
           icon="trash-outline"
           title="Delete account"
-          subtitle="Permanently erase your account and data"
+          subtitle="Permanently erase your account"
           danger
           onPress={() => navigation.navigate('DeleteAccount')}
           isLast
         />
       </SettingsSection>
 
-      {/* ── BUYING & SELLING ── */}
-      <SettingsSection title="Buying & selling" icon="bag-outline" noCard>
+      {/* ── PRIVACY & SAFETY ── */}
+      <SettingsSection title="Privacy & safety" icon="lock-closed-outline" noCard>
+        <SettingsRow
+          icon="eye-outline"
+          title="Privacy & safety"
+          subtitle="Visibility, blocked users"
+          onPress={() => navigation.navigate('PrivacySettings')}
+          isFirst
+        />
+        <SettingsRow
+          icon="chatbubble-outline"
+          title="Chat privacy"
+          subtitle="Who can message you"
+          onPress={() => navigation.navigate('ChatSettings')}
+        />
+        <SettingsRow
+          icon="lock-closed-outline"
+          title="Data & privacy"
+          subtitle="Privacy controls and retention"
+          onPress={() => navigation.navigate('DataPrivacy')}
+        />
+        <SettingsRow
+          icon="ban-outline"
+          title="Blocked users"
+          subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None'}
+          onPress={() => navigation.navigate('BlockedUsers')}
+          isLast
+        />
+      </SettingsSection>
+
+      {/* ── BUYING ── */}
+      <SettingsSection title="Buying" icon="bag-outline" noCard>
+        <SettingsRow
+          icon="location-outline"
+          title="Saved addresses"
+          subtitle={savedAddress ? '1 saved' : 'None saved'}
+          onPress={() => navigation.navigate('SavedAddresses')}
+          isFirst
+        />
+        <SettingsRow
+          icon="card-outline"
+          title="Payment methods"
+          subtitle={savedPaymentMethod ? savedPaymentMethod.label : 'None saved'}
+          onPress={() => navigation.navigate('Payments')}
+        />
         <SettingsRow
           icon="heart-outline"
           title="Saved & collections"
           onPress={() => navigation.navigate('Closet')}
-          isFirst
+          isLast
         />
+      </SettingsSection>
+
+      {/* ── SELLING & PAYOUTS ── */}
+      <SettingsSection title="Selling & payouts" icon="cash-outline" noCard>
         <SettingsRow
           icon="wallet-outline"
           title="Payout account"
           subtitle="Balance and wallet"
           onPress={() => navigation.navigate('Wallet')}
+          isFirst
         />
         <SettingsRow
           icon="cube-outline"
@@ -550,34 +588,28 @@ export default function SettingsScreen({ navigation }: Props) {
           isFirst
         />
         <SettingsRow
-          icon="mail-outline"
-          title="Email notifications"
-          subtitle={emailNotificationsEnabled ? 'On' : 'Off'}
-          onPress={() => navigation.navigate('EmailNotifications')}
-        />
-        <SettingsRow
-          icon="options-outline"
-          title="Notification preferences"
-          subtitle="Master toggle, quiet hours, preview"
-          onPress={() => navigation.navigate('NotificationPreferences')}
-        />
-        <SettingsRow
           icon="notifications-outline"
           title="Notification categories"
           subtitle={notificationSummary}
           onPress={() => navigation.navigate('PushNotifications')}
         />
         <SettingsRow
-          icon="chatbubble-outline"
-          title="Chat privacy"
-          subtitle="Who can message you"
-          onPress={() => navigation.navigate('ChatSettings')}
+          icon="options-outline"
+          title="Notification preferences"
+          subtitle="Quiet hours, preview"
+          onPress={() => navigation.navigate('NotificationPreferences')}
+        />
+        <SettingsRow
+          icon="mail-outline"
+          title="Email preferences"
+          subtitle={emailNotificationsEnabled ? 'On' : 'Off'}
+          onPress={() => navigation.navigate('EmailNotifications')}
           isLast
         />
       </SettingsSection>
 
-      {/* ── PREFERENCES ── */}
-      <SettingsSection title="Preferences" icon="options-outline" noCard>
+      {/* ── PERSONALISATION & APPEARANCE ── */}
+      <SettingsSection title="Personalisation & appearance" icon="color-palette-outline" noCard>
         <SettingsRow
           icon="color-palette-outline"
           title="Theme"
@@ -604,40 +636,40 @@ export default function SettingsScreen({ navigation }: Props) {
           onPress={() => setLanguagePickerVisible(true)}
         />
         <SettingsRow
-          icon="accessibility-outline"
-          title="Accessibility"
-          subtitle="Text size, motion, contrast"
-          onPress={() => navigation.navigate('AccessibilitySettings')}
-        />
-        <SettingsRow
-          icon="sparkles-outline"
-          title="Your Algorithm"
-          subtitle="Your feed preferences"
-          onPress={() => navigation.navigate('YourAlgorithm')}
-        />
-        <SettingsRow
-          icon="leaf-outline"
-          title="Sustainability"
-          subtitle="Goals, shipping, impact tracking"
-          onPress={() => navigation.navigate('SustainabilityPreferences')}
-        />
-        <SettingsRow
           icon="options-outline"
           title="Content preferences"
           subtitle="Feed and recommendations"
           onPress={() => navigation.navigate('Personalisation')}
         />
         <SettingsRow
-          icon="time-outline"
-          title="Search history"
-          subtitle="Clear your recent searches"
-          onPress={() => void handleClearSearchHistory()}
+          icon="bulb-outline"
+          title="Listing suggestions"
+          subtitle="Photo enhancement, title and price suggestions"
+          onPress={() => navigation.navigate('AIPreferences')}
         />
         <SettingsRow
-          icon="ban-outline"
-          title="Blocked users"
-          subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None'}
-          onPress={() => navigation.navigate('BlockedUsers')}
+          icon="analytics-outline"
+          title="Your feed"
+          subtitle="Recommendations and transparency"
+          onPress={() => navigation.navigate('YourAlgorithm')}
+        />
+        <SettingsRow
+          icon="leaf-outline"
+          title="Sustainability"
+          subtitle="Goals, shipping, impact"
+          onPress={() => navigation.navigate('SustainabilityPreferences')}
+        />
+        <SettingsRow
+          icon="accessibility-outline"
+          title="Accessibility"
+          subtitle="Text size, motion, contrast"
+          onPress={() => navigation.navigate('AccessibilitySettings')}
+        />
+        <SettingsRow
+          icon="time-outline"
+          title="Search history"
+          subtitle="Clear recent searches"
+          onPress={() => void handleClearSearchHistory()}
         />
         <SettingsRow
           icon="analytics-outline"
@@ -645,42 +677,6 @@ export default function SettingsScreen({ navigation }: Props) {
           subtitle="Analytics and personalization"
           toggleValue={!analyticsOptOut}
           onToggle={(v) => setAnalyticsOptOut(!v)}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── AI & AGENTS ── */}
-      <SettingsSection title="AI & Agents" icon="sparkles-outline" noCard>
-        <SettingsRow
-          icon="sparkles-outline"
-          title="AI Preferences"
-          subtitle="Listing suggestions, photo, chat agents, Smart Sell"
-          onPress={() => navigation.navigate('AIPreferences')}
-          isFirst
-        />
-        <SettingsRow
-          icon="key-outline"
-          title="AI API Integration"
-          subtitle="OpenAI, Anthropic, Gemini — bring your own key"
-          onPress={() => navigation.navigate('AIAgentIntegration')}
-        />
-        <SettingsRow
-          icon="people-outline"
-          title="Agent Directory"
-          subtitle="Browse and deploy AI assistants"
-          onPress={() => navigation.navigate('BotDirectory')}
-        />
-        <SettingsRow
-          icon="person-circle-outline"
-          title="My Agents"
-          subtitle="Your custom agents"
-          onPress={() => navigation.navigate('CustomBots')}
-        />
-        <SettingsRow
-          icon="create-outline"
-          title="Create Agent"
-          subtitle="Build a custom AI assistant"
-          onPress={() => navigation.navigate('BotBuilder', {})}
           isLast
         />
       </SettingsSection>
@@ -737,6 +733,41 @@ export default function SettingsScreen({ navigation }: Props) {
           title="About Thryftverse"
           value="v1.0.0"
           onPress={() => navigation.navigate('About')}
+          isLast
+        />
+      </SettingsSection>
+
+      {/* ── ADVANCED & DEVELOPER ── */}
+      {/* Agent/API settings isolated from ordinary settings (audit: Global P0 —
+          move Agent/API settings out of ordinary Settings). These are
+          developer-facing capabilities (BYOK keys, agent builder, bot
+          management) and are visually separated from the consumer settings
+          above so they do not read as ordinary user preferences. */}
+      <SettingsSection title="Advanced & developer" icon="code-working-outline" noCard>
+        <SettingsRow
+          icon="key-outline"
+          title="Provider credentials"
+          subtitle="Bring your own API key"
+          onPress={() => navigation.navigate('AIAgentIntegration')}
+          isFirst
+        />
+        <SettingsRow
+          icon="people-outline"
+          title="Automation & agents"
+          subtitle="Browse and deploy assistants"
+          onPress={() => navigation.navigate('BotDirectory')}
+        />
+        <SettingsRow
+          icon="person-circle-outline"
+          title="My agents"
+          subtitle="Your custom agents"
+          onPress={() => navigation.navigate('CustomBots')}
+        />
+        <SettingsRow
+          icon="create-outline"
+          title="Create agent"
+          subtitle="Build a custom assistant"
+          onPress={() => navigation.navigate('BotBuilder', {})}
           isLast
         />
       </SettingsSection>
@@ -829,10 +860,10 @@ const styles = StyleSheet.create({
     lineHeight: Type.bodyLarge.lineHeight,
   },
   identityHandle: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   identityEmail: {
     fontSize: Type.meta.size,
@@ -849,9 +880,9 @@ const styles = StyleSheet.create({
   identityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs - 1,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2,
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
   },
   identityBadgeText: {
@@ -869,17 +900,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.sm,
+    gap: Space.xs + 1,
+    paddingVertical: Space.sm + Space.xs / 2,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: Control.hit,
   },
-  identityQuickBtnPrimary: {},
   identityQuickBtnText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   identityEditAffordance: {
     width: Control.chromeCompact,

@@ -1,7 +1,7 @@
 /**
  * SuggestedRepliesBar — horizontal scroll of pill-shaped AI-suggested replies
- * shown above the chat input. Each pill has an icon based on the reply type
- * and an "AI" badge to indicate the suggestions are AI-generated.
+ * shown above the chat input. Each pill has an icon based on the reply type.
+ * The bar uses a neutral visual identity (no sparkles) per AGENTS.md §4.
  *
  * Demo mode is indicated subtly (AGENTS.md §11).
  */
@@ -14,7 +14,7 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import type { SuggestedReply, SuggestedReplyType } from '../../services/chatAgentsApi';
 
@@ -48,20 +48,16 @@ export function SuggestedRepliesBar({
   return (
     <View style={[styles.root, { backgroundColor: colors.background, borderBottomColor: colors.borderSubtle }]}>
       <View style={styles.headerRow}>
-        <View style={[styles.agentIcon, { backgroundColor: `${colors.brand}14` }]}>
+        <View style={[styles.agentIcon, { backgroundColor: colors.surfaceAlt }]}>
           <Ionicons
-            name={(agentAvatar ?? 'sparkles') as keyof typeof Ionicons.glyphMap}
+            name={(agentAvatar ?? 'cube-outline') as keyof typeof Ionicons.glyphMap}
             size={12}
-            color={colors.brand}
+            color={colors.textSecondary}
           />
         </View>
         <Text style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={1}>
           {agentName ? `${agentName} suggests` : 'Suggested replies'}
         </Text>
-        <View style={[styles.aiBadge, { backgroundColor: `${colors.brand}14` }]}>
-          <Ionicons name="sparkles" size={9} color={colors.brand} />
-          <Text style={[styles.aiBadgeText, { color: colors.brand }]}>AI</Text>
-        </View>
         <View style={[styles.demoBadge, { backgroundColor: colors.surfaceAlt }]}>
           <Text style={[styles.demoBadgeText, { color: colors.textMuted }]}>demo</Text>
         </View>
@@ -80,7 +76,7 @@ export function SuggestedRepliesBar({
               key={`${reply.text}-${index}`}
               style={({ pressed }) => [
                 styles.pill,
-                { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
+                { backgroundColor: colors.surface, borderColor: colors.border },
                 pressed && { opacity: 0.6 },
               ]}
               onPress={() => onSelect(reply)}
@@ -88,7 +84,7 @@ export function SuggestedRepliesBar({
               accessibilityLabel={`Use suggested reply: ${reply.text}`}
               accessibilityHint="Fills the message input with this reply"
             >
-              <Ionicons name={iconName} size={13} color={colors.textSecondary} />
+              <Ionicons name={iconName} size={13} color={colors.textMuted} />
               <Text style={[styles.pillText, { color: colors.textPrimary }]} numberOfLines={1}>
                 {reply.text}
               </Text>
@@ -103,40 +99,26 @@ export function SuggestedRepliesBar({
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     root: {
-      paddingTop: Space.sm,
-      paddingBottom: Space.xs,
+      paddingTop: Space.sm - 1,
+      paddingBottom: Space.xs + 1,
       borderBottomWidth: StyleSheet.hairlineWidth,
     },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
+      gap: Space.xs + 1,
       paddingHorizontal: Space.md,
       marginBottom: Space.xs,
     },
     agentIcon: {
-      width: 20,
-      height: 20,
+      width: 22,
+      height: 22,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
     },
-    aiBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      paddingHorizontal: 5,
-      paddingVertical: 1,
-      borderRadius: Radius.full,
-    },
-    aiBadgeText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      letterSpacing: Type.metaElevated.letterSpacing,
-    },
     demoBadge: {
-      paddingHorizontal: 5,
+      paddingHorizontal: 6,
       paddingVertical: 1,
       borderRadius: Radius.full,
       marginLeft: 'auto',
@@ -144,35 +126,35 @@ const createStyles = (colors: ThemeColors) =>
     demoBadgeText: {
       fontSize: Type.meta.size,
       lineHeight: Type.meta.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      fontFamily: Typography.family.regular,
+      letterSpacing: 0.3,
       textTransform: 'lowercase',
     },
     headerLabel: {
       fontSize: Type.caption.size,
       lineHeight: Type.caption.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: Typography.family.regular,
       flexShrink: 1,
     },
     scrollContent: {
       paddingHorizontal: Space.md,
-      gap: Space.sm,
+      gap: Space.sm - 1,
       paddingVertical: 2,
     },
     pill: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.sm - 1,
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      minHeight: 36,
+      minHeight: 34,
     },
     pillText: {
       fontSize: Type.caption.size,
       lineHeight: Type.caption.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: Typography.family.regular,
       maxWidth: 220,
     },
   });

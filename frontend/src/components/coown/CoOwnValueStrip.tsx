@@ -316,11 +316,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   columnHeader: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
-    textTransform: 'uppercase',
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginBottom: Space.xs,
   },
   cell: {
@@ -328,10 +327,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   cellLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   bidAskRow: {
     flexDirection: 'row',
@@ -343,6 +342,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     letterSpacing: Type.meta.letterSpacing,
     marginTop: 1,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   sizeLabel: {
     fontSize: Type.meta.size,
@@ -350,6 +350,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     letterSpacing: Type.meta.letterSpacing,
     marginTop: 1,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   missingValue: {
     fontSize: Type.priceList.size,

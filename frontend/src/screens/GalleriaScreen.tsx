@@ -645,7 +645,7 @@ export default function GalleriaScreen() {
             accessibilityHint="Create posters, looks, and moodboard collages"
           >
             <View style={styles.moodboardCtaIconWrap}>
-              <Ionicons name="sparkles-outline" size={22} color={colors.brand} />
+              <Ionicons name="create-outline" size={22} color={colors.brand} />
             </View>
             <View style={styles.moodboardCtaCopy}>
               <Text style={styles.moodboardCtaTitle} numberOfLines={1}>

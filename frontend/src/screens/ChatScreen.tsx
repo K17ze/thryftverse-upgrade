@@ -280,7 +280,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
+      paddingVertical: Space.sm - 1,
       backgroundColor: colors.surfaceAlt,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
@@ -301,20 +301,18 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     dateWrap: {
       alignItems: "center",
-      marginVertical: Space.sm,
-      paddingVertical: Space.xs,
-      paddingHorizontal: Space.sm,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
+      marginVertical: Space.md,
+      paddingVertical: 0,
+      paddingHorizontal: 0,
       alignSelf: "center",
     },
 
     dateText: {
       fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontFamily: Typography.family.medium,
       color: colors.textMuted,
-      textTransform: "uppercase",
-      letterSpacing: Type.meta.letterSpacing,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
     },
 
     statusWrap: {
@@ -337,7 +335,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     linkPreviewWrap: {
       maxWidth: "78%",
       alignSelf: "flex-start",
-      marginTop: Space.xs,
+      marginTop: Space.sm,
     },
 
     linkPreviewWrapRight: {
@@ -375,7 +373,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingHorizontal: 0,
       paddingBottom: 0,
       paddingTop: 0,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.background,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
     },
@@ -387,31 +385,31 @@ export default function ChatScreen({ navigation, route }: Props) {
       backgroundColor: colors.surfaceAlt,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
-      marginHorizontal: -Space.md,
-      marginTop: -Space.xs,
-      marginBottom: Space.xs,
+      marginHorizontal: 0,
+      marginTop: 0,
+      marginBottom: 0,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
+      paddingVertical: Space.sm - 1,
     },
 
     undoBannerText: {
       color: colors.textSecondary,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
     },
 
     undoBannerAction: {
       color: colors.brand,
-      fontSize: Type.meta.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
 
     agentRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: Space.sm + Space.xs,
+      paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
-      gap: Space.sm,
+      gap: Space.xs + 1,
       flexWrap: 'wrap',
     },
 
@@ -419,10 +417,12 @@ export default function ChatScreen({ navigation, route }: Props) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.md,
-      backgroundColor: `${colors.brand}14`,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs + 1,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
     },
 
     agentChipPressed: {
@@ -431,25 +431,26 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     agentChipText: {
       fontSize: Type.meta.size,
-      color: colors.brand,
+      color: colors.textPrimary,
       fontFamily: Typography.family.semibold,
     },
 
     agentHintText: {
       fontSize: Type.meta.size,
-      color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      fontFamily: Typography.family.regular,
     },
 
     addAgentBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs + 1,
+      borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
+      backgroundColor: colors.background,
     },
 
     addAgentBtnPressed: {
@@ -467,13 +468,42 @@ export default function ChatScreen({ navigation, route }: Props) {
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
-      gap: Space.xs,
+      gap: Space.xs + 1,
     },
 
     typingText: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
+    },
+
+    unreadDividerWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginVertical: Space.sm,
+      paddingHorizontal: Space.md,
+    },
+
+    unreadDividerLine: {
+      flex: 1,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.brand,
+    },
+
+    unreadDividerBadge: {
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full,
+      backgroundColor: `${colors.brand}14`,
+    },
+
+    unreadDividerText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.brand,
+      letterSpacing: 0.3,
+      textTransform: 'uppercase',
     },
   }), [colors]);
 
@@ -802,9 +832,15 @@ export default function ChatScreen({ navigation, route }: Props) {
     setMessages(hydratedMessages);
   }, [hydratedMessages]);
 
+  // Capture the initial unread state before markConversationRead clears it.
+  // Used to show an "unread divider" between previously read and new messages.
+  const wasUnreadOnOpenRef = useRef(false);
   useEffect(() => {
-    if (conversationId) markConversationRead(conversationId);
-  }, [conversationId, markConversationRead]);
+    if (conversationId) {
+      wasUnreadOnOpenRef.current = !!conversation?.unread;
+      markConversationRead(conversationId);
+    }
+  }, [conversationId, markConversationRead, conversation?.unread]);
 
   useEffect(() => {
     setIsTyping(false);
@@ -1766,6 +1802,22 @@ export default function ChatScreen({ navigation, route }: Props) {
     return indices;
   }, [messages]);
 
+  // Unread divider — shows "New messages" before the first unread incoming
+  // message. When the conversation was unread on open, we find the last
+  // incoming message from the other party and place the divider there.
+  // This is an approximation since the data model tracks unread as a
+  // boolean, not per-message read state.
+  const unreadDividerIndex = useMemo(() => {
+    if (!wasUnreadOnOpenRef.current) return -1;
+    // Find the last incoming (them) message — that's where new messages start
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender === 'them' && !messages[i].isSystem) {
+        return i;
+      }
+    }
+    return -1;
+  }, [messages]);
+
   const scrollToMessage = (messageId: string) => {
     const idx = messages.findIndex((m) => m.id === messageId);
     if (idx >= 0 && listRef.current) {
@@ -1802,15 +1854,15 @@ export default function ChatScreen({ navigation, route }: Props) {
     const isFirstInCluster = clusterFirst;
     const isLastInCluster = clusterLast;
 
-    // Spacing tiers — tight within clusters, normal between clusters
-    let spacingTop: number = Space.sm;
+    // Spacing tiers — 8pt within clusters, 12pt between clusters (AGENTS.md §4)
+    let spacingTop: number = Space.smMd;
     if (!prevMsg) spacingTop = Space.md;
-    else if (prevMsg.sender === msg.sender) spacingTop = Space.xs;
-    else spacingTop = Space.md;
+    else if (prevMsg.sender === msg.sender) spacingTop = Space.sm;
+    else spacingTop = Space.smMd;
 
     // Cluster rhythm: tight bottom inside cluster, normal at cluster end
-    let marginBottom: number = Space.xs;
-    if (isLastInCluster) marginBottom = Space.sm;
+    let marginBottom: number = Space.sm;
+    if (isLastInCluster) marginBottom = Space.smMd;
 
     const showDateSeparator = dateSeparatorIndices.has(index);
     const dateLabel = msg.date ? formatDateSeparator(msg.date) : null;
@@ -1821,6 +1873,20 @@ export default function ChatScreen({ navigation, route }: Props) {
           <Text style={styles.dateText}>{dateLabel}</Text>
         </View>
       ) : null;
+
+    // Unread divider — "New messages" separator between read and unread
+    const showUnreadDivider = unreadDividerIndex === index && unreadDividerIndex > 0;
+    const unreadDivider = showUnreadDivider ? (
+      <View style={styles.unreadDividerWrap}>
+        <View style={styles.unreadDividerLine} />
+        <View style={styles.unreadDividerBadge}>
+          <Text style={styles.unreadDividerText}>New messages</Text>
+        </View>
+        <View style={styles.unreadDividerLine} />
+      </View>
+    ) : null;
+
+    const separator = unreadDivider ?? dateSeparator;
 
     // Purchase status message — inline centered event
     if (msg.type === "purchase_status") {
@@ -2160,6 +2226,20 @@ export default function ChatScreen({ navigation, route }: Props) {
   // Memoized FlashList callbacks — stable references avoid re-rendering the
   // whole message list when parent state that doesn't affect messages changes.
   const messageKeyExtractor = useCallback((item: Message) => item.id, []);
+
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible messages on every parent state change (e.g. input text, agent
+  // panel toggle). renderMessage closes over many component-scope values, so
+  // we use a ref to always call the latest version while keeping a stable
+  // callback reference for FlashList's cell recycling.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderMessageRef = useRef(renderMessage);
+  renderMessageRef.current = renderMessage;
+  const renderMessageItem = useCallback(
+    ({ item, index }: { item: Message; index: number }) =>
+      renderMessageRef.current(item, index),
+    [],
+  );
   const handleMessageListScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -2342,7 +2422,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           <FlashList
             ref={listRef}
             data={messages}
-            renderItem={({ item, index }) => renderMessage(item, index)}
+            renderItem={renderMessageItem}
             keyExtractor={messageKeyExtractor}
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
@@ -2373,7 +2453,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           {isTyping ? (
             <View style={styles.typingRow}>
               <TypingIndicator />
-              <Text style={styles.typingText}>typing...</Text>
+              <Text style={styles.typingText}>typing…</Text>
             </View>
           ) : null}
           {/* P0-8: Composer-stack height enforcement. Multiple contextual
@@ -2474,17 +2554,17 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityHint={`Remove ${agent.name} from this conversation`}
               >
                 <Ionicons
-                  name={(agent.avatar as keyof typeof Ionicons.glyphMap) || 'sparkles'}
-                  size={Type.meta.size}
-                  color={colors.brand}
+                  name={(agent.avatar as keyof typeof Ionicons.glyphMap) || 'cube-outline'}
+                  size={13}
+                  color={colors.textSecondary}
                 />
                 <Text style={styles.agentChipText}>
                   {agent.name}
                 </Text>
                 <Ionicons
                   name="close-circle"
-                  size={Type.meta.size}
-                  color={colors.brand}
+                  size={13}
+                  color={colors.textMuted}
                 />
               </Pressable>
             ))}
@@ -2506,14 +2586,14 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityHint="Browse and deploy AI assistants into this conversation"
             >
               <Ionicons
-                name="sparkles"
-                size={Type.meta.size}
+                name="add-outline"
+                size={15}
                 color={colors.textSecondary}
               />
               <Text style={styles.addAgentBtnText}>
                 {deployedChatAgents.length > 0
-                  ? 'Add another assistant'
-                  : 'Add AI assistant'}
+                  ? 'Add another'
+                  : 'Add assistant'}
               </Text>
             </Pressable>
           </View>

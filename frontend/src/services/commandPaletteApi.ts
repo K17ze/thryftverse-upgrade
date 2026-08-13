@@ -350,10 +350,10 @@ export function getCommands(navigation: CommandNavigation): Command[] {
     },
     {
       id: 'action-ai-listing',
-      label: 'AI-powered listing',
-      subtitle: 'Generate a listing with AI',
+      label: 'Quick listing',
+      subtitle: 'Create a listing with suggestions',
       category: 'action',
-      icon: 'sparkles-outline',
+      icon: 'document-text-outline',
       keywords: ['ai', 'smart sell', 'auto listing', 'generate'],
       action: nav('AIPoweredListing'),
     },

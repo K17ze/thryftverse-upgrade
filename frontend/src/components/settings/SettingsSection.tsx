@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Radius, Typography, Control } from '../../theme/designTokens';
+import { Space, Type, Radius, Typography } from '../../theme/designTokens';
 
 export interface SettingsSectionProps {
   title: string;
@@ -34,7 +34,7 @@ export function SettingsSection({
       <View style={styles.titleRow}>
         {icon ? (
           <View style={styles.titleIcon}>
-            <Ionicons name={icon} size={20} color={colors.textPrimary} />
+            <Ionicons name={icon} size={20} color={colors.textSecondary} />
           </View>
         ) : null}
         <Text style={[noCard ? styles.titleFlat : styles.title, { color: noCard ? colors.textPrimary : colors.textSecondary }]}>
@@ -53,7 +53,7 @@ export function SettingsSection({
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: Space.md + Space.xs,
+    marginBottom: Space.lg,
   },
   eyebrow: {
     fontSize: Type.meta.size,
@@ -68,24 +68,24 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
   },
   titleIcon: {
-    width: Control.hit,
+    width: 24,
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -Space.xs,
+    marginLeft: -2,
   },
   title: {
-    fontSize: Type.meta.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
-    marginTop: Space.md,
-    letterSpacing: 0.8,
+    marginTop: Space.md + Space.xs,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
-    lineHeight: Type.meta.lineHeight,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   titleFlat: {
     fontSize: Type.subtitle.size,
@@ -96,12 +96,12 @@ const styles = StyleSheet.create({
     lineHeight: Type.subtitle.lineHeight,
   },
   description: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     marginBottom: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.captionElevated.lineHeight,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   card: {
     borderRadius: Radius.lg,

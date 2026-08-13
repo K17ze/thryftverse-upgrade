@@ -41,6 +41,7 @@ import { ShutterButton } from './camera/ShutterButton';
 import { ControlsRail } from './camera/ControlsRail';
 import { GalleryCarousel } from './camera/GalleryCarousel';
 import { PermissionState } from './camera/PermissionState';
+import { CreatorAnalytics } from './creatorAnalytics';
 
 // ── CreatorCamera — Flagship 2026 Elevation ────────────────────────
 // Snapchat 2026 / TikTok / BeReal-grade camera component with:
@@ -61,7 +62,7 @@ import { PermissionState } from './camera/PermissionState';
 
 const SHUTTER_SIZE = 80;
 const SHUTTER_INNER = 64;
-const CORNER_SIZE = 40;
+const CORNER_SIZE = 32;
 const CORNER_STROKE = 2;
 const GALLERY_THUMB_SIZE = 64;
 const CONTROL_RAIL_ICON = 22;
@@ -122,6 +123,11 @@ export default function CreatorCamera({
   const [timerOption, setTimerOption] = useState<TimerOption>(0);
   const [showGrid, setShowGrid] = useState(false);
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  // ── Long-press focus lock (Snapchat 2026 / iOS Camera pattern) ──
+  // Long-press on the viewfinder locks AE/AF at the touch point. A persistent
+  // "AE/AF LOCK" badge appears. Tap to unlock and return to continuous AF.
+  const [focusLocked, setFocusLocked] = useState(false);
+  const [focusLockPoint, setFocusLockPoint] = useState<{ x: number; y: number } | null>(null);
   const [lastImageUri, setLastImageUri] = useState<string | null>(null);
   const [recentImages, setRecentImages] = useState<string[]>([]);
   const [showRecentCarousel, setShowRecentCarousel] = useState(false);
@@ -320,11 +326,10 @@ export default function CreatorCamera({
   }, [reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
 
   const snapPinchToStep = useCallback((currentZoom: number) => {
-    // Find nearest step
+    // Find nearest step — 0.5x, 1x, 2x
     if (currentZoom < 0.75) setZoomIndex(0); // 0.5x
     else if (currentZoom < 1.5) setZoomIndex(1); // 1x
-    else if (currentZoom < 2.5) setZoomIndex(2); // 2x
-    else setZoomIndex(2); // cap at 2x
+    else setZoomIndex(2); // 2x or above
   }, []);
 
   const pinchGesture = useMemo(
@@ -338,12 +343,12 @@ export default function CreatorCamera({
         })
         .onUpdate((e) => {
           'worklet';
-          const newZoom = Math.max(1, Math.min(4, pinchStartZoom.current * e.scale));
+          const newZoom = Math.max(0.5, Math.min(4, pinchStartZoom.current * e.scale));
           runOnJS(setPinchZoom)(newZoom);
         })
         .onEnd((e) => {
           'worklet';
-          const finalZoom = Math.max(1, Math.min(4, pinchStartZoom.current * e.scale));
+          const finalZoom = Math.max(0.5, Math.min(4, pinchStartZoom.current * e.scale));
           runOnJS(setPinchZoom)(1);
           runOnJS(snapPinchToStep)(finalZoom);
           runOnJS(haptic.light)();
@@ -384,10 +389,12 @@ export default function CreatorCamera({
     }
 
     try {
+      const captureStart = Date.now();
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.92,
         skipProcessing: false,
       });
+      const captureLatencyMs = Date.now() - captureStart;
       if (photo?.uri) {
         haptic.medium();
         // Capture flash — white overlay 0→0.8→0 over 200ms (Snapchat pattern)
@@ -398,6 +405,10 @@ export default function CreatorCamera({
           );
         }
         setCapturedUri(photo.uri);
+        // ── Capture latency telemetry ──
+        // Tracks shutter-to-photo-ready time so we can monitor camera
+        // performance regressions across devices and OS versions.
+        CreatorAnalytics.capturePhoto(isPoster ? 'poster' : 'look', captureLatencyMs);
       }
     } catch {
       show('Failed to capture photo', 'error');
@@ -417,8 +428,10 @@ export default function CreatorCamera({
     // Stop actual recording
     if (cameraMode === 'video') {
       cameraRef.current?.stopRecording();
+      // ── Video duration telemetry ──
+      CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', recordingElapsed);
     }
-  }, [isRecording, haptic, recordingProgress, cameraMode, spring]);
+  }, [isRecording, haptic, recordingProgress, cameraMode, spring, recordingElapsed, isPoster]);
 
   const startRecording = useCallback(() => {
     if (!cameraRef.current || isRecording) return;
@@ -447,10 +460,15 @@ export default function CreatorCamera({
     // Start actual video recording
     if (cameraMode === 'boomerang') {
       // Boomerang: record short clip then auto-stop
+      const boomerangStart = Date.now();
       cameraRef.current?.recordAsync({ maxDuration: BOOMERANG_DURATION / 1000 })
         .then((video) => {
           if (video?.uri) {
             setCapturedUri(video.uri);
+            CreatorAnalytics.captureBoomerang(
+              isPoster ? 'poster' : 'look',
+              Date.now() - boomerangStart,
+            );
           }
         })
         .catch(() => {
@@ -582,10 +600,28 @@ export default function CreatorCamera({
   }, [capturedUri, haptic, show]);
 
   const handleTapFocus = useCallback((evt: GestureResponderEvent) => {
+    // If focus is locked, tap to unlock (iOS Camera pattern)
+    if (focusLocked) {
+      setFocusLocked(false);
+      setFocusLockPoint(null);
+      haptic.light();
+      return;
+    }
     const { locationX, locationY } = evt.nativeEvent;
     setFocusPoint({ x: locationX, y: locationY });
     // FocusReticle component handles its own spring animation + haptic + auto-dismiss
-  }, []);
+  }, [focusLocked, haptic]);
+
+  // ── Long-press to lock AE/AF (Snapchat 2026 / iOS Camera pattern) ──
+  // Long-press on the viewfinder locks focus + exposure at the touch point.
+  // A persistent "AE/AF LOCK" badge appears. Tap anywhere to unlock.
+  const handleLongPressFocus = useCallback((evt: GestureResponderEvent) => {
+    const { locationX, locationY } = evt.nativeEvent;
+    setFocusLocked(true);
+    setFocusLockPoint({ x: locationX, y: locationY });
+    setFocusPoint({ x: locationX, y: locationY });
+    haptic.medium(); // medium impact on lock
+  }, [haptic]);
 
   const handleOpenSettings = useCallback(() => Linking.openSettings(), []);
 
@@ -618,8 +654,13 @@ export default function CreatorCamera({
         {/* Double-tap gesture for camera flip (wrapped around camera feed) */}
         <GestureDetector gesture={doubleTapGesture}>
           <View style={StyleSheet.absoluteFill}>
-            {/* Full-screen camera feed with tap-to-focus + 3D flip rotation */}
-            <Pressable style={StyleSheet.absoluteFill} onPress={handleTapFocus}>
+            {/* Full-screen camera feed with tap-to-focus + long-press focus lock + 3D flip rotation */}
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={handleTapFocus}
+              onLongPress={handleLongPressFocus}
+              delayLongPress={400}
+            >
               <Reanimated.View style={[StyleSheet.absoluteFill, cameraFlipStyle]}>
                 <CameraView
                   ref={cameraRef}
@@ -667,8 +708,30 @@ export default function CreatorCamera({
       <FocusReticle
         focusPoint={focusPoint}
         size={FOCUS_RETICLE_SIZE}
-        onDismiss={() => setFocusPoint(null)}
+        onDismiss={() => {
+          // Don't auto-clear focusPoint when locked — the lock badge persists
+          if (!focusLocked) setFocusPoint(null);
+        }}
       />
+
+      {/* AE/AF LOCK badge — persistent indicator when focus is locked (iOS Camera pattern) */}
+      {focusLocked && focusLockPoint && (
+        <View
+          style={[
+            styles.focusLockBadge,
+            {
+              left: focusLockPoint.x - 60,
+              top: focusLockPoint.y + FOCUS_RETICLE_SIZE / 2 + 8,
+            },
+          ]}
+          pointerEvents="none"
+          accessibilityLabel="Auto exposure and auto focus locked. Tap to unlock."
+          accessibilityRole="text"
+        >
+          <Ionicons name="lock-closed" size={11} color="#fff" />
+          <Text style={styles.focusLockText}>AE/AF LOCK</Text>
+        </View>
+      )}
 
       {/* Zoom level indicator — spring appearance (0.5x/1x/2x/3x) */}
       <Reanimated.View style={[styles.zoomIndicator, zoomIndicatorStyle]} pointerEvents="none">
@@ -849,7 +912,18 @@ export default function CreatorCamera({
         >
           <Image source={{ uri: capturedUri }} style={styles.reviewImage} />
 
-          {/* Review actions */}
+          {/* Top scrim for close-area legibility over bright captures */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
+            style={styles.reviewTopScrim}
+            pointerEvents="none"
+          />
+
+          {/* Review actions — refined layout with clear primary/secondary hierarchy.
+              The primary action (Edit/Search/Done) is a prominent pill with an
+              icon + label; secondary actions (Retake, Save, Add) are compact
+              icon+label clusters. This matches iOS Camera/Snapchat post-capture
+              patterns where the primary action is visually dominant. */}
           <View style={[styles.reviewActions, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
             {multiCaptureMode ? (
               <>
@@ -859,6 +933,7 @@ export default function CreatorCamera({
                   onPress={handleAddAnother}
                   hitSlop={12}
                   accessibilityLabel="Add another photo"
+                  accessibilityHint="Captures another photo without leaving the camera"
                   accessibilityRole="button"
                 >
                   <Ionicons name="add-circle-outline" size={26} color="#fff" />
@@ -870,7 +945,7 @@ export default function CreatorCamera({
                   style={({ pressed }) => [styles.reviewPrimaryBtn, { backgroundColor: colors.textPrimary }, pressed && styles.btnPressed]}
                   onPress={handleFinishMultiCapture}
                   hitSlop={16}
-                  accessibilityLabel="Finish multi-capture and edit"
+                  accessibilityLabel={`Finish multi-capture and edit, ${multiCaptures.length + 1} photos selected`}
                   accessibilityRole="button"
                 >
                   <Ionicons name="checkmark" size={28} color={colors.background} />
@@ -885,6 +960,7 @@ export default function CreatorCamera({
                   onPress={handleRetake}
                   hitSlop={12}
                   accessibilityLabel="Retake current photo"
+                  accessibilityHint="Discards the current photo and returns to the camera"
                   accessibilityRole="button"
                 >
                   <Ionicons name="refresh-outline" size={26} color="#fff" />
@@ -899,6 +975,7 @@ export default function CreatorCamera({
                   onPress={handleRetake}
                   hitSlop={12}
                   accessibilityLabel="Retake photo"
+                  accessibilityHint="Discards the current photo and returns to the camera"
                   accessibilityRole="button"
                 >
                   <Ionicons name="refresh-outline" size={26} color="#fff" />
@@ -911,6 +988,7 @@ export default function CreatorCamera({
                   onPress={handleConfirmCapture}
                   hitSlop={16}
                   accessibilityLabel={isVisualSearch ? 'Search with this photo' : 'Edit in studio'}
+                  accessibilityHint={isVisualSearch ? 'Starts a visual search with the captured photo' : 'Opens the studio editor with this photo'}
                   accessibilityRole="button"
                 >
                   <Ionicons name="arrow-forward" size={28} color={colors.background} />
@@ -925,6 +1003,7 @@ export default function CreatorCamera({
                   onPress={handleSaveToGallery}
                   hitSlop={12}
                   accessibilityLabel="Save to gallery"
+                  accessibilityHint="Saves the photo to the device photo library"
                   accessibilityRole="button"
                 >
                   <Ionicons name="download-outline" size={26} color="#fff" />
@@ -1077,6 +1156,23 @@ const styles = StyleSheet.create({
     height: FOCUS_RETICLE_SIZE,
     pointerEvents: 'none',
   },
+  // AE/AF LOCK badge — persistent pill below the locked focus reticle (iOS Camera pattern)
+  focusLockBadge: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  focusLockText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.meta.size,
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
   // Pinch zoom indicator — subtle pill at bottom center
   zoomIndicator: {
     position: 'absolute',
@@ -1111,7 +1207,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
   },
-  // Corner brackets — refined 2pt stroke
+  // Corner brackets — refined 2pt stroke, smaller and more elegant
   bracketTL: {
     position: 'absolute',
     top: '18%',
@@ -1121,7 +1217,7 @@ const styles = StyleSheet.create({
     borderTopWidth: CORNER_STROKE,
     borderLeftWidth: CORNER_STROKE,
     borderColor: 'rgba(255,255,255,0.85)',
-    borderTopLeftRadius: 12,
+    borderTopLeftRadius: 8,
   },
   bracketTR: {
     position: 'absolute',
@@ -1132,7 +1228,7 @@ const styles = StyleSheet.create({
     borderTopWidth: CORNER_STROKE,
     borderRightWidth: CORNER_STROKE,
     borderColor: 'rgba(255,255,255,0.85)',
-    borderTopRightRadius: 12,
+    borderTopRightRadius: 8,
   },
   bracketBL: {
     position: 'absolute',
@@ -1143,7 +1239,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: CORNER_STROKE,
     borderLeftWidth: CORNER_STROKE,
     borderColor: 'rgba(255,255,255,0.85)',
-    borderBottomLeftRadius: 12,
+    borderBottomLeftRadius: 8,
   },
   bracketBR: {
     position: 'absolute',
@@ -1154,7 +1250,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: CORNER_STROKE,
     borderRightWidth: CORNER_STROKE,
     borderColor: 'rgba(255,255,255,0.85)',
-    borderBottomRightRadius: 12,
+    borderBottomRightRadius: 8,
   },
   bracketBottomWithDeck: {
     bottom: '38%',
@@ -1409,6 +1505,15 @@ const styles = StyleSheet.create({
   reviewImage: {
     ...StyleSheet.absoluteFill,
     resizeMode: 'contain',
+  },
+  // Top scrim for the review overlay — ensures any top chrome is legible
+  // over bright captures (white backgrounds, light product photography).
+  reviewTopScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
   },
   reviewActions: {
     position: 'absolute',

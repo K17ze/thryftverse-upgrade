@@ -304,7 +304,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
         <View style={styles.header}>
           <Text style={styles.title}>Publish</Text>
-          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close publish">
+          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close publish" accessibilityHint="Closes the publish sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
@@ -527,7 +527,9 @@ function ErrorStateView({
         onPress={onRetry}
         style={localStyles.retryBtn}
         accessibilityLabel="Retry publish"
+        accessibilityHint="Retries the failed publish attempt"
         scale={0.95}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Ionicons name="refresh-outline" size={16} color={colors.textInverse} style={{ marginRight: 6 }} />
         <Text style={localStyles.retryBtnText}>Retry</Text>
@@ -643,7 +645,9 @@ function CelebrationSuccess({
           onPress={onView}
           style={styles.viewBtn}
           accessibilityLabel="View published content"
+          accessibilityHint="Opens the published look or poster"
           scale={0.95}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Text style={styles.viewBtnText}>View Post</Text>
         </PressScale>
@@ -651,7 +655,9 @@ function CelebrationSuccess({
           onPress={onCreateNew}
           style={styles.createBtn}
           accessibilityLabel="Create new post"
+          accessibilityHint="Starts a new creation in the studio"
           scale={0.95}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
           <Text style={styles.createBtnText}>Create New</Text>
@@ -660,7 +666,9 @@ function CelebrationSuccess({
           onPress={onShare}
           style={styles.shareBtn}
           accessibilityLabel="Share published content"
+          accessibilityHint="Shares the published content"
           scale={0.96}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="share-outline" size={18} color={colors.brand} />
           <Text style={styles.shareBtnText}>Share</Text>
@@ -877,7 +885,9 @@ function PublishReview({
                 onPress={() => { haptic.selection(); setCoverPageIndex(i); }}
                 style={[styles.coverThumbWrap, coverPageIndex === i && styles.coverThumbActive]}
                 accessibilityLabel={`Set page ${i + 1} as cover`}
+                accessibilityHint="Sets this page as the story cover"
                 accessibilityRole="button"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <CreatorCanvas
                   document={document}
@@ -888,7 +898,7 @@ function PublishReview({
                 />
                 {coverPageIndex === i && (
                   <View style={styles.coverBadge}>
-                    <Ionicons name="checkmark" size={12} color="#fff" />
+                    <Ionicons name="checkmark" size={12} color={colors.textInverse} />
                   </View>
                 )}
               </Pressable>
@@ -945,8 +955,9 @@ function PublishReview({
               onPress={() => { haptic.light(); updateMetadata({ visibility: opt.key }); }}
               style={styles.audienceSegmentItem}
               accessibilityLabel={`Audience ${opt.label}`}
+              accessibilityHint={`Sets visibility to ${opt.label}`}
               accessibilityRole="button"
-              hitSlop={8}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name={opt.icon} size={16} color={isActive ? colors.textInverse : colors.textSecondary} />
               <Text style={[styles.audienceSegmentText, isActive && styles.audienceSegmentTextActive]}>{opt.label}</Text>
@@ -965,7 +976,7 @@ function PublishReview({
           value={saveToCameraRoll}
           onValueChange={(v) => { haptic.selection(); setSaveToCameraRoll(v); }}
           trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-          thumbColor={saveToCameraRoll ? '#fff' : colors.textMuted}
+          thumbColor={saveToCameraRoll ? colors.textInverse : colors.textMuted}
           accessibilityLabel="Save to camera roll"
         />
       </View>
@@ -977,18 +988,22 @@ function PublishReview({
             <Text style={styles.toggleLabel}>Allow replies</Text>
             <Switch
               value={document.metadata.allowReplies}
-              onValueChange={(v) => updateMetadata({ allowReplies: v })}
+              onValueChange={(v) => { haptic.selection(); updateMetadata({ allowReplies: v }); }}
               trackColor={{ false: colors.surfaceAlt, true: `${colors.brand}40` }}
               thumbColor={document.metadata.allowReplies ? colors.brand : colors.textMuted}
+              accessibilityLabel="Allow replies"
+              accessibilityHint="Toggles whether viewers can reply to this poster"
             />
           </View>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>Allow reactions</Text>
             <Switch
               value={document.metadata.allowReactions}
-              onValueChange={(v) => updateMetadata({ allowReactions: v })}
+              onValueChange={(v) => { haptic.selection(); updateMetadata({ allowReactions: v }); }}
               trackColor={{ false: colors.surfaceAlt, true: `${colors.brand}40` }}
-              thumbColor={document.metadata.allowReplies ? colors.brand : colors.textMuted}
+              thumbColor={document.metadata.allowReactions ? colors.brand : colors.textMuted}
+              accessibilityLabel="Allow reactions"
+              accessibilityHint="Toggles whether viewers can react to this poster"
             />
           </View>
         </>
@@ -1001,8 +1016,9 @@ function PublishReview({
           style={[styles.schedulePill, !document.metadata.scheduledFor && styles.schedulePillActive]}
           onPress={() => { haptic.selection(); updateMetadata({ scheduledFor: undefined }); }}
           accessibilityLabel="Publish now"
+          accessibilityHint="Publishes immediately"
           accessibilityRole="button"
-          hitSlop={12}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="flash-outline" size={16} color={!document.metadata.scheduledFor ? colors.brand : colors.textSecondary} />
           <Text style={[styles.schedulePillText, !document.metadata.scheduledFor && { color: colors.brand }]}>Now</Text>
@@ -1018,8 +1034,9 @@ function PublishReview({
             updateMetadata({ scheduledFor: tomorrow.toISOString() });
           }}
           accessibilityLabel="Schedule for later"
+          accessibilityHint="Schedules the post for tomorrow at noon"
           accessibilityRole="button"
-          hitSlop={12}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="time-outline" size={16} color={document.metadata.scheduledFor ? colors.brand : colors.textSecondary} />
           <Text style={[styles.schedulePillText, document.metadata.scheduledFor && { color: colors.brand }]}>Later</Text>
@@ -1035,8 +1052,9 @@ function PublishReview({
           </Text>
           <Pressable
             onPress={() => { haptic.light(); updateMetadata({ scheduledFor: undefined }); }}
-            hitSlop={12}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="Clear schedule"
+            accessibilityHint="Removes the scheduled date and switches to publish now"
             accessibilityRole="button"
           >
             <Ionicons name="close-circle" size={20} color={colors.textMuted} />
@@ -1050,7 +1068,9 @@ function PublishReview({
           onPress={handleSaveDraft}
           style={styles.draftBtn}
           accessibilityLabel="Save as draft"
+          accessibilityHint="Saves the current creation as a draft"
           scale={0.96}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="save-outline" size={18} color={colors.textSecondary} />
           <Text style={styles.draftBtnText}>Save draft</Text>
@@ -1059,7 +1079,9 @@ function PublishReview({
           onPress={handlePublishWithValidation}
           style={styles.publishBtn}
           accessibilityLabel={document.metadata.scheduledFor ? 'Schedule post' : 'Publish now'}
+          accessibilityHint={document.metadata.scheduledFor ? 'Schedules the post for the selected date' : 'Publishes the content immediately'}
           scale={0.96}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.publishBtnText}>{document.metadata.scheduledFor ? 'Schedule' : 'Publish now'}</Text>
         </PressScale>
@@ -1241,7 +1263,7 @@ function createStyles(colors: ThemeColorsType) {
       borderWidth: 2,
       borderColor: 'transparent',
       elevation: 2,
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.08,
       shadowRadius: 4,

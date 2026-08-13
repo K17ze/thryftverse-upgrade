@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography, Control } from '../../theme/designTokens';
+import { Space, Type, Typography, Control, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PremiumToggle } from './PremiumToggle';
 
@@ -71,12 +71,12 @@ export function SettingsRow({
     >
       <View style={[styles.root, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
         {icon ? (
-          // 44pt transparent hit target wrapping a 20pt glyph so the icon
+          // 44pt transparent hit target wrapping a 23pt glyph so the icon
           // meets the AGENTS.md §13 touch-target minimum without visible chrome.
           <View style={styles.iconTarget}>
             <Ionicons
               name={icon}
-              size={20}
+              size={23}
               color={iconColor ?? (danger ? colors.danger : colors.textPrimary)}
             />
           </View>
@@ -108,7 +108,7 @@ export function SettingsRow({
           {onToggle !== undefined ? (
             <PremiumToggle value={!!toggleValue} onValueChange={onToggle} disabled={disabled} />
           ) : showChevron ? (
-            <Ionicons name="chevron-forward" size={Control.iconCompact} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           ) : null}
           {children}
         </View>
@@ -123,8 +123,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
-    minHeight: Control.hit,
-    gap: Space.sm,
+    minHeight: 58,
+    gap: Space.sm + Space.xs,
   },
   // 44pt transparent hit target — no visible chrome, just the touch area.
   iconTarget: {
@@ -138,19 +138,20 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
+    gap: Space.xs / 4,
   },
   title: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   subtitle: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
-    marginTop: Space.xs * 0.5,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
+    marginTop: 0,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   right: {
     flexDirection: 'row',
@@ -161,11 +162,11 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   value: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     flexShrink: 1,
     maxWidth: '100%',
     textAlign: 'right',
-    letterSpacing: Type.caption.letterSpacing,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
 });

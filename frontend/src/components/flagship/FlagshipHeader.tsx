@@ -20,6 +20,11 @@ export interface FlagshipHeaderProps {
   avatar?: React.ReactNode;
   onTitlePress?: () => void;
   titleAccessibilityLabel?: string;
+  /** Optional large-title scroll progress (0 = expanded, 1 = collapsed).
+   *  When provided, the large variant fades the big title into the compact
+   *  bar title as the user scrolls, mirroring iOS large-title behaviour
+   *  without a separate native component. */
+  collapseProgress?: number;
 }
 
 export function FlagshipHeader({
@@ -35,6 +40,7 @@ export function FlagshipHeader({
   avatar,
   onTitlePress,
   titleAccessibilityLabel,
+  collapseProgress,
 }: FlagshipHeaderProps) {
   const { colors } = useAppTheme();
   const isLarge = variant === 'large';
@@ -42,6 +48,13 @@ export function FlagshipHeader({
 
   const effectiveBackIcon = backIcon ?? (isModal ? 'close' : 'arrow-back');
   const effectiveOnBack = onClose ?? onBack;
+
+  // Large-title collapse: when a collapse progress is supplied (0→1), the
+  // compact bar title opacity tracks it so the title only appears in the bar
+  // once the large title has scrolled away. Default to fully visible for the
+  // non-large / non-collapsing case.
+  const compactTitleOpacity =
+    collapseProgress == null ? 1 : Math.max(0, Math.min(1, collapseProgress));
 
   const identity = (
     <>
@@ -58,6 +71,7 @@ export function FlagshipHeader({
               fontFamily: isLarge ? TypeStyles.title.fontFamily : TypeStyles.bodyEmphasis.fontFamily,
               lineHeight: isLarge ? Type.title.lineHeight : Type.subtitle.lineHeight,
               letterSpacing: isLarge ? Type.title.letterSpacing : Type.subtitle.letterSpacing,
+              opacity: compactTitleOpacity,
             },
           ]}
           numberOfLines={1}
@@ -82,7 +96,8 @@ export function FlagshipHeader({
             onPress={effectiveOnBack}
             accessibilityRole="button"
             accessibilityLabel={isModal ? 'Close' : 'Go back'}
-            scaleValue={0.92}
+            accessibilityHint={isModal ? 'Closes this screen' : 'Returns to the previous screen'}
+            scaleValue={0.9}
             hapticFeedback="light"
             activeOpacity={0.62}
           >

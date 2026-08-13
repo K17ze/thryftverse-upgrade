@@ -120,7 +120,7 @@ function PickerShell({ title, onClose, children }: { title: string; onClose: () 
       <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" hitSlop={12}>
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
@@ -180,12 +180,17 @@ interface MediaAsset {
 }
 
 // Camera roll category tabs
-type MediaCategory = 'recent' | 'photos' | 'videos' | 'selfies';
+// Note: "Selfies" was previously inferred from square aspect ratio, which is
+// not truthful (a square image is not necessarily a selfie). Renamed to
+// "Square" so the filter label matches what it actually does. Querying
+// actual smart albums (iOS Selfies album) requires platform-specific APIs
+// not reliably available through expo-media-library.
+type MediaCategory = 'recent' | 'photos' | 'videos' | 'square';
 const MEDIA_CATEGORIES: { key: MediaCategory; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { key: 'recent', label: 'Recent', icon: 'time-outline' },
   { key: 'photos', label: 'Photos', icon: 'images-outline' },
   { key: 'videos', label: 'Videos', icon: 'videocam-outline' },
-  { key: 'selfies', label: 'Selfies', icon: 'person-circle-outline' },
+  { key: 'square', label: 'Square', icon: 'crop-outline' },
 ];
 
 // ── MediaGridItem — spring press feedback + spring scale selection badge ──
@@ -238,7 +243,7 @@ function MediaGridItem({
       accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
-      hitSlop={4}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
     >
       <Reanimated.View style={[styles.mediaGridCell, pressStyle]}>
         <Image
@@ -268,36 +273,12 @@ function MediaGridItem({
   );
 }
 
-// ── BreathingIcon — gentle scale breathing for empty states ──
-function BreathingIcon({ name, size, color }: { name: React.ComponentProps<typeof Ionicons>['name']; size: number; color: string }) {
-  const reduceMotion = useReducedMotion();
-  const { spring } = useMotionConfig();
-  const breathSV = useSharedValue(1);
-
-  useEffect(() => {
-    if (reduceMotion) {
-      breathSV.value = 1;
-      return;
-    }
-    breathSV.value = withRepeat(
-      withSequence(
-        withSpring(1.08, spring.lift),
-        withSpring(1, spring.lift),
-      ),
-      -1,
-      false
-    );
-    return () => { cancelAnimation(breathSV); };
-  }, [reduceMotion, breathSV]);
-
-  const breathStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: breathSV.value }],
-  }));
-
+// ── StaticStateIcon — replaces the previous infinite breathing animation.
+// Per AGENTS.md §17, continuous pulsing is prohibited. Empty/permission
+// states use a static icon with a restrained one-shot entrance fade instead.
+function StaticStateIcon({ name, size, color }: { name: React.ComponentProps<typeof Ionicons>['name']; size: number; color: string }) {
   return (
-    <Reanimated.View style={breathStyle}>
-      <Ionicons name={name} size={size} color={color} />
-    </Reanimated.View>
+    <Ionicons name={name} size={size} color={color} />
   );
 }
 
@@ -336,7 +317,7 @@ function PermissionDeniedState({
 
   return (
     <Reanimated.View style={[styles.mediaPermissionState, entranceStyle]}>
-      <BreathingIcon name={icon} size={40} color={colors.textMuted} />
+      <StaticStateIcon name={icon} size={40} color={colors.textMuted} />
       <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
         {title}
       </Text>
@@ -347,7 +328,7 @@ function PermissionDeniedState({
         onPress={onCta}
         style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
         accessibilityLabel={ctaLabel}
-        hitSlop={12}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>{ctaLabel}</Text>
       </PressScale>
@@ -366,10 +347,41 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Ordered selection — preserved as an array instead of deriving order
+  // from Set iteration semantics (which is not deterministic across JS
+  // engines). This ensures the selection order matches the user's tap order.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<MediaCategory>('recent');
   const cursorRef = useRef<string | undefined>(undefined);
   const mountedRef = useRef(true);
+
+  // ── Album/source model ──
+  // Queries the device's actual photo albums (iOS smart albums, Android
+  // buckets) so the user can browse by source instead of only by media type.
+  // Falls back gracefully to "All Photos" when the platform doesn't expose
+  // albums or the query fails.
+  const [albums, setAlbums] = useState<MediaLibrary.Album[]>([]);
+  const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
+  const [showAlbumPicker, setShowAlbumPicker] = useState(false);
+
+  useEffect(() => {
+    if (!status?.granted) return;
+    let cancelled = false;
+    MediaLibrary.getAlbumsAsync({ includeSmartAlbums: true })
+      .then((result) => {
+        if (!cancelled && result) {
+          setAlbums(result);
+        }
+      })
+      .catch(() => {
+        // Albums are optional — the grid still works with the default
+        // "all photos" query when album listing is unavailable.
+      });
+    return () => { cancelled = true; };
+  }, [status?.granted]);
+
+  const activeAlbum = albums.find((a) => a.id === activeAlbumId) ?? null;
+  const albumLabel = activeAlbum?.title ?? 'All Photos';
 
   // Spring indicator for category tab
   const tabIndicatorXSV = useSharedValue(0);
@@ -381,7 +393,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     return () => { mountedRef.current = false; };
   }, []);
 
-  // Load recent media when permission is granted
+  // Load media when permission is granted or album changes
   const loadRecentMedia = useCallback(async (reset: boolean) => {
     if (reset) {
       setIsLoading(true);
@@ -399,6 +411,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       };
       if (!reset && cursorRef.current) {
         opts.after = cursorRef.current;
+      }
+      // When an album is selected, scope the query to that album's assets.
+      if (activeAlbumId) {
+        opts.album = activeAlbumId;
       }
 
       const page = await MediaLibrary.getAssetsAsync(opts);
@@ -425,7 +441,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         else setLoadingMore(false);
       }
     }
-  }, [hasMore, loadingMore]);
+  }, [hasMore, loadingMore, activeAlbumId]);
 
   useEffect(() => {
     if (status && status.granted) {
@@ -455,31 +471,43 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     if (activeCategory === 'recent') return assets;
     if (activeCategory === 'photos') return assets.filter(a => a.mediaType === 'image');
     if (activeCategory === 'videos') return assets.filter(a => a.mediaType === 'video');
-    if (activeCategory === 'selfies') return assets.filter(a => a.mediaType === 'image' && a.width === a.height);
+    if (activeCategory === 'square') return assets.filter(a => a.mediaType === 'image' && a.width === a.height);
     return assets;
   }, [assets, activeCategory]);
 
-  // Recent photos section (top 6 most recent)
-  const recentPhotos = useMemo(() => filteredAssets.slice(0, 6), [filteredAssets]);
+  // ── Video preflight ──
+  // Reject videos exceeding the max supported duration (60s) before they
+  // enter the selection. This prevents the user from building a selection
+  // that will be rejected downstream by the editor or upload pipeline.
+  const MAX_VIDEO_DURATION_MS = 60_000;
+  const videoPreflightError = useRef<string | null>(null);
 
   const toggleSelect = useCallback((asset: MediaAsset) => {
+    if (asset.mediaType === 'video') {
+      if (asset.duration && asset.duration > MAX_VIDEO_DURATION_MS) {
+        haptic.medium();
+        videoPreflightError.current = `Video is ${Math.floor(asset.duration / 1000)}s — max 60s supported`;
+        return;
+      }
+    }
     haptic.selection();
     setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(asset.id)) {
-        next.delete(asset.id);
-      } else {
-        if (next.size >= 10) return prev;
-        next.add(asset.id);
+      if (prev.includes(asset.id)) {
+        return prev.filter((id) => id !== asset.id);
       }
-      return next;
+      if (prev.length >= 10) return prev;
+      return [...prev, asset.id];
     });
-  }, []);
+  }, [haptic]);
 
   const handleAddSelected = useCallback(() => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.length === 0) return;
     haptic.light();
-    const selected = assets.filter((a) => selectedIds.has(a.id));
+    // Preserve the user's tap order by mapping over the ordered array
+    // instead of filtering assets (which would preserve library order).
+    const selected = selectedIds
+      .map((id) => assets.find((a) => a.id === id))
+      .filter((a): a is MediaAsset => !!a);
     selected.forEach((asset, i) => {
       onAddLayer({
         ...baseLayer(createStableId('media'), i),
@@ -497,6 +525,22 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     });
     onClose();
   }, [selectedIds, assets, onAddLayer, onClose]);
+
+  // ── Reorder selection ──
+  // Move a selected item left or right in the ordered array. This lets the
+  // user correct their tap order before committing to the canvas.
+  const reorderSelection = useCallback((id: string, direction: -1 | 1) => {
+    haptic.selection();
+    setSelectedIds((prev) => {
+      const idx = prev.indexOf(id);
+      if (idx < 0) return prev;
+      const targetIdx = idx + direction;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      return next;
+    });
+  }, [haptic]);
 
   const handleTakePhoto = useCallback(async () => {
     haptic.light();
@@ -552,7 +596,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     Linking.openSettings();
   }, []);
 
-  const selectedCount = selectedIds.size;
+  const selectedCount = selectedIds.length;
 
   // ── Selection count badge with spring scale ──────────────────────
   const countBadgeScaleSV = useSharedValue(0);
@@ -583,7 +627,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           onPress={handleTakePhoto}
           style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Take photo with camera"
-          hitSlop={4}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="camera-outline" size={28} color={colors.textPrimary} />
         </PressScale>
@@ -595,15 +639,15 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           onPress={handlePickVideo}
           style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
           accessibilityLabel="Pick video from gallery"
-          hitSlop={4}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="videocam-outline" size={28} color={colors.textPrimary} />
         </PressScale>
       );
     }
     const asset = item as MediaAsset;
-    const isSelected = selectedIds.has(asset.id);
-    const selectionOrder = isSelected ? Array.from(selectedIds).indexOf(asset.id) + 1 : 0;
+    const isSelected = selectedIds.includes(asset.id);
+    const selectionOrder = isSelected ? selectedIds.indexOf(asset.id) + 1 : 0;
     return (
       <MediaGridItem
         asset={asset}
@@ -666,7 +710,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   // ── Media grid with multi-select ──
 
   return (
-    <SheetContainer visible={true} onClose={selectedCount > 0 ? () => { setSelectedIds(new Set()); } : onClose} maxHeight={0.9}>
+    <SheetContainer visible={true} onClose={selectedCount > 0 ? () => { setSelectedIds([]); } : onClose} maxHeight={0.9}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           {selectedCount > 0 ? `${selectedCount} selected` : 'Add Media'}
@@ -678,17 +722,80 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                 onPress={handleAddSelected}
                 style={[styles.addBtn, { backgroundColor: colors.brand }]}
                 accessibilityLabel="Add selected media"
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[styles.addBtnText, { color: colors.textInverse }]}>Add</Text>
               </PressScale>
             </Reanimated.View>
           )}
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" hitSlop={12}>
+          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
       </View>
+
+      {/* Album/source disclosure — per audit: "album/source disclosure" in
+          the canonical MediaAcquireSheet header. Shows the current album
+          name and opens a dropdown to switch between device albums. */}
+      {albums.length > 0 && (
+        <Pressable
+          style={styles.albumDisclosure}
+          onPress={() => { haptic.light(); setShowAlbumPicker((v) => !v); }}
+          accessibilityLabel={`Current album: ${albumLabel}. Tap to change album.`}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showAlbumPicker }}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+        >
+          <Ionicons name="folder-open-outline" size={14} color={colors.textSecondary} />
+          <Text style={[styles.albumDisclosureText, { color: colors.textPrimary }]} numberOfLines={1}>
+            {albumLabel}
+          </Text>
+          <Ionicons name={showAlbumPicker ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
+        </Pressable>
+      )}
+
+      {/* Album picker dropdown — flat list of device albums */}
+      {showAlbumPicker && albums.length > 0 && (
+        <View style={[styles.albumPickerDropdown, { borderColor: colors.border }]}>
+          <Pressable
+            style={[styles.albumPickerItem, activeAlbumId === null && { backgroundColor: `${colors.brand}12` }]}
+            onPress={() => {
+              haptic.selection();
+              setActiveAlbumId(null);
+              setShowAlbumPicker(false);
+            }}
+            accessibilityLabel="All Photos album"
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeAlbumId === null }}
+          >
+            <Ionicons name="images-outline" size={16} color={activeAlbumId === null ? colors.brand : colors.textSecondary} />
+            <Text style={[styles.albumPickerItemText, { color: activeAlbumId === null ? colors.brand : colors.textPrimary }]}>
+              All Photos
+            </Text>
+            {activeAlbumId === null && <Ionicons name="checkmark" size={14} color={colors.brand} />}
+          </Pressable>
+          {albums.slice(0, 12).map((album) => (
+            <Pressable
+              key={album.id}
+              style={[styles.albumPickerItem, activeAlbumId === album.id && { backgroundColor: `${colors.brand}12` }]}
+              onPress={() => {
+                haptic.selection();
+                setActiveAlbumId(album.id);
+                setShowAlbumPicker(false);
+              }}
+              accessibilityLabel={`${album.title} album`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeAlbumId === album.id }}
+            >
+              <Ionicons name="folder-outline" size={16} color={activeAlbumId === album.id ? colors.brand : colors.textSecondary} />
+              <Text style={[styles.albumPickerItemText, { color: activeAlbumId === album.id ? colors.brand : colors.textPrimary }]} numberOfLines={1}>
+                {album.title}
+              </Text>
+              {activeAlbumId === album.id && <Ionicons name="checkmark" size={14} color={colors.brand} />}
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {/* Camera roll category tabs with spring indicator */}
       <View style={styles.categoryTabRow}>
@@ -714,6 +821,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               accessibilityLabel={`Category ${cat.label}`}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons
                 name={cat.icon}
@@ -736,47 +844,103 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           <ActivityIndicator size="large" color={colors.brand} />
         </View>
       ) : filteredAssets.length === 0 ? (
-        // Empty state with breathing icon
+        // Empty state
         <View style={styles.mediaEmptyState}>
-          <BreathingIcon name="images-outline" size={40} color={colors.textMuted} />
+          <StaticStateIcon name="images-outline" size={40} color={colors.textMuted} />
           <Text style={[styles.mediaEmptyText, { color: colors.textSecondary }]}>
-            {activeCategory === 'videos' ? 'No videos found' : activeCategory === 'selfies' ? 'No selfies found' : 'No photos found'}
+            {activeCategory === 'videos' ? 'No videos found' : activeCategory === 'square' ? 'No square photos found' : 'No photos found'}
           </Text>
           <PressScale
             onPress={handleTakePhoto}
             style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
             accessibilityLabel="Take photo"
-            hitSlop={12}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Take photo</Text>
           </PressScale>
         </View>
       ) : (
         <>
-          {/* Recent photos section at top (horizontal scroll) */}
-          {activeCategory === 'recent' && recentPhotos.length > 0 && (
-            <View style={styles.recentSection}>
-              <Text style={[styles.recentSectionLabel, { color: colors.textSecondary }]}>
-                Recent
+          {/* Limited-access banner (iOS 14+ / Android 14+) */}
+          {status.accessPrivileges === 'limited' && (
+            <Pressable
+              style={[styles.limitedAccessBanner, { borderColor: colors.border }]}
+              onPress={async () => {
+                try {
+                  await MediaLibrary.presentPermissionsPickerAsync();
+                  loadRecentMedia(true);
+                } catch {
+                  handleOpenSettings();
+                }
+              }}
+              accessibilityLabel="Limited photo access — tap to select more photos"
+              accessibilityRole="button"
+            >
+              <Ionicons name="images-outline" size={16} color={colors.textSecondary} />
+              <Text style={[styles.limitedAccessText, { color: colors.textSecondary }]}>
+                Limited access — tap to add more photos
               </Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+            </Pressable>
+          )}
+
+          {/* Selection preview rail — ordered thumbnails with reorder support */}
+          {selectedCount > 0 && (
+            <View style={styles.selectionPreviewRail}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.recentScroll}
+                contentContainerStyle={styles.selectionPreviewScroll}
               >
-                {recentPhotos.map((asset) => {
-                  const isSelected = selectedIds.has(asset.id);
-                  const selectionOrder = isSelected ? Array.from(selectedIds).indexOf(asset.id) + 1 : 0;
+                {selectedIds.map((id, index) => {
+                  const asset = assets.find((a) => a.id === id);
+                  if (!asset) return null;
                   return (
-                    <MediaGridItem
-                      key={asset.id}
-                      asset={asset}
-                      isSelected={isSelected}
-                      selectionOrder={selectionOrder}
-                      onPress={() => toggleSelect(asset)}
-                      colors={colors}
-                      styles={styles}
-                    />
+                    <View key={id} style={styles.selectionPreviewItem}>
+                      <Image
+                        source={{ uri: asset.uri }}
+                        style={styles.selectionPreviewThumb}
+                        contentFit="cover"
+                      />
+                      <View style={[styles.selectionPreviewOrder, { backgroundColor: colors.brand }]}>
+                        <Text style={[styles.selectionPreviewOrderText, { color: colors.textInverse }]}>
+                          {index + 1}
+                        </Text>
+                      </View>
+                      {/* Reorder left — move this item earlier in the sequence */}
+                      {index > 0 && (
+                        <Pressable
+                          style={styles.selectionPreviewReorderLeft}
+                          onPress={() => reorderSelection(id, -1)}
+                          hitSlop={4}
+                          accessibilityLabel={`Move ${asset.mediaType} ${index + 1} earlier in selection`}
+                          accessibilityRole="button"
+                        >
+                          <Ionicons name="chevron-back-circle" size={18} color="#fff" />
+                        </Pressable>
+                      )}
+                      {/* Reorder right — move this item later in the sequence */}
+                      {index < selectedIds.length - 1 && (
+                        <Pressable
+                          style={styles.selectionPreviewReorderRight}
+                          onPress={() => reorderSelection(id, 1)}
+                          hitSlop={4}
+                          accessibilityLabel={`Move ${asset.mediaType} ${index + 1} later in selection`}
+                          accessibilityRole="button"
+                        >
+                          <Ionicons name="chevron-forward-circle" size={18} color="#fff" />
+                        </Pressable>
+                      )}
+                      <Pressable
+                        style={styles.selectionPreviewRemove}
+                        onPress={() => toggleSelect(asset)}
+                        hitSlop={8}
+                        accessibilityLabel={`Remove ${asset.mediaType} ${index + 1} from selection`}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="close-circle" size={18} color="#fff" />
+                      </Pressable>
+                    </View>
                   );
                 })}
               </ScrollView>
@@ -895,7 +1059,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't search listings</Text>
-          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -904,7 +1068,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           data={results}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={12}>
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <View style={styles.resultThumb}>
                 {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={16} color={colors.textSecondary} />}
               </View>
@@ -1010,7 +1174,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't search users</Text>
-          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -1019,7 +1183,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           data={results}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={12}>
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <View style={styles.resultAvatar}>
                 {item.avatar ? <Image source={{ uri: item.avatar }} style={styles.resultThumbImg} /> : <Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text>}
               </View>
@@ -1119,7 +1283,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load looks</Text>
-          <Pressable onPress={loadLooks} style={styles.retryBtn} accessibilityLabel="Retry loading looks" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={loadLooks} style={styles.retryBtn} accessibilityLabel="Retry loading looks" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -1128,7 +1292,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={12}>
+            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={16} color={colors.textSecondary} /></View>
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
@@ -1301,7 +1465,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Text style ${s.label}`}
               accessibilityRole="button"
               accessibilityState={{ selected: textStyle === s.key }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Text
                 style={[
@@ -1333,7 +1497,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Text color ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: textColor === c && !showSpectrum }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
@@ -1362,7 +1526,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               />
             </LinearGradient>
             <View style={[styles.spectrumIndicator, { backgroundColor: textColor }]} />
-            <PressScale onPress={() => { haptic.selection(); setShowSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={13}>
+            <PressScale onPress={() => { haptic.selection(); setShowSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
             </PressScale>
           </View>
@@ -1379,7 +1543,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Align ${a.key}`}
               accessibilityRole="button"
               accessibilityState={{ selected: alignment === a.key }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name={a.icon} size={18} color={alignment === a.key ? colors.brand : colors.textSecondary} />
             </Pressable>
@@ -1404,7 +1568,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Text effect ${e.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text
                   style={[
@@ -1448,7 +1612,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Text animation ${a.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name={animIcon[a.key]} size={20} color={isActive ? colors.brand : colors.textSecondary} />
                 <Text style={[styles.animChipLabel, isActive && styles.animChipLabelActive]}>{a.label}</Text>
@@ -1473,7 +1637,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Background ${c === 'transparent' ? 'none' : c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: textBgColor === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               {c === 'transparent' && (
                 <Ionicons name="close" size={16} color={colors.textSecondary} />
@@ -1482,7 +1646,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           ))}
         </View>
 
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button" accessibilityState={{ disabled: !text.trim() }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !text.trim() && styles.saveBtnDisabled]} disabled={!text.trim()} accessibilityLabel={isEditing ? 'Update text' : 'Add text'} accessibilityRole="button" accessibilityState={{ disabled: !text.trim() }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Text'}</Text>
         </Pressable>
       </View>
@@ -1740,7 +1904,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Brush ${t.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name={t.icon} size={22} color={isActive ? '#fff' : colors.textSecondary} />
               </Pressable>
@@ -1762,7 +1926,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   accessibilityLabel={`Draw color ${c}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: activeColor === c && !showDrawSpectrum }}
-                  hitSlop={12}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 />
               ))}
             </View>
@@ -1788,7 +1952,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   />
                 </LinearGradient>
                 <View style={[styles.spectrumIndicator, { backgroundColor: activeColor }]} />
-                <PressScale onPress={() => { haptic.selection(); setShowDrawSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={13}>
+                <PressScale onPress={() => { haptic.selection(); setShowDrawSpectrum(false); }} style={styles.spectrumClose} accessibilityLabel="Close spectrum" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                   <Ionicons name="chevron-up" size={18} color={colors.textSecondary} />
                 </PressScale>
               </View>
@@ -1811,7 +1975,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Brush size ${s}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <View style={[styles.brushSizeDot, { width: dotSize, height: dotSize, backgroundColor: previewColor }]} />
               </Pressable>
@@ -1837,19 +2001,19 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
         {/* Actions */}
         <View style={styles.drawActions}>
-          <PressScale onPress={handleUndo} disabled={strokes.length === 0} style={[styles.drawActionBtn, ...(strokes.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Undo stroke" accessibilityState={{ disabled: strokes.length === 0 }} hitSlop={12}>
+          <PressScale onPress={handleUndo} disabled={strokes.length === 0} style={[styles.drawActionBtn, ...(strokes.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Undo stroke" accessibilityState={{ disabled: strokes.length === 0 }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="arrow-undo-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.drawActionLabel}>Undo</Text>
           </PressScale>
-          <PressScale onPress={handleRedo} disabled={redoStack.length === 0} style={[styles.drawActionBtn, ...(redoStack.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Redo stroke" accessibilityState={{ disabled: redoStack.length === 0 }} hitSlop={12}>
+          <PressScale onPress={handleRedo} disabled={redoStack.length === 0} style={[styles.drawActionBtn, ...(redoStack.length === 0 ? [{ opacity: 0.4 }] : [])]} accessibilityLabel="Redo stroke" accessibilityState={{ disabled: redoStack.length === 0 }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="refresh-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.drawActionLabel}>Redo</Text>
           </PressScale>
-          <PressScale onPress={handleClear} style={styles.drawActionBtn} accessibilityLabel="Clear drawing" hitSlop={12}>
+          <PressScale onPress={handleClear} style={styles.drawActionBtn} accessibilityLabel="Clear drawing" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="trash-outline" size={20} color={colors.danger} />
             <Text style={[styles.drawActionLabel, { color: colors.danger }]}>Clear</Text>
           </PressScale>
-          <PressScale onPress={handleDone} style={[styles.drawDoneBtn, { backgroundColor: colors.brand }]} accessibilityLabel="Done drawing" hitSlop={12}>
+          <PressScale onPress={handleDone} style={[styles.drawDoneBtn, { backgroundColor: colors.brand }]} accessibilityLabel="Done drawing" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.drawDoneBtnText}>Done</Text>
           </PressScale>
         </View>
@@ -1990,7 +2154,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
               accessibilityLabel={`GIF category ${cat.label}`}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Text style={[styles.gifCategoryChipText, isActive && { color: colors.textInverse }]}>
                 {cat.label}
@@ -2017,7 +2181,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load GIFs</Text>
-          <Pressable onPress={() => fetchGifs(query, activeCategory)} style={styles.retryBtn} accessibilityLabel="Retry GIF search" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={() => fetchGifs(query, activeCategory)} style={styles.retryBtn} accessibilityLabel="Retry GIF search" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -2032,6 +2196,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
               style={styles.gifCell}
               accessibilityLabel={`Select GIF ${item.altText}`}
               accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Image
                 source={{ uri: item.stillUrl || item.gifUrl }}
@@ -2191,7 +2356,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       {error ? (
         <View style={styles.errorBody}>
           <Text style={styles.errorText}>Couldn't load music</Text>
-          <Pressable onPress={() => fetchTracks(query)} style={styles.retryBtn} accessibilityLabel="Retry music search" accessibilityRole="button" hitSlop={12}>
+          <Pressable onPress={() => fetchTracks(query)} style={styles.retryBtn} accessibilityLabel="Retry music search" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
@@ -2206,6 +2371,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               style={({ pressed }) => [styles.musicRow, pressed && { opacity: 0.6 }]}
               accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
               accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} contentFit="cover" />
               <View style={styles.musicInfo}>
@@ -2259,6 +2425,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
   const handleAdd = useCallback(() => {
     if (!question.trim() || options.filter(o => o.trim()).length < 2) return;
+    haptic.medium();
     const cleanOptions = options.filter(o => o.trim()).slice(0, 4);
     const optionObjs = cleanOptions.map((label, i) => ({ id: `opt_${i}_${Date.now()}`, label: label.trim() }));
     const payload: any = {
@@ -2280,7 +2447,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       });
     }
     onClose();
-  }, [question, options, correctIdx, emoji, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [question, options, correctIdx, emoji, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
     <PickerShell title={isEditing ? 'Edit Quiz' : 'Add Quiz'} onClose={onClose}>
@@ -2325,6 +2492,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               style={[styles.quizCorrectDot, correctIdx === i && { backgroundColor: colors.success }]}
               accessibilityLabel={`Mark option ${i + 1} as correct`}
               accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               {correctIdx === i && <Ionicons name="checkmark" size={14} color="#fff" />}
             </Pressable>
@@ -2340,13 +2508,14 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             {options.length > 2 && (
               <Pressable
                 onPress={() => {
+                  haptic.warning();
                   setOptions(prev => prev.filter((_, idx) => idx !== i));
                   if (correctIdx >= i && correctIdx > 0) setCorrectIdx(correctIdx - 1);
                 }}
                 style={styles.quizRemoveBtn}
                 accessibilityLabel={`Remove option ${i + 1}`}
                 accessibilityRole="button"
-                hitSlop={12}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name="close-circle" size={20} color={colors.danger} />
               </Pressable>
@@ -2359,7 +2528,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             style={styles.quizAddOptionBtn}
             accessibilityLabel="Add option"
             accessibilityRole="button"
-            hitSlop={12}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
             <Text style={styles.quizAddOptionText}>Add Option</Text>
@@ -2375,7 +2544,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Emoji ${e}`}
               accessibilityRole="button"
               accessibilityState={{ selected: emoji === e }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Text style={{ fontSize: Type.title.size }}>{e}</Text>
             </Pressable>
@@ -2398,6 +2567,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 accessibilityLabel={`Timer: ${t.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
                   {t.label}
@@ -2413,6 +2583,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           accessibilityLabel={isEditing ? 'Update quiz' : 'Add quiz'}
           accessibilityRole="button"
           accessibilityState={{ disabled: !question.trim() || options.filter(o => o.trim()).length < 2 }}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Quiz'}</Text>
         </Pressable>
@@ -2426,6 +2597,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
 function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'question';
   const existing = editingLayer?.type === 'question' ? editingLayer.payload : null;
@@ -2438,6 +2610,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
 
   const handleAdd = useCallback(() => {
     if (!prompt.trim()) return;
+    haptic.medium();
     const payload: any = {
       prompt: prompt.trim(),
       placeholder: placeholder.trim() || 'Type something...',
@@ -2456,7 +2629,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
       });
     }
     onClose();
-  }, [prompt, placeholder, bgColor, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [prompt, placeholder, bgColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
     <PickerShell title={isEditing ? 'Edit Question' : 'Ask Me'} onClose={onClose}>
@@ -2499,12 +2672,12 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
           {QUESTION_BG_COLORS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => setBgColor(c)}
+              onPress={() => { haptic.selection(); setBgColor(c); }}
               style={[styles.colorOption, { backgroundColor: c }, bgColor === c && styles.colorOptionActive]}
               accessibilityLabel={`Background ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: bgColor === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
@@ -2515,6 +2688,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
           accessibilityLabel={isEditing ? 'Update question' : 'Add question'}
           accessibilityRole="button"
           accessibilityState={{ disabled: !prompt.trim() }}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Question'}</Text>
         </Pressable>
@@ -2544,6 +2718,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
 
   const handleAdd = useCallback(() => {
     if (!question.trim()) return;
+    haptic.medium();
     const payload: any = {
       question: question.trim(),
       emoji,
@@ -2562,7 +2737,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
       });
     }
     onClose();
-  }, [question, emoji, endLabel, sliderColor, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [question, emoji, endLabel, sliderColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   return (
     <PickerShell title={isEditing ? 'Edit Slider' : 'Emoji Slider'} onClose={onClose}>
@@ -2611,7 +2786,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
               accessibilityLabel={`Emoji ${e}`}
               accessibilityRole="button"
               accessibilityState={{ selected: emoji === e }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Text style={{ fontSize: Type.title.size }}>{e}</Text>
             </Pressable>
@@ -2622,12 +2797,12 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
           {SLIDER_COLORS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => setSliderColor(c)}
+              onPress={() => { haptic.selection(); setSliderColor(c); }}
               style={[styles.colorOption, { backgroundColor: c }, sliderColor === c && styles.colorOptionActive]}
               accessibilityLabel={`Slider color ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: sliderColor === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
@@ -2638,6 +2813,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
           accessibilityLabel={isEditing ? 'Update slider' : 'Add slider'}
           accessibilityRole="button"
           accessibilityState={{ disabled: !question.trim() }}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Slider'}</Text>
         </Pressable>
@@ -2651,6 +2827,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
 
 function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isEditing = editingLayer?.type === 'countdown';
   const existing = editingLayer?.type === 'countdown' ? editingLayer.payload : null;
@@ -2669,6 +2846,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
 
   const handleAdd = useCallback(() => {
     if (!label.trim()) return;
+    haptic.medium();
     const payload: any = {
       label: label.trim(),
       endDateTime: endDate.toISOString(),
@@ -2687,7 +2865,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
       });
     }
     onClose();
-  }, [label, endDate, color, isEditing, editingLayer, onAddLayer, onClose]);
+  }, [label, endDate, color, isEditing, editingLayer, onAddLayer, onClose, haptic]);
 
   const formatDate = (d: Date) => {
     const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
@@ -2718,6 +2896,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
         <Text style={styles.pickerSectionLabel}>End Date & Time</Text>
         <Pressable
           onPress={() => {
+            haptic.selection();
             // Simple date adjustment: cycle through next 7 days at 6pm
             const d = new Date(endDate);
             d.setDate(d.getDate() + 1);
@@ -2726,7 +2905,9 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
           }}
           style={styles.countdownDateBtn}
           accessibilityLabel="Adjust end date"
+          accessibilityHint="Cycles to the next day"
           accessibilityRole="button"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="calendar-outline" size={20} color={colors.brand} />
           <Text style={styles.countdownDateText}>{formatDate(endDate)}</Text>
@@ -2737,12 +2918,12 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
           {COUNTDOWN_COLORS.map((c) => (
             <Pressable
               key={c}
-              onPress={() => setColor(c)}
+              onPress={() => { haptic.selection(); setColor(c); }}
               style={[styles.colorOption, { backgroundColor: c }, color === c && styles.colorOptionActive]}
               accessibilityLabel={`Countdown color ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: color === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
@@ -2753,6 +2934,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
           accessibilityLabel={isEditing ? 'Update countdown' : 'Add countdown'}
           accessibilityRole="button"
           accessibilityState={{ disabled: !label.trim() }}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         >
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Countdown'}</Text>
         </Pressable>
@@ -2824,7 +3006,7 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             style={({ pressed }) => [styles.shapeOption, pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }]}
             accessibilityLabel={`Add ${s.label}`}
             accessibilityRole="button"
-            hitSlop={12}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <View style={styles.shapePreviewBox}>
               {renderShapePreview(s.shape)}
@@ -2843,7 +3025,7 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             accessibilityLabel={`Shape color ${c}`}
             accessibilityRole="button"
             accessibilityState={{ selected: activeColor === c }}
-            hitSlop={12}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           />
         ))}
       </View>
@@ -2885,13 +3067,13 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
   const removeOption = (index: number) => {
     if (options.length > 2) {
       setOptions(prev => prev.filter((_, i) => i !== index));
-      haptic.light();
+      haptic.warning();
     }
   };
 
   const handleAdd = useCallback(() => {
     if (!canSave) return;
-    haptic.selection();
+    haptic.medium();
     const validOptions = options
       .map(o => o.trim())
       .filter(o => o.length > 0)
@@ -2963,7 +3145,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={styles.sectionLabel}>Option {i + 1}</Text>
               {options.length > 2 && (
-                <Pressable onPress={() => removeOption(i)} hitSlop={14} accessibilityLabel={`Remove option ${i + 1}`} accessibilityRole="button">
+                <Pressable onPress={() => removeOption(i)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel={`Remove option ${i + 1}`} accessibilityRole="button">
                   <Ionicons name="close-circle" size={18} color={colors.danger} />
                 </Pressable>
               )}
@@ -2985,6 +3167,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             style={({ pressed }) => [styles.addOptionBtn, pressed && { opacity: 0.7 }]}
             accessibilityLabel="Add option"
             accessibilityRole="button"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
             <Text style={styles.addOptionBtnText}>Add Option ({options.length}/4)</Text>
@@ -3007,6 +3190,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
                 accessibilityLabel={`Timer: ${t.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[styles.timerChipText, isActive && { color: '#fff' }]}>
                   {t.label}
@@ -3015,7 +3199,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
             );
           })}
         </ScrollView>
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel="Add vote" accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>
           <Text style={styles.saveBtnText}>Add Vote</Text>
         </Pressable>
       </View>
@@ -3134,7 +3318,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     <SheetContainer visible={true} onClose={onClose} maxHeight={0.85}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Stickers</Text>
-        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close stickers" hitSlop={12}>
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close stickers" accessibilityHint="Closes the sticker tray" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Ionicons name="close" size={22} color={colors.textSecondary} />
         </PressScale>
       </View>
@@ -3151,7 +3335,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           accessibilityLabel="Search stickers"
         />
         {search.length > 0 && (
-          <PressScale onPress={() => setSearch('')} style={styles.stickerSearchClear} accessibilityLabel="Clear search" hitSlop={6}>
+          <PressScale onPress={() => setSearch('')} style={styles.stickerSearchClear} accessibilityLabel="Clear search" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close-circle" size={18} color={colors.textMuted} />
           </PressScale>
         )}
@@ -3170,6 +3354,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                 accessibilityLabel={`Category ${cat.label}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[styles.stickerCategoryChipText, isActive && { color: colors.textInverse }]}>
                   {cat.label}
@@ -3201,6 +3386,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                     style={({ pressed }) => [styles.stickerCell, pressed && { opacity: 0.7 }]}
                     accessibilityLabel={`Add ${sticker.label} sticker`}
                     accessibilityRole="button"
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
                     <View style={styles.stickerCellIcon}>
                       <Ionicons name={sticker.icon} size={28} color={colors.brand} />
@@ -3294,11 +3480,11 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Link color ${c}`}
               accessibilityRole="button"
               accessibilityState={{ selected: bgColor === c }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             />
           ))}
         </View>
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update link' : 'Add link'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update link' : 'Add link'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Link'}</Text>
         </Pressable>
       </View>
@@ -3356,7 +3542,7 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
           maxLength={80}
           accessibilityLabel="Location name"
         />
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update location' : 'Add location'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update location' : 'Add location'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Location'}</Text>
         </Pressable>
       </View>
@@ -3419,7 +3605,7 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
           autoCorrect={false}
           accessibilityLabel="Hashtag"
         />
-        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update hashtag' : 'Add hashtag'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={12}>
+        <Pressable onPress={handleAdd} style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]} disabled={!canSave} accessibilityLabel={isEditing ? 'Update hashtag' : 'Add hashtag'} accessibilityRole="button" accessibilityState={{ disabled: !canSave }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Hashtag'}</Text>
         </Pressable>
       </View>
@@ -3486,13 +3672,13 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityLabel={`Time format ${f.label}`}
               accessibilityRole="button"
               accessibilityState={{ selected: format === f.key }}
-              hitSlop={12}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name={f.icon} size={18} color={format === f.key ? colors.brand : colors.textSecondary} />
             </Pressable>
           ))}
         </View>
-        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update time' : 'Add time'} accessibilityRole="button" hitSlop={12}>
+        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update time' : 'Add time'} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Time'}</Text>
         </Pressable>
       </View>
@@ -3581,7 +3767,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
                 accessibilityLabel={`Weather ${w.condition}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                hitSlop={8}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={[styles.weatherCellEmoji, isActive && { color: '#fff' }]}>{w.emoji}</Text>
                 <Text style={[styles.weatherCellLabel, isActive && { color: '#fff' }]} numberOfLines={1}>{w.condition}</Text>
@@ -3615,7 +3801,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
             accessibilityLabel="Weather location"
           />
         </View>
-        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update weather' : 'Add weather'} accessibilityRole="button" hitSlop={12}>
+        <Pressable onPress={handleAdd} style={styles.saveBtn} accessibilityLabel={isEditing ? 'Update weather' : 'Add weather'} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Weather'}</Text>
         </Pressable>
       </View>
@@ -3633,6 +3819,39 @@ function createStyles(colors: ThemeColors) {
   mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
   mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
   mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  // ── Album/source disclosure ──
+  albumDisclosure: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  albumDisclosureText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.captionElevated.size,
+    flex: 1,
+  },
+  albumPickerDropdown: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    marginHorizontal: Space.md,
+    marginBottom: Space.xs,
+    overflow: 'hidden',
+  },
+  albumPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.smMd,
+    minHeight: 40,
+  },
+  albumPickerItemText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.body.size,
+    flex: 1,
+  },
   // ── Category tabs ──
   categoryTabRow: {
     flexDirection: 'row',
@@ -3662,21 +3881,70 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
   },
-  // ── Recent photos section ──
-  recentSection: {
+  // ── Limited-access banner ──
+  limitedAccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.sm,
+  },
+  limitedAccessText: {
+    flex: 1,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+  },
+  // ── Selection preview rail ──
+  selectionPreviewRail: {
     paddingVertical: Space.sm,
   },
-  recentSectionLabel: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
-  },
-  recentScroll: {
+  selectionPreviewScroll: {
     paddingHorizontal: Space.md,
     gap: Space.xs,
+  },
+  selectionPreviewItem: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  selectionPreviewThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  selectionPreviewOrder: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectionPreviewOrderText: {
+    fontFamily: Typography.family.bold,
+    fontSize: 10,
+  },
+  selectionPreviewRemove: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+  },
+  selectionPreviewReorderLeft: {
+    position: 'absolute',
+    left: 2,
+    top: '50%',
+    marginTop: -9,
+  },
+  selectionPreviewReorderRight: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
   },
   // ── Media grid ──
   mediaGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
@@ -3684,7 +3952,7 @@ function createStyles(colors: ThemeColors) {
   mediaGridCell: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -3695,12 +3963,12 @@ function createStyles(colors: ThemeColors) {
   },
   mediaGridVideoBadge: {
     position: 'absolute',
-    bottom: 4,
-    right: 4,
+    bottom: Space.xs,
+    left: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: Space.xs,
     paddingVertical: 2,
     borderRadius: Radius.sm,
@@ -3710,9 +3978,14 @@ function createStyles(colors: ThemeColors) {
     fontSize: 10,
     fontFamily: Typography.family.medium,
   },
+  // Selection overlay — subtle tint + border highlight (iOS Photos pattern).
+  // The border communicates selection more clearly than a heavy dark overlay.
   mediaGridSelectedOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth: 2,
+    borderColor: '#fff',
+    borderRadius: Radius.md,
   },
   mediaGridSelectionBadge: {
     position: 'absolute',
@@ -3724,6 +3997,11 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
   },
   mediaGridSelectionText: {
     color: '#000',

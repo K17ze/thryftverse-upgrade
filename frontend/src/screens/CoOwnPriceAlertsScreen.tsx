@@ -24,7 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -143,8 +143,8 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
             <Reanimated.View entering={FadeInDown.duration(300)}>
               <View style={styles.heroCard}>
                 <View style={styles.heroIconRow}>
-                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                    <Ionicons name="notifications" size={20} color={colors.textInverse} />
+                  <View style={[styles.heroIcon, { backgroundColor: colors.surfaceAlt }]}>
+                    <Ionicons name="notifications" size={20} color={colors.brand} />
                   </View>
                   <View style={styles.heroText}>
                     <Text style={styles.heroTitle}>Price alerts</Text>
@@ -282,7 +282,7 @@ function createStyles(colors: ThemeColors) {
     heroIcon: {
       width: Control.hit,
       height: Control.hit,
-      borderRadius: Radius.full,
+      borderRadius: Radius.lg,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -292,12 +292,16 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       letterSpacing: Type.subtitle.letterSpacing,
+      lineHeight: Type.subtitle.lineHeight,
     },
     heroSubtitle: {
-      fontSize: Type.caption.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       marginTop: Space.xs / 2,
+      fontVariant: ['tabular-nums'],
     },
 
     // Section headers
@@ -310,11 +314,12 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs,
     },
     sectionTitle: {
-      fontSize: Type.meta.size,
+      fontSize: Type.metaElevated.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       textTransform: 'uppercase',
-      letterSpacing: LetterSpacing.caps,
+      letterSpacing: Type.metaElevated.letterSpacing,
+      lineHeight: Type.metaElevated.lineHeight,
       opacity: 0.7,
     },
     sectionCount: {
@@ -326,9 +331,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     sectionCountText: {
-      fontSize: Type.meta.size,
+      fontSize: Type.metaElevated.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
+      fontVariant: ['tabular-nums'],
+      letterSpacing: Type.metaElevated.letterSpacing,
     },
 
     // Alert cards
@@ -358,11 +365,12 @@ function createStyles(colors: ThemeColors) {
     },
     alertText: { flex: 1 },
     alertCondition: {
-      fontSize: Type.caption.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
       textTransform: 'uppercase',
       letterSpacing: Type.metaElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
     },
     alertPrice: {
       fontSize: Type.priceList.size,
@@ -371,11 +379,14 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs / 2,
       fontVariant: ['tabular-nums'],
       letterSpacing: Type.priceList.letterSpacing,
+      lineHeight: Type.priceList.lineHeight,
     },
     alertDate: {
-      fontSize: Type.meta.size,
+      fontSize: Type.captionElevated.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
+      letterSpacing: Type.captionElevated.letterSpacing,
+      lineHeight: Type.captionElevated.lineHeight,
       marginTop: Space.xs,
     },
     deleteButton: {

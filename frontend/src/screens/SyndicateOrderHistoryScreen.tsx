@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Alert, View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
@@ -242,6 +242,44 @@ export default function CoOwnOrderHistoryScreen() {
     });
   }, [remoteEntries, sideFilter, dateFilter]);
 
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible order history rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderOrderItem = useCallback(({ item, index }: { item: HistoryEntry; index: number }) => (
+    <Reanimated.View
+      entering={
+        reducedMotionEnabled
+          ? undefined
+          : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
+      }
+    >
+      <OrderHistoryRow
+        id={item.id}
+        side={item.side}
+        type={item.type}
+        assetTitle={item.assetTitle}
+        quantity={item.quantity}
+        filledQuantity={item.filledQuantity}
+        pricePerShare={formatCoOwnIze(item.pricePerShare)}
+        totalAmount={formatCoOwnIze(item.totalAmount)}
+        status={item.status}
+        timestamp={item.createdAt}
+        onCancel={item.source === 'backend' && (item.status === 'open' || item.status === 'partially_filled')
+          ? () => requestCancelOrder(item)
+          : undefined}
+        isCancelling={cancellingOrderId === item.id}
+        onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: item.assetId }); }}
+      />
+    </Reanimated.View>
+  ), [
+    reducedMotionEnabled,
+    formatCoOwnIze,
+    requestCancelOrder,
+    cancellingOrderId,
+    haptics,
+    navigation,
+  ]);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
@@ -307,33 +345,7 @@ export default function CoOwnOrderHistoryScreen() {
         showsVerticalScrollIndicator={false}
         onEndReached={() => void loadMoreRemoteHistory()}
         onEndReachedThreshold={0.5}
-        renderItem={({ item, index }) => (
-          <Reanimated.View
-            entering={
-              reducedMotionEnabled
-                ? undefined
-                : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
-            }
-          >
-            <OrderHistoryRow
-              id={item.id}
-              side={item.side}
-              type={item.type}
-              assetTitle={item.assetTitle}
-              quantity={item.quantity}
-              filledQuantity={item.filledQuantity}
-              pricePerShare={formatCoOwnIze(item.pricePerShare)}
-              totalAmount={formatCoOwnIze(item.totalAmount)}
-              status={item.status}
-              timestamp={item.createdAt}
-              onCancel={item.source === 'backend' && (item.status === 'open' || item.status === 'partially_filled')
-                ? () => requestCancelOrder(item)
-                : undefined}
-              isCancelling={cancellingOrderId === item.id}
-              onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: item.assetId }); }}
-            />
-          </Reanimated.View>
-        )}
+        renderItem={renderOrderItem}
         ListEmptyComponent={
           isSyncingRemote ? (
             <View style={styles.loadingWrap}>

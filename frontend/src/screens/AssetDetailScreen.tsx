@@ -17,7 +17,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Type, Typography, Radius, DockConstants, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Type, Typography, Radius, DockConstants, Stroke, Control, LetterSpacing, Numeric } from '../theme/designTokens';
 import {
   fetchCoOwnAssetById,
   fetchCoOwnOrderBook,
@@ -1749,34 +1749,42 @@ const styles = StyleSheet.create({
   // Per Design.md between-group spacing: the issuer row is a distinct
   // group. paddingVertical Space.md (16px) gives proper breathing room
   // for avatar + name + verification + actions.
+  // Per spec 11_COOWN: 12-16pt between data rows.
   identityExtension: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   // ── Elevated trust strip (near trade decision point) ──
   // Flat inline icon+text pairs, no card container. Per AGENTS.md §4.
   // 2026 benchmark: trust near CTA = 40%+ conversion improvement.
+  // Per spec 11_COOWN: "Trust signals — regulatory, security, transparency.
+  // Professional, not gamified." 16pt vertical padding for breathing room.
   coOwnTrustStrip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.sm,
+    paddingVertical: Space.md,
+    gap: Space.md,
   },
   coOwnTrustChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
   },
+  // Trust chip text uses captionElevated for quiet, professional readability.
   coOwnTrustChipText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: LetterSpacing.tight,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   // ── Market status row (inside transaction surface) ──
+  // Per spec 11_COOWN: "Standardize market-state color and shape semantics."
+  // Status dot uses semantic colors (success/warning/textMuted) for truth.
+  // Status text uses captionElevated for quiet, professional readability.
   marketStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1789,34 +1797,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
   },
+  // Status dot — 8pt, Radius.sm, semantic color only.
   marketStatusDot: {
     width: Space.sm,
     height: Space.sm,
     borderRadius: Radius.sm,
   },
+  // Status text — captionElevated (13/18/400) for quiet readability.
   marketStatusText: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.normal,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
+  // Stale indicator — warning color, captionElevated.
   marketStatusStale: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
+  // Rights/spread indicator — captionElevated for quiet metadata.
   marketStatusRights: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   // ── Market book row (bid/ask inside transaction surface) ──
+  // ── Market book row (bid/ask inside transaction surface) ──
+  // Per spec 11_COOWN: 24pt between sections. Space.lg (24px) top margin
+  // and padding from the status row. Values use Numeric.priceList with
+  // tabular-nums for stable alignment.
   marketBookRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
     borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
+    marginTop: Space.lg,
+    paddingTop: Space.lg,
   },
   marketBookSide: {
     flex: 1,
@@ -1826,18 +1844,21 @@ const styles = StyleSheet.create({
     width: StyleSheet.hairlineWidth,
     marginHorizontal: Space.sm,
   },
+  // Market book labels — captionElevated for quiet hierarchy.
   marketBookLabel: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.captionElevated.letterSpacing,
   },
+  // Market book values — Numeric.priceList (20/24/700) with tabular-nums.
+  // Per spec 11_COOWN: "Values: Type.priceList or Numeric.priceLarge."
   marketBookValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
+    fontSize: Numeric.priceList.size,
+    lineHeight: Numeric.priceList.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
+    letterSpacing: Numeric.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Secondary facts (NAV / distribution / report) ──
   marketSecondaryFacts: {
@@ -1861,14 +1882,17 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     lineHeight: Type.body.lineHeight,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Fundamentals — stacked layout (per spec 03_COOWN §1) ──
+  // ── Fundamentals — stacked layout (per spec 03_COOWN §1) ──
+  // Per spec 11_COOWN: 12-16pt between data rows. Space.md (16px) gap
+  // between rows. 24pt from the previous section (Space.lg).
   fundamentalsStacked: {
-    marginTop: Space.xs,
-    paddingTop: Space.sm,
+    marginTop: Space.lg,
+    paddingTop: Space.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: Space.sm,
+    gap: Space.md,
   },
   fundamentalsRow: {
     flexDirection: 'row',
@@ -1876,6 +1900,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
   },
+  // Fundamentals label — captionElevated for quiet hierarchy.
   fundamentalsLabel: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
@@ -1883,11 +1908,16 @@ const styles = StyleSheet.create({
     letterSpacing: Type.captionElevated.letterSpacing,
     flexShrink: 0,
   },
+  // Fundamentals value — bodyEmphasis (15/21/600) with tabular-nums.
+  // Per spec 11_COOWN: "Values: Type.priceList or Numeric.priceLarge."
+  // Using bodyEmphasis for compact fundamentals rows; priceList is used
+  // for the main market values above.
   fundamentalsValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
-    fontVariant: ['tabular-nums'],
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
     textAlign: 'right',
     flexShrink: 1,
   },
@@ -1927,10 +1957,12 @@ const styles = StyleSheet.create({
   // ── Viewer position ──
   // Trust chips — flat inline icon+text pairs. Same pattern as
   // ItemDetailScreen. No card, no surface fill, no border.
+  // Per spec 11_COOWN: "Professional, not gamified."
+  // 16pt bottom padding for breathing room before the metric rows.
   trustChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
+    gap: Space.md,
     paddingBottom: Space.md,
   },
   trustChip: {
@@ -1938,15 +1970,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
   },
+  // Trust chip text uses captionElevated for quiet, professional readability.
   trustChipText: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
+  // ── Audit trail — calm, professional history ──
+  // Per spec 11_COOWN: 24pt between sections. Space.lg (24px) top margin
+  // and padding. Hairline separator. Tabular-nums for dates.
   auditTrailWrap: {
-    gap: Space.xs,
-    paddingTop: Space.md,
-    marginTop: Space.sm,
+    gap: Space.sm,
+    paddingTop: Space.lg,
+    marginTop: Space.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   auditTrailTitle: {
@@ -1957,12 +1994,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: Space.xs,
   },
+  // Audit trail rows — 12-16pt between data rows per spec.
   auditTrailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xs,
+    paddingVertical: Space.sm,
   },
   auditTrailEvent: {
     fontSize: Type.captionElevated.size,
@@ -1973,13 +2011,18 @@ const styles = StyleSheet.create({
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // ── Viewer position header — calm, professional ownership display ──
+  // Per spec 11_COOWN: "Clear ownership stake, current value." 24pt
+  // section spacing (Space.lg) between the header and supply summary.
+  // Values use Numeric.priceLarge with tabular-nums for stable alignment.
   viewerPositionHeader: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    gap: Space.sm,
-    marginBottom: Space.sm,
+    gap: Space.md,
+    marginBottom: Space.lg,
   },
   // Stale appraisal refresh action
   staleAppraisalRow: {
@@ -2003,32 +2046,37 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   viewerPositionValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
+    fontSize: Numeric.priceList.size,
+    lineHeight: Numeric.priceList.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
+    letterSpacing: Numeric.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
     flexShrink: 1,
   },
   viewerPositionMarketValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
+    fontSize: Numeric.priceLarge.size,
+    lineHeight: Numeric.priceLarge.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
+    letterSpacing: Numeric.priceLarge.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
+  // Position meta — captionElevated for quiet, professional labels.
   viewerPositionMeta: {
     fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
     lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   // ── Supply summary ──
+  // ── Supply summary — calm, professional allocation display ──
+  // Per spec 11_COOWN: 12-16pt between data rows. Space.md (16px) between
+  // the summary and the allocation bar. Values use tabular-nums.
   supplySummary: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
   },
   supplyMetric: {
     gap: Space.xs,
@@ -2037,6 +2085,7 @@ const styles = StyleSheet.create({
   supplyMetricTrailing: {
     alignItems: 'flex-end',
   },
+  // Supply metric labels — captionElevated for quiet hierarchy.
   supplyMetricLabel: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
@@ -2048,13 +2097,13 @@ const styles = StyleSheet.create({
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: Type.subtitle.letterSpacing,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   supplyAllocated: {
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   allocationBar: {
     height: Space.sm,
@@ -2065,20 +2114,28 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: Radius.full,
   },
+  // Supply holders — quiet metadata, 16pt from allocation bar.
   supplyHolders: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    marginTop: Space.sm,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    marginTop: Space.md,
   },
   // ── Rights summary ──
+  // ── Rights summary — calm, professional risk communication ──
+  // Per spec 11_COOWN: "Financial disclosures should be reachable before
+  // order confirmation." 16pt vertical padding for breathing room.
   rightsSummary: {
-    paddingVertical: Space.sm,
+    paddingVertical: Space.md,
   },
+  // Critical statement uses bodyEmphasis (15/21/600) for clear hierarchy.
+  // This is the most important risk fact the user needs to understand.
   rightsCriticalStatement: {
     fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
     lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   // ── Unavailable exit row (truthful disabled state) ──
   unavailableRow: {
@@ -2105,20 +2162,25 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
   },
-  // ── Dock state badge ──
+  // ── Dock state badge — calm, professional status ──
+  // Uses bodyEmphasis (15/21/600) for clear hierarchy in the dock.
   dockStateBadge: {
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.normal,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
-  // ── Elevated trust strip (near trade CTA) ──
-  // ── Discovery ──
+  // ── Discovery — 24pt section spacing per spec 11_COOWN ──
   recommendationSection: {
-    marginTop: Space.md,
+    marginTop: Space.lg,
   },
 });
 
 const priceAlertStyles = StyleSheet.create({
+  // ── Price alert sheet — calm, professional modal ──
+  // Per spec 11_COOWN: "Clean, calm, trustworthy." 24pt padding.
+  // Semantic condition colours (success/danger) for above/below —
+  // truthful state, not decoration.
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -2152,10 +2214,12 @@ const priceAlertStyles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
     marginBottom: Space.xs - 2,
   },
+  // Sheet subtitle — captionElevated for quiet, professional explanation.
   sheetSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   conditionRow: {
     flexDirection: 'row',
@@ -2172,23 +2236,33 @@ const priceAlertStyles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
   },
+  // Condition text uses body (14/20/400) for clear readability.
   conditionText: {
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.body.letterSpacing,
   },
+  // Input label — captionElevated for quiet hierarchy.
   inputLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginBottom: Space.xs,
   },
+  // Price input — tabular-nums for stable numeric entry.
   input: {
     borderWidth: Stroke.standard,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
     marginBottom: Space.lg,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   actions: {
     flexDirection: 'row',

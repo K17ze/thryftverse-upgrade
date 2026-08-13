@@ -130,7 +130,7 @@ export interface EmptyStatePreset {
  * The CTA should be the primary creation action.
  */
 export const EMPTY_PRESET_FIRST_TIME: EmptyStatePreset = {
-  icon: 'sparkles-outline',
+  icon: 'cube-outline',
   title: 'Nothing here yet',
   subtitle: 'Your saves and creations will show up here once you get started.',
 };

@@ -47,10 +47,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   title: {
     fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.bold,
+    fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.2,
   },
   subtitle: {
     fontSize: Type.caption.size,

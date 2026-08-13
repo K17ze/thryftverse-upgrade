@@ -157,7 +157,7 @@ interface SavedSearch {
   lastMatchCount?: number;
 }
 
-interface SupportTicket {
+export interface SupportTicket {
   id: string;
   orderId: string;
   topicId: string;

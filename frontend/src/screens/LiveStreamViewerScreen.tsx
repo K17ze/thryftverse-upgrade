@@ -39,7 +39,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { Space, Radius, Type, Elevation, Control, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Elevation, Control, Typography, Stroke, FontFamily } from '../theme/designTokens';
 import {
   LiveSession,
   LiveChatMessage,
@@ -422,8 +422,14 @@ export function LiveStreamViewerScreen() {
           >
             <View style={styles.bidSheetHandle} />
             <Text style={[styles.bidSheetTitle, { color: colors.textPrimary }]}>Place a Bid</Text>
-            <Text style={[styles.bidSheetCurrent, { color: colors.textSecondary }]}>
-              Current bid: £{currentBid}
+            <Text style={[styles.bidSheetCurrentLabel, { color: colors.textSecondary }]}>
+              Current bid
+            </Text>
+            <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>
+              £{currentBid}
+            </Text>
+            <Text style={[styles.bidSheetMinLabel, { color: colors.textMuted }]}>
+              Minimum next bid £{minNextBid}
             </Text>
             <View style={styles.quickBidRow}>
               {[minNextBid, minNextBid + 5, minNextBid + 10, minNextBid + 20].map((amount) => (
@@ -529,7 +535,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.textPrimary,
   },
   liveBadgeText: {
-    fontSize: Type.meta.size,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: Type.metaElevated.letterSpacing,
@@ -547,6 +554,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   videoOverlayRight: {
     flex: 1,
@@ -587,13 +595,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
   },
   sellerName: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     flexShrink: 1,
   },
   streamTitle: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.6)',
   },
@@ -612,23 +622,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   productPlane: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.md,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.md,
     backgroundColor: '#161616',
   },
   productImage: {
-    width: Space.xxl + Space.xl,
-    height: Space.xxl + Space.xl,
-    borderRadius: Radius.md,
+    width: Space.xxl + Space.xl + Space.sm,
+    height: Space.xxl + Space.xl + Space.sm,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
   },
   productInfo: {
     flex: 1,
-    gap: Space.xs / 2,
+    gap: Space.xs,
   },
   productTitle: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -643,9 +654,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
   },
   priceValue: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   bidCountBadge: {
     flexDirection: 'row',
@@ -660,6 +674,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.7)',
+    fontVariant: ['tabular-nums'],
   },
   timeRow: {
     flexDirection: 'row',
@@ -667,8 +682,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs / 2,
   },
   timeText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   productActions: {
     flexDirection: 'row',
@@ -687,6 +704,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   buyNowBtn: {
     paddingHorizontal: Space.md + 2,
@@ -701,6 +719,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   // ── Chat plane ──
   chatPlane: {
@@ -765,6 +784,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
+    paddingTop: (Space.xl + Space.xs + 4 - Type.body.lineHeight) / 2,
   },
   chatSendBtn: {
     width: Control.hit,
@@ -790,7 +810,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingTop: Space.sm,
     paddingBottom: Space.xl,
-    gap: Space.md,
+    gap: Space.sm,
   },
   bidSheetHandle: {
     width: Space.xxl + Space.xs,
@@ -800,14 +820,34 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignSelf: 'center',
   },
   bidSheetTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.subtitle.letterSpacing,
+    textAlign: 'center',
+  },
+  bidSheetCurrentLabel: {
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
     textAlign: 'center',
   },
   bidSheetCurrent: {
-    fontSize: Type.body.size,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceLarge.letterSpacing,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
+  bidSheetMinLabel: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   quickBidRow: {
     flexDirection: 'row',
@@ -826,6 +866,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   quickBidText: {
     fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
   },
   cancelBidBtn: {
     paddingVertical: Space.sm,

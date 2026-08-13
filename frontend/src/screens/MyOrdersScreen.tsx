@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
@@ -304,6 +304,25 @@ export default function MyOrdersScreen() {
 
   const renderSeparator = useCallback(() => <View style={styles.separator} />, []);
 
+  // FlashList v2 performance: memoized outer renderItem prevents full re-render
+  // of all visible order groups on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderGroupItem = useCallback(
+    ({ item: group }: { item: DateGroup }) => (
+      <View>
+        {renderGroupHeader(group.label)}
+        <FlashList
+          data={group.data}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          ItemSeparatorComponent={renderSeparator}
+          scrollEnabled={false}
+        />
+      </View>
+    ),
+    [renderGroupHeader, keyExtractor, renderItem, renderSeparator]
+  );
+
   const renderEmpty = useCallback(() => {
     if (!viewerId) {
       return (
@@ -542,18 +561,7 @@ export default function MyOrdersScreen() {
       <FlashList
         data={groupedOrders}
         keyExtractor={(group) => group.key}
-        renderItem={({ item: group }) => (
-          <View>
-            {renderGroupHeader(group.label)}
-            <FlashList
-              data={group.data}
-              keyExtractor={keyExtractor}
-              renderItem={renderItem}
-              ItemSeparatorComponent={renderSeparator}
-              scrollEnabled={false}
-            />
-          </View>
-        )}
+        renderItem={renderGroupItem}
         ListEmptyComponent={
           loadError && orders.length === 0
             ? renderError
@@ -611,8 +619,10 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.title.letterSpacing,
     color: colors.textPrimary,
   },
   headerFilterBtn: {
@@ -632,7 +642,9 @@ function createStyles(colors: ThemeColors) {
   needsActionText: {
     flex: 1,
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.brand,
   },
   searchRow: {
@@ -663,26 +675,31 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xs,
   },
   filterSummaryText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
   },
   clearFilterText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.brand,
   },
   groupHeader: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Space.xs,
+    paddingTop: Space.lg,
+    paddingBottom: Space.xs + 2,
   },
   groupHeaderText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38,
   },
   listContent: {
     paddingBottom: Space.xl,
@@ -690,7 +707,7 @@ function createStyles(colors: ThemeColors) {
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: Space.xxl * 2 + Space.sm,
+    marginLeft: Space.md + 80 + Space.md,
   },
   errorContainer: {
     alignItems: 'center',
@@ -732,7 +749,9 @@ function createStyles(colors: ThemeColors) {
   },
   footerLoadingText: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
   },
   footerError: {
@@ -744,12 +763,16 @@ function createStyles(colors: ThemeColors) {
   },
   footerErrorText: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
   },
   retryLink: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.brand,
   },
   footerEnd: {
@@ -757,8 +780,10 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
   },
   footerEndText: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
   },
   });

@@ -79,6 +79,7 @@ export function RelatedItemsRail({
                 style={styles.cardImage}
                 containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.lg }}
                 contentFit="cover"
+                downscaleWidth={Math.round(cardWidth)}
               />
             ) : (
               <ImageEmptyGraphic

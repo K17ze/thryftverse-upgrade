@@ -3,7 +3,7 @@ import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, Control } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { isVideoUri } from '../../utils/media';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -43,6 +43,7 @@ export function FlagshipProductCard({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasVideo = isVideoUri(imageUri);
   const reducedMotion = useReducedMotion();
+  const saved = isSaved || isWishlisted;
 
   return (
     <Pressable onPress={onPress} style={[styles.root, { width: CARD_W }, style]}>
@@ -55,7 +56,7 @@ export function FlagshipProductCard({
           priority="normal"
         />
 
-        {/* Top-right save button */}
+        {/* Top-right save button — 44pt hit area, transparent by default */}
         {onToggleSave && (
           <Pressable
             onPress={(e) => {
@@ -64,40 +65,40 @@ export function FlagshipProductCard({
             }}
             style={styles.saveBtn}
             hitSlop={12}
+            accessibilityLabel={saved ? 'Remove from saved' : 'Save item'}
+            accessibilityRole="button"
           >
             <Ionicons
-              name={isSaved || isWishlisted ? 'heart' : 'heart-outline'}
+              name={saved ? 'heart' : 'heart-outline'}
               size={20}
-              color={isSaved || isWishlisted ? colors.danger : '#fff'}
+              color={saved ? colors.danger : '#fff'}
             />
           </Pressable>
         )}
 
-        {/* Video indicator */}
+        {/* Video indicator — compact, only when media is video */}
         {hasVideo && (
           <View style={styles.videoBadge}>
             <Ionicons name="videocam" size={12} color="#fff" />
           </View>
         )}
-
-        {/* Bottom gradient + text */}
-        <View style={styles.bottomOverlay}>
-          <View style={styles.textRow}>
-            <Reanimated.Text
-              entering={reducedMotion ? undefined : FadeIn}
-              numberOfLines={1}
-              style={styles.priceText}
-            >
-              {price}
-            </Reanimated.Text>
-          </View>
-        </View>
       </View>
 
-      {/* Title below image */}
+      {/* Metadata below image — flat, no card shell */}
       <View style={styles.metaRow}>
-        <Reanimated.Text entering={reducedMotion ? undefined : FadeIn} numberOfLines={2} style={styles.titleText}>
+        <Reanimated.Text
+          entering={reducedMotion ? undefined : FadeIn}
+          numberOfLines={2}
+          style={styles.titleText}
+        >
           {title}
+        </Reanimated.Text>
+        <Reanimated.Text
+          entering={reducedMotion ? undefined : FadeIn}
+          numberOfLines={1}
+          style={styles.priceText}
+        >
+          {price}
         </Reanimated.Text>
       </View>
 
@@ -131,10 +132,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     position: 'absolute',
     top: Space.sm,
     right: Space.sm,
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -145,48 +144,33 @@ const createStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
   },
-  bottomOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 56,
-    justifyContent: 'flex-end',
-    padding: Space.sm,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-  textRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  priceText: {
-    fontSize: Type.price.size,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -0.3,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
   metaRow: {
     marginTop: Space.xs,
     paddingHorizontal: 2,
+    gap: 2,
   },
   titleText: {
     fontSize: Type.body.size,
-    fontWeight: '500',
-    color: colors.textPrimary,
     lineHeight: 18,
+    fontFamily: FontFamily.medium,
+    color: colors.textPrimary,
+  },
+  priceText: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: 20,
+    fontFamily: FontFamily.bold,
+    color: colors.textPrimary,
+    letterSpacing: -0.2,
   },
   sellerText: {
     fontSize: Type.meta.size,
-    fontWeight: '500',
+    lineHeight: 14,
+    fontFamily: FontFamily.medium,
     color: colors.textSecondary,
     marginTop: 2,
     paddingHorizontal: 2,
@@ -198,12 +182,13 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   conditionText: {
     fontSize: Type.meta.size,
-    fontWeight: '500',
+    lineHeight: 14,
+    fontFamily: FontFamily.medium,
     color: colors.textSecondary,
   },
 });

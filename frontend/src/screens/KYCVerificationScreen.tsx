@@ -251,8 +251,8 @@ export default function KYCVerificationScreen({ navigation }: Props) {
           entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
           style={styles.submittedWrap}
         >
-          <View style={[styles.submittedIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="hourglass-outline" size={40} color={colors.warning} />
+          <View style={[styles.submittedIcon, { backgroundColor: colors.warning + '18' }]}>
+            <Ionicons name="hourglass-outline" size={44} color={colors.warning} />
           </View>
           <Text style={styles.submittedTitle}>Verification in review</Text>
           <Text style={styles.submittedBody}>
@@ -291,6 +291,29 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
       <View style={styles.root}>
+        {/* ── Privacy reassurance banner ──
+            Psychology (§27.7 trust architecture): KYC is the highest-trust
+            moment in onboarding. A visible privacy statement before the form
+            reduces abandonment by addressing the user's primary concern
+            ("what happens to my data?") before they encounter the camera.
+            Research (FinAuth 2026): "Say what you do with the data. Verification
+            asks for trust; visible privacy practice earns it back." */}
+        <View style={[styles.privacyBanner, { backgroundColor: colors.commerceTrust + '12', borderBottomColor: colors.commerceTrust + '20' }]}>
+          <View style={styles.privacyBannerContent}>
+            <View style={[styles.privacyIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
+              <Ionicons name="lock-closed" size={16} color={colors.commerceTrust} />
+            </View>
+            <View style={styles.privacyTextWrap}>
+              <Text style={[styles.privacyTitle, { color: colors.textPrimary }]}>
+                Your data is encrypted and secure
+              </Text>
+              <Text style={[styles.privacyBody, { color: colors.textSecondary }]}>
+                Documents are used only for identity verification and deleted after review.
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* ── Step indicator ── */}
         <StepIndicator currentStep={step} colors={colors} styles={styles} />
 
@@ -1014,11 +1037,13 @@ function CaptureTile({
         style={[styles.captureTile, { backgroundColor: colors.surfaceAlt, borderColor: error ? colors.danger : colors.border }]}
         accessibilityRole="button"
         accessibilityLabel={`Capture ${label}`}
+        accessibilityHint="Opens the camera to take a photo"
       >
         <View style={[styles.captureIconWrap, circular && { borderRadius: Radius.full }]}>
-          <Ionicons name={icon} size={28} color={colors.textMuted} />
+          <Ionicons name={icon} size={32} color={colors.textMuted} />
         </View>
         <Text style={styles.captureTileText}>Tap to capture</Text>
+        <Text style={styles.captureTileHint}>Use good lighting · fill the frame</Text>
       </Pressable>
       {error ? <Text style={styles.captureError}>{error}</Text> : null}
     </View>
@@ -1073,6 +1098,39 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: {
       flex: 1,
+    },
+    // Privacy reassurance banner
+    privacyBanner: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    privacyBannerContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm + 2,
+    },
+    privacyIcon: {
+      width: Control.chrome + Space.xs,
+      height: Control.chrome + Space.xs,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    privacyTextWrap: {
+      flex: 1,
+    },
+    privacyTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      lineHeight: Type.bodyEmphasis.lineHeight,
+    },
+    privacyBody: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight + 2,
+      marginTop: Space.xs / 2,
     },
     // Step indicator
     stepIndicatorWrap: {
@@ -1207,6 +1265,13 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
+    },
+    captureTileHint: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      opacity: 0.7,
+      letterSpacing: 0.1,
     },
     captureError: {
       fontSize: Type.meta.size,

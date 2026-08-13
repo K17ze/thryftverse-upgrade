@@ -5,7 +5,7 @@ import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { PremiumStatusPill } from '../ui/PremiumStatusPill';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -136,13 +136,13 @@ const createStyles = (colors: any) => StyleSheet.create({
   title: {
     flex: 1,
     fontSize: Type.body.size,
-    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
     lineHeight: 20,
   },
   price: {
     fontSize: Type.price.size,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
@@ -154,12 +154,12 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   actor: {
     fontSize: Type.caption.size,
-    fontWeight: '500',
+    fontFamily: FontFamily.medium,
     color: colors.textSecondary,
   },
   date: {
     fontSize: Type.meta.size,
-    fontWeight: '400',
+    fontFamily: FontFamily.regular,
     color: colors.textMuted,
     marginTop: 2,
   },

@@ -78,9 +78,10 @@ const AnimatedFlashList: any = Platform.OS === 'web'
 type Props = NativeStackScreenProps<RootStackParamList, 'UserProfile'>;
 
 const COVER_HEIGHT = 160;
-const GRID_GAP = 8;
-const CARD_ASPECT = 1.25;
-const LOOK_GAP = 2;
+const GRID_GAP = 4;
+const CARD_ASPECT = 4 / 3; // 3:4 portrait — Poshmark 2026 standard
+const SHOP_COLS = 3;
+const LOOK_GAP = 4;
 const LOOK_COLS = 3;
 const COLLAPSED_BAR_HEIGHT = 50;
 
@@ -182,7 +183,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
 
   // Responsive geometry
-  const cardWidth = useMemo(() => (screenWidth - Space.md * 2 - GRID_GAP) / 2, [screenWidth]);
+  const cardWidth = useMemo(() => (screenWidth - Space.md * 2 - GRID_GAP * (SHOP_COLS - 1)) / SHOP_COLS, [screenWidth]);
   const cardHeight = cardWidth * CARD_ASPECT;
   const lookTileWidth = useMemo(() => (screenWidth - Space.md * 2 - LOOK_GAP * (LOOK_COLS - 1)) / LOOK_COLS, [screenWidth]);
   const lookTileHeight = lookTileWidth * (4 / 3);
@@ -469,7 +470,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // MAIN RENDER
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : 2;
+  const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
 
   const listHeader = (
     <View>
@@ -558,11 +559,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           <Text style={[styles.shopPoliciesTitle, t.shopPoliciesTitle]}>Shop policies</Text>
           <View style={styles.shopPoliciesGrid}>
             <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-              <Ionicons name="shield-checkmark-outline" size={14} color={MUTED} />
+              <Ionicons name="shield-checkmark-outline" size={15} color={colors.textSecondary} />
               <Text style={[styles.shopPolicyText, t.shopPolicyText]}>Buyer protection</Text>
             </View>
             <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-              <Ionicons name="return-down-back-outline" size={14} color={MUTED} />
+              <Ionicons name="return-down-back-outline" size={15} color={colors.textSecondary} />
               <Text style={[styles.shopPolicyText, t.shopPolicyText]}>Returns accepted</Text>
             </View>
           </View>
@@ -954,19 +955,21 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.sm + 2,
     marginHorizontal: Space.md,
+    marginTop: Space.sm,
     marginBottom: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md - 2,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   awayBannerTextWrap: {
     flex: 1,
-    gap: Space.xs - 2,
+    gap: Space.xs / 2,
   },
   awayBannerTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   awayBannerSub: {
     fontSize: Type.caption.size,
@@ -975,61 +978,62 @@ const styles = StyleSheet.create({
   },
   shopPoliciesSection: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
+    paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
   shopPoliciesTitle: {
-    fontSize: Type.meta.size,
+    fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps - 0.12,
-    marginBottom: Space.xs,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    marginBottom: Space.sm,
   },
   shopPoliciesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.xs,
+    gap: Space.sm,
   },
   shopPolicyItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 1,
-    borderRadius: Radius.md,
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md - 2,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.lg,
   },
   shopPolicyText: {
-    fontSize: Type.meta.size,
+    fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
+    lineHeight: Type.captionElevated.lineHeight,
   },
   featuredSection: {
-    paddingTop: Space.sm,
+    paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
   featuredHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
+    marginBottom: Space.sm,
   },
   featuredTitle: {
-    fontSize: Type.meta.size,
+    fontSize: Type.metaElevated.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps - 0.12,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   featuredScroll: {
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    gap: Space.md,
   },
   featuredCard: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    gap: Space.xs,
+    width: 120,
+    gap: Space.xs + 1,
   },
   featuredImage: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    height: Space.xxl + Space.xxl + Space.lg,
+    width: 120,
+    height: 160,
     borderRadius: Radius.md,
   },
   featuredImagePlaceholder: {
@@ -1039,6 +1043,7 @@ const styles = StyleSheet.create({
   featuredPrice: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
   listStateTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },

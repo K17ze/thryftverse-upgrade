@@ -173,7 +173,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             onToggle={(v) => { haptic.selection(); setAnalyticsOptOut(!v); }}
           />
           <SettingsRow
-            icon="sparkles-outline"
+            icon="person-outline"
             title="Recommendation personalisation"
             subtitle="Use your activity to personalise feed recommendations"
             toggleValue={recommendationPersonalization}

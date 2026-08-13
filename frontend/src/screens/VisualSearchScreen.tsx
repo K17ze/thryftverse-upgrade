@@ -19,6 +19,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -41,6 +42,7 @@ type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error';
 export default function VisualSearchScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
+  const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const initialImageUri = route.params?.initialImageUri;
   const { show } = useToast();
@@ -144,11 +146,13 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   }, [imageUri]);
 
   const handlePhotoCapture = useCallback((uri: string) => {
+    haptic.medium();
     setPreviewFailed(false);
     setImageUri(uri);
-  }, []);
+  }, [haptic]);
 
   const openGallery = useCallback(async () => {
+    haptic.selection();
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -162,15 +166,17 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         quality: 0.92,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
+        haptic.light();
         setPreviewFailed(false);
         setImageUri(result.assets[0].uri);
       }
     } catch {
       show('Could not open photo library', 'error');
     }
-  }, [show]);
+  }, [haptic, show]);
 
   const handleRemoveImage = useCallback(() => {
+    haptic.warning();
     setPreviewFailed(false);
     setImageUri(null);
     setStatus('idle');
@@ -180,9 +186,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     setBrand('');
     setMinPrice('');
     setMaxPrice('');
-  }, []);
-
-  // Build the active filter payload from current refinement inputs.
+  }, [haptic]);
   const buildFilterPayload = useCallback(() => {
     const minPriceNum = minPrice.trim() ? Number(minPrice) : undefined;
     const maxPriceNum = maxPrice.trim() ? Number(maxPrice) : undefined;
@@ -264,8 +268,9 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
 
   // Re-run when refinement inputs change (debounced via the user's explicit "Apply").
   const handleApplyFilters = useCallback(() => {
+    haptic.medium();
     if (imageUri) void runSearch();
-  }, [imageUri, runSearch]);
+  }, [haptic, imageUri, runSearch]);
 
   const handleRefresh = useCallback(async () => {
     if (!imageUri) return;
@@ -275,6 +280,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   }, [imageUri, runSearch]);
 
   const handleClearFilters = useCallback(() => {
+    haptic.light();
     setDescription('');
     setSelectedCategory(null);
     setBrand('');
@@ -284,13 +290,14 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       // Re-run with cleared filters on next tick to flush state.
       setTimeout(() => void runSearch(), 0);
     }
-  }, [imageUri, runSearch]);
+  }, [haptic, imageUri, runSearch]);
 
   const handleBrowseCategory = useCallback(
     (categoryId: string, categoryTitle: string) => {
+      haptic.selection();
       navigation.navigate('Browse', { categoryId, title: categoryTitle });
     },
-    [navigation]
+    [haptic, navigation]
   );
 
   const handlePressItem = useCallback(
@@ -320,6 +327,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
 
   const handleSaveSearch = useCallback(() => {
     if (!imageUri) return;
+    haptic.success();
     const minPriceNum = minPrice.trim() ? Number(minPrice) : undefined;
     const maxPriceNum = maxPrice.trim() ? Number(maxPrice) : undefined;
     addSavedSearch({
@@ -336,7 +344,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       alertsEnabled: true,
     });
     show('Search saved with alerts enabled', 'success');
-  }, [imageUri, saveSearchLabel, brand, selectedCategory, minPrice, maxPrice, addSavedSearch, show]);
+  }, [imageUri, saveSearchLabel, brand, selectedCategory, minPrice, maxPrice, addSavedSearch, show, haptic]);
 
   const hasActiveFilters =
     description.trim().length > 0 ||
@@ -393,9 +401,10 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           style={styles.queryThumbRemove}
           onPress={handleRemoveImage}
           activeOpacity={0.85}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Remove photo and start over"
+          accessibilityHint="Removes the photo and returns to the camera"
         >
           <Ionicons name="close-circle" size={22} color="#fff" />
         </AnimatedPressable>
@@ -404,10 +413,12 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       <View style={styles.queryActions}>
         <AnimatedPressable
           style={styles.queryActionBtn}
-          onPress={() => setImageUri(null)}
+          onPress={() => { haptic.selection(); setImageUri(null); }}
           activeOpacity={0.85}
+          hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Retake photo with camera"
+          accessibilityHint="Returns to the camera to capture a new photo"
         >
           <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
           <Text style={styles.queryActionText}>Retake</Text>
@@ -416,8 +427,10 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           style={styles.queryActionBtn}
           onPress={openGallery}
           activeOpacity={0.85}
+          hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Replace photo from gallery"
+          accessibilityHint="Opens your photo library to pick a different image"
         >
           <Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />
           <Text style={styles.queryActionText}>Replace</Text>
@@ -444,7 +457,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           accessibilityLabel="Describe the item in your photo"
         />
         {description.length > 0 && (
-          <AnimatedPressable onPress={() => setDescription('')} hitSlop={8} accessibilityLabel="Clear description">
+          <AnimatedPressable onPress={() => { haptic.light(); setDescription(''); }} hitSlop={12} accessibilityLabel="Clear description" accessibilityRole="button" accessibilityHint="Clears the description text">
             <Ionicons name="close-circle" size={18} color={colors.textMuted} />
           </AnimatedPressable>
         )}
@@ -459,10 +472,12 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         >
           <AnimatedPressable
             style={[styles.categoryPill, !selectedCategory && styles.categoryPillActive]}
-            onPress={() => setSelectedCategory(null)}
+            onPress={() => { haptic.selection(); setSelectedCategory(null); }}
             activeOpacity={0.85}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="All categories"
+            accessibilityHint="Clears the category filter to show all categories"
             accessibilityState={{ selected: !selectedCategory }}
           >
             <Text style={[styles.categoryPillText, !selectedCategory && styles.categoryPillTextActive]}>All</Text>
@@ -473,10 +488,12 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
               <AnimatedPressable
                 key={category}
                 style={[styles.categoryPill, active && styles.categoryPillActive]}
-                onPress={() => setSelectedCategory(active ? null : category)}
+                onPress={() => { haptic.selection(); setSelectedCategory(active ? null : category); }}
                 activeOpacity={0.85}
+                hitSlop={12}
                 accessibilityRole="button"
                 accessibilityLabel={`Filter by ${category}, ${count} items`}
+                accessibilityHint={`Filters results to ${category} category`}
                 accessibilityState={{ selected: active }}
               >
                 <Text style={[styles.categoryPillText, active && styles.categoryPillTextActive]}>{category}</Text>
@@ -537,10 +554,12 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             <AnimatedPressable
               key={b}
               style={styles.suggestionChip}
-              onPress={() => setBrand(b)}
+              onPress={() => { haptic.selection(); setBrand(b); }}
               activeOpacity={0.85}
+              hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel={`Set brand to ${b}`}
+              accessibilityHint={`Filters results to ${b} brand`}
             >
               <Text style={styles.suggestionText}>{b}</Text>
             </AnimatedPressable>
@@ -561,8 +580,10 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             style={styles.clearBtn}
             onPress={handleClearFilters}
             activeOpacity={0.85}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Clear all filters"
+            accessibilityHint="Resets all filter fields and re-runs the search"
           >
             <Text style={styles.clearBtnText}>Clear</Text>
           </AnimatedPressable>

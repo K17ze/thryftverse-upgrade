@@ -20,7 +20,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import { Space, Typography, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Typography, Radius, Type, Stroke, Control } from '../theme/designTokens';
 import {
   CommerceOrder,
   OrderParcelEvent,
@@ -1535,23 +1535,38 @@ const txStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: Space.xs + 2,
   },
   label: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   labelBold: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
+  // Transaction values use tabular-nums per spec — all monetary values aligned
   value: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
+  // Total uses priceList per spec — hero financial value
   valueBold: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
 });
 
@@ -1587,8 +1602,10 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   headerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.title.letterSpacing,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1643,14 +1660,17 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   statusHeader: {
-    paddingVertical: Space.sm,
-    gap: Space.xs,
+    paddingVertical: Space.md,
+    gap: Space.xs + 2,
   },
+  // Order number — clear reference, captionElevated with tabular-nums
   orderNumber: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.caps + 0.38,
+    letterSpacing: Type.captionElevated.letterSpacing,
     textTransform: 'uppercase',
+    fontVariant: ['tabular-nums'],
   },
   statusBadgeRow: {
     flexDirection: 'row',
@@ -1672,22 +1692,27 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   statusLabel: {
-    fontSize: Type.title.size,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
+    letterSpacing: Type.priceLarge.letterSpacing,
   },
   statusExplanation: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   lastUpdated: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs / 2,
   },
   refreshErrorRow: {
@@ -1698,22 +1723,27 @@ const styles = StyleSheet.create({
   },
   refreshErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   retryLink: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
+    marginVertical: Space.lg,
   },
   sectionLabel: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38,
     marginBottom: Space.sm,
   },
   counterpartySection: {
@@ -1739,7 +1769,9 @@ const styles = StyleSheet.create({
   counterpartyName: {
     flex: 1,
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   counterpartyActions: {
     flexDirection: 'row',
@@ -1756,7 +1788,9 @@ const styles = StyleSheet.create({
   },
   counterpartyBtnText: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   timelineSection: {
     paddingVertical: Space.sm,
@@ -1785,17 +1819,23 @@ const styles = StyleSheet.create({
   },
   escrowTitle: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   escrowSub: {
-    fontSize: Type.caption.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   escrowCountdown: {
-    fontSize: Type.meta.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs / 2,
+    fontVariant: ['tabular-nums'],
   },
   shipmentSection: {
     paddingVertical: Space.sm,
@@ -1808,18 +1848,25 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   detailLabel: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   detailValue: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     textAlign: 'right',
     flex: 1,
   },
   detailValueLink: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   copyRow: {
     flexDirection: 'row',
@@ -1835,8 +1882,10 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   shippingLabelBtnText: {
-    fontSize: Type.body.size,
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
   transactionSection: {
     paddingVertical: Space.sm,
@@ -1860,11 +1909,15 @@ const styles = StyleSheet.create({
   },
   supportLabel: {
     fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
     fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
   supportSub: {
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs / 2,
   },
 });

@@ -26,7 +26,7 @@ import { parseApiError } from '../lib/apiClient';
 import { requestPushPermissionOnce } from '../lib/pushPermission';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Space, Radius, Typography, Type, DockConstants, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Type, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
 import {
   getAuctionDetail,
   placeAuctionBid,
@@ -283,7 +283,14 @@ export default function AuctionDetailScreen() {
         show('Removed from watchlist', 'info');
       } else {
         await addToWatchlist(auctionId);
-        show('Added to watchlist', 'info');
+        // Upcoming auctions: make the notification intent explicit so the
+        // user understands watching = "notify me when this goes live."
+        // (audit 08 P1: upcoming notification toggle)
+        const isUpcomingAuction = effectiveState === 'upcoming';
+        show(
+          isUpcomingAuction ? 'Watching · we’ll notify you when it goes live' : 'Added to watchlist',
+          'info',
+        );
         // Contextual push permission prompt — ask once after the user adds an
         // item to their watchlist. Best-effort; never blocks the watch flow.
         if (!favoritePushAskedRef.current) {
@@ -1341,6 +1348,21 @@ export default function AuctionDetailScreen() {
                   } else if (primaryType === 'viewSimilar') {
                     haptics.tap();
                     navigation.navigate('MainTabs', { screen: 'Explore' });
+                  } else if (primaryType === 'viewResult') {
+                    // Result continuation: won auction → navigate to checkout
+                    // to complete payment, or to order detail if already paid.
+                    haptics.tap();
+                    if (auction.listingId) {
+                      navigation.navigate('Checkout', { itemId: auction.listingId });
+                    }
+                  } else if (primaryType === 'viewOutcome') {
+                    // Seller result continuation: navigate to seller auction
+                    // centre to view sale outcome and arrange shipping.
+                    haptics.tap();
+                    navigation.navigate('SellerAuctionCentre');
+                  } else if (primaryType === 'viewPerformance') {
+                    haptics.tap();
+                    navigation.navigate('SellerAuctionCentre');
                   }
                 },
                 loading: isSubmittingBid || watchToggling,
@@ -1386,7 +1408,7 @@ export default function AuctionDetailScreen() {
             handleToggleWatch();
           }}
           accessibilityRole="button"
-          accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+          accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : (effectiveState === 'upcoming' ? 'Get notified when this goes live' : 'Add to watchlist')}
           accessibilityState={{ selected: auction.isWatched }}
         >
           <Ionicons
@@ -1395,7 +1417,7 @@ export default function AuctionDetailScreen() {
             color={auction.isWatched ? colors.brand : colors.textPrimary}
           />
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
-            {auction.isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+            {auction.isWatched ? 'Remove from watchlist' : (effectiveState === 'upcoming' ? 'Get notified when live' : 'Add to watchlist')}
           </Text>
         </Pressable>
         <Pressable
@@ -1759,9 +1781,10 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   bidActivityAmount: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   bidActivityEmpty: {
@@ -1795,14 +1818,14 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   itemDetailValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
+    fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   descriptionText: {
     fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
+    lineHeight: Type.body.lineHeight + 4,
     fontFamily: Typography.family.regular,
   },
   // ── Terminal result — one compact module ──
@@ -1811,9 +1834,9 @@ const styles = StyleSheet.create({
   // content module after media in terminal states.
   terminalResultModule: {
     marginHorizontal: Space.md,
-    marginTop: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.xs,
+    marginTop: Space.lg,
+    paddingVertical: Space.md,
+    gap: Space.sm,
   },
   terminalResultTitleWon: {
     fontSize: Type.subtitle.size,
@@ -1834,10 +1857,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
   },
   terminalResultValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
+    fontSize: Type.priceLarge.size,
+    lineHeight: Type.priceLarge.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    letterSpacing: Type.priceLarge.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   terminalResultNote: {
@@ -1852,7 +1875,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
     marginTop: Space.md,
-    paddingTop: Space.sm,
+    paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   transactionBidActivityLabel: {
@@ -1863,9 +1886,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   transactionBidActivityValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
+    fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   transactionMinRow: {
@@ -1883,8 +1906,8 @@ const styles = StyleSheet.create({
     letterSpacing: Type.metaElevated.letterSpacing,
   },
   transactionMinValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -1934,14 +1957,16 @@ const styles = StyleSheet.create({
   ruleItem: {
     flexDirection: 'row',
     gap: Space.md,
+    alignItems: 'flex-start',
   },
   ruleNumber: {
-    width: Space.lg + Space.xs,
-    height: Space.lg + Space.xs,
+    width: Space.xl,
+    height: Space.xl,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    marginTop: 2,
   },
   ruleNumberText: {
     fontSize: Type.body.size,
@@ -1988,9 +2013,9 @@ const styles = StyleSheet.create({
   },
   livePollText: {
     color: '#ffffff',
-    fontSize: 10,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.3,
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
   },
   // ── Seller identity extension ──
   // Tight rhythm: the seller row follows the transaction surface
@@ -2053,7 +2078,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   bidRowLeft: {
@@ -2074,9 +2099,9 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
   bidderName: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
   },
   bidRowInfo: {
     flexDirection: 'column',
@@ -2091,6 +2116,7 @@ const styles = StyleSheet.create({
     fontSize: Type.metaElevated.size,
     lineHeight: Type.metaElevated.lineHeight,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
   bidRowRight: {
     flexDirection: 'row',
@@ -2098,9 +2124,9 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   bidAmount: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   topBidLabel: {

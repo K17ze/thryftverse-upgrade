@@ -152,7 +152,7 @@ export function SheetContainer({
     <View style={[StyleSheet.absoluteFill, sheetStyles.layer]} pointerEvents={visible ? 'auto' : 'none'}>
       {/* Backdrop */}
       <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close sheet" accessibilityRole="button" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Close sheet" accessibilityHint="Dismisses the sheet" accessibilityRole="button" />
       </Reanimated.View>
 
       {/* Sheet */}

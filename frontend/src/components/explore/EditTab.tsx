@@ -228,7 +228,7 @@ export default function EditTab() {
             </View>
           </View>
           <View style={styles.quizIconWrap}>
-            <Ionicons name="color-wand" size={28} color={colors.brand} />
+            <Ionicons name="color-palette-outline" size={28} color={colors.brand} />
           </View>
         </AnimatedPressable>
       </Reanimated.View>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
@@ -213,6 +213,66 @@ export default function MarketLedgerScreen() {
     );
   }
 
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible ledger rows on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderLedgerItem = useCallback(({ item, index }: { item: LedgerEntry; index: number }) => {
+    const isAuction = item.channel === 'auction';
+    const side = item.action === 'sell-units' ? 'sell' as const : 'buy' as const;
+    const title = item.action === 'bid' ? 'Bid submitted' : item.action === 'win' ? 'Auction settlement' : item.action === 'sell-units' ? 'Units sold' : 'Units purchased';
+    const unitPrice = item.units && item.units > 0 ? item.amountGBP / item.units : item.amountGBP;
+    const cashflow = getEntryCashflow(item);
+    const signedCoOwnTotal = `${cashflow >= 0 ? '+' : '−'}${formatCoOwnIze(Math.abs(cashflow))}`;
+
+    return (
+      <Reanimated.View
+        entering={
+          reducedMotionEnabled
+            ? undefined
+            : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
+        }
+      >
+        <OrderHistoryRow
+          id={item.id}
+          side={side}
+          type="market"
+          assetTitle={title}
+          quantity={item.units ?? 1}
+          pricePerShare={isAuction ? formatMoney(unitPrice) : formatCoOwnIze(unitPrice)}
+          totalAmount={isAuction ? formatSignedMoney(cashflow) : signedCoOwnTotal}
+          status={item.action === 'bid' ? 'open' : 'filled'}
+          timestamp={relativeTime(item.timestamp)}
+          onPress={() => {
+            haptics.tap();
+            const source: CommerceDestinationSource = isAuction
+              ? { commerceMode: 'auction', auctionId: item.referenceId }
+              : { commerceMode: 'co_own', assetId: item.referenceId };
+            const destination = resolveCommerceDestination(source);
+            if (destination.ok) {
+              if (destination.screen === 'ItemDetail') {
+                navigation.navigate('ItemDetail', destination.params);
+              } else if (destination.screen === 'AuctionDetail') {
+                navigation.navigate('AuctionDetail', destination.params);
+              } else if (destination.screen === 'AssetDetail') {
+                navigation.navigate('AssetDetail', destination.params);
+              }
+            }
+          }}
+        />
+      </Reanimated.View>
+    );
+  }, [
+    reducedMotionEnabled,
+    getEntryCashflow,
+    formatCoOwnIze,
+    formatMoney,
+    formatSignedMoney,
+    relativeTime,
+    haptics,
+    navigation,
+    resolveCommerceDestination,
+  ]);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
@@ -283,52 +343,7 @@ export default function MarketLedgerScreen() {
         showsVerticalScrollIndicator={false}
         onEndReached={() => void loadMoreRemoteLedger()}
         onEndReachedThreshold={0.5}
-        renderItem={({ item, index }) => {
-          const isAuction = item.channel === 'auction';
-          const side = item.action === 'sell-units' ? 'sell' as const : 'buy' as const;
-          const title = item.action === 'bid' ? 'Bid submitted' : item.action === 'win' ? 'Auction settlement' : item.action === 'sell-units' ? 'Units sold' : 'Units purchased';
-          const unitPrice = item.units && item.units > 0 ? item.amountGBP / item.units : item.amountGBP;
-          const cashflow = getEntryCashflow(item);
-          const signedCoOwnTotal = `${cashflow >= 0 ? '+' : '−'}${formatCoOwnIze(Math.abs(cashflow))}`;
-
-          return (
-            <Reanimated.View
-              entering={
-                reducedMotionEnabled
-                  ? undefined
-                  : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
-              }
-            >
-              <OrderHistoryRow
-                id={item.id}
-                side={side}
-                type="market"
-                assetTitle={title}
-                quantity={item.units ?? 1}
-                pricePerShare={isAuction ? formatMoney(unitPrice) : formatCoOwnIze(unitPrice)}
-                totalAmount={isAuction ? formatSignedMoney(cashflow) : signedCoOwnTotal}
-                status={item.action === 'bid' ? 'open' : 'filled'}
-                timestamp={relativeTime(item.timestamp)}
-                onPress={() => {
-                  haptics.tap();
-                  const source: CommerceDestinationSource = isAuction
-                    ? { commerceMode: 'auction', auctionId: item.referenceId }
-                    : { commerceMode: 'co_own', assetId: item.referenceId };
-                  const destination = resolveCommerceDestination(source);
-                  if (destination.ok) {
-                    if (destination.screen === 'ItemDetail') {
-                      navigation.navigate('ItemDetail', destination.params);
-                    } else if (destination.screen === 'AuctionDetail') {
-                      navigation.navigate('AuctionDetail', destination.params);
-                    } else if (destination.screen === 'AssetDetail') {
-                      navigation.navigate('AssetDetail', destination.params);
-                    }
-                  }
-                }}
-              />
-            </Reanimated.View>
-          );
-        }}
+        renderItem={renderLedgerItem}
         ListEmptyComponent={
           isSyncingLedger ? (
             <View style={styles.loadingWrap}>

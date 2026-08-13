@@ -63,6 +63,8 @@ interface ListingMediaStudioProps {
   onReorder: (newOrderedIds: string[]) => void;
   onRemoveItem: (itemId: string) => void;
   onRetryItem: (itemId: string) => void;
+  /** Per audit 04 P0: explicit "Set as cover" affordance. Moves item to position 0. */
+  onSetCover?: (itemId: string) => void;
   /** Edit-Listing: label for the remove action (default: 'Remove') */
   removeLabel?: string;
   /** Edit-Listing: returns true if the item can be removed (default: true for all) */
@@ -238,6 +240,7 @@ export function ListingMediaStudio({
   onReorder,
   onRemoveItem,
   onRetryItem,
+  onSetCover,
   removeLabel = 'Remove',
   canRemoveItem,
   reorderEnabled = true,
@@ -273,6 +276,11 @@ export function ListingMediaStudio({
     haptic.light();
     onRetryItem(itemId);
   }, [haptic, onRetryItem]);
+
+  const handleSetCover = useCallback((itemId: string) => {
+    haptic.medium();
+    onSetCover?.(itemId);
+  }, [haptic, onSetCover]);
 
   const prevStatusMap = useRef<Record<string, ItemStatus>>({});
   useEffect(() => {
@@ -425,6 +433,25 @@ export function ListingMediaStudio({
             accessibilityLabel={`${removeLabel} ${isVideo ? 'video' : 'photo'} ${index + 1}`}
           >
             <Ionicons name="close" size={12} color={'#fff'} />
+          </Pressable>
+        )}
+
+        {/* ── Set as cover ──
+            Per audit 04 P0: "Add cover-photo semantics and explicit reorder
+            affordance." A compact "Set cover" button on non-cover thumbnails.
+            Only shown when onSetCover is provided and the item is not already
+            the cover. Positioned at bottom-left to avoid collision with the
+            remove button (top-right) and number badge (top-left). */}
+        {onSetCover && item.id !== coverItem.id && status !== 'failed' && status !== 'cancelled' && (
+          <Pressable
+            style={styles.thumbSetCoverBtn}
+            onPress={() => handleSetCover(item.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Set ${isVideo ? 'video' : 'photo'} ${index + 1} as cover`}
+          >
+            <Ionicons name="star-outline" size={10} color={'#fff'} />
+            <Text style={styles.thumbSetCoverText}>Cover</Text>
           </Pressable>
         )}
       </View>
@@ -955,6 +982,29 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  /* ── Set as cover button ──
+     Per audit 04 P0: explicit cover-photo semantics.
+     Compact pill at bottom-left — distinct from remove (top-right)
+     and number badge (top-left). Semi-transparent dark for legibility
+     over any image. */
+  thumbSetCoverBtn: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  thumbSetCoverText: {
+    fontSize: 9,
+    fontFamily: Typography.family.semibold,
+    color: '#fff',
+    letterSpacing: 0.3,
   },
   /* ── studio actions ── */
   studioActions: {

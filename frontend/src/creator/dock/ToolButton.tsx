@@ -111,7 +111,8 @@ export const ToolButton = React.memo(function ToolButton({
       onLongPress={handleLongPress}
       style={[styles.toolBtn, { opacity: containerOpacity }]}
       accessibilityLabel={tool.label}
-      hitSlop={8}
+      accessibilityHint={`Opens ${tool.label}`}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
     >
       {/* Gradient ring — Instagram-style. Sits behind the icon, animates in/out.
           Uses the shared GradientRing primitive with theme-derived brand gold

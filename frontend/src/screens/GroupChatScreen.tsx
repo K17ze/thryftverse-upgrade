@@ -412,7 +412,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                   accessibilityLabel="Add AI Agent to this group"
                   accessibilityHint="Opens the AI agent picker"
                 >
-                  <Ionicons name="sparkles-outline" size={15} color={colors.brand} />
+                  <Ionicons name="person-add-outline" size={15} color={colors.brand} />
                   <Text style={[styles.addAgentText, { color: colors.brand }]}>
                     {deployedAgents.length > 0 ? 'Manage AI agents' : 'Add AI agent'}
                   </Text>

@@ -7,7 +7,6 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
-import { T } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
 import { AnimatedHeart } from './AnimatedHeart';
@@ -44,6 +43,13 @@ interface ProductCardV2Props {
   enableEntranceAnimation?: boolean;
   onPressSeller?: () => void;
   onMessageSeller?: () => void;
+  /**
+   * Image resolution policy: target display width in pixels for CDN
+   * downscaling. Pass the pixel width of the card so grid thumbnails
+   * do not download full-resolution images.
+   * (LIST_RENDERING_POLICY.md §5.1 / audit §Caching/prefetch)
+   */
+  downscaleWidth?: number;
 }
 
 function ProductCardV2Base({
@@ -55,6 +61,7 @@ function ProductCardV2Base({
   mediaAspectRatio,
   enableEntranceAnimation = true,
   onPressSeller,
+  downscaleWidth,
   // `onMessageSeller` remains in the interface so existing callers
   // (SearchScreen, PinterestMasonryGrid) keep type-checking, but the
   // chat action is intentionally not rendered on the card — messaging
@@ -167,6 +174,7 @@ function ProductCardV2Base({
             transition={300}
             focalPoint={getCategoryFocalPoint(item.category)}
             onError={() => setImageFailed(true)}
+            downscaleWidth={downscaleWidth}
           />
         )}
 
@@ -257,26 +265,18 @@ function ProductCardV2Base({
         </View>
       </AnimatedPressable>
 
-      {/* Info - Clean hierarchy */}
+      {/* Info — Product tile metadata budget (audit §02 / PRODUCT_TILE_METADATA_BUDGET):
+            media + title/brand (one restrained line) + price + one state marker.
+            No stacking of price + old price + discount + likes + size + seller +
+            badge + shipping + AI reason + availability. The -X% badge on the
+            media is the single deal signal; the original price, likes count,
+            and size are available on the PDP, not on every discovery tile. */}
       {!visualOnly && (
         <View style={styles.info}>
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
-            <View style={styles.priceWrap}>
-              <Text style={styles.priceHero}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
-              {hasPriceDrop && (
-                <Text style={styles.originalPrice}>{formatFromFiat(item.originalPrice!, 'GBP', { displayMode: 'fiat' })}</Text>
-              )}
-            </View>
-            {item.likes > 0 ? (
-              <View style={styles.likes}>
-                <Ionicons name="heart" size={9} color={colors.textMuted} />
-                <T.Caption style={styles.likesText}>{item.likes}</T.Caption>
-              </View>
-            ) : null}
+            <Text style={styles.priceHero}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
           </View>
-
-          {item.size ? <T.Caption numberOfLines={1} style={{ marginTop: 1 }}>{item.size}</T.Caption> : null}
           {sellerUsername ? (
             <View style={styles.sellerRow}>
               <AnimatedPressable
@@ -293,6 +293,7 @@ function ProductCardV2Base({
                   style={styles.sellerAvatar}
                   contentFit="cover"
                   focalPoint={FACE_FOCAL_POINT}
+                  downscaleWidth={64}
                 />
               ) : (
                 // Premium compact seller placeholder — keeps alignment and
@@ -335,6 +336,18 @@ export const ProductCardV2 = React.memo(ProductCardV2Base);
 // ============================================================================
 // MASONRY GRID
 // ============================================================================
+//
+// CANONICAL STRATEGY (audit §02 — one masonry implementation):
+//   1. Virtualized feeds (HomeScreen): FlashList numColumns=2 — the single
+//      virtualized masonry path for long feeds.
+//   2. Non-virtualized masonry (Browse, Search, CategoryDetail, VisualSearch,
+//      CollectionDetail, Closet, ExploreCollection): PinterestMasonryGrid
+//      in components/discover/PinterestMasonryGrid.tsx — the single
+//      non-virtualized masonry path.
+//
+// This `MasonryGrid` export is kept for backward compatibility with existing
+// callers (CollectionDetail, Closet, ExploreCollection). New screens should
+// import PinterestMasonryGrid instead. Do not add new callers of this export.
 
 interface MasonryGridProps {
   items: Listing[];
@@ -354,7 +367,7 @@ export function MasonryGrid({ items, onPressItem, numColumns = 2, showSaveButton
   items.forEach((item, index) => {
     const aspect = resolveListingMediaAspectRatio(item);
     const imgHeight = 160 / aspect; // approximate; actual width varies
-    const infoHeight = visualOnly ? 0 : 108;
+    const infoHeight = visualOnly ? 0 : 88; // title + price + seller row (no likes/size)
     const itemHeight = imgHeight + infoHeight + 12;
 
     let shortestCol = 0;
@@ -506,12 +519,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  priceWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
   },
   // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
   // This is the Vestiaire/StockX move: price is the visual anchor.
@@ -521,22 +528,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: Type.bodyLarge.letterSpacing,
-  },
-  originalPrice: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    textDecorationLine: 'line-through',
-  },
-  likes: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  likesText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
   },
   sellerRow: {
     flexDirection: 'row',

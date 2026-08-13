@@ -460,7 +460,7 @@ export function createCustomAgent(config: CustomAgentConfig): ChatAgent {
     id: makeId('custom_agent'),
     type: 'custom',
     name: config.name.trim(),
-    avatar: config.avatar && config.avatar.length > 0 ? config.avatar : 'sparkles-outline',
+    avatar: config.avatar && config.avatar.length > 0 ? config.avatar : 'person-circle-outline',
     description: config.description.trim(),
     capabilities: config.capabilities,
     isDemo: true,

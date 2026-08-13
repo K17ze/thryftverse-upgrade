@@ -13,7 +13,10 @@ type CreatorAnalyticsEvent =
   | 'creator_publish_success'
   | 'creator_publish_error'
   | 'creator_page_add'
-  | 'creator_page_remove';
+  | 'creator_page_remove'
+  | 'creator_capture_photo'
+  | 'creator_capture_video'
+  | 'creator_capture_boomerang';
 
 interface CreatorAnalyticsPayload {
   documentType?: 'look' | 'poster';
@@ -21,6 +24,7 @@ interface CreatorAnalyticsPayload {
   pageCount?: number;
   layerCount?: number;
   durationMs?: number;
+  captureLatencyMs?: number;
   errorMessage?: string;
   publishedId?: string;
 }
@@ -107,4 +111,13 @@ export const CreatorAnalytics = {
 
   pageRemove: (documentType: 'look' | 'poster', pageCount: number) =>
     trackCreatorEvent('creator_page_remove', { documentType, pageCount }),
+
+  capturePhoto: (documentType: 'look' | 'poster', captureLatencyMs: number) =>
+    trackCreatorEvent('creator_capture_photo', { documentType, captureLatencyMs }),
+
+  captureVideo: (documentType: 'look' | 'poster', durationMs: number) =>
+    trackCreatorEvent('creator_capture_video', { documentType, durationMs }),
+
+  captureBoomerang: (documentType: 'look' | 'poster', captureLatencyMs: number) =>
+    trackCreatorEvent('creator_capture_boomerang', { documentType, captureLatencyMs }),
 };

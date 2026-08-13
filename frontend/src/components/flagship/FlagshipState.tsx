@@ -1,10 +1,24 @@
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+  cancelAnimation,
+  FadeIn,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, IconGrammar } from '../../theme/designTokens';
+
 export interface FlagshipStateProps {
   variant: 'loading' | 'empty' | 'error' | 'offline' | 'unavailable';
   title?: string;
@@ -12,18 +26,22 @@ export interface FlagshipStateProps {
   actionLabel?: string;
   onAction?: () => void;
   icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** Optional secondary action (e.g. "Go back") shown below the primary. */
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 const DEFAULT_TITLES: Record<string, string> = {
-  loading: 'Loading...',
-  empty: 'Nothing here',
+  loading: 'Loading',
+  empty: 'Nothing here yet',
   error: 'Something went wrong',
   offline: 'You are offline',
   unavailable: 'Not available',
 };
 
 const DEFAULT_SUBTITLES: Record<string, string> = {
-  loading: 'One moment.',
+  loading: 'One moment while we get this ready.',
   empty: 'When content appears, you\'ll see it here.',
   error: 'We could not load this. Tap below to try again.',
   offline: 'Check your connection and try again.',
@@ -38,6 +56,19 @@ const DEFAULT_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name'
   unavailable: 'lock-closed-outline',
 };
 
+const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
+
+/**
+ * FlagshipState — the canonical loading / empty / error / offline / unavailable
+ * surface for ThryftVerse.
+ *
+ * Design principles (AGENTS §14, §27.4):
+ *   - loading uses a skeleton-style shimmer, not a generic centred spinner;
+ *   - empty/error/offline get a restrained icon circle, clear title, helpful
+ *     subtitle, and a recovery action with the correct haptic level;
+ *   - error/offline retry fires a medium haptic (action commit);
+ *   - reduced motion collapses the shimmer to a static placeholder.
+ */
 export function FlagshipState({
   variant,
   title,
@@ -45,47 +76,182 @@ export function FlagshipState({
   actionLabel,
   onAction,
   icon,
+  secondaryActionLabel,
+  onSecondaryAction,
+  style,
 }: FlagshipStateProps) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const reducedMotionEnabled = useReducedMotion();
 
+  // ── Loading: skeleton shimmer instead of a generic spinner ──────────────
   if (variant === 'loading') {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.textMuted} />
+      <View style={[styles.center, style]} accessibilityLiveRegion="polite">
+        <LoadingShimmer colors={colors} reduced={reducedMotionEnabled} />
         <Text style={[styles.loadingText, { color: colors.textMuted }]}>
           {title ?? DEFAULT_TITLES.loading}
         </Text>
+        {subtitle ? (
+          <Text style={[styles.loadingSub, { color: colors.textMuted }]}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
     );
   }
 
   const effectiveIcon = icon ?? DEFAULT_ICONS[variant];
+  const isErrorish = variant === 'error' || variant === 'offline';
+
+  const handleAction = () => {
+    // Recovery actions commit a real retry — medium haptic per AGENTS §13.
+    if (isErrorish) {
+      haptic.medium();
+    } else {
+      haptic.light();
+    }
+    onAction?.();
+  };
+
+  const handleSecondary = () => {
+    haptic.light();
+    onSecondaryAction?.();
+  };
+
+  const enter = reducedMotionEnabled ? undefined : FadeIn.duration(220);
 
   return (
-    <View style={styles.center}>
-      <View style={[styles.iconCircle, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name={effectiveIcon} size={28} color={colors.textMuted} />
-      </View>
-      <Text style={[styles.title, { color: colors.textPrimary }]}>
+    <Reanimated.View
+      entering={enter}
+      style={[styles.center, style]}
+      accessibilityLiveRegion={isErrorish ? 'assertive' : 'polite'}
+    >
+      <Reanimated.View
+        entering={enter}
+        style={styles.iconWrap}
+      >
+        <Ionicons
+          name={effectiveIcon}
+          size={IconGrammar.hero}
+          color={isErrorish ? colors.danger : colors.textMuted}
+        />
+      </Reanimated.View>
+      <Reanimated.Text
+        entering={enter}
+        style={[styles.title, { color: colors.textPrimary }]}
+      >
         {title ?? DEFAULT_TITLES[variant]}
-      </Text>
-      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+      </Reanimated.Text>
+      <Reanimated.Text
+        entering={enter}
+        style={[styles.subtitle, { color: colors.textSecondary }]}
+      >
         {subtitle ?? DEFAULT_SUBTITLES[variant]}
-      </Text>
+      </Reanimated.Text>
       {actionLabel && onAction && (
-        <AnimatedPressable
-          onPress={onAction}
-          scaleValue={0.96}
-          hapticFeedback="light"
-          style={[styles.actionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-        >
-          <Text style={[styles.actionText, { color: colors.textPrimary }]}>{actionLabel}</Text>
-        </AnimatedPressable>
+        <Reanimated.View entering={enter}>
+          <AnimatedPressable
+            onPress={handleAction}
+            scaleValue={0.97}
+            hapticFeedback="none"
+            accessibilityRole="button"
+            accessibilityHint={isErrorish ? 'Tries loading this again' : undefined}
+            style={[styles.actionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+          >
+            <Text style={[styles.actionText, { color: colors.textPrimary }]}>{actionLabel}</Text>
+          </AnimatedPressable>
+        </Reanimated.View>
       )}
+      {secondaryActionLabel && onSecondaryAction && (
+        <Reanimated.View entering={enter}>
+          <AnimatedPressable
+            onPress={handleSecondary}
+            scaleValue={0.98}
+            hapticFeedback="none"
+            accessibilityRole="button"
+            style={styles.secondaryBtn}
+          >
+            <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>
+              {secondaryActionLabel}
+            </Text>
+          </AnimatedPressable>
+        </Reanimated.View>
+      )}
+    </Reanimated.View>
+  );
+}
+
+// ── Loading shimmer ──────────────────────────────────────────────────────────
+// A compact skeleton-style indicator: three stacked shimmering bars that
+// resemble a loading content block. Replaces the generic ActivityIndicator
+// per AGENTS §14 ("Do not use a generic centred spinner for every state")
+// and §27.4 (flagship loading = skeleton matching final silhouette + shimmer).
+function LoadingShimmer({
+  colors,
+  reduced,
+}: {
+  colors: ReturnType<typeof useAppTheme>['colors'];
+  reduced: boolean;
+}) {
+  const shimmerX = useSharedValue(-1);
+
+  React.useEffect(() => {
+    if (reduced) {
+      cancelAnimation(shimmerX);
+      shimmerX.value = -1;
+      return;
+    }
+    shimmerX.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-1, { duration: 0 })
+      ),
+      -1,
+      false
+    );
+  }, [reduced, shimmerX]);
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shimmerX.value * 120 }],
+  }));
+
+  const bar = (width: number | `${number}%`, height: number, radius: number, mt: number) => (
+    <View
+      style={{
+        width: width as any,
+        height,
+        borderRadius: radius,
+        backgroundColor: colors.surfaceAlt,
+        overflow: 'hidden',
+        marginTop: mt,
+      }}
+    >
+      {reduced ? null : (
+        <Reanimated.View style={[StyleSheet.absoluteFill, shimmerStyle]}>
+          <AnimatedLinearGradient
+            colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={[StyleSheet.absoluteFill, { width: 240 }]}
+          />
+        </Reanimated.View>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={styles.shimmerBlock}>
+      <View style={[styles.shimmerGlyph, { backgroundColor: colors.surfaceAlt }]}>
+        <Ionicons name="cube-outline" size={22} color={colors.textMuted} />
+      </View>
+      {bar('55%', 12, 6, 12)}
+      {bar('80%', 10, 5, 8)}
     </View>
   );
 }
 
+// ── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   center: {
     alignItems: 'center',
@@ -94,15 +260,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   loadingText: {
-    marginTop: Space.sm,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    marginTop: Space.md,
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
   },
-  iconCircle: {
-    width: 64,
-    height: 64,
+  loadingSub: {
+    marginTop: Space.xs,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
+    textAlign: 'center',
+  },
+  shimmerBlock: {
+    alignItems: 'center',
+    width: 180,
+  },
+  shimmerGlyph: {
+    width: 56,
+    height: 56,
     borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md,
@@ -122,6 +303,7 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
     lineHeight: Type.body.lineHeight,
     marginBottom: Space.md,
+    maxWidth: 280,
   },
   actionBtn: {
     paddingHorizontal: Space.lg,
@@ -133,5 +315,15 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
+  },
+  secondaryBtn: {
+    marginTop: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+  },
+  secondaryText: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.captionElevated.letterSpacing,
   },
 });

@@ -6,7 +6,6 @@ import {
   Pressable,
   Animated,
   StatusBar,
-  Easing,
   PanResponder,
   Modal,
   AccessibilityInfo,
@@ -21,7 +20,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -41,11 +40,14 @@ const MODE_CONTEXT: Record<CreateMode, string> = {
   poster: 'Create a story',
 };
 
-// Mode-specific hints shown under the mode switcher
+// Mode-specific hints shown under the mode switcher.
+// Kept to a single short line per audit §A: "reduce explanatory text after
+// first use." The mode label + context label already communicate intent;
+// the hint is a quiet affordance, not an instruction manual.
 const MODE_HINT: Record<CreateMode, string> = {
   'visual-search': 'Point at an item to search',
-  look: 'Capture or upload to create a look',
-  poster: 'Capture or upload to create a story',
+  look: 'Capture or upload',
+  poster: 'Capture or upload',
 };
 
 const OVERFLOW_ACTIONS = [
@@ -90,11 +92,10 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
       opacity.setValue(1);
       return;
     }
-    Animated.timing(opacity, {
+    Animated.spring(opacity, {
       toValue: 1,
-      duration: Motion.duration.normal,
+      ...Motion.spring.entrance,
       useNativeDriver: false,
-      easing: Easing.out(Easing.ease),
     }).start();
   }, [opacity, reducedMotion]);
 
@@ -115,15 +116,13 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     }
     Animated.spring(modeIndicatorX, {
       toValue: xOffset,
+      ...Motion.spring.indicator,
       useNativeDriver: false,
-      tension: 80,
-      friction: 10,
     }).start();
     Animated.spring(modeIndicatorWidth, {
       toValue: targetWidth,
+      ...Motion.spring.indicator,
       useNativeDriver: false,
-      tension: 80,
-      friction: 10,
     }).start();
   }, [mode, chipWidths, modeIndicatorX, modeIndicatorWidth, reducedMotion]);
 
@@ -142,8 +141,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     // Crossfade the camera content on mode change
     if (!reducedMotion) {
       Animated.sequence([
-        Animated.timing(modeTransition, { toValue: 0, duration: Motion.duration.fast, useNativeDriver: true }),
-        Animated.timing(modeTransition, { toValue: 1, duration: Motion.duration.normal, useNativeDriver: true }),
+        Animated.spring(modeTransition, { toValue: 0, ...Motion.spring.glide, useNativeDriver: true }),
+        Animated.spring(modeTransition, { toValue: 1, ...Motion.spring.glide, useNativeDriver: true }),
       ]).start();
     }
     setMode(MODES[nextIndex].key);
@@ -176,8 +175,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     AccessibilityInfo.announceForAccessibility(`Switched to ${modeLabel} mode`);
     if (!reducedMotion) {
       Animated.sequence([
-        Animated.timing(modeTransition, { toValue: 0, duration: Motion.duration.fast, useNativeDriver: true }),
-        Animated.timing(modeTransition, { toValue: 1, duration: Motion.duration.normal, useNativeDriver: true }),
+        Animated.spring(modeTransition, { toValue: 0, ...Motion.spring.glide, useNativeDriver: true }),
+        Animated.spring(modeTransition, { toValue: 1, ...Motion.spring.glide, useNativeDriver: true }),
       ]).start();
     }
     setMode(newMode);
@@ -195,24 +194,52 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
   }, [mode, navigation]);
 
   const handleGallery = useCallback(async () => {
+    haptic.selection();
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         show('Photo library access required', 'error');
         return;
       }
+      // Gallery now supports photos AND videos with ordered multi-select
+      // (up to 10), matching the canonical acquisition surface. The first
+      // asset is sent via the existing flow; additional assets are passed
+      // via initialMediaUris so the studio can receive them all.
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         quality: 0.92,
         allowsEditing: false,
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
+        orderedSelection: true,
       });
-      if (!result.canceled && result.assets[0]?.uri) {
-        handleCapture(result.assets[0].uri);
+      if (!result.canceled && result.assets.length > 0) {
+        const firstUri = result.assets[0].uri;
+        if (result.assets.length > 1) {
+          // Multi-select: pass all assets to the studio. The route type is
+          // extended with initialMediaUris via a cast since the navigation
+          // types file is outside this task's edit scope.
+          const allUris = result.assets.map((a) => a.uri).filter(Boolean);
+          if (mode === 'visual-search') {
+            navigation.navigate('VisualSearch', { initialImageUri: firstUri });
+          } else {
+            (navigation.navigate as (route: 'CreatorStudio', params: Record<string, unknown>) => void)(
+              'CreatorStudio',
+              {
+                type: mode,
+                initialMediaUri: firstUri,
+                initialMediaUris: allUris,
+              },
+            );
+          }
+        } else {
+          handleCapture(firstUri);
+        }
       }
     } catch {
       show('Failed to open gallery', 'error');
     }
-  }, [handleCapture, show]);
+  }, [handleCapture, show, navigation, mode, haptic]);
 
   const handleClose = useCallback(() => {
     navigation.goBack();
@@ -262,8 +289,9 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     }
 
     return [
+      { key: 'gallery', label: 'Gallery', icon: 'images-outline' as const, onPress: handleGallery },
       { key: 'templates', label: 'Templates', icon: 'grid-outline' as const, onPress: handleOpenTemplates },
-      { key: 'blank', label: 'Blank', icon: 'add-outline' as const, onPress: handleBlankCanvas },
+      { key: 'blank', label: 'Blank canvas', icon: 'add-outline' as const, onPress: handleBlankCanvas },
       { key: 'drafts', label: 'Drafts', icon: 'document-text-outline' as const, onPress: handleDrafts },
     ];
   }, [handleBlankCanvas, handleDrafts, handleOpenTemplates, handleSavedSearches, mode]);
@@ -285,35 +313,11 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         pointerEvents="box-none"
         accessibilityRole="radiogroup"
       >
-        {/* Premium contextual tool cards — visible entry points for
-            look/poster modes. Semi-transparent dark cards over the camera
-            feed (Instagram/Snapchat overlay pattern) with white text + icon
-            for legibility against any camera background. */}
-        {mode !== 'visual-search' && (
-          <View style={s.contextCardsRow} pointerEvents="box-none">
-            <Pressable
-              style={({ pressed }) => [s.contextCard, pressed && s.contextCardPressed]}
-              onPress={handleBlankCanvas}
-              accessibilityLabel="Start with blank canvas"
-              accessibilityRole="button"
-            >
-              <Ionicons name="create-outline" size={18} color="#fff" />
-              <Text style={s.contextCardText} numberOfLines={1}>Start Blank</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [s.contextCard, pressed && s.contextCardPressed]}
-              onPress={handleGallery}
-              accessibilityLabel="Upload from gallery"
-              accessibilityRole="button"
-            >
-              <Ionicons name="images-outline" size={18} color="#fff" />
-              <Text style={s.contextCardText} numberOfLines={1}>Gallery</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Context label — flat transparent text, no grey deck */}
+        {/* Context label — flat transparent text, no grey deck.
+            Per audit §A: the quick camera shows only close/back, flash,
+            flip, shutter, gallery thumbnail, and one tools disclosure.
+            Templates/drafts/blank live in the overflow menu, not as
+            context cards competing with the viewfinder. */}
         <Text style={s.modeContextText}>{MODE_CONTEXT[mode]}</Text>
 
         {/* Mode chips with animated sliding indicator */}
@@ -351,10 +355,11 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
                     });
                   }}
                   onPress={() => handleModeChange(m.key)}
-                  hitSlop={12}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
                   accessibilityLabel={`Switch to ${m.label} mode`}
+                  accessibilityHint={`Switches to ${m.label} capture mode`}
                 >
                   <Text
                     style={[
@@ -375,7 +380,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         <Text style={s.modeHintText}>{MODE_HINT[mode]}</Text>
       </Animated.View>
     );
-  }, [handleBlankCanvas, handleGallery, handleModeChange, insets.bottom, mode, modeIndicatorX, modeIndicatorWidth, opacity]);
+  }, [handleModeChange, insets.bottom, mode, modeIndicatorX, modeIndicatorWidth, opacity]);
 
   const renderOverflowButton = useCallback(() => (
     <View style={s.topRightRow}>
@@ -387,6 +392,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
           setShowGrid((g) => !g);
           AccessibilityInfo.announceForAccessibility(showGrid ? 'Grid hidden' : 'Grid shown');
         }}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         accessibilityLabel={showGrid ? 'Hide grid overlay' : 'Show grid overlay'}
         accessibilityHint="Toggles rule-of-thirds composition grid"
         accessibilityRole="button"
@@ -397,7 +403,9 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
       <Pressable
         style={({ pressed }) => [s.topIconBtn, pressed && s.controlPressed]}
         onPress={() => { haptic.light(); setShowOverflow((value) => !value); }}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         accessibilityLabel="More create options"
+        accessibilityHint="Opens a menu with additional creation options"
         accessibilityRole="button"
         accessibilityState={{ expanded: showOverflow }}
       >
@@ -446,8 +454,10 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
             {/* Backdrop — tap to dismiss */}
             <Pressable
               style={s.overflowBackdrop}
-              onPress={() => setShowOverflow(false)}
+              onPress={() => { haptic.light(); setShowOverflow(false); }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityLabel="Close menu"
+              accessibilityHint="Dismisses the overflow menu"
               accessibilityRole="button"
             />
             {/* Bottom sheet */}
@@ -471,8 +481,10 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
                   setShowOverflow(false);
                   tool.onPress();
                 }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 accessibilityRole="menuitem"
                 accessibilityLabel={tool.label}
+                accessibilityHint={`Opens ${tool.label}`}
               >
                 <Ionicons name={tool.icon} size={22} color={colors.textSecondary} style={s.overflowOptionIcon} />
                 <Text style={[s.overflowOptionText, { color: colors.textPrimary }]}>
@@ -495,8 +507,10 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
                   pressed && { opacity: 0.6 },
                 ]}
                 onPress={() => handleOverflowAction(action.route)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 accessibilityRole="menuitem"
                 accessibilityLabel={action.label}
+                accessibilityHint={`Opens ${action.label} creation flow`}
               >
                 <Ionicons name={action.icon} size={22} color={colors.textSecondary} style={s.overflowOptionIcon} />
                 <Text style={[s.overflowOptionText, { color: colors.textPrimary }]}>
@@ -516,8 +530,10 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
                 haptic.light();
                 setShowOverflow(false);
               }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
               accessibilityLabel="Cancel"
+              accessibilityHint="Closes the overflow menu without selecting an option"
             >
               <Text style={[s.overflowOptionText, { color: colors.textSecondary, flex: 1 }]}>
                 Cancel
@@ -556,39 +572,6 @@ const s = StyleSheet.create({
     fontSize: Type.caption.size,
     color: 'rgba(255,255,255,0.6)',
     letterSpacing: LetterSpacing.wide + 0.18,
-  },
-  // ── Contextual tool cards (Start Blank / Gallery) ──
-  // Minimal semi-transparent pills over the camera feed — lighter than the
-  // previous full-width cards so they read as quick entry points, not heavy
-  // panels. Instagram keeps camera overlays small and unobtrusive.
-  contextCardsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  contextCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderWidth: Stroke.hairline,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  contextCardPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.96 }],
-  },
-  contextCardText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    color: '#fff',
-    letterSpacing: LetterSpacing.wide + 0.08,
   },
   // ── Mode tabs with sliding indicator ──
   modeTabsContainer: {

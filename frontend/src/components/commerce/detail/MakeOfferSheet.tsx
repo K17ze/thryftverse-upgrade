@@ -533,7 +533,7 @@ export function MakeOfferSheet({
       {/* Smart Sell demo-mode indicator */}
       {smartSellEnabled && smartSellThreshold != null && smartSellThreshold > 0 ? (
         <View style={[styles.smartSellBanner, { backgroundColor: `${colors.success}14`, borderColor: `${colors.success}30` }]}>
-          <Ionicons name="sparkles" size={14} color={colors.success} />
+          <Ionicons name="trending-up-outline" size={14} color={colors.success} />
           <Text style={[styles.smartSellText, { color: colors.textSecondary }]}>
             {SMART_SELL_DEMO_MODE ? 'Demo mode — ' : ''}
             Seller has Smart Sell enabled — offers above {formatFromFiat(smartSellThreshold, 'GBP', { displayMode: 'fiat' })} auto-accept

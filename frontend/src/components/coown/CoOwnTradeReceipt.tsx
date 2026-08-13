@@ -307,6 +307,7 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   productCard: {
     flexDirection: 'row',

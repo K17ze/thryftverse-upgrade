@@ -45,7 +45,10 @@ export function PinterestMasonryGrid({
       const aspect = resolveListingMediaAspectRatio(item);
       const imgHeight = colWidth / aspect;
       const titleLines = item.title.length > 22 ? 2 : 1;
-      const infoHeight = visualOnly ? 0 : 68 + titleLines * 19;
+      // Info height: title (2 lines max) + price (1 line) + seller row.
+      // Likes count, original price, and size are no longer on the tile
+      // (PRODUCT_TILE_METADATA_BUDGET), so the info block is shorter.
+      const infoHeight = visualOnly ? 0 : 52 + titleLines * 19;
       const itemHeight = imgHeight + infoHeight + gap;
 
       // Find shortest column
@@ -85,6 +88,7 @@ export function PinterestMasonryGrid({
                   enableEntranceAnimation={false}
                   onPressSeller={onPressSeller ? () => onPressSeller(item) : undefined}
                   onMessageSeller={onMessageSeller ? () => onMessageSeller(item) : undefined}
+                  downscaleWidth={Math.round(colWidth)}
                 />
               </Reanimated.View>
             ) : (
@@ -99,6 +103,7 @@ export function PinterestMasonryGrid({
                 enableEntranceAnimation={false}
                 onPressSeller={onPressSeller ? () => onPressSeller(item) : undefined}
                 onMessageSeller={onMessageSeller ? () => onMessageSeller(item) : undefined}
+                downscaleWidth={Math.round(colWidth)}
               />
             )
           ))}

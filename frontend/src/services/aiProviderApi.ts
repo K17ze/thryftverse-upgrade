@@ -102,7 +102,7 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     id: 'gemini',
     name: 'Google Gemini',
     description: 'Gemini 1.5 Pro / Flash and Gemini 2.0 Flash multimodal models.',
-    icon: 'sparkles-outline',
+    icon: 'globe-outline',
     // Google API keys are commonly prefixed with 'AIza' but the platform does
     // not strictly enforce it; we accept the prefix when present and otherwise
     // only enforce length.

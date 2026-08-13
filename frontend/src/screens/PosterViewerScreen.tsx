@@ -267,30 +267,34 @@ export default function PosterViewerScreen() {
     }
   }, [frameIndex, storyIndex, stories, activeStory, haptic]);
 
-  // ── 3D cube transition between stories ──────────────────────────────
-  // Instagram-style 3D perspective transition. When the story index changes,
-  // the media container rotates on the Y axis with perspective foreshortening.
-  const cubeRotate = useSharedValue(0);
-  const cubeScale = useSharedValue(1);
+  // ── Story transition — flat scale/fade (flagship restraint) ─────────
+  // Per audit: the 3D cube rotation reads as a "demo effect" rather than
+  // flagship restraint. Replaced with a flatter spatial transition:
+  // horizontal edge continuity + small scale/fade only, keeping the
+  // progress bar and header stable. Reduced-motion = no transform.
+  const storyScale = useSharedValue(1);
+  const storyOpacity = useSharedValue(1);
   const prevStoryIndexRef = React.useRef(storyIndex);
 
   React.useEffect(() => {
     if (prevStoryIndexRef.current === storyIndex) return;
-    const direction = storyIndex > prevStoryIndexRef.current ? 1 : -1;
     prevStoryIndexRef.current = storyIndex;
-    // Animate: start from rotated position, spring back to center
-    cubeRotate.value = direction * 45;
-    cubeScale.value = 0.85;
-    cubeRotate.value = withSpring(0, Motion.spring.lift);
-    cubeScale.value = withSpring(1, Motion.spring.lift);
-  }, [storyIndex, cubeRotate, cubeScale]);
+    if (reducedMotion) {
+      storyScale.value = 1;
+      storyOpacity.value = 1;
+      return;
+    }
+    // Subtle scale dip (0.94→1) + brief opacity fade (0.5→1) for a
+    // clean crossfade that preserves edge continuity without a 3D demo.
+    storyScale.value = 0.94;
+    storyOpacity.value = 0.5;
+    storyScale.value = withSpring(1, Motion.spring.entrance);
+    storyOpacity.value = withSpring(1, Motion.spring.entrance);
+  }, [storyIndex, storyScale, storyOpacity, reducedMotion]);
 
-  const cubeAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: SCREEN_WIDTH * 1.5 },
-      { rotateY: `${cubeRotate.value}deg` },
-      { scale: cubeScale.value },
-    ],
+  const storyAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: storyScale.value }],
+    opacity: storyOpacity.value,
   }));
 
   // Skip to the next story (account) — used by swipe-left gesture.
@@ -443,12 +447,19 @@ export default function PosterViewerScreen() {
 
   // Reset media error, pause, and buffering state when frame changes.
   // For video frames, set buffering=true so the indicator shows until onLoad fires.
+  // A short delay threshold prevents the buffering indicator from flashing
+  // for videos that load quickly (Instagram pattern: only show after ~400ms).
   React.useEffect(() => {
     setMediaError(false);
     setIsPaused(false);
     const isVideoFrame = activeFrame?.mediaType === 'video' ||
       (activeFrame?.mediaUrl && isVideoUrl(activeFrame.mediaUrl));
-    setIsBuffering(!!isVideoFrame);
+    if (isVideoFrame) {
+      // Delay showing the buffering indicator to avoid flash on fast loads.
+      const thresholdTimer = setTimeout(() => setIsBuffering(true), 400);
+      return () => clearTimeout(thresholdTimer);
+    }
+    setIsBuffering(false);
   }, [activeFrame?.id, activeFrame?.mediaType, activeFrame?.mediaUrl]);
 
   // ── Pinch-to-zoom shared values (image frames only) ────────────────
@@ -921,8 +932,8 @@ export default function PosterViewerScreen() {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Background — canonical composition or legacy media.
-          Wrapped in a Reanimated.View for the 3D cube transition between stories. */}
-      <Reanimated.View style={[styles.mediaFull, cubeAnimatedStyle]}>
+          Wrapped in a Reanimated.View for the flat scale/fade story transition. */}
+      <Reanimated.View style={[styles.mediaFull, storyAnimatedStyle]}>
       {compositionDoc && compositionPage ? (
         <CreatorCanvas
           document={compositionDoc}
@@ -1019,10 +1030,13 @@ export default function PosterViewerScreen() {
         </View>
       )}
 
-      {/* Pause indicator — subtle, appears only when paused by long-press */}
+      {/* Pause indicator — subtle pill with "Paused" label (Instagram pattern).
+          Appears only when paused by long-press. Refined from a bare circle
+          to a soft pill so it reads as a status, not a loading spinner. */}
       {isPaused && !mediaError && (
         <View style={styles.pauseIndicator} pointerEvents="none">
-          <Ionicons name="pause" size={20} color="rgba(255,255,255,0.7)" />
+          <Ionicons name="pause" size={16} color="rgba(255,255,255,0.85)" />
+          <Text style={styles.pauseIndicatorText}>Paused</Text>
         </View>
       )}
 
@@ -1693,15 +1707,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    marginLeft: -22,
+    marginLeft: -44,
     marginTop: -22,
-    width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
+    flexDirection: 'row',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md + 4,
     zIndex: 15,
+  },
+  pauseIndicatorText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: LetterSpacing.wide,
   },
   bufferingIndicator: {
     position: 'absolute',

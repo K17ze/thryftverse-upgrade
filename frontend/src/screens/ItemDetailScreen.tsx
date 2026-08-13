@@ -49,6 +49,10 @@ import { ImageEmptyGraphic } from '../components/ImageEmptyGraphic';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { BottomSheet } from '../components/BottomSheet';
+import { SellerTrustBadge } from '../components/seller/SellerTrustBadge';
+import { HorizontalRail } from '../components/HorizontalRail';
+import { ProductCardV2 } from '../components/ProductCardV2';
+import type { Listing as CatalogListing } from '../data/mockData';
 
 import {
   ProductDescription,
@@ -80,15 +84,10 @@ import {
   CommerceDetailOfflineBanner,
   COMMERCE_DETAIL_COMPACT_WIDTH,
   SellerInfoCard,
-  RelatedItemsRail,
   ShippingReturnsInfo,
   SustainabilityImpact,
   MakeOfferSheet,
 } from '../components/commerce/detail';
-import { SellerTrustBadge } from '../components/seller/SellerTrustBadge';
-import { HorizontalRail } from '../components/HorizontalRail';
-import { ProductCardV2 } from '../components/ProductCardV2';
-import type { Listing as CatalogListing } from '../data/mockData';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
   useListingDetail,
@@ -658,9 +657,6 @@ export default function ItemDetailScreen() {
   } : undefined);
   const recommendationSections = recommendationsData?.sections ?? [];
   const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
-  const railSections = recommendationSections.filter(
-    (s) => s.key !== 'seen_in_looks' && s.key !== 'continue_exploring'
-  );
 
   // Bundle upsell: items from the same seller (more_from_seller section)
   const moreFromSellerSection = recommendationSections.find((s) => s.key === 'more_from_seller');
@@ -1040,8 +1036,29 @@ export default function ItemDetailScreen() {
           );
         })()}
 
+        {/* ── Zone C — Seller & verification trust ──
+            Per audit 03 psychology: the seller answers "Can I trust what
+            I am seeing?" — question #2, immediately after the elevated
+            trust strip and BEFORE the logistics breakdown ("Can I get
+            it?"). Benchmark order (Vestiaire/Vinted/Depop 2026): media →
+            title/price → trust line → seller → shipping/returns.
+
+            SellerInfoCard carries the identity row, stats and performance
+            badges (SellerStandardsBadges — fast shipper, responsive, top
+            seller). SellerTrustBadge is layered directly beneath as the
+            verification-trust complement (verified, trusted seller) so the
+            two badge clusters form one cohesive seller-trust composition
+            instead of two duplicated surfaces. limit={2} restricts
+            SellerTrustBadge to the verification badges it uniquely owns;
+            SellerStandardsBadges owns performance. Both components are
+            preserved and given a clear, non-overlapping role.
+
+            Per AGENTS.md §4: flat canvas + hairline, no card-on-card.
+            The "More from this seller" browse rail closes the seller
+            section with a bottom hairline — contextual to the seller,
+            distinct from the Bundle upsell in the discovery tail. */}
         {seller && (
-          <View style={[styles.sellerRowWrap, { borderTopColor: colors.borderSubtle }]}>
+          <View style={[styles.sellerTrustSection, { borderTopColor: colors.borderSubtle }]}>
             <SellerInfoCard
               seller={seller}
               isOwner={capabilities.isOwner}
@@ -1090,28 +1107,27 @@ export default function ItemDetailScreen() {
                 navigation.navigate('UserProfile', { userId: seller.id });
               }}
             />
+            <View style={styles.sellerVerificationRow}>
+              <SellerTrustBadge seller={seller} limit={2} />
+            </View>
           </View>
         )}
 
-        {seller ? (
-          <View style={styles.sellerBadgesRow}>
-            <SellerTrustBadge seller={seller} />
-          </View>
-        ) : null}
-
         {/* ── More from this seller ──
             Horizontal browse rail of other live listings from the same
-            seller. Only rendered when there are at least 2 real items —
-            no empty state, no fabricated listings. Uses ProductCardV2
-            inside HorizontalRail so the cards match discovery surfaces. */}
-        {moreFromSellerRailItems.length >= 2 ? (
+            seller. Contextual to the seller section — closes it with a
+            bottom hairline. Only rendered when there are at least 2 real
+            items. Uses ProductCardV2 inside HorizontalRail so cards match
+            discovery surfaces. Distinct from the Bundle upsell discovery
+            module in the tail (which incentivises multi-item purchase). */}
+        {seller && moreFromSellerRailItems.length >= 2 ? (
           <View style={[styles.moreFromSellerRailWrap, { borderBottomColor: colors.borderSubtle }]}>
             <Text style={[styles.moreFromSellerRailTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-              More from {seller?.username ?? 'this seller'}
+              More from {seller.username ?? 'this seller'}
             </Text>
             <HorizontalRail
               contentContainerStyle={styles.railContent}
-              accessibilityLabel={`More from ${seller?.username ?? 'this seller'}`}
+              accessibilityLabel={`More from ${seller.username ?? 'this seller'}`}
             >
               {moreFromSellerRailItems.map((railItem) => (
                 <View key={railItem.id} style={styles.railCardWrap}>
@@ -1129,13 +1145,14 @@ export default function ItemDetailScreen() {
         ) : null}
 
         {/* ── Zone D — Purchase details ──
-            The top trust signals are now elevated to the trust strip
-            right after the identity block (see above). This section
-            keeps the full disclosure row that opens the cost breakdown
-            sheet. Per spec 05 §4: "Use a compact summary plus disclosure
-            sheet. Do not render a separate bordered strip for every
-            policy." The elevated strip handles the at-a-glance trust;
-            this section handles the detailed breakdown. */}
+            Per audit 03 psychology: answers "Can I get it?" (#3) and
+            "What happens if something goes wrong?" (#4) — placed after
+            the seller trust block so the buyer knows who they are buying
+            from before reviewing the landed cost and policies. Per spec
+            05 §4: "Use a compact summary plus disclosure sheet. Do not
+            render a separate bordered strip for every policy." The
+            elevated strip handles at-a-glance trust; this section handles
+            the detailed breakdown via a disclosure sheet. */}
         {purchaseSummary ? (
           <CommerceDetailSection label="Buying this item" variant="continuation">
             <CommerceDetailDisclosureRow
@@ -1226,43 +1243,6 @@ export default function ItemDetailScreen() {
             <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1}>
               Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
-          ) : null}
-        </CommerceDetailSection>
-
-        {/* ── Zone E2 — Sustainability ──
-            Estimated impact from listing attributes (condition, category,
-            brand, seller location). Truthfully labeled as estimates per
-            AGENTS.md §11. Compact chip is always visible; tapping expands
-            the full breakdown inline. */}
-        <CommerceDetailSection label="Sustainability" divider variant="editorial">
-          <Pressable
-            onPress={() => {
-              haptic.light();
-              setSustainabilityExpanded((prev) => !prev);
-            }}
-            accessibilityLabel={
-              sustainabilityExpanded ? 'Hide sustainability breakdown' : 'Show sustainability breakdown'
-            }
-            accessibilityRole="button"
-            accessibilityState={{ expanded: sustainabilityExpanded }}
-            style={styles.sustainabilityRow}
-          >
-            <SustainabilityBadge score={sustainabilityScore!} variant="compact" />
-            <Text style={[styles.sustainabilitySummary, { color: colors.textSecondary }]} numberOfLines={2}>
-              {sustainabilityScore!.summary}
-            </Text>
-            <Ionicons
-              name={sustainabilityExpanded ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={colors.textMuted}
-            />
-          </Pressable>
-
-          {sustainabilityExpanded ? (
-            <View style={styles.sustainabilityDetailWrap}>
-              <SustainabilityBadge score={sustainabilityScore!} variant="detailed" />
-              <SustainabilityImpact score={sustainabilityScore!} />
-            </View>
           ) : null}
         </CommerceDetailSection>
 
@@ -1433,31 +1413,6 @@ export default function ItemDetailScreen() {
             />
           </View>
         )}
-
-        {/* ── Zone H2 — Related items rail ──
-            Horizontal "You may also like" rail with portrait 3:4 cards.
-            Uses backend recommendations when available, falls back to
-            backend listings filtered by category/brand. */}
-        {(() => {
-          const railItems: Listing[] = railSections.length > 0
-            ? railSections.flatMap((s) => s.items.filter(
-                (i): i is DisplayReadyListing => !isRecommendationLook(i)
-              )).map((i) => i as unknown as Listing)
-            : backendListings.filter((l) =>
-                l.id !== item.id && !l.isSold &&
-                (l.category === item.category || l.brand === item.brand)
-              );
-          if (railItems.length < 2) return null;
-          return (
-            <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(220).delay(160)}>
-              <RelatedItemsRail
-                items={railItems.slice(0, 10)}
-                onPressItem={handlePressRecommendation}
-                headerLabel={item.brand ? `More from ${item.brand}` : 'More like this'}
-              />
-            </Reanimated.View>
-          );
-        })()}
       </Reanimated.ScrollView>
 
       {/* ── Zone I — Sticky action dock ──
@@ -1802,11 +1757,13 @@ export default function ItemDetailScreen() {
 
       {/* ── Condition definition sheet ──
           Tapping the colour-coded condition badge opens a compact
-          definition so buyers understand exactly what the grade means. */}
+          definition so buyers understand exactly what the grade means.
+          Per audit 03 P1: includes a condition-evidence gallery jump so
+          buyers can see the photos that evidence the condition grade. */}
       <BottomSheet
         visible={conditionInfoVisible}
         onDismiss={() => setConditionInfoVisible(false)}
-        snapPoint={0.36}
+        snapPoint={0.42}
       >
         <View style={styles.conditionSheetWrap}>
           <View style={styles.conditionSheetHeader}>
@@ -1833,6 +1790,33 @@ export default function ItemDetailScreen() {
               <Text style={[styles.conditionSheetDefinition, { color: colors.textSecondary }]}>
                 {conditionMeta.definition}
               </Text>
+            ) : null}
+            {/* Condition-evidence gallery jump — per audit 03 P1.
+                Jumps to the detail/flaw photos in the media gallery.
+                Per photography policy: first image is the silhouette,
+                later images show details/flaws/labels. We jump to the
+                last available photo (most likely to show condition
+                evidence) and open fullscreen for close inspection. */}
+            {item.images && item.images.length > 1 ? (
+              <Pressable
+                style={({ pressed }) => [styles.conditionEvidenceJump, pressed && styles.pressed]}
+                onPress={() => {
+                  setConditionInfoVisible(false);
+                  // Jump to the last photo (detail/flaw shot per policy)
+                  const evidenceIndex = item.images!.length - 1;
+                  setFullscreenIndex(evidenceIndex);
+                  setFullscreenVisible(true);
+                  haptic.light();
+                }}
+                accessibilityLabel="View condition evidence photos"
+                accessibilityRole="button"
+              >
+                <Ionicons name="images-outline" size={18} color={colors.brand} />
+                <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]}>
+                  View condition photos
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+              </Pressable>
             ) : null}
           </View>
         </View>
@@ -1949,11 +1933,11 @@ const styles = StyleSheet.create({
   // without adding a card surface (per AGENTS.md surface budget).
   // No padding here — SellerInfoCard handles its own internal padding.
   // This avoids double-padding that would push content inward.
-  sellerRowWrap: {
+  sellerTrustSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'transparent', // overridden inline with theme color
   },
-  sellerBadgesRow: {
+  sellerVerificationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -2269,5 +2253,21 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight + Space.xs,
     fontFamily: Typography.family.regular,
+  },
+  // ── Condition evidence gallery jump ──
+  // Per audit 03 P1: a compact row that jumps to the condition evidence
+  // photos in the fullscreen media viewer. Flat inline row with brand
+  // accent — no card chrome (per §4 surface budget).
+  conditionEvidenceJump: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    minHeight: Control.hit,
+  },
+  conditionEvidenceJumpText: {
+    flex: 1,
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
   },
 });

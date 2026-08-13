@@ -11,7 +11,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
-import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -103,7 +103,7 @@ function InboxConversationRowBase({
       accessibilityRole="button"
       accessibilityHint={accessibilityHint ?? 'Opens the conversation thread. Long press for quick actions'}
     >
-      <View style={styles.row}>
+      <View style={[styles.row, unread && styles.rowUnread]}>
         <View style={styles.avatarWrap}>{avatarElement}</View>
         <View style={styles.body}>
           <View style={styles.topLine}>
@@ -115,10 +115,10 @@ function InboxConversationRowBase({
                 {displayTitle}
               </Text>
               {isPinned && (
-                <Ionicons name="pin" size={11} color={colors.textMuted} style={styles.metaIcon} />
+                <Ionicons name="pin" size={12} color={colors.textMuted} style={styles.metaIcon} />
               )}
               {isMuted && (
-                <Ionicons name="volume-mute" size={11} color={colors.textMuted} style={styles.metaIcon} />
+                <Ionicons name="volume-mute" size={12} color={colors.textMuted} style={styles.metaIcon} />
               )}
             </View>
             <Text
@@ -151,7 +151,6 @@ function InboxConversationRowBase({
                 style={[
                   styles.preview,
                   unread && styles.previewUnread,
-                  !draftText && isGroup && memberCount != null && styles.previewWithMemberPrefix,
                 ]}
                 numberOfLines={1}
               >
@@ -159,7 +158,7 @@ function InboxConversationRowBase({
               </Text>
             )}
             {unread && !draftText ? (
-              <View style={styles.unreadDot} />
+              <View style={styles.unreadIndicator} />
             ) : null}
             {!unread && itemId && itemThumbUri ? (
               <CachedImage
@@ -180,37 +179,40 @@ export const InboxConversationRow = React.memo(InboxConversationRowBase);
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: Space.sm,
+    alignItems: 'center',
+    paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     gap: Space.sm + 2,
+    minHeight: 68,
   },
+  rowUnread: {},
   avatarWrap: {
     position: 'relative',
   },
   body: {
     flex: 1,
     justifyContent: 'center',
-    gap: Space.xs,
+    gap: Space.xs + 1,
   },
   topLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 1,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs + 1,
     flex: 1,
     minWidth: 0,
   },
+  // Name: Type.bodyEmphasis — clear, readable, emphasis on identity
   name: {
-    fontSize: Type.body.size,
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
   nameUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -218,11 +220,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   metaIcon: {
     marginLeft: 1,
   },
+  // Timestamp: Type.caption — quiet metadata
   time: {
-    fontSize: Type.meta.size,
+    fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textMuted,
     paddingLeft: Space.xs,
+    letterSpacing: Type.caption.letterSpacing,
   },
   timeUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -231,24 +235,26 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   bottomLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: Space.xs + 1,
   },
   memberCount: {
-    fontSize: Type.meta.size,
+    fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textMuted,
   },
   draftLabel: {
-    fontSize: Type.meta.size,
+    fontSize: Type.caption.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.brand,
   },
+  // Snippet: Type.body — readable, not cramped
   preview: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: Type.body.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.lineHeight,
+    lineHeight: Type.body.lineHeight,
+    letterSpacing: Type.body.letterSpacing,
   },
   typingPreview: {
     color: colors.brand,
@@ -258,18 +264,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
   },
-  previewWithMemberPrefix: {},
-  unreadDot: {
+  // Unread indicator — refined dot, not a large badge
+  unreadIndicator: {
     width: 8,
     height: 8,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
     marginLeft: 2,
   },
+  // Commerce thumbnail — clean, rounded, right-side context
   itemThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.sm,
+    width: 28,
+    height: 28,
+    borderRadius: Radius.sm + 1,
     backgroundColor: colors.surfaceAlt,
   },
 });

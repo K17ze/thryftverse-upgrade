@@ -54,6 +54,8 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   const [isMuted, setIsMuted] = React.useState(true);
   const [mediaError, setMediaError] = React.useState(false);
   const [mediaRetryKey, setMediaRetryKey] = React.useState(0);
+  // Caption expand/collapse — Instagram pattern: 3-line clamp with "more" tap.
+  const [captionExpanded, setCaptionExpanded] = React.useState(false);
 
   // Load highlight data
   React.useEffect(() => {
@@ -95,6 +97,12 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   }, [highlightId]);
 
   const activeFrame = highlight?.frames[frameIndex] ?? null;
+
+  // Reset caption expansion whenever the frame changes so each frame starts
+  // in its collapsed (3-line clamp) state.
+  React.useEffect(() => {
+    setCaptionExpanded(false);
+  }, [activeFrame?.frameId]);
 
   const goNextFrame = React.useCallback(() => {
     setProgress(0);
@@ -360,11 +368,27 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
         />
       </View>
 
-      {/* Caption (if present and not a text-only frame) */}
+      {/* Caption (if present and not a text-only frame).
+          Instagram pattern: 3-line clamp with "more" tap to expand.
+          Tappable (not pointerEvents="none") so the user can expand/collapse. */}
       {activeFrame.caption && activeFrame.mediaUrl && (
-        <View style={[styles.captionWrap, { bottom: insets.bottom + 24 }]} pointerEvents="none">
-          <Text style={styles.captionText} numberOfLines={3}>{activeFrame.caption}</Text>
-        </View>
+        <Pressable
+          style={[styles.captionWrap, { bottom: insets.bottom + 24 }]}
+          onPress={() => { haptic.selection(); setCaptionExpanded((v) => !v); }}
+          accessibilityLabel={captionExpanded ? 'Collapse caption' : 'Expand caption'}
+          accessibilityRole="button"
+          accessibilityHint="Toggles caption expansion"
+        >
+          <Text
+            style={styles.captionText}
+            numberOfLines={captionExpanded ? undefined : 3}
+          >
+            {activeFrame.caption}
+            {!captionExpanded && (
+              <Text style={styles.captionMore}> … more</Text>
+            )}
+          </Text>
+        </Pressable>
       )}
 
       {/* Frame counter */}
@@ -494,11 +518,16 @@ function createStyles(colors: any) {
     captionText: {
       color: '#fff',
       fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.semibold,
-      textShadowColor: 'rgba(0,0,0,0.6)',
+      lineHeight: Type.body.lineHeight + 2,
+      fontFamily: Typography.family.regular,
+      textShadowColor: 'rgba(0,0,0,0.7)',
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 4,
+      textShadowRadius: 8,
+    },
+    captionMore: {
+      color: 'rgba(255,255,255,0.7)',
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
     },
     textFrameCaption: {
       color: '#fff',
@@ -514,9 +543,14 @@ function createStyles(colors: any) {
       alignItems: 'center',
     },
     frameCounterText: {
-      color: 'rgba(255,255,255,0.5)',
+      color: 'rgba(255,255,255,0.7)',
       fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+      paddingHorizontal: Space.smMd,
+      paddingVertical: Space.xs - 1,
+      borderRadius: Radius.full,
+      letterSpacing: 0.3,
     },
     mediaErrorOverlay: {
       ...StyleSheet.absoluteFill,

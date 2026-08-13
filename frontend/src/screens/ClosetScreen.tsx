@@ -8,6 +8,7 @@ import {
   ScrollView,
   Share,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
@@ -31,6 +32,7 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { MasonryGrid } from '../components/ProductCardV2';
+import { ClosetMediaMosaic } from '../components/closet/ClosetMediaMosaic';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -41,12 +43,23 @@ import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout } from '../theme/designTokens';
+import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 const SORT_OPTIONS: SortOption[] = ['Default', 'Recently saved', 'Price: Low to High', 'Price: High to Low', 'Newest'];
+
+// ── Mosaic geometry — matches ClosetMediaMosaic tile dimensions so the
+//    loading skeleton preserves the final 3:4 portrait silhouette and
+//    avoids layout shift when media decodes (AGENTS.md §14, §16). ──
+const { width: SCREEN_W } = Dimensions.get('window');
+const SKEL_COLUMNS = 3;
+const SKEL_GAP = Space.sm;
+const SKEL_PADDING = Space.md;
+const SKEL_TILE_W =
+  (SCREEN_W - SKEL_PADDING * 2 - SKEL_GAP * (SKEL_COLUMNS - 1)) / SKEL_COLUMNS;
+const SKEL_TILE_H = SKEL_TILE_W / AspectRatio.portrait;
 
 export default function ClosetScreen() {
   const { colors, isDark } = useAppTheme();
@@ -75,7 +88,7 @@ export default function ClosetScreen() {
     filterChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
     filterChipText: { color: colors.brand },
     filterChipTextActive: { color: colors.background },
-    statsCard: { backgroundColor: 'transparent', borderColor: 'transparent' },
+    statsCard: { backgroundColor: 'transparent', borderColor: colors.border },
     statDivider: { backgroundColor: colors.border },
     statValue: { color: colors.textPrimary },
     statLabel: { color: colors.textMuted },
@@ -406,12 +419,14 @@ export default function ClosetScreen() {
   const renderLoadingSkeleton = () => (
     <View style={styles.skeletonWrap}>
       <View style={styles.skeletonRow}>
-        <SkeletonLoader width="48%" height={200} borderRadius={Radius.lg} />
-        <SkeletonLoader width="48%" height={260} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
       </View>
       <View style={styles.skeletonRow}>
-        <SkeletonLoader width="48%" height={240} borderRadius={Radius.lg} />
-        <SkeletonLoader width="48%" height={180} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={SKEL_TILE_W} height={SKEL_TILE_H} borderRadius={Radius.lg} />
       </View>
     </View>
   );
@@ -435,10 +450,10 @@ export default function ClosetScreen() {
         {renderSortMenu()}
         {/* Brand filter chips */}
         {availableBrands.length > 1 ? renderBrandChips() : null}
-        <MasonryGrid
+        {/* 3-column media mosaic — 3:4 portrait thumbnails, media-first */}
+        <ClosetMediaMosaic
           items={filteredSaved}
           onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
-          numColumns={2}
           showSaveButton
         />
       </Reanimated.View>
@@ -452,7 +467,7 @@ export default function ClosetScreen() {
         <EmptyState
           graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
           title="Your wishlist is empty"
-          subtitle="Heart items to track them."
+          subtitle="Heart items to track price drops and get notified when they go on sale."
           ctaLabel="Browse"
           onCtaPress={handleBrowse}
         />
@@ -485,11 +500,10 @@ export default function ClosetScreen() {
             </AnimatedPressable>
           </View>
         ) : null}
-        <MasonryGrid
+        <ClosetMediaMosaic
           items={filteredWishlist}
           onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
-          numColumns={2}
-          showSaveButton
+          showWishlistButton
         />
       </Reanimated.View>
     );
@@ -499,9 +513,9 @@ export default function ClosetScreen() {
     if (filteredCollections.length === 0) {
       return (
         <EmptyState
-          graphic={<BoardEmptyGraphic title="No collections" subtitle="Create your first moodboard" icon="folder-open-outline" size={140} />}
+          graphic={<BoardEmptyGraphic title="No collections" subtitle="Create your first board" icon="folder-open-outline" size={140} />}
           title="No collections yet"
-          subtitle="Group your saved items into boards to organise your finds."
+          subtitle="Group your saved items into boards to organise your finds by style, season, or vibe."
           ctaLabel="Create collection"
           onCtaPress={handleCreateCollection}
         />
@@ -510,7 +524,7 @@ export default function ClosetScreen() {
 
     const boardData = filteredCollections.map((collection) => {
       const covers = collection.itemIds
-        .slice(0, 3)
+        .slice(0, 4)
         .map((id) => listings.find((l) => l.id === id))
         .filter((l): l is NonNullable<typeof listings[0]> => !!l && Array.isArray(l.images) && l.images.length > 0)
         .map((l) => l.images[0]);
@@ -519,6 +533,8 @@ export default function ClosetScreen() {
         title: collection.name,
         itemCount: collection.itemIds?.length ?? 0,
         covers,
+        updatedAt: collection.updatedAt,
+        isPrivate: collection.isPrivate === true,
       };
     });
 
@@ -850,11 +866,11 @@ const styles = StyleSheet.create({
   },
   searchWrap: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
   },
   tabsWrap: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.md,
+    marginBottom: Space.lg,
   },
   scrollContent: {
     paddingTop: Space.sm,
@@ -864,7 +880,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.md,
   },
   resultCount: {
     fontSize: Type.caption.size,
@@ -949,23 +965,20 @@ const styles = StyleSheet.create({
     width: (Layout.screenWidth - Space.md * 2 - Space.sm) / 2,
   },
   skeletonWrap: {
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
+    paddingHorizontal: SKEL_PADDING,
+    gap: SKEL_GAP,
     marginTop: Space.sm,
   },
   skeletonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: Space.sm,
   },
   statsCard: {
     marginHorizontal: Space.md,
-    marginBottom: Space.md,
-    borderRadius: Radius.none,
-    borderWidth: 0,
+    marginBottom: Space.lg,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.hairline,
     padding: Space.md,
-    borderTopWidth: Stroke.hairline,
-    borderBottomWidth: Stroke.hairline,
   },
   statsRow: {
     flexDirection: 'row',

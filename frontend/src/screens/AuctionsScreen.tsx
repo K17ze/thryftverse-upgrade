@@ -420,9 +420,9 @@ export default function AuctionsScreen() {
     }
   };
 
-  const navigateToDetail = (auction: AuctionViewModel) => {
+  const navigateToDetail = useCallback((auction: AuctionViewModel) => {
     navigation.navigate('AuctionDetail', { auctionId: auction.id });
-  };
+  }, [navigation]);
 
   const openBidHistory = async (auction: AuctionViewModel) => {
     setBidHistoryAuction(auction);
@@ -487,6 +487,31 @@ export default function AuctionsScreen() {
         </AnimatedPressable>
       ))}
     </View>
+  );
+
+  // FlashList v2 performance: memoized renderItem for upcoming auctions rail
+  // prevents full re-render of all visible cards on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderUpcomingItem = useCallback(
+    ({ item }: { item: AuctionViewModel }) => (
+      <AnimatedPressable
+        style={styles.upcomingCard}
+        activeOpacity={0.9}
+        onPress={() => navigateToDetail(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open upcoming auction ${item.title}`}
+      >
+        <SharedTransitionView style={styles.upcomingImageFrame} sharedTransitionTag={`image-${item.listingId}-0`}>
+          <CachedImage uri={item.image} style={styles.upcomingImage} containerStyle={styles.upcomingImageContainer} contentFit="cover" downscaleWidth={160} />
+        </SharedTransitionView>
+        <View style={styles.upcomingMeta}>
+          <BodyEmphasis style={styles.upcomingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
+          <Body style={styles.upcomingTimer}>{t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}</Body>
+          <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, 'GBP', { displayMode: 'fiat' }) })}</Meta>
+        </View>
+      </AnimatedPressable>
+    ),
+    [styles, navigateToDetail, t, formatFromFiat],
   );
 
   const renderFeaturedAuction = () => {
@@ -652,24 +677,7 @@ export default function AuctionsScreen() {
             keyExtractor={(item) => item.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalListContent}
-            renderItem={({ item }) => (
-              <AnimatedPressable
-                style={styles.upcomingCard}
-                activeOpacity={0.9}
-                onPress={() => navigateToDetail(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`Open upcoming auction ${item.title}`}
-              >
-                <SharedTransitionView style={styles.upcomingImageFrame} sharedTransitionTag={`image-${item.listingId}-0`}>
-                  <CachedImage uri={item.image} style={styles.upcomingImage} containerStyle={styles.upcomingImageContainer} contentFit="cover" />
-                </SharedTransitionView>
-                <View style={styles.upcomingMeta}>
-                  <BodyEmphasis style={styles.upcomingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-                  <Body style={styles.upcomingTimer}>{t('auctions.upcoming.startsIn', { countdown: formatCountdown(item.msToStart) })}</Body>
-                  <Meta style={styles.upcomingBid}>{t('auctions.upcoming.startingBid', { amount: formatFromFiat(item.startingBid, 'GBP', { displayMode: 'fiat' }) })}</Meta>
-                </View>
-              </AnimatedPressable>
-            )}
+            renderItem={renderUpcomingItem}
           />
         </View>
       )}
@@ -952,6 +960,7 @@ function createStyles(colors: ThemeColors) {
   sortChipText: {
     color: colors.textSecondary,
     fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
   },
   sortChipTextActive: {
     color: colors.textInverse,
@@ -978,6 +987,7 @@ function createStyles(colors: ThemeColors) {
   statusChipText: {
     color: colors.textSecondary,
     fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
   },
   statusChipTextActive: {
     color: colors.textInverse,
@@ -1034,7 +1044,11 @@ function createStyles(colors: ThemeColors) {
   featuredLabel: {
     marginBottom: Space.sm,
     fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textSecondary,
+    textTransform: 'uppercase',
   },
   featuredCard: {
     borderRadius: Radius.lg,
@@ -1099,29 +1113,43 @@ function createStyles(colors: ThemeColors) {
   endingSoonText: {
     color: '#fff',
     fontSize: Type.meta.size - 3,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
+    letterSpacing: 0.5,
   },
   featuredLiveText: {
     color: colors.textInverse,
     fontSize: Type.meta.size - 1,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: 0.5,
   },
   featuredMeta: {
-    padding: Space.md,
+    padding: Space.md + 2,
   },
   featuredTitle: {
-    marginBottom: Space.sm,
-    fontSize: Type.bodyLarge.size,
+    marginBottom: Space.sm + 2,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
   },
   featuredStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: Space.sm,
   },
   featuredStatLabel: {
-    fontSize: Type.meta.size,
-    marginBottom: Space.xs / 2,
+    fontSize: Type.metaElevated.size,
+    lineHeight: Type.metaElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    color: colors.textSecondary,
+    marginBottom: Space.xs / 2 + 1,
+    textTransform: 'uppercase',
   },
   featuredStatValue: {
-    fontSize: Type.body.size,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   featuredTimer: {
     color: colors.danger,
@@ -1162,7 +1190,9 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sectionTitle: {},
+  sectionTitle: {
+    fontFamily: Typography.family.semibold,
+  },
   horizontalListContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
@@ -1190,16 +1220,20 @@ function createStyles(colors: ThemeColors) {
     height: '100%',
   },
   upcomingMeta: {
-    padding: Space.sm + 2,
+    padding: Space.sm + 4,
   },
   upcomingTitle: {
-    marginBottom: Space.xs,
+    marginBottom: Space.xs + 1,
+    fontFamily: Typography.family.semibold,
   },
   upcomingTimer: {
     color: colors.brand,
     marginBottom: Space.xs / 2,
+    fontVariant: ['tabular-nums'],
   },
-  upcomingBid: {},
+  upcomingBid: {
+    fontVariant: ['tabular-nums'],
+  },
   loadingWrap: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
@@ -1224,7 +1258,9 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   bidHistoryTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
     marginBottom: Space.xs / 2,
   },
   bidHistorySubtitle: {
@@ -1284,9 +1320,14 @@ function createStyles(colors: ThemeColors) {
   },
   bidHistoryMinNextBidLabel: {
     color: colors.textSecondary,
+    fontFamily: Typography.family.medium,
   },
   bidHistoryMinNextBidValue: {
     color: colors.brand,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   bidHistoryList: {
     flex: 1,
@@ -1295,7 +1336,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.sm,
+    paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
@@ -1312,13 +1353,19 @@ function createStyles(colors: ThemeColors) {
   },
   bidHistoryRowLabel: {
     color: colors.textSecondary,
-    marginBottom: 2,
+    marginBottom: 3,
+    fontFamily: Typography.family.medium,
   },
   bidHistoryRowBidder: {
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   bidHistoryRowAmount: {
     color: colors.textPrimary,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   });
 }

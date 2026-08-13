@@ -11,7 +11,7 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type, AspectRatio } from '../../theme/designTokens';
-import type { RecommendationSection } from '../../platform/product';
+import type { RecommendationSection, RecommendationLook } from '../../platform/product';
 import { isRecommendationLook } from '../../platform/product';
 import { ProductAnalytics } from '../../platform/product';
 import { Listing } from '../../data/mockData';
@@ -75,6 +75,7 @@ function RailCard({
             style={styles.cardImage}
             containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.lg }}
             contentFit="cover"
+            downscaleWidth={Math.round(cardWidth)}
           />
         ) : (
           <View style={styles.cardImageFallback} />
@@ -131,6 +132,27 @@ export function RecommendationRail({
   const cardHeight = Math.round(cardWidth / AspectRatio.portrait);
   const showAccent = isPersonalised;
 
+  // FlashList v2 performance: memoized renderItem prevents full re-render of
+  // all visible rail cards on every parent state change.
+  // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
+  const renderItem = useCallback(
+    ({ item, index }: { item: Listing | RecommendationLook; index: number }) => (
+      <RailCard
+        item={item as Listing}
+        index={index}
+        sectionKey={section.key}
+        reasonCode={section.reason}
+        personalised={section.personalised}
+        listingId={listingId}
+        onPress={onPressItem}
+        cardWidth={cardWidth}
+        cardHeight={cardHeight}
+        showAccent={showAccent}
+      />
+    ),
+    [section.key, section.reason, section.personalised, listingId, onPressItem, cardWidth, cardHeight, showAccent],
+  );
+
   return (
     <Reanimated.View
       entering={reducedMotion ? undefined : FadeInDown.duration(300).springify().damping(18)}
@@ -166,7 +188,7 @@ export function RecommendationRail({
       {section.reason ? (
         <View style={styles.reasonRow}>
           <Ionicons
-            name={section.personalised ? 'sparkles' : 'pricetag'}
+            name={section.personalised ? 'person-outline' : 'pricetag'}
             size={12}
             color={colors.textMuted}
           />
@@ -180,20 +202,7 @@ export function RecommendationRail({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <RailCard
-            item={item as Listing}
-            index={index}
-            sectionKey={section.key}
-            reasonCode={section.reason}
-            personalised={section.personalised}
-            listingId={listingId}
-            onPress={onPressItem}
-            cardWidth={cardWidth}
-            cardHeight={cardHeight}
-            showAccent={showAccent}
-          />
-        )}
+        renderItem={renderItem}
         ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
       />
     </Reanimated.View>
