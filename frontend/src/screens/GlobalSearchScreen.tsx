@@ -287,15 +287,15 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
         if (affinityProfile.brandSet.has(brand)) {
           score += 16;
-          reasons.push('Matches brands you save often');
+          reasons.push('Brand you save');
         }
         if (affinityProfile.categorySet.has(category)) {
           score += 11;
-          reasons.push('Aligned with your closet categories');
+          reasons.push('Your category');
         }
         if (affinityProfile.subcategorySet.has(subcategory)) {
           score += 8;
-          reasons.push('Close to items in your wishlist');
+          reasons.push('Similar to saved items');
         }
 
         const matchedTokens = queryTokens.filter(
@@ -309,7 +309,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
         if (queryTokens.length > 0) {
           if (matchedTokens.length > 0) {
             score += 22 + matchedTokens.length * 7;
-            reasons.unshift(`Matches your search for "${matchedTokens[0]}"`);
+            reasons.unshift(`Search match`);
           } else {
             score -= 18;
           }
@@ -327,7 +327,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           sellerId: listing.sellerId,
           createdAt: listing.createdAt,
           score,
-          reason: reasons[0] ?? 'Recommended from current market momentum',
+          reason: reasons[0] ?? 'Recommended',
           mediaHeightRatio: resolveListingMediaHeightRatio(listing),
         };
       })
@@ -338,17 +338,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       .sort((a, b) => b.score - a.score)
       .slice(0, 20);
   }, [affinityProfile.brandSet, affinityProfile.categorySet, affinityProfile.subcategorySet, listings, queryTokens, wishlistIds, normalizedQuery, backendSearchResults]);
-
-  // Explore tags — derived from the canonical category tree + real affinity
-  // brands. No hardcoded editorial strings; every tag maps to a real browse
-  // destination (audit: Global P0 — remove production sample editorial
-  // constants; Search → real recent/saved/trending inputs).
-  const trendingTags = useMemo(() => {
-    const affinityBrands = [...affinityProfile.brandSet];
-    const queryBoost = normalizedQuery ? [normalizedQuery] : [];
-    const categoryIds = CATEGORIES.map((cat) => cat.id);
-    return [...new Set([...queryBoost, ...affinityBrands, ...categoryIds])].slice(0, 8);
-  }, [affinityProfile.brandSet, normalizedQuery]);
 
   const activeFilterCount =
     browseFilters.brands.length
@@ -659,12 +648,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     suggestionsHeader: { color: colors.textMuted },
     suggestionRow: { borderTopColor: colors.border },
     suggestionText: { color: colors.textPrimary },
-    sectionSupertitle: { color: colors.textMuted },
     recentPill: { backgroundColor: colors.surface },
     clearRecentPill: { borderColor: colors.border },
     recentPillText: { color: colors.textPrimary },
-    trendingPill: { backgroundColor: colors.surface, borderColor: colors.border },
-    trendingPillText: { color: colors.textPrimary },
     trendingFocusPill: { backgroundColor: colors.surface, borderColor: colors.border },
     trendingFocusText: { color: colors.textPrimary },
     sortChip: { backgroundColor: colors.surface, borderColor: colors.border },
@@ -682,7 +668,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     saveSearchText: { color: colors.textSecondary },
     saveSearchTextActive: { color: colors.brand },
     savedSearchRow: { backgroundColor: colors.surface, borderColor: colors.border },
-    savedSearchIconWrap: { backgroundColor: colors.surfaceAlt },
     savedSearchQuery: { color: colors.textPrimary },
     savedSearchMeta: { color: colors.textMuted },
     recoEmptyState: { borderColor: colors.border, backgroundColor: colors.surface },
@@ -788,7 +773,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(220)}>
                     {/* Recent searches */}
                     {recentSearches.length > 0 && (
-                      <EditorialSection kicker="Your history" title="Recent searches">
+                      <EditorialSection title="Recent searches">
                         <View style={styles.recentPillsWrap}>
                           {recentSearches.map((term, idx) => (
                             <AnimatedPressable
@@ -811,7 +796,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     {/* Saved searches with alerts */}
                     {savedSearches.length > 0 && (
                       <EditorialSection
-                        kicker="Never miss a drop"
                         title="Saved searches"
                         onSearchPress={() => navigation.navigate('SavedSearches')}
                       >
@@ -824,13 +808,11 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                                 accessibilityLabel={`Search for ${search.query}`}
                                 accessibilityRole="button"
                               >
-                                <View style={[styles.savedSearchIconWrap, t.savedSearchIconWrap]}>
-                                  <Ionicons
-                                    name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
-                                    size={16}
-                                    color={search.alertsEnabled ? colors.brand : colors.textMuted}
-                                  />
-                                </View>
+                                <Ionicons
+                                  name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
+                                  size={18}
+                                  color={search.alertsEnabled ? colors.brand : colors.textMuted}
+                                />
                                 <View style={styles.savedSearchTextWrap}>
                                   <Text style={[styles.savedSearchQuery, t.savedSearchQuery]} numberOfLines={1}>{search.query}</Text>
                                   {search.alertsEnabled ? (
@@ -844,8 +826,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       </EditorialSection>
                     )}
 
-                    {/* Trending categories ΓÇö real category data with icons */}
-                    <EditorialSection kicker="Browse by category" title="Trending categories">
+                    {/* Trending categories — real category data with icons */}
+                    <EditorialSection title="Categories">
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -870,7 +852,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 <>
                 {/* Recent searches */}
                 {recentSearches.length > 0 && (
-                  <EditorialSection kicker="Your history" title="Recent searches">
+                  <EditorialSection title="Recent searches">
                     <View style={styles.recentPillsWrap}>
                       {recentSearches.map((term, idx) => (
                         <AnimatedPressable
@@ -892,7 +874,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 {/* Saved searches with alerts */}
                 {savedSearches.length > 0 && (
                   <EditorialSection
-                    kicker="Never miss a drop"
                     title="Saved searches"
                     onSearchPress={() => navigation.navigate('SavedSearches')}
                   >
@@ -905,13 +886,11 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             accessibilityLabel={`Search for ${search.query}`}
                             accessibilityRole="button"
                           >
-                            <View style={[styles.savedSearchIconWrap, t.savedSearchIconWrap]}>
-                              <Ionicons
-                                name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
-                                size={16}
-                                color={search.alertsEnabled ? colors.brand : colors.textMuted}
-                              />
-                            </View>
+                            <Ionicons
+                              name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
+                              size={18}
+                              color={search.alertsEnabled ? colors.brand : colors.textMuted}
+                            />
                             <View style={styles.savedSearchTextWrap}>
                               <Text style={[styles.savedSearchQuery, t.savedSearchQuery]} numberOfLines={1}>{search.query}</Text>
                               <Text style={[styles.savedSearchMeta, t.savedSearchMeta]}>
@@ -950,7 +929,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 )}
 
                 {/* Suggested categories — canonical category tree, no editorial seed */}
-                <EditorialSection title="Suggested categories">
+                <EditorialSection title="Categories">
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingFocusScroll}>
                     {TRENDING_CATEGORIES.map((cat, idx) => (
                       <AnimatedPressable
@@ -967,20 +946,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </ScrollView>
                 </EditorialSection>
 
-                {/* Explore categories */}
-                <EditorialSection title="Explore categories">
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingScroll}>
-                    {trendingTags.map((tag, idx) => (
-                      <AnimatedPressable key={idx} style={[styles.trendingPill, t.trendingPill]} onPress={() => handlePillPress(tag)}>
-                        <Text style={[styles.trendingPillText, t.trendingPillText]}>{tag}</Text>
-                      </AnimatedPressable>
-                    ))}
-                  </ScrollView>
-                </EditorialSection>
-
                 {/* Discover masonry grid at bottom of landing */}
                 <EditorialSection
-                  kicker="Ideas for you"
                   title="Discover"
                   onSearchPress={handleSearchSubmit}
                 >
@@ -1093,7 +1060,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
                 {/* Recommendation text */}
                 <Reanimated.View entering={FadeInDown.delay(100).duration(400)} style={styles.sectionWrap}>
-                  <Text style={[styles.sectionSupertitle, t.sectionSupertitle]}>Results</Text>
                   <View style={styles.recoHeaderRow}>
                     <Text style={[styles.recoHeaderTitle, t.recoHeaderTitle]}>
                       {normalizedQuery ? `Search: ${normalizedQuery}` : 'Discover'}
@@ -1159,7 +1125,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             </SharedTransitionView>
                             <View style={styles.resultOverlay}>
                               <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
-                              <Text style={styles.resultReason} numberOfLines={1}>{listing.reason}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1182,7 +1147,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                             </SharedTransitionView>
                             <View style={styles.resultOverlay}>
                               <Text style={styles.resultPrice}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
-                              <Text style={styles.resultReason} numberOfLines={1}>{listing.reason}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1351,11 +1315,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 28,
   },
-  sectionSupertitle: {
-    fontSize: 13,
-    fontFamily: FontFamily.medium,
-    marginBottom: 4,
-  },
 
   // Recent searches pills
   recentPillsWrap: {
@@ -1380,23 +1339,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
   },
 
-  // Trending
-  trendingScroll: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  trendingPill: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    borderWidth: 1,
-  },
-  trendingPillText: {
-    fontSize: 15,
-    fontFamily: FontFamily.semibold,
-  },
-
-  // Focus state ΓÇö trending pills (horizontal scroll with category icons)
+  // Focus state — trending pills (horizontal scroll with category icons)
   trendingFocusScroll: {
     paddingHorizontal: 16,
     gap: 10,
@@ -1406,7 +1349,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: RadiusRoleValue.dominantPanel,
+    borderRadius: RadiusRoleValue.compactControl,
     borderWidth: 1,
   },
   trendingFocusIcon: {
@@ -1544,13 +1487,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  savedSearchIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   savedSearchTextWrap: {
     flex: 1,
     gap: 2,
@@ -1609,12 +1545,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 14,
     color: '#fff',
-  },
-  resultReason: {
-    fontFamily: FontFamily.medium,
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.85)',
-    marginTop: 2,
   },
   recoEmptyState: {
     borderWidth: StyleSheet.hairlineWidth,

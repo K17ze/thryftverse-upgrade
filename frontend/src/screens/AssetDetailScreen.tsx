@@ -25,12 +25,8 @@ import {
   fetchCoOwnOrderBook,
   fetchCoOwnHoldings,
   refreshCoOwnAppraisal,
-  fetchCoOwnRecourseStatus,
-  createVerificationDemand,
-  signRecourseAgreement,
   type CoOwnOrderBookSnapshot,
   type MarketCoOwnAsset,
-  type CoOwnRecourseStatus,
   createCoOwnPriceAlert,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -39,7 +35,6 @@ import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { formatCoOwnIze } from '../utils/currency';
 import {
   CommerceMediaStage,
-  CategoryEvidence,
 } from '../components/commerce';
 import {
   CommerceDetailHeader,
@@ -60,7 +55,6 @@ import { ProductFamilyBadge, RecommendationRail, FullscreenMediaViewer } from '.
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { BottomSheet } from '../components/BottomSheet';
-import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
 import {
   buildCoOwnViewModel,
@@ -72,14 +66,11 @@ import {
 import type { RecommendationLook } from '../platform/product';
 import {
   CoOwnOwnershipPanel,
-  CoOwnTrustPanel,
-  CoOwnRecoursePanel,
   CoOwnRiskDisclosure,
   CoOwnAssetDetailSkeleton,
   CoOwnStateCanvas,
   CoOwnPriceChart,
   CoOwnFirstTradeGuide,
-  CoOwnAssetDossier,
   CoOwnRightsSheet,
   CoOwnOrderBook,
   CoOwnCandleChart,
@@ -93,6 +84,7 @@ import {
 import { AppButton } from '../components/ui/AppButton';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -142,8 +134,6 @@ export default function AssetDetailScreen() {
   const [orderBookError, setOrderBookError] = React.useState(false);
   const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
   const [holdingsError, setHoldingsError] = React.useState(false);
-  const [recourseStatus, setRecourseStatus] = React.useState<CoOwnRecourseStatus | null>(null);
-  const [verificationDemandLoading, setVerificationDemandLoading] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
@@ -188,10 +178,8 @@ export default function AssetDetailScreen() {
   }, [assetId, alertTargetPrice, alertCondition, show]);
 
   const [dataLoadedAt, setDataLoadedAt] = React.useState<number | null>(null);
-  // Per spec 03_COOWN §5: dossier collapsed by default.
-  const [dossierExpanded, setDossierExpanded] = React.useState(false);
   // Per spec 03_COOWN §8: risk disclosure collapsed by default, opens
-  // in a modal sheet via "View risk disclosure" disclosure row.
+  // in a modal sheet via "Risks" disclosure row.
   const [riskDisclosureVisible, setRiskDisclosureVisible] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
 
@@ -224,8 +212,7 @@ export default function AssetDetailScreen() {
       fetchCoOwnAssetById(assetId),
       fetchCoOwnOrderBook(assetId, { limit: 40 }),
       currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
-      fetchCoOwnRecourseStatus(assetId).catch(() => null),
-    ]).then(([assetResult, bookResult, holdingsResult, recourseResult]) => {
+    ]).then(([assetResult, bookResult, holdingsResult]) => {
       if (cancelled) return;
 
       if (assetResult.status === 'rejected') {
@@ -251,10 +238,6 @@ export default function AssetDetailScreen() {
       } else {
         setHoldingsError(true);
         setYourUnits(null);
-      }
-
-      if (recourseResult.status === 'fulfilled' && recourseResult.value) {
-        setRecourseStatus(recourseResult.value);
       }
 
       setIsLoading(false);
@@ -285,9 +268,8 @@ export default function AssetDetailScreen() {
       });
   }, [assetId, currentUser?.id]);
 
-  // Pull-to-refresh — reloads asset, order book, holdings, and recourse
-  // status in parallel. The recourse fetch is non-fatal (catch → null)
-  // so a recourse endpoint failure doesn't block the rest of the refresh.
+  // Pull-to-refresh — reloads asset, order book, and holdings in parallel.
+  // Recourse status is fetched by the Due Diligence screen independently.
   const handleRefresh = React.useCallback(() => {
     if (!assetId) return;
     setRefreshing(true);
@@ -295,8 +277,7 @@ export default function AssetDetailScreen() {
       fetchCoOwnAssetById(assetId),
       fetchCoOwnOrderBook(assetId, { limit: 40 }),
       currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
-      fetchCoOwnRecourseStatus(assetId).catch(() => null),
-    ]).then(([assetResult, bookResult, holdingsResult, recourseResult]) => {
+    ]).then(([assetResult, bookResult, holdingsResult]) => {
       if (assetResult.status === 'fulfilled') {
         setAsset(assetResult.value);
         setDataLoadedAt(Date.now());
@@ -314,9 +295,6 @@ export default function AssetDetailScreen() {
       } else if (currentUser?.id) {
         setYourUnits(null);
         setHoldingsError(true);
-      }
-      if (recourseResult.status === 'fulfilled' && recourseResult.value) {
-        setRecourseStatus(recourseResult.value);
       }
       setRefreshing(false);
     });
@@ -777,11 +755,12 @@ export default function AssetDetailScreen() {
           />
         </View>
 
-        {/* ── Zone C — Family transaction module ──
+        {/* ── Layer 1 — Compact market overview ──
             The one non-media surface near the top: reference price,
-            top-of-book, depth and market mode. It follows the active
-            light/dark theme and stays flat/full-width rather than becoming
-            a dashboard card or a forced trading-terminal canvas.
+            trading state, and a thin allocation indicator. Order book
+            and valuation depth have moved to Layer 2 (Market & position)
+            so the first viewport communicates the asset proposition, not
+            the full trading terminal.
             Spec 02 §C + spec 03 §2/§3: do not label reference price as
             "Last trade" without settled-execution proof. Use "Reference
             unit price" unless the backend provides lastExecutionPriceGbp. */}
@@ -822,65 +801,149 @@ export default function AssetDetailScreen() {
               </View>
             }
           >
-          {orderBookError ? (
+          {/* Thin allocation indicator — compact, one line.
+              "78% allocated · 220 units available" pattern per spec 09. */}
+          <View style={[styles.allocationIndicatorRow, { borderTopColor: colors.border }]}>
+            <View style={[styles.allocationBar, { backgroundColor: colors.surfaceAlt, flex: 1 }]}>
+              <View
+                style={[
+                  styles.allocationFill,
+                  {
+                    backgroundColor: colors.brand,
+                    width: `${Math.min(100, allocatedPct)}%`,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={[styles.allocationIndicatorText, { color: colors.textSecondary }]}>
+              {allocatedPct}% allocated · {availableUnits} units available
+            </Text>
+          </View>
+          </CommerceDetailTransactionSurface>
+        </CoOwnMarketOverview>
+
+        {/* ── Layer 1 — Trust highlights ──
+            2-3 concise trust signals backed by backend data, shown near
+            the trade decision point. Only claims backed by backend data
+            are rendered (fail closed). Per spec 09: "Authenticated ·
+            Insured custody · Rights v2" pattern.
+            Per AGENTS.md §4: flat canvas, no card containers. Inline
+            icon+text pairs separated by spacing, not borders. */}
+        {(() => {
+          const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
+          if (asset.authenticityStatus === 'verified') {
+            trustChips.push({ icon: 'ribbon-outline', label: 'Authenticated' });
+          }
+          if (asset.custodyInsured && asset.custodyInsurer) {
+            trustChips.push({ icon: 'shield-checkmark-outline', label: 'Insured custody' });
+          }
+          if (asset.buyerProtection) {
+            trustChips.push({ icon: 'checkmark-circle-outline', label: 'Buyer protection' });
+          }
+          if (asset.legalVehicleType && asset.legalVehicleType !== 'none' && trustChips.length < 3) {
+            const vehicleLabel = asset.legalVehicleType === 'spv' ? 'SPV'
+              : asset.legalVehicleType === 'series_llc' ? 'Series LLC'
+              : asset.legalVehicleType === 'llc' ? 'LLC'
+              : asset.legalVehicleType === 'trust' ? 'Trust'
+              : asset.legalVehicleType;
+            trustChips.push({ icon: 'business-outline', label: vehicleLabel as string });
+          }
+          if (asset.rights?.version && trustChips.length < 3) {
+            trustChips.push({ icon: 'document-text-outline', label: `Rights v${asset.rights.version}` });
+          }
+          if (trustChips.length === 0) return null;
+          const elevated = trustChips.slice(0, 3);
+          return (
+            <View style={styles.coOwnTrustStrip}>
+              {elevated.map((chip, i) => (
+                <View key={i} style={styles.coOwnTrustChip}>
+                  <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
+                  <Text style={[styles.coOwnTrustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {chip.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          );
+        })()}
+
+        {/* ════════════════════════════════════════════════════════════
+            Layer 2 — Market & your position
+            One section: holder position (high priority), price chart,
+            valuation (NAV), market summary (bid/ask/spread), and
+            "Bids & asks" disclosure (order book). Order book is one
+            disclosure inside Market, not a large default feature.
+            ════════════════════════════════════════════════════════════ */}
+        <CommerceDetailSection
+          label={isHolder ? 'Your position & market' : 'Market'}
+          divider
+          variant="editorial"
+        >
+          {/* ── Holder position — high priority if user owns units ──
+              Per spec 09: "Your position / 12 units · £1,248 value /
+              Avg. entry £98.20 · +£69.60 (+5.9%)". Only show P&L if
+              authoritative data exists. */}
+          {holdingsError ? (
             <CommerceDetailUnavailableInline
-              title="Live market unavailable"
-              body="Reference pricing remains visible, but bid and ask depth could not be loaded."
-              onRetry={retryOrderBook}
+              title="Position unavailable"
+              body="We could not verify your settled units. Trading is disabled until this refreshes."
+              onRetry={retryHoldings}
             />
-          ) : (
-            <View style={[styles.marketBookRow, { borderTopColor: colors.border }]}>
-              <View style={styles.marketBookSide}>
-                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]}>Highest bid</Text>
-                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
-                  {bestBid?.unitPriceGbp != null ? `${formatCoOwnIze(bestBid.unitPriceGbp)} × ${bestBid.units ?? 0}` : 'No bid'}
+          ) : isHolder && yourUnits != null && viewerPct != null ? (
+            <View style={styles.viewerPositionHeader}>
+              <View style={styles.viewerPositionCopy}>
+                <Text style={[styles.viewerPositionValue, { color: colors.textPrimary }]}>
+                  {yourUnits} units · {viewerPct.toFixed(1)}%
+                </Text>
+                <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary }]}>
+                  Your settled position
                 </Text>
               </View>
-              <View style={[styles.marketBookDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.marketBookSide}>
-                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]}>Lowest ask</Text>
-                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
-                  {bestAsk?.unitPriceGbp != null ? `${formatCoOwnIze(bestAsk.unitPriceGbp)} × ${bestAsk.units ?? 0}` : 'No ask'}
+              <View style={styles.viewerPositionCopy}>
+                <Text style={[styles.viewerPositionMarketValue, { color: colors.textPrimary }]}>
+                  {formatCoOwnIze(asset.unitPriceGbp * yourUnits)}
+                </Text>
+                <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary, textAlign: 'right' }]}>
+                  Reference value
                 </Text>
               </View>
             </View>
-          )}
-          {!orderBookError && orderBook ? (
-            <>
-              <CommerceDetailDisclosureRow
-                label={orderBookExpanded ? 'Hide market depth' : 'Explore market depth'}
-                summary={`${orderBook.bids.length + orderBook.asks.length} offers`}
-                onPress={() => setOrderBookExpanded((prev) => !prev)}
-                leadingIcon="bar-chart-outline"
-              />
-              {orderBookExpanded ? (
-                <CoOwnOrderBook
-                  embedded
-                  bids={orderBook.bids.map((level) => ({
-                    price: level.unitPriceGbp,
-                    size: level.units,
-                    orderCount: level.orderCount,
-                  }))}
-                  asks={orderBook.asks.map((level) => ({
-                    price: level.unitPriceGbp,
-                    size: level.units,
-                    orderCount: level.orderCount,
-                  }))}
-                  visibleLevels={5}
+          ) : null}
+
+          {/* ── Price chart ──
+              Historical settled/reference price with honest data semantics.
+              Per spec 03_COOWN §4: only expose the candle toggle when real
+              OHLC candles exist. */}
+          <CoOwnPriceChart
+            assetId={asset.id}
+            unitPriceGbp={asset.unitPriceGbp}
+            marketMovePct24h={asset.marketMovePct24h ?? null}
+            volume24hGbp={asset.volume24hGbp ?? null}
+            lastAgeSeconds={undefined}
+            change24hTimestamp={undefined}
+            candleChart={
+              hasCandleData ? (
+                <CoOwnCandleChart
+                  candles={candleData}
+                  range={candleRange}
+                  onRangeChange={setCandleRange}
+                  showVolume={showVolume}
                   lastPrice={marketSnapshot?.lastExecutionPriceGbp ?? undefined}
                   lastAgeSeconds={undefined}
-                  mode={asset.isOpen ? 'continuous' : 'closed'}
-                  onSelectLevel={handleSelectOrderBookLevel}
                 />
-              ) : null}
-            </>
-          ) : null}
+              ) : undefined
+            }
+          />
+
+          {/* ── Valuation — NAV comparison ──
+              Reference vs NAV, NAV per unit, next report. Compact
+              disclosure, not a large default feature. */}
           <CommerceDetailDisclosureRow
-            label={fundamentalsExpanded ? 'Hide valuation facts' : 'Review valuation facts'}
+            label={fundamentalsExpanded ? 'Hide valuation' : 'Valuation'}
             summary={
               navPerUnitGbp != null
                 ? `${formatFromFiat(navPerUnitGbp, 'GBP')} NAV / unit`
-                : 'Valuation · reporting'
+                : 'Reporting'
             }
             onPress={() => setFundamentalsExpanded((prev) => !prev)}
             leadingIcon="analytics-outline"
@@ -917,449 +980,108 @@ export default function AssetDetailScreen() {
               </View>
             </View>
           ) : null}
-          </CommerceDetailTransactionSurface>
-        </CoOwnMarketOverview>
 
-        {/* ── Elevated trust strip — near the trade decision point ──
-            Per 2026 fintech trust design research (Wise, Monzo, Stripe,
-            N26): trust signals near the CTA outperform footer/buried
-            placement by 40%+. The full CoOwnTrustPanel remains in the
-            asset dossier section below for detailed trust information.
-            This compact strip surfaces the 2-3 most decision-critical
-            trust signals at the moment the user is evaluating the
-            market data and considering a trade.
-            Per AGENTS.md §4: flat canvas, no card containers. Inline
-            icon+text pairs separated by spacing, not borders. */}
-        {(() => {
-          const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
-          if (asset.legalVehicleType && asset.legalVehicleType !== 'none') {
-            const vehicleLabel = asset.legalVehicleType === 'spv' ? 'SPV'
-              : asset.legalVehicleType === 'series_llc' ? 'Series LLC'
-              : asset.legalVehicleType === 'llc' ? 'LLC'
-              : asset.legalVehicleType === 'trust' ? 'Trust'
-              : asset.legalVehicleType;
-            trustChips.push({
-              icon: 'business-outline',
-              label: vehicleLabel as string,
-            });
-          }
-          if (asset.custodyInsured && asset.custodyInsurer) {
-            trustChips.push({
-              icon: 'shield-checkmark-outline',
-              label: 'Insured custody',
-            });
-          }
-          if (asset.buyerProtection) {
-            trustChips.push({
-              icon: 'checkmark-circle-outline',
-              label: 'Buyer protection',
-            });
-          }
-          if (trustChips.length === 0) return null;
-          const elevated = trustChips.slice(0, 3);
-          return (
-            <View style={styles.coOwnTrustStrip}>
-              {elevated.map((chip, i) => (
-                <View key={i} style={styles.coOwnTrustChip}>
-                  <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
-                  <Text style={[styles.coOwnTrustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {chip.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          );
-        })()}
-
-        <CommerceDetailSection
-          label={isHolder ? 'Your ownership' : 'Current ownership'}
-          divider
-          variant="editorial"
-        >
-          {holdingsError ? (
+          {/* ── Market summary — best bid/ask/spread ── */}
+          {orderBookError ? (
             <CommerceDetailUnavailableInline
-              title="Position unavailable"
-              body="We could not verify your settled units. Trading is disabled until this refreshes."
-              onRetry={retryHoldings}
+              title="Live market unavailable"
+              body="Bid and ask depth could not be loaded."
+              onRetry={retryOrderBook}
             />
-          ) : isHolder && yourUnits != null && viewerPct != null ? (
-            <View style={styles.viewerPositionHeader}>
-              <View style={styles.viewerPositionCopy}>
-                <Text style={[styles.viewerPositionValue, { color: colors.textPrimary }]}>
-                  {yourUnits} units · {viewerPct.toFixed(1)}%
-                </Text>
-                <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary }]}>
-                  Your settled position
+          ) : (
+            <View style={[styles.marketBookRow, { borderTopColor: colors.border }]}>
+              <View style={styles.marketBookSide}>
+                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]}>Highest bid</Text>
+                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                  {bestBid?.unitPriceGbp != null ? `${formatCoOwnIze(bestBid.unitPriceGbp)} × ${bestBid.units ?? 0}` : 'No bid'}
                 </Text>
               </View>
-              <View style={styles.viewerPositionCopy}>
-                <Text style={[styles.viewerPositionMarketValue, { color: colors.textPrimary }]}>
-                  {formatCoOwnIze(asset.unitPriceGbp * yourUnits)}
-                </Text>
-                <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary, textAlign: 'right' }]}>
-                  Reference value
+              <View style={[styles.marketBookDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.marketBookSide}>
+                <Text style={[styles.marketBookLabel, { color: colors.textSecondary }]}>Lowest ask</Text>
+                <Text style={[styles.marketBookValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                  {bestAsk?.unitPriceGbp != null ? `${formatCoOwnIze(bestAsk.unitPriceGbp)} × ${bestAsk.units ?? 0}` : 'No ask'}
                 </Text>
               </View>
             </View>
-          ) : null}
-          <View style={styles.supplySummary}>
-            <View style={styles.supplyMetric}>
-              <Text style={[styles.supplyMetricLabel, { color: colors.textSecondary }]}>
-                Available
-              </Text>
-              <Text style={[styles.supplyUnits, { color: colors.textPrimary }]}>
-                {availableUnits} / {totalUnits} units
-              </Text>
-            </View>
-            <View style={[styles.supplyMetric, styles.supplyMetricTrailing]}>
-              <Text style={[styles.supplyMetricLabel, { color: colors.textSecondary }]}>
-                Allocated
-              </Text>
-              <Text style={[styles.supplyAllocated, { color: colors.textPrimary }]}>
-                {allocatedPct}%
-              </Text>
-            </View>
-          </View>
-          <View style={[styles.allocationBar, { backgroundColor: colors.surfaceAlt }]}>
-            <View
-              style={[
-                styles.allocationFill,
-                {
-                  backgroundColor: colors.brand,
-                  width: `${Math.min(100, allocatedPct)}%`,
-                },
-              ]}
-            />
-          </View>
-          {asset.holders != null && (
-            <Text style={[styles.supplyHolders, { color: colors.textSecondary }]}>
-              {asset.holders} holders
-            </Text>
           )}
-          {/* Per spec 03_COOWN §6: do not infer treasury, authorised,
-              issued, public float or sponsor locked. Use Available
-              units, Allocated units, Holder count. Omit treasury
-              language until explicit nullable backend fields exist. */}
-          <CommerceDetailDisclosureRow
-            label="View supply structure"
-            summary="Available · allocated · holders"
-            onPress={() => setSupplySheetVisible(true)}
-            leadingIcon="layers-outline"
-          />
-        </CommerceDetailSection>
 
-        {/* ── Price history ──
-            Spec 03 §6: empty state shows compact inline "No settled trade
-            history yet"; error state shows "Price history unavailable" +
-            Retry. Do not show +0.0%. Do not reserve a large blank chart.
-            Movement is passed as nullable — missing movement is never
-            coerced to zero. */}
-        {/* ── Price history ──
-            Per spec 03_COOWN §4: only expose the line/candle toggle
-            when real OHLC candles exist. Do not pass an empty candle
-            component merely to satisfy a layout path. */}
-        <CommerceDetailSection label="Price history" divider variant="editorial">
-          <CoOwnPriceChart
-            assetId={asset.id}
-            unitPriceGbp={asset.unitPriceGbp}
-            marketMovePct24h={asset.marketMovePct24h ?? null}
-            volume24hGbp={asset.volume24hGbp ?? null}
-            lastAgeSeconds={undefined}
-            change24hTimestamp={undefined}
-            candleChart={
-              hasCandleData ? (
-                <CoOwnCandleChart
-                  candles={candleData}
-                  range={candleRange}
-                  onRangeChange={setCandleRange}
-                  showVolume={showVolume}
+          {/* ── Bids & asks — order book disclosure ──
+              One disclosure inside Market, not a large default feature.
+              Copy cleanup: "Explore market depth" → "Bids & asks". */}
+          {!orderBookError && orderBook ? (
+            <>
+              <CommerceDetailDisclosureRow
+                label={orderBookExpanded ? 'Hide bids & asks' : 'Bids & asks'}
+                summary={`${orderBook.bids.length + orderBook.asks.length} offers`}
+                onPress={() => setOrderBookExpanded((prev) => !prev)}
+                leadingIcon="bar-chart-outline"
+              />
+              {orderBookExpanded ? (
+                <CoOwnOrderBook
+                  embedded
+                  bids={orderBook.bids.map((level) => ({
+                    price: level.unitPriceGbp,
+                    size: level.units,
+                    orderCount: level.orderCount,
+                  }))}
+                  asks={orderBook.asks.map((level) => ({
+                    price: level.unitPriceGbp,
+                    size: level.units,
+                    orderCount: level.orderCount,
+                  }))}
+                  visibleLevels={5}
                   lastPrice={marketSnapshot?.lastExecutionPriceGbp ?? undefined}
                   lastAgeSeconds={undefined}
+                  mode={asset.isOpen ? 'continuous' : 'closed'}
+                  onSelectLevel={handleSelectOrderBookLevel}
                 />
-              ) : undefined
-            }
-          />
+              ) : null}
+            </>
+          ) : null}
         </CommerceDetailSection>
 
-        {/* ── Asset evidence ──
-            Combined category evidence + trust panel + dossier into one
-            "Asset dossier" section. Spec 03 §8: "Combine category evidence,
-            authenticity, condition, storage, insurance and appraisal into
-            one Asset dossier section." */}
-        {/* ── Asset dossier — collapsed by default ──
-            Per spec 03_COOWN §5: default summary shows maximum five
-            decision facts (Authenticity, Condition, Storage, Insurance,
-            Latest appraisal). Full dossier opens via "View full asset
-            dossier" disclosure. Do not render — rows; omit missing. */}
-        {hasExpandedDossier ? (
-          <CommerceDetailSection label="Asset dossier" divider variant="editorial">
-            {/* Trust chips — flat inline icon+text, same pattern as
-                ItemDetailScreen. Surfaces key trust signals without
-                requiring a tap. Per AGENTS.md: flat canvas, no cards.
-                Fail closed: chips only render when the backend provides
-                the substantiating field. */}
-            {(() => {
-              const chips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
-              if (asset.authenticityStatus === 'verified') {
-                chips.push({ icon: 'ribbon-outline', label: 'Authenticated' });
-              }
-              if (asset.buyerProtection) {
-                chips.push({ icon: 'shield-checkmark-outline', label: 'Buyer protection' });
-              }
-              if (asset.custodianName) {
-                chips.push({ icon: 'cube-outline', label: 'Custodied' });
-              }
-              if (asset.custodyInsured && asset.custodyInsurer) {
-                chips.push({ icon: 'checkmark-circle-outline', label: 'Insured' });
-              }
-              if (asset.legalVehicleType && asset.legalVehicleType !== 'none') {
-                chips.push({ icon: 'business-outline', label: 'SPV' });
-              }
-              if (chips.length === 0) return null;
-              return (
-                <View style={styles.trustChipsRow}>
-                  {chips.map((chip, i) => (
-                    <View key={i} style={styles.trustChip}>
-                      <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
-                      <Text style={[styles.trustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {chip.label}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              );
-            })()}
-            {/* Summary facts — maximum five decision facts. Fail closed. */}
-            {asset.authenticityStatus === 'verified' && (
-              <CommerceDetailMetricRow
-                label="Authenticity"
-                value={asset.authenticityMethod ? `Verified · ${asset.authenticityMethod}` : 'Verified'}
-              />
-            )}
-            {asset.conditionGrade && (
-              <CommerceDetailMetricRow
-                label="Condition"
-                value={asset.conditionGrade}
-              />
-            )}
-            {asset.custodianLocation && (
-              <CommerceDetailMetricRow
-                label="Storage"
-                value={asset.custodianLocation}
-              />
-            )}
-            {asset.appraisalStaleDays != null && asset.appraisalStaleDays > 180 && (
-              <View style={styles.staleAppraisalRow}>
-                <CommerceDetailMetricRow
-                  label="Appraisal"
-                  value={`Stale · ${asset.appraisalStaleDays}d since last valuation`}
-                />
-                {isIssuer && (
-                  <Pressable
-                    style={[styles.refreshBtn, { borderColor: colors.border, opacity: isRefreshingAppraisal ? 0.5 : 1 }]}
-                    disabled={isRefreshingAppraisal}
-                    onPress={async () => {
-                      if (isRefreshingAppraisal) return;
-                      setIsRefreshingAppraisal(true);
-                      try {
-                        await refreshCoOwnAppraisal(assetId, { appraisalValueGbp: asset.appraisalValueGbp ?? 0, appraisalValuer: 'Issuer refresh' });
-                        show('Appraisal refresh requested', 'success');
-                        // Reload asset to get updated stale days
-                        const updated = await fetchCoOwnAssetById(assetId);
-                        setAsset(updated);
-                      } catch {
-                        show('Unable to refresh appraisal', 'error');
-                      } finally {
-                        setIsRefreshingAppraisal(false);
-                      }
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={isRefreshingAppraisal ? 'Refreshing appraisal' : 'Refresh appraisal'}
-                  >
-                    <Text style={[styles.refreshBtnText, { color: colors.brand }]}>{isRefreshingAppraisal ? 'Refreshing…' : 'Refresh'}</Text>
-                  </Pressable>
-                )}
-              </View>
-            )}
-            {/* WS6: Stale market mark — show when no public market events
-                have been logged in >7 days. Fail closed (omit when null). */}
-            {asset.staleMarkDays != null && asset.staleMarkDays > 7 && (
-              <CommerceDetailMetricRow
-                label="Market activity"
-                value={`Pricing may be stale · ${asset.staleMarkDays}d since last market event`}
-              />
-            )}
-            <CommerceDetailDisclosureRow
-              label={dossierExpanded ? 'Hide full asset dossier' : 'View full asset dossier'}
-              onPress={() => setDossierExpanded((prev) => !prev)}
-              leadingIcon="document-text-outline"
-              accessibilityLabel={dossierExpanded ? 'Hide full asset dossier' : 'View full asset dossier'}
+        {/* ════════════════════════════════════════════════════════════
+            Layer 3 entry — Due diligence
+            One disclosure row navigates to the dedicated full-height
+            Due Diligence screen. All legal/compliance/valuation/
+            provenance/audit depth lives there, not as inline modules.
+            Rights sheet remains accessible here for trading-blocked
+            states (rights incomplete). Per spec 09: "full legal/risk
+            evidence remains reachable in <=2 taps."
+            ════════════════════════════════════════════════════════════ */}
+        <CommerceDetailSection label="Due diligence" divider variant="editorial">
+          {/* Stale market mark — show when no public market events have
+              been logged in >7 days. Fail closed (omit when null). */}
+          {asset.staleMarkDays != null && asset.staleMarkDays > 7 && (
+            <CommerceDetailMetricRow
+              label="Market activity"
+              value={`Pricing may be stale · ${asset.staleMarkDays}d since last market event`}
             />
-
-            {/* Full dossier — expanded on demand */}
-            {dossierExpanded && (
-              <>
-                {dossierEvidenceGroups.length > 0 ? (
-                  <CategoryEvidence groups={dossierEvidenceGroups} />
-                ) : null}
-
-                <CoOwnTrustPanel
-                  authenticityStatus={asset.authenticityStatus ?? null}
-                  authenticityMethod={asset.authenticityMethod ?? null}
-                  buyerProtection={asset.buyerProtection ?? false}
-                  buyerProtectionTermsUrl={asset.buyerProtectionTermsUrl ?? null}
-                  custodianName={asset.custodianName ?? null}
-                  custodianLocation={asset.custodianLocation ?? null}
-                  custodyInsured={asset.custodyInsured ?? false}
-                  custodyInsurer={asset.custodyInsurer ?? null}
-                  custodyCoverageGbp={asset.custodyCoverageGbp ?? null}
-                  custodyPolicyRef={asset.custodyPolicyRef ?? null}
-                  legalVehicleType={asset.legalVehicleType ?? null}
-                  legalVehicleName={asset.legalVehicleName ?? null}
-                  legalVehicleJurisdiction={asset.legalVehicleJurisdiction ?? null}
-                />
-
-                {/* WS7: Seller accountability — recourse agreement, personal
-                    liability, verification demands. Shows the seller's
-                    signed personal guarantee and any active verification
-                    requests from unit holders. */}
-                <CoOwnRecoursePanel
-                  recourseAgreementSigned={asset.recourseAgreementSigned ?? false}
-                  recourseStatus={asset.recourseStatus ?? 'pending'}
-                  totalTradedValueGbp={asset.totalTradedValueGbp}
-                  activeVerificationDemands={asset.activeVerificationDemands}
-                  agreement={recourseStatus?.agreement ?? null}
-                  sellerLiability={recourseStatus?.sellerLiability ?? null}
-                  verificationDemands={recourseStatus?.verificationDemands}
-                  isHolder={(yourUnits ?? 0) > 0}
-                  isIssuer={isIssuer}
-                  onRequestVerification={async () => {
-                    if (!assetId) return;
-                    setVerificationDemandLoading(true);
-                    try {
-                      await createVerificationDemand(assetId, 'authenticity');
-                      show('Verification request sent to seller', 'success');
-                      // Refresh recourse status
-                      const updated = await fetchCoOwnRecourseStatus(assetId);
-                      setRecourseStatus(updated);
-                    } catch {
-                      show('Could not send verification request', 'error');
-                    } finally {
-                      setVerificationDemandLoading(false);
-                    }
-                  }}
-                  onRespondToVerification={(demandId) => {
-                    navigation.navigate('VerificationResponse', { assetId, demandId });
-                  }}
-                />
-
-                {(asset.provenance || asset.conditionGrade || asset.custodianLocation || asset.appraisalValueGbp) && (
-                  <CoOwnAssetDossier
-                    provenance={asset.provenance ? [{ event: 'Provenance', date: '', note: asset.provenance }] : undefined}
-                    condition={asset.conditionGrade ? {
-                      grade: asset.conditionGrade,
-                    } : undefined}
-                    storage={asset.custodianLocation ? {
-                      location: asset.custodianLocation,
-                      custodian: asset.custodianName ?? '—',
-                      insured: asset.custodyInsured ?? false,
-                      policyRef: asset.custodyPolicyRef ?? undefined,
-                    } : undefined}
-                    appraisal={asset.appraisalValueGbp != null ? {
-                      value: asset.appraisalValueGbp,
-                      currency: 'GBP',
-                      valuedAt: asset.appraisalValuedAt ?? '',
-                      method: '—',
-                      valuer: asset.appraisalValuer ?? undefined,
-                    } : undefined}
-                  />
-                )}
-
-                {/* Trust audit trail — append-only history of trust-profile
-                    changes (SEC Rule 17Ad-7 pattern). Fail closed when empty. */}
-                {asset.trustAuditEvents && asset.trustAuditEvents.length > 0 ? (
-                  <View style={[styles.auditTrailWrap, { borderTopColor: colors.borderSubtle }]}>
-                    <Text style={[styles.auditTrailTitle, { color: colors.textSecondary }]}>
-                      Trust history
-                    </Text>
-                    {asset.trustAuditEvents.map((evt, i) => (
-                      <View key={i} style={styles.auditTrailRow}>
-                        <Text style={[styles.auditTrailEvent, { color: colors.textMuted }]} numberOfLines={1}>
-                          {evt.eventType.replace(/_/g, ' ')}
-                        </Text>
-                        <Text style={[styles.auditTrailDate, { color: colors.textMuted }]} numberOfLines={1}>
-                          {new Date(evt.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-
-                {/* WS6: Market audit trail — price marks, supply changes,
-                    listing tier transitions. Fail closed when empty. */}
-                {asset.marketAuditEvents && asset.marketAuditEvents.length > 0 ? (
-                  <View style={[styles.auditTrailWrap, { borderTopColor: colors.borderSubtle }]}>
-                    <Text style={[styles.auditTrailTitle, { color: colors.textSecondary }]}>
-                      Market history
-                    </Text>
-                    {asset.marketAuditEvents.map((evt) => (
-                      <View key={evt.id} style={styles.auditTrailRow}>
-                        <Text style={[styles.auditTrailEvent, { color: colors.textMuted }]} numberOfLines={1}>
-                          {evt.eventType.replace(/_/g, ' ')}
-                        </Text>
-                        <Text style={[styles.auditTrailDate, { color: colors.textMuted }]} numberOfLines={1}>
-                          {new Date(evt.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <View style={[styles.auditTrailWrap, { borderTopColor: colors.borderSubtle }]}>
-                    <Text style={[styles.auditTrailTitle, { color: colors.textSecondary }]}>
-                      Market history
-                    </Text>
-                    <Text style={[styles.auditTrailEvent, { color: colors.textMuted }]}>
-                      No market history yet
-                    </Text>
-                  </View>
-                )}
-              </>
-            )}
-          </CommerceDetailSection>
-        ) : null}
-
-        {/* ── Rights and risk ──
-            Default summary: completion state + one critical plain-language
-            statement + "Review N terms". Full sheet keeps all canonical rows.
-            Spec 03 §9. */}
-        {/* ── Rights & risks — compressed ──
-            Per spec 03_COOWN §8: default summary shows one critical
-            plain-language statement + "Review N terms" + "View risk
-            disclosure". Both expand via disclosure rows, not inline
-            blocks. */}
-        <CommerceDetailSection label="Rights & risks" divider variant="editorial">
-          <View style={styles.rightsSummary}>
-            <Text style={[styles.rightsCriticalStatement, { color: colors.textPrimary }]}>
-              You own units in the asset, not the physical item.
-            </Text>
-          </View>
-          <CommerceDetailMetricRow
-            label="Full-asset buyout"
-            value="Not available"
-            muted
-          />
+          )}
           <CommerceDetailDisclosureRow
-            label="Review rights"
+            label="Due diligence"
+            summary="Provenance · authentication · custody · valuation · rights · risks · audit"
+            onPress={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
+            leadingIcon="document-text-outline"
+            accessibilityLabel="View due diligence"
+          />
+          {/* Rights — kept accessible on the main screen for trading-blocked
+              states (rights incomplete). The full 13-row sheet opens here. */}
+          <CommerceDetailDisclosureRow
+            label="Rights"
             count={CANONICAL_RIGHTS_LABELS.length}
             summary={asset.rights?.version ? formatRightsVersion(`v${asset.rights.version}`) : undefined}
             onPress={() => setRightsSheetVisible(true)}
             leadingIcon="document-text-outline"
           />
+          {/* Risks — quick access to the risk disclosure sheet. Full
+              risk detail also lives in the Due Diligence screen. */}
           <CommerceDetailDisclosureRow
-            label="View risk disclosure"
+            label="Risks"
             onPress={() => setRiskDisclosureVisible(true)}
             leadingIcon="warning-outline"
-            accessibilityLabel="View risk disclosure"
+            accessibilityLabel="View risks"
           />
         </CommerceDetailSection>
 
@@ -1837,6 +1559,25 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     marginTop: Space.lg,
     paddingTop: Space.lg,
+  },
+  // ── Allocation indicator (Layer 1 compact) ──
+  // Thin bar + one-line summary: "78% allocated · 220 units available".
+  // Per spec 09: compact indicator, not a full supply section.
+  allocationIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.lg,
+    paddingTop: Space.lg,
+  },
+  allocationIndicatorText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    flexShrink: 1,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   marketBookSide: {
     flex: 1,

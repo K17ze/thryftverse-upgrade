@@ -789,7 +789,7 @@ export default function AuctionDetailScreen() {
               <AuctionStateBadge
                 state={isLive ? 'live' : isUpcoming ? 'upcoming' : isCancelled ? 'cancelled' : isSettled ? 'settled' : 'ended'}
               />
-              {isLive && (
+              {isLive && !countdown.isFinalMinutes && (
                 <View style={styles.livePollIndicator} accessibilityLabel="Live auction · updating in real time">
                   <Reanimated.View style={styles.livePollDot} entering={FadeInDown.duration(300)} />
                   <Text style={styles.livePollText}>updating</Text>
@@ -871,7 +871,7 @@ export default function AuctionDetailScreen() {
             headlineAside={
               <AuctionCountdown
                 text={countdown.text}
-                urgent={countdown.isFinalMinutes}
+                urgent={countdown.isFinalMinutes && viewerState !== 'outbid'}
                 stage={countdown.stage}
                 progress={isLive ? countdownProgress : undefined}
                 showProgress={isLive}
@@ -978,7 +978,10 @@ export default function AuctionDetailScreen() {
             )}
             {viewerState === 'lost' && (
               <>
-                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction closed</Text>
+                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction ended</Text>
+                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
+                  You didn't win this time
+                </Text>
                 <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {terminalAmountText}
                 </Text>

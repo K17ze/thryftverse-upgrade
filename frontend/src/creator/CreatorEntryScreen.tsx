@@ -18,8 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
-import { createStableId } from '../utils/createStableId';
-import type { CreatorLayer } from './composition';
+import type { CreatorInitialMedia } from '../navigation/types';
 import CreatorCamera from './CreatorCamera';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -70,7 +69,13 @@ interface MediaAsset {
 export interface CreatorEntryScreenProps {
   documentType: 'look' | 'poster';
   onClose: () => void;
-  onMediaSelected: (layers: CreatorLayer[]) => void;
+  /**
+   * Returns the selected media in tap/selection order as a typed
+   * CreatorInitialMedia[] payload. The caller (CreatorStudioShell) is
+   * responsible for deciding how to seed the document — Poster creates
+   * one page per asset, Look creates stacked layers on one page.
+   */
+  onMediaSelected: (media: CreatorInitialMedia[]) => void;
   onBlankStart: () => void;
 }
 
@@ -95,7 +100,9 @@ export function CreatorEntryScreen({
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Ordered selection — preserves tap order so Poster frames are created
+  // in the order the user selected them (tap B → A → C gives B,A,C).
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const mountedRef = useRef(true);
 
   const thumbSize = useMemo(
@@ -168,104 +175,68 @@ export function CreatorEntryScreen({
     }
   }, [view, mediaPerm, requestMediaPerm]);
 
-  // ── Camera capture → create media layer → enter editor ──
+  // ── Camera capture → typed media payload → enter editor ──
   const handleCapture = useCallback((uri: string) => {
-    // Get image dimensions to preserve aspect ratio
+    // Get image dimensions to preserve aspect ratio in the typed payload
     RNImage.getSize(uri, (imgW: number, imgH: number) => {
-      const imgRatio = imgW / imgH;
-      // Fit within canvas while preserving aspect ratio
-      const layer: CreatorLayer = {
-        id: createStableId('media'),
-        type: 'media',
-        x: 0.5,
-        y: 0.5,
-        width: 1,
-        height: 1 / imgRatio,
-        scale: 1,
-        rotation: 0,
-        zIndex: 0,
-        locked: false,
-        hidden: false,
-        opacity: 1,
-        payload: {
-          mediaUri: uri,
-          mediaType: 'image',
-          contentFit: 'cover',
-          opacity: 1,
-        },
+      const media: CreatorInitialMedia = {
+        id: `capture_${Date.now()}`,
+        uri,
+        kind: 'image',
+        width: imgW,
+        height: imgH,
       };
-      onMediaSelected([layer]);
+      onMediaSelected([media]);
     }, () => {
-      // Fallback: full-bleed if we can't get dimensions
-      const layer: CreatorLayer = {
-        id: createStableId('media'),
-        type: 'media',
-        x: 0.5,
-        y: 0.5,
-        width: 1,
-        height: 1,
-        scale: 1,
-        rotation: 0,
-        zIndex: 0,
-        locked: false,
-        hidden: false,
-        opacity: 1,
-        payload: {
-          mediaUri: uri,
-          mediaType: 'image',
-          contentFit: 'cover',
-          opacity: 1,
-        },
+      // Fallback: no dimensions available
+      const media: CreatorInitialMedia = {
+        id: `capture_${Date.now()}`,
+        uri,
+        kind: 'image',
       };
-      onMediaSelected([layer]);
+      onMediaSelected([media]);
     });
   }, [onMediaSelected]);
 
-  // ── Gallery selection → create media layers → enter editor ──
+  // ── Gallery selection → ordered media payload → enter editor ──
+  // Selection is stored as an ordered string[] so tap order is preserved.
+  // Tapping B → A → C produces [B, A, C], which becomes the frame order
+  // for Poster or the layer order for Look.
   const toggleSelect = useCallback((asset: MediaAsset) => {
     haptic.selection();
     setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(asset.id)) {
-        next.delete(asset.id);
-      } else {
-        const maxSelect = isPoster ? 10 : 6;
-        if (next.size >= maxSelect) return prev;
-        next.add(asset.id);
+      if (prev.includes(asset.id)) {
+        return prev.filter((id) => id !== asset.id);
       }
-      return next;
+      const maxSelect = isPoster ? 10 : 6;
+      if (prev.length >= maxSelect) return prev;
+      return [...prev, asset.id];
     });
   }, [isPoster]);
 
   const handleAddSelected = useCallback(() => {
-    if (selectedIds.size === 0) return;
-    const selected = assets.filter((a) => selectedIds.has(a.id));
-    const layers: CreatorLayer[] = selected.map((asset, i) => ({
-      id: createStableId('media'),
-      type: 'media',
-      x: 0.5,
-      y: 0.5,
-      width: 1,
-      height: 1,
-      scale: 1,
-      rotation: 0,
-      zIndex: i,
-      locked: false,
-      hidden: false,
-      opacity: 1,
-      payload: {
-        mediaUri: asset.uri,
-        mediaType: asset.mediaType,
-        contentFit: 'cover',
-        videoDurationMs: asset.durationMs,
-        opacity: 1,
-      },
-    }));
+    if (selectedIds.length === 0) return;
+    // Build the media payload in selection (tap) order by mapping the
+    // ordered selectedIds array to the source assets. This preserves
+    // the user's tap order — tap B → A → C gives frames B,A,C for
+    // Poster or layers B,A,C for Look.
+    const assetMap = new Map(assets.map((a) => [a.id, a]));
+    const media: CreatorInitialMedia[] = selectedIds.map((id, i) => {
+      const asset = assetMap.get(id);
+      return {
+        id: `entry_${i}_${id}`,
+        uri: asset!.uri,
+        kind: asset!.mediaType,
+        width: asset!.width,
+        height: asset!.height,
+        durationMs: asset!.durationMs,
+      };
+    });
     haptic.light();
-    onMediaSelected(layers);
+    onMediaSelected(media);
   }, [selectedIds, assets, onMediaSelected]);
 
-  const selectedCount = selectedIds.size;
+  const selectedCount = selectedIds.length;
 
   // ═══════════════════════════════════════════════════════════════
   // CAMERA VIEW — the default, shown immediately on open
@@ -376,7 +347,7 @@ export function CreatorEntryScreen({
           contentContainerStyle={styles.grid}
           columnWrapperStyle={styles.gridRow}
           renderItem={({ item }) => {
-            const isSelected = selectedIds.has(item.id);
+            const isSelected = selectedIds.includes(item.id);
             return (
               <Pressable
                 style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
@@ -422,7 +393,12 @@ export function CreatorEntryScreen({
         >
           <View style={styles.selectedPreviewBar}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectedPreviewScroll}>
-              {assets.filter(a => selectedIds.has(a.id)).map((asset) => (
+              {(() => {
+                const assetMap = new Map(assets.map((a) => [a.id, a]));
+                return selectedIds
+                  .map((id) => assetMap.get(id))
+                  .filter((a): a is MediaAsset => a != null);
+              })().map((asset) => (
                 <View key={asset.id} style={styles.selectedThumbWrap}>
                   <Image source={{ uri: asset.uri }} style={styles.selectedThumb} resizeMode="cover" />
                   <Pressable

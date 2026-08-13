@@ -68,6 +68,42 @@ export interface CreatorContextValue {
   alignLayerToCenter: (layerId: string) => void;
   alignLayerToHorizontalCenter: (layerId: string) => void;
   alignLayerToVerticalCenter: (layerId: string) => void;
+
+  // ── Poster-specific frame methods ──────────────────────────────────
+  // Poster is a sequence of frames (pages). Each frame normally has one
+  // primary media layer. These methods encode the Story mental model
+  // (add frames, replace frame media, reorder frames) without leaking
+  // the generic layer/page abstraction to callers. They are no-ops for
+  // Look documents (Look is a single-page collage).
+  addPosterFrame: (media?: CreatorInitialMedia) => void;
+  addPosterFrames: (media: CreatorInitialMedia[]) => void;
+  replacePosterFrameMedia: (pageId: string, media: CreatorInitialMedia) => void;
+  reorderPosterFrames: (from: number, to: number) => void;
+
+  // ── Look-specific intent methods ──────────────────────────────────
+  // Look is a collage on a single 4:5 canvas. These methods encode the
+  // collage mental model (cutouts, product tags, asset swap, auto
+  // arrangement) without leaking the generic layer/page abstraction to
+  // callers. They are no-ops for Poster documents.
+  addLookCutout: (params: {
+    mediaUri: string;
+    sourceLayerId?: string;
+    contentFit?: 'cover' | 'contain' | 'fill';
+  }) => void;
+  addLookProduct: (params: {
+    listingId: string;
+    snapshotTitle: string;
+    snapshotImageUrl?: string;
+    snapshotPriceGbp?: number;
+    x?: number;
+    y?: number;
+  }) => void;
+  swapLookAsset: (layerId: string, replacement: {
+    mediaUri: string;
+    mediaType?: 'image' | 'video';
+    contentFit?: 'cover' | 'contain' | 'fill';
+  }) => void;
+  autoArrangeLook: (layout?: 'hero' | 'pair' | 'dominant' | 'collage') => void;
 }
 
 const CreatorContext = createContext<CreatorContextValue | null>(null);
@@ -99,15 +135,61 @@ export interface CreatorProviderProps {
 export function CreatorProvider({ children, initialType, draftId, templateId, sourceDocumentId, initialMediaUri, initialMedia }: CreatorProviderProps) {
   const initialDoc = useMemo(() => createEmptyDocument(initialType), [initialType]);
   const [document, setDocumentState] = useState<CreatorDocument>(initialDoc);
-  // Seed initial captured/selected media as layers. When `initialMedia` is
-  // provided (typed multi-asset payload), every asset is seeded in
-  // deterministic order, preserving kind, dimensions and video duration.
-  // Otherwise, fall back to the legacy single-URI `initialMediaUri` path
-  // (treated as an image layer) for backward compatibility with existing
-  // single-asset entry points (e.g. camera capture).
+  // Seed initial captured/selected media. The seeding strategy branches on
+  // `initialType` to respect the two distinct product mental models:
+  //
+  //   Poster (Story): a SEQUENCE of frames. Each selected asset becomes its
+  //     own page (frame) — media[0] → page 0, media[1] → page 1, etc. This
+  //     preserves the user's tap/selection order so frames play in the
+  //     order the user chose them.
+  //
+  //   Look (collage): a COMPOSED canvas. Multiple selected assets are seeded
+  //     as stacked media layers on a single page (page 0), preserving the
+  //     existing collage behavior.
+  //
+  // When `initialMedia` is absent, fall back to the legacy single-URI
+  // `initialMediaUri` path (treated as an image layer on page 0) for
+  // backward compatibility with existing single-asset entry points (e.g.
+  // camera capture).
   useEffect(() => {
     if (initialMedia && initialMedia.length > 0) {
       setDocumentState((prev) => {
+        if (initialType === 'poster') {
+          // ── Poster: one page per selected asset ──
+          // Each media item creates a new page with a single base media
+          // layer at z=0. The initial empty page (page_1) is replaced by
+          // the first frame; subsequent frames are appended. Selection
+          // order == page order.
+          const pages = initialMedia.slice(0, MAX_PAGES).map((asset, i) => {
+            const mediaLayer: CreatorLayer = {
+              id: createStableId('media'),
+              type: 'media',
+              x: 0.5,
+              y: 0.5,
+              width: 1,
+              height: 1,
+              scale: 1,
+              rotation: 0,
+              zIndex: 0,
+              locked: false,
+              hidden: false,
+              opacity: 1,
+              payload: {
+                mediaUri: asset.uri,
+                mediaType: asset.kind,
+                contentFit: 'cover',
+                videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
+                opacity: 1,
+              },
+            };
+            return {
+              id: `page_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+              layers: [mediaLayer],
+            };
+          });
+          return { ...prev, pages, updatedAt: new Date().toISOString() };
+        }
+        // ── Look: multi-media as stacked layers on page 0 ──
         let doc = prev;
         initialMedia.forEach((asset, i) => {
           const mediaLayer: CreatorLayer = {
@@ -160,7 +242,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     };
     setDocumentState((prev) => addLayerToPage(prev, 0, mediaLayer));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMediaUri, initialMedia]);
+  }, [initialMediaUri, initialMedia, initialType]);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [canUndo, setCanUndo] = useState(false);
@@ -586,6 +668,309 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     updateLayer(layerId, { y: 0.5 });
   }, [updateLayer]);
 
+  // ─── Poster-specific frame methods ────────────────────────────────
+  // Poster is a sequence of frames (pages). Each frame normally has one
+  // primary media layer. These methods encode the Story mental model
+  // (add frames, replace frame media, reorder frames) and are no-ops for
+  // Look documents (Look is a single-page collage).
+
+  const addPosterFrame = useCallback((media?: CreatorInitialMedia) => {
+    if (document.type !== 'poster') return;
+    setDocumentState((prev) => {
+      if (prev.pages.length >= MAX_PAGES) return prev;
+      const mediaLayer: CreatorLayer | null = media ? {
+        id: createStableId('media'),
+        type: 'media',
+        x: 0.5,
+        y: 0.5,
+        width: 1,
+        height: 1,
+        scale: 1,
+        rotation: 0,
+        zIndex: 0,
+        locked: false,
+        hidden: false,
+        opacity: 1,
+        payload: {
+          mediaUri: media.uri,
+          mediaType: media.kind,
+          contentFit: 'cover',
+          videoDurationMs: media.kind === 'video' ? media.durationMs : undefined,
+          opacity: 1,
+        },
+      } : null;
+      const newPage: CreatorPage = {
+        id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        layers: mediaLayer ? [mediaLayer] : [],
+      };
+      const doc = {
+        ...prev,
+        pages: [...prev.pages, newPage],
+        updatedAt: new Date().toISOString(),
+      };
+      historyRef.current.push(doc, 'Add frame');
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+    setActivePageIndex((prev) => prev + 1);
+    setSelectedLayerId(null);
+    CreatorAnalytics.pageAdd('poster', document.pages.length + 1);
+  }, [document.type, document.pages.length, syncHistoryButtons]);
+
+  const addPosterFrames = useCallback((media: CreatorInitialMedia[]) => {
+    if (document.type !== 'poster') return;
+    setDocumentState((prev) => {
+      const remaining = MAX_PAGES - prev.pages.length;
+      if (remaining <= 0) return prev;
+      const toAdd = media.slice(0, remaining);
+      const newPages: CreatorPage[] = toAdd.map((asset, i) => {
+        const mediaLayer: CreatorLayer = {
+          id: createStableId('media'),
+          type: 'media',
+          x: 0.5,
+          y: 0.5,
+          width: 1,
+          height: 1,
+          scale: 1,
+          rotation: 0,
+          zIndex: 0,
+          locked: false,
+          hidden: false,
+          opacity: 1,
+          payload: {
+            mediaUri: asset.uri,
+            mediaType: asset.kind,
+            contentFit: 'cover',
+            videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
+            opacity: 1,
+          },
+        };
+        return {
+          id: `page_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+          layers: [mediaLayer],
+        };
+      });
+      const doc = {
+        ...prev,
+        pages: [...prev.pages, ...newPages],
+        updatedAt: new Date().toISOString(),
+      };
+      historyRef.current.push(doc, `Add ${newPages.length} frame${newPages.length > 1 ? 's' : ''}`);
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+  }, [document.type, syncHistoryButtons]);
+
+  const replacePosterFrameMedia = useCallback((pageId: string, media: CreatorInitialMedia) => {
+    if (document.type !== 'poster') return;
+    setDocumentState((prev) => {
+      const pageIndex = prev.pages.findIndex((p) => p.id === pageId);
+      if (pageIndex === -1) return prev;
+      const pages = [...prev.pages];
+      const page = { ...pages[pageIndex] };
+      // Find existing media layer or create a new one
+      const existingMediaIdx = page.layers.findIndex((l) => l.type === 'media');
+      const newMediaLayer: CreatorLayer = {
+        id: existingMediaIdx >= 0 ? page.layers[existingMediaIdx].id : createStableId('media'),
+        type: 'media',
+        x: 0.5,
+        y: 0.5,
+        width: 1,
+        height: 1,
+        scale: 1,
+        rotation: 0,
+        zIndex: 0,
+        locked: false,
+        hidden: false,
+        opacity: 1,
+        payload: {
+          mediaUri: media.uri,
+          mediaType: media.kind,
+          contentFit: 'cover',
+          videoDurationMs: media.kind === 'video' ? media.durationMs : undefined,
+          opacity: 1,
+        },
+      };
+      if (existingMediaIdx >= 0) {
+        page.layers = page.layers.map((l, i) => i === existingMediaIdx ? newMediaLayer : l);
+      } else {
+        page.layers = [newMediaLayer, ...page.layers];
+      }
+      pages[pageIndex] = page;
+      const doc = { ...prev, pages, updatedAt: new Date().toISOString() };
+      historyRef.current.push(doc, 'Replace frame media');
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+  }, [document.type, syncHistoryButtons]);
+
+  const reorderPosterFrames = useCallback((from: number, to: number) => {
+    if (document.type !== 'poster') return;
+    reorderPages(from, to);
+  }, [document.type, reorderPages]);
+
+  // ─── Look-specific intent methods ────────────────────────────────────
+  // Look is a single-page 4:5 collage. These methods encode the collage
+  // mental model (cutouts, product tags, asset swap, auto arrangement)
+  // and are no-ops for Poster documents. They always target page 0.
+
+  const addLookCutout = useCallback((params: {
+    mediaUri: string;
+    sourceLayerId?: string;
+    contentFit?: 'cover' | 'contain' | 'fill';
+  }) => {
+    if (document.type !== 'look') return;
+    const page0 = document.pages[0];
+    const maxZ = page0 ? page0.layers.reduce((max, l) => Math.max(max, l.zIndex), 0) : 0;
+    const layer: CreatorLayer = {
+      id: createStableId('media'),
+      type: 'media',
+      x: 0.5,
+      y: 0.5,
+      width: 0.4,
+      height: 0.4,
+      scale: 1,
+      rotation: 0,
+      zIndex: maxZ + 1,
+      locked: false,
+      hidden: false,
+      opacity: 1,
+      payload: {
+        mediaUri: params.mediaUri,
+        mediaType: 'image',
+        contentFit: params.contentFit ?? 'contain',
+        opacity: 1,
+      },
+    };
+    addLayer(layer);
+    CreatorAnalytics.layerAdd('look', 'media');
+  }, [document.type, document.pages, addLayer]);
+
+  const addLookProduct = useCallback((params: {
+    listingId: string;
+    snapshotTitle: string;
+    snapshotImageUrl?: string;
+    snapshotPriceGbp?: number;
+    x?: number;
+    y?: number;
+  }) => {
+    if (document.type !== 'look') return;
+    const page0 = document.pages[0];
+    const maxZ = page0 ? page0.layers.reduce((max, l) => Math.max(max, l.zIndex), 0) : 0;
+    const layer: CreatorLayer = {
+      id: createStableId('product'),
+      type: 'product',
+      x: params.x ?? 0.5,
+      y: params.y ?? 0.5,
+      width: 0.08,
+      height: 0.08,
+      scale: 1,
+      rotation: 0,
+      zIndex: maxZ + 1,
+      locked: false,
+      hidden: false,
+      opacity: 1,
+      payload: {
+        listingId: params.listingId,
+        snapshotTitle: params.snapshotTitle,
+        snapshotImageUrl: params.snapshotImageUrl,
+        snapshotPriceGbp: params.snapshotPriceGbp,
+        availability: 'active',
+        hotspotLabel: params.snapshotTitle,
+      },
+    };
+    addLayer(layer);
+    CreatorAnalytics.layerAdd('look', 'product');
+  }, [document.type, document.pages, addLayer]);
+
+  const swapLookAsset = useCallback((layerId: string, replacement: {
+    mediaUri: string;
+    mediaType?: 'image' | 'video';
+    contentFit?: 'cover' | 'contain' | 'fill';
+  }) => {
+    if (document.type !== 'look') return;
+    const page0 = document.pages[0];
+    const layer = page0?.layers.find((l) => l.id === layerId);
+    if (!layer || layer.type !== 'media') return;
+    updateLayer(layerId, {
+      type: 'media',
+      payload: {
+        ...layer.payload,
+        mediaUri: replacement.mediaUri,
+        mediaType: replacement.mediaType ?? layer.payload.mediaType,
+        contentFit: replacement.contentFit ?? layer.payload.contentFit,
+      },
+    }, 'Swap asset');
+  }, [document.type, document.pages, updateLayer]);
+
+  const autoArrangeLook = useCallback((layout: 'hero' | 'pair' | 'dominant' | 'collage' = 'collage') => {
+    if (document.type !== 'look') return;
+    setDocumentState((prev) => {
+      const page0 = prev.pages[0];
+      if (!page0) return prev;
+      const mediaLayers = page0.layers.filter((l) => l.type === 'media' && !l.hidden);
+      const otherLayers = page0.layers.filter((l) => l.type !== 'media');
+      if (mediaLayers.length === 0) return prev;
+
+      let arranged: CreatorLayer[];
+      const n = mediaLayers.length;
+
+      if (layout === 'hero' || n === 1) {
+        // 1 → hero composition
+        arranged = [{
+          ...mediaLayers[0],
+          x: 0.5, y: 0.5, width: 0.9, height: 0.9, scale: 1, rotation: 0,
+        }];
+      } else if (layout === 'pair' || n === 2) {
+        // 2 → balanced editorial pairing
+        arranged = [
+          { ...mediaLayers[0], x: 0.27, y: 0.5, width: 0.44, height: 0.8, scale: 1, rotation: 0 },
+          { ...mediaLayers[1], x: 0.73, y: 0.5, width: 0.44, height: 0.8, scale: 1, rotation: 0 },
+        ];
+      } else if (layout === 'dominant' || n === 3) {
+        // 3 → dominant + two supporting
+        arranged = [
+          { ...mediaLayers[0], x: 0.5, y: 0.42, width: 0.7, height: 0.7, scale: 1, rotation: 0 },
+          { ...mediaLayers[1], x: 0.22, y: 0.82, width: 0.3, height: 0.3, scale: 1, rotation: 0 },
+          { ...mediaLayers[2], x: 0.78, y: 0.82, width: 0.3, height: 0.3, scale: 1, rotation: 0 },
+        ];
+      } else {
+        // 4+ → scattered collage with collision avoidance
+        // Distribute around the canvas with slight overlap but no full overlap
+        arranged = mediaLayers.map((layer, i) => {
+          const angle = (i / n) * Math.PI * 2;
+          const radius = 0.28;
+          const cx = 0.5 + Math.cos(angle) * radius;
+          const cy = 0.5 + Math.sin(angle) * radius;
+          const size = 0.34;
+          return {
+            ...layer,
+            x: Math.max(0.18, Math.min(0.82, cx)),
+            y: Math.max(0.18, Math.min(0.82, cy)),
+            width: size,
+            height: size,
+            scale: 1,
+            rotation: (i % 2 === 0 ? 1 : -1) * 4,
+          };
+        });
+      }
+
+      // Reassign zIndex in order
+      const allLayers = [...arranged, ...otherLayers].map((l, i) => ({ ...l, zIndex: i }));
+      const newPages = [...prev.pages];
+      newPages[0] = { ...page0, layers: allLayers };
+      const doc = { ...prev, pages: newPages, updatedAt: new Date().toISOString() };
+      historyRef.current.push(doc, 'Auto-arrange look');
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+    haptics.selection();
+  }, [document.type, syncHistoryButtons]);
+
   // Autosave
   useEffect(() => {
     if (!isDirty) return;
@@ -656,6 +1041,14 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     alignLayerToCenter,
     alignLayerToHorizontalCenter,
     alignLayerToVerticalCenter,
+    addPosterFrame,
+    addPosterFrames,
+    replacePosterFrameMedia,
+    reorderPosterFrames,
+    addLookCutout,
+    addLookProduct,
+    swapLookAsset,
+    autoArrangeLook,
   };
 
   return <CreatorContext.Provider value={value}>{children}</CreatorContext.Provider>;

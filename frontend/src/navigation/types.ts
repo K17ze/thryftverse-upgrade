@@ -45,6 +45,18 @@ export type CreatorInitialMedia = {
   mimeType?: string;
 };
 
+// ---------------------------------------------------------------------------
+// Creator acquisition result (Phase 2 — Poster vs Look semantic model)
+// ---------------------------------------------------------------------------
+// A typed, semantic description of what the user acquired at the entry point.
+// Poster multi-selection creates pages (frames), not layers. Look
+// multi-selection creates layers on one page (collage). Single media is the
+// backward-compatible path for camera capture and legacy callers.
+export type CreatorAcquisitionResult =
+  | { mode: 'poster_frames'; media: CreatorInitialMedia[] }
+  | { mode: 'look_layers'; media: CreatorInitialMedia[] }
+  | { mode: 'single_media'; media: CreatorInitialMedia };
+
 export type RootStackParamList = {
   // Age gate — shown before onboarding/auth on first launch (18+ marketplace).
   AgeVerification: undefined;
@@ -93,6 +105,7 @@ export type RootStackParamList = {
     initialSegment?: 'active' | 'new_issues' | 'watchlist';
   } | undefined;
   AssetDetail: { assetId: string };
+  AssetDueDiligence: { assetId: string };
   Trade: { assetId: string; side: 'buy' | 'sell'; limitPrice?: number };
   Portfolio: undefined;
   CoOwnOrderHistory: undefined;

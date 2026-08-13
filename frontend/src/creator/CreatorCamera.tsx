@@ -42,18 +42,20 @@ import { ControlsRail } from './camera/ControlsRail';
 import { GalleryCarousel } from './camera/GalleryCarousel';
 import { PermissionState } from './camera/PermissionState';
 import { CreatorAnalytics } from './creatorAnalytics';
+import type { CreatorInitialMedia } from '../navigation/types';
 
 // ── CreatorCamera — Flagship 2026 Elevation ────────────────────────
 // Snapchat 2026 / TikTok / BeReal-grade camera component with:
-//   - tap-to-focus with animated reticle
+//   - tap-to-focus visual indicator (no fake AE/AF lock claim)
 //   - corner brackets (mode-specific aspect ratio guide, refined 2pt)
 //   - center crosshair
-//   - large shutter button with press animation
-//   - vertical controls rail: flip, flash, zoom, timer, grid (TikTok pattern)
+//   - large shutter button with tap=photo / press-and-hold=video
+//   - vertical controls rail: flip, zoom, tools disclosure
 //   - gallery thumbnail (64x64, recent photos carousel)
 //   - quick-review overlay (post-capture preview with retake/edit/save)
-//   - grid overlay (rule-of-thirds toggle)
-//   - self-timer with countdown overlay
+//   - multi-capture with frame-review tray (all captures retained)
+//   - grid overlay (rule-of-thirds, behind Tools)
+//   - self-timer with countdown overlay (behind Tools)
 //   - refined gradient overlays (0.25 top, 0.35 bottom)
 //   - proper permission states with art-directed empty states
 //
@@ -66,31 +68,38 @@ const CORNER_SIZE = 32;
 const CORNER_STROKE = 2;
 const GALLERY_THUMB_SIZE = 64;
 const CONTROL_RAIL_ICON = 22;
-const ZOOM_LEVELS = [0.5, 1, 2];
+// Zoom is normalized 0..1 per Expo Camera contract. UI labels (1×, 2×, 3×)
+// are digital zoom multipliers mapped honestly to the normalized range.
+const ZOOM_STEPS = [
+  { label: '1×', normalized: 0 },
+  { label: '2×', normalized: 0.5 },
+  { label: '3×', normalized: 1 },
+] as const;
 const TIMER_OPTIONS = [0, 3, 5, 10] as const;
 const FOCUS_RETICLE_SIZE = 70;
-const RECORDING_MAX_DURATION = 15000; // 15s max for video/boomerang
-const BOOMERANG_DURATION = 2000; // 2s for boomerang
+const RECORDING_MAX_DURATION = 15000; // 15s max for video
 const RECORDING_RING_SIZE = SHUTTER_SIZE + 12;
 const RECORDING_RING_STROKE = 4;
 const MODE_SWITCHER_HEIGHT = 36;
+// Press-and-hold threshold for video recording (ms)
+const HOLD_THRESHOLD_MS = 350;
 
 type FlashMode = 'off' | 'on' | 'auto';
-type ZoomLevel = 0 | 1 | 2;
+type ZoomStepIndex = 0 | 1 | 2;
 type TimerOption = 0 | 3 | 5 | 10;
-type CameraMode = 'photo' | 'video' | 'boomerang';
-
-const CAMERA_MODES: { mode: CameraMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { mode: 'photo', label: 'Photo', icon: 'camera-outline' },
-  { mode: 'video', label: 'Video', icon: 'videocam-outline' },
-  { mode: 'boomerang', label: 'Boomerang', icon: 'repeat-outline' },
-];
 
 export interface CreatorCameraProps {
   /** Camera mode — determines framing guide + labels */
   mode: 'poster' | 'look' | 'visual-search';
-  /** Called when the user captures a photo and confirms it via quick-review */
+  /** Called when the user captures a photo and confirms it via quick-review.
+   *  Used for single captures and backward-compatible callers (visual search,
+   *  legacy poster CameraCapture). */
   onCapture: (uri: string) => void;
+  /** Called when the user finishes a batch capture (multi-capture or single
+   *  capture in poster/look mode). Every capture is retained as a
+   *  CreatorInitialMedia entry in deterministic order. When provided, this
+   *  takes precedence over onCapture for poster/look modes. */
+  onCaptureBatch?: (captures: CreatorInitialMedia[]) => void;
   /** Called when the user taps the gallery thumbnail */
   onGallery: () => void;
   /** Called when the user taps close */
@@ -104,6 +113,7 @@ export interface CreatorCameraProps {
 export default function CreatorCamera({
   mode,
   onCapture,
+  onCaptureBatch,
   onGallery,
   onClose,
   renderBottomOverlay,
@@ -119,15 +129,10 @@ export default function CreatorCamera({
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [flash, setFlash] = useState<FlashMode>('off');
-  const [zoomIndex, setZoomIndex] = useState<ZoomLevel>(1);
+  const [zoomIndex, setZoomIndex] = useState<ZoomStepIndex>(0);
   const [timerOption, setTimerOption] = useState<TimerOption>(0);
   const [showGrid, setShowGrid] = useState(false);
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
-  // ── Long-press focus lock (Snapchat 2026 / iOS Camera pattern) ──
-  // Long-press on the viewfinder locks AE/AF at the touch point. A persistent
-  // "AE/AF LOCK" badge appears. Tap to unlock and return to continuous AF.
-  const [focusLocked, setFocusLocked] = useState(false);
-  const [focusLockPoint, setFocusLockPoint] = useState<{ x: number; y: number } | null>(null);
   const [lastImageUri, setLastImageUri] = useState<string | null>(null);
   const [recentImages, setRecentImages] = useState<string[]>([]);
   const [showRecentCarousel, setShowRecentCarousel] = useState(false);
@@ -135,17 +140,15 @@ export default function CreatorCamera({
   const [countdown, setCountdown] = useState<number | null>(null);
   const reviewOpacity = useSharedValue(0);
   const captureFlash = useSharedValue(0);
-  // ── Multi-capture mode (Instagram Layout-style sequential captures) ──
+  // ── Multi-capture mode (Snapchat Multi Snap pattern) ──
+  // Every capture is retained as a CreatorInitialMedia entry. Poster maps
+  // captures to frames; Look maps captures to layers.
   const [multiCaptureMode, setMultiCaptureMode] = useState(false);
-  const [multiCaptures, setMultiCaptures] = useState<string[]>([]);
+  const [multiCaptures, setMultiCaptures] = useState<CreatorInitialMedia[]>([]);
 
   // ── Flagship upgrade shared values ──
   // Flip animation (double-tap to switch camera)
   const flipRotation = useSharedValue(0);
-  // Camera mode switcher
-  const [cameraMode, setCameraMode] = useState<CameraMode>('photo');
-  const modeSwitcherTranslate = useSharedValue(0);
-  const modeUnderlineScale = useSharedValue(1);
   // Zoom indicator spring appearance
   const zoomIndicatorOpacity = useSharedValue(0);
   const zoomIndicatorScale = useSharedValue(0.8);
@@ -159,14 +162,21 @@ export default function CreatorCamera({
   const recordingProgress = useSharedValue(0);
   const recordingRingScale = useSharedValue(1);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // ── Native recording promise ref (P0.1 — one recording lifecycle) ──
+  const recordingPromiseRef = useRef<Promise<{ uri: string } | undefined> | null>(null);
   // Countdown Reanimated values (flagship spring)
   const countdownScale = useSharedValue(1.5);
   const countdownOpacity = useSharedValue(0);
+  // ── Tools disclosure (timer/grid/multi-capture behind one button) ──
+  const [showTools, setShowTools] = useState(false);
+  // ── Press-and-hold video: track long-press state to suppress photo on release ──
+  const isLongPressRef = useRef(false);
 
   const isPoster = mode === 'poster';
   const isVisualSearch = mode === 'visual-search';
   const modeLabel = isVisualSearch ? 'Search' : isPoster ? 'Story' : 'Look';
-  const zoom = ZOOM_LEVELS[zoomIndex];
+  const zoomLabel = ZOOM_STEPS[zoomIndex].label;
+  const zoomNormalized = ZOOM_STEPS[zoomIndex].normalized;
 
   const captureFlashStyle = useAnimatedStyle(() => ({ opacity: captureFlash.value }));
 
@@ -193,11 +203,6 @@ export default function CreatorCamera({
   const countdownTextStyle = useAnimatedStyle(() => ({
     opacity: countdownOpacity.value,
     transform: [{ scale: countdownScale.value }],
-  }));
-
-  // ── Mode switcher: underline scale ──
-  const modeUnderlineStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: modeUnderlineScale.value }],
   }));
 
   // ── Permission ──
@@ -286,7 +291,7 @@ export default function CreatorCamera({
 
   const cycleZoom = useCallback(() => {
     haptic.light();
-    setZoomIndex((p) => ((p + 1) % 3) as ZoomLevel);
+    setZoomIndex((p) => ((p + 1) % 3) as ZoomStepIndex);
     // Show zoom indicator with spring appearance, auto-hide after 1.2s
     if (!reducedMotion) {
       zoomIndicatorOpacity.value = withSpring(1, spring.tap);
@@ -310,11 +315,12 @@ export default function CreatorCamera({
   }, [haptic]);
 
   // ── Pinch-to-zoom (Snapchat pattern) ──
-  // Tracks two-finger pinch scale and maps it to a smooth zoom factor.
-  // The zoom factor is separate from the stepped zoomIndex — it provides
-  // a continuous 1x–4x range that snaps to the nearest step on release.
-  const pinchStartZoom = useRef(1);
-  const [pinchZoom, setPinchZoom] = useState(1);
+  // Tracks two-finger pinch and maps it to the normalized 0..1 zoom range
+  // required by Expo Camera's zoom prop. The pinch delta is added to the
+  // stepped zoom baseline and clamped to 0..1. On release, it snaps to the
+  // nearest zoom step.
+  const pinchStartZoom = useRef(0);
+  const [pinchZoomDelta, setPinchZoomDelta] = useState(0);
 
   const showZoomIndicator = useCallback(() => {
     if (!reducedMotion) {
@@ -325,11 +331,11 @@ export default function CreatorCamera({
     }
   }, [reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
 
-  const snapPinchToStep = useCallback((currentZoom: number) => {
-    // Find nearest step — 0.5x, 1x, 2x
-    if (currentZoom < 0.75) setZoomIndex(0); // 0.5x
-    else if (currentZoom < 1.5) setZoomIndex(1); // 1x
-    else setZoomIndex(2); // 2x or above
+  const snapPinchToStep = useCallback((normalizedZoom: number) => {
+    // Snap to nearest step: 0 (1×), 0.5 (2×), 1 (3×)
+    if (normalizedZoom < 0.25) setZoomIndex(0);
+    else if (normalizedZoom < 0.75) setZoomIndex(1);
+    else setZoomIndex(2);
   }, []);
 
   const pinchGesture = useMemo(
@@ -339,26 +345,28 @@ export default function CreatorCamera({
           'worklet';
           runOnJS((z: number) => {
             pinchStartZoom.current = z;
-          })(zoom);
+          })(zoomNormalized);
         })
         .onUpdate((e) => {
           'worklet';
-          const newZoom = Math.max(0.5, Math.min(4, pinchStartZoom.current * e.scale));
-          runOnJS(setPinchZoom)(newZoom);
+          // Map pinch scale to normalized zoom delta. A scale of 2 doubles
+          // the zoom, so we map proportionally within the 0..1 range.
+          const newZoom = Math.max(0, Math.min(1, pinchStartZoom.current + (e.scale - 1) * 0.5));
+          runOnJS(setPinchZoomDelta)(newZoom - pinchStartZoom.current);
         })
         .onEnd((e) => {
           'worklet';
-          const finalZoom = Math.max(0.5, Math.min(4, pinchStartZoom.current * e.scale));
-          runOnJS(setPinchZoom)(1);
+          const finalZoom = Math.max(0, Math.min(1, pinchStartZoom.current + (e.scale - 1) * 0.5));
+          runOnJS(setPinchZoomDelta)(0);
           runOnJS(snapPinchToStep)(finalZoom);
           runOnJS(haptic.light)();
           runOnJS(showZoomIndicator)();
         }),
-    [zoom, snapPinchToStep, haptic, showZoomIndicator],
+    [zoomNormalized, snapPinchToStep, haptic, showZoomIndicator],
   );
 
-  // Effective zoom = stepped zoom × pinch multiplier (clamped)
-  const effectiveZoom = Math.max(0.5, Math.min(4, zoom * pinchZoom));
+  // Effective zoom = stepped baseline + pinch delta, clamped to 0..1
+  const effectiveZoom = Math.max(0, Math.min(1, zoomNormalized + pinchZoomDelta));
 
   // ── Capture with optional timer ──
   const takePhoto = useCallback(async () => {
@@ -415,25 +423,20 @@ export default function CreatorCamera({
     }
   }, [cameraRef, countdown, haptic, reducedMotion, show, timerOption, countdownScale, countdownOpacity, captureFlash, spring]);
 
-  // ── Recording: start/stop with ring progress + timer ──
+  // ── P0.1: One unified recording lifecycle ────────────────────────
+  // beginVideoRecording() starts native recordAsync() and stores the promise.
+  // stopRecording() calls stopRecording() on the native camera, which causes
+  // the promise to resolve. The awaited result enters the same review object
+  // as a photo. Cleanup runs on background/unmount/interruption.
   const stopRecording = useCallback(() => {
     if (!isRecording) return;
-    haptic.medium(); // medium on recording stop
-    setIsRecording(false);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    recordingProgress.value = withSpring(0, spring.entrance);
-    // Stop actual recording
-    if (cameraMode === 'video') {
-      cameraRef.current?.stopRecording();
-      // ── Video duration telemetry ──
-      CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', recordingElapsed);
-    }
-  }, [isRecording, haptic, recordingProgress, cameraMode, spring, recordingElapsed, isPoster]);
+    haptic.medium();
+    // Stop native recording — this resolves the recordAsync promise
+    cameraRef.current?.stopRecording();
+    // The await in beginVideoRecording handles the rest (UI cleanup, review)
+  }, [isRecording, haptic]);
 
-  const startRecording = useCallback(() => {
+  const beginVideoRecording = useCallback(async () => {
     if (!cameraRef.current || isRecording) return;
     haptic.medium(); // medium on recording start
     setIsRecording(true);
@@ -446,7 +449,7 @@ export default function CreatorCamera({
         withSpring(1, spring.entrance),
       );
     }
-    const maxDuration = cameraMode === 'boomerang' ? BOOMERANG_DURATION : RECORDING_MAX_DURATION;
+    const maxDuration = RECORDING_MAX_DURATION;
     const startTime = Date.now();
     recordingTimerRef.current = setInterval(() => {
       const elapsed = Date.now() - startTime;
@@ -457,69 +460,80 @@ export default function CreatorCamera({
         stopRecording();
       }
     }, 50);
-    // Start actual video recording
-    if (cameraMode === 'boomerang') {
-      // Boomerang: record short clip then auto-stop
-      const boomerangStart = Date.now();
-      cameraRef.current?.recordAsync({ maxDuration: BOOMERANG_DURATION / 1000 })
-        .then((video) => {
-          if (video?.uri) {
-            setCapturedUri(video.uri);
-            CreatorAnalytics.captureBoomerang(
-              isPoster ? 'poster' : 'look',
-              Date.now() - boomerangStart,
-            );
-          }
-        })
-        .catch(() => {
-          show('Failed to record boomerang', 'error');
-        });
-    } else {
-      // Video mode — recording continues until user stops or max duration
-    }
-  }, [cameraRef, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, cameraMode, show, stopRecording, spring]);
 
-  // ── Cleanup recording timer on unmount ──
+    // Start native recording — one promise for the entire lifecycle
+    recordingPromiseRef.current = cameraRef.current.recordAsync({
+      maxDuration: maxDuration / 1000,
+    });
+
+    try {
+      const result = await recordingPromiseRef.current;
+      recordingPromiseRef.current = null;
+      if (result?.uri) {
+        haptic.medium();
+        // Capture flash — white overlay (Snapchat pattern)
+        if (!reducedMotion) {
+          captureFlash.value = withSequence(
+            withTiming(0.8, { duration: 80, easing: Easing.out(Easing.cubic) }),
+            withTiming(0, { duration: 120, easing: Easing.in(Easing.cubic) }),
+          );
+        }
+        setCapturedUri(result.uri);
+        CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', Date.now() - startTime);
+      }
+    } catch {
+      show('Failed to record video', 'error');
+    }
+
+    // Cleanup UI state (runs after promise resolves or rejects)
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    recordingProgress.value = withSpring(0, spring.entrance);
+  }, [cameraRef, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, stopRecording, spring, captureFlash, isPoster]);
+
+  // ── Cleanup recording on unmount / interruption ──
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
       }
+      // Stop any active native recording to prevent orphaned promises
+      if (recordingPromiseRef.current) {
+        cameraRef.current?.stopRecording();
+        recordingPromiseRef.current = null;
+      }
     };
   }, []);
 
+  // ── Shutter: tap=photo, press-and-hold=video (Snapchat 2026 pattern) ──
+  // Quick tap takes a photo. Press-and-hold (beyond HOLD_THRESHOLD_MS) starts
+  // video recording; releasing stops it. This eliminates the need for
+  // permanent Photo/Video/Boomerang mode tabs.
   const handleShutterPress = useCallback(() => {
-    // Press spring is handled internally by ShutterButton.
-    if (cameraMode === 'video' || cameraMode === 'boomerang') {
-      // Video/boomerang: toggle recording
-      if (isRecording) {
-        stopRecording();
-      } else {
-        startRecording();
-      }
-    } else {
+    // Quick tap — take photo (only if the long-press didn't fire)
+    if (!isLongPressRef.current && !isRecording) {
       takePhoto();
     }
-  }, [takePhoto, cameraMode, isRecording, startRecording, stopRecording]);
+  }, [takePhoto, isRecording]);
 
-  // ── Camera mode switcher: spring underline + translate ──
-  const handleModeSwitch = useCallback((newMode: CameraMode) => {
-    if (newMode === cameraMode) return;
-    haptic.light(); // light on mode change
-    const modeIndex = CAMERA_MODES.findIndex((m) => m.mode === newMode);
-    const modeWidth = 80; // approximate width per mode tab
-    // Spring translate to new position
-    if (!reducedMotion) {
-      modeSwitcherTranslate.value = withSpring(modeIndex * modeWidth, spring.entrance);
-      // Underline: shrink then grow for smooth transition
-      modeUnderlineScale.value = withSequence(
-        withSpring(0.3, spring.tap),
-        withSpring(1, spring.lift),
-      );
+  const handleShutterLongPress = useCallback(() => {
+    // Press-and-hold — start video recording
+    isLongPressRef.current = true;
+    beginVideoRecording();
+  }, [beginVideoRecording]);
+
+  const handleShutterPressOut = useCallback(() => {
+    // Release — if recording, stop
+    if (isRecording) {
+      stopRecording();
     }
-    setCameraMode(newMode);
-  }, [cameraMode, haptic, reducedMotion, modeSwitcherTranslate, modeUnderlineScale, spring]);
+    // Reset long-press flag after a tick so onPress doesn't also fire
+    setTimeout(() => { isLongPressRef.current = false; }, 50);
+  }, [isRecording, stopRecording]);
 
   // ── Quick-review flow ──
   useEffect(() => {
@@ -550,36 +564,64 @@ export default function CreatorCamera({
     haptic.light();
     // In multi-capture mode, add to stack instead of immediately sending
     if (multiCaptureMode) {
-      setMultiCaptures((prev) => [...prev, capturedUri]);
+      const media: CreatorInitialMedia = {
+        id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        uri: capturedUri,
+        kind: 'image',
+      };
+      setMultiCaptures((prev) => [...prev, media]);
       setCapturedUri(null);
       return;
     }
-    onCapture(capturedUri);
-  }, [capturedUri, haptic, onCapture, multiCaptureMode]);
+    // If onCaptureBatch is provided, use it for poster/look modes
+    if (onCaptureBatch && !isVisualSearch) {
+      onCaptureBatch([{
+        id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        uri: capturedUri,
+        kind: 'image',
+      }]);
+    } else {
+      onCapture(capturedUri);
+    }
+  }, [capturedUri, haptic, onCapture, onCaptureBatch, multiCaptureMode, isVisualSearch]);
 
   // ── Multi-capture: add another photo without leaving camera ──
   const handleAddAnother = useCallback(() => {
     haptic.selection();
     if (capturedUri) {
-      setMultiCaptures((prev) => [...prev, capturedUri]);
+      const media: CreatorInitialMedia = {
+        id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        uri: capturedUri,
+        kind: 'image',
+      };
+      setMultiCaptures((prev) => [...prev, media]);
       setCapturedUri(null);
     }
   }, [capturedUri, haptic]);
 
-  // ── Multi-capture: finish and send all captures ──
+  // ── Multi-capture: finish and send ALL captures (P0.3 fix) ──
+  // Every capture is retained and sent as a CreatorInitialMedia[] batch.
+  // Poster maps captures to frames; Look maps captures to layers.
   const handleFinishMultiCapture = useCallback(() => {
     if (multiCaptures.length === 0 && !capturedUri) return;
     haptic.medium();
-    const all = capturedUri ? [...multiCaptures, capturedUri] : multiCaptures;
-    // Send all captures — the first one goes via onCapture,
-    // additional ones would need multi-capture support in the entry flow
-    // For now, send the first and store the rest as recent images
-    if (all.length > 0) {
-      onCapture(all[0]);
+    const currentCapture: CreatorInitialMedia[] = capturedUri
+      ? [{
+          id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          uri: capturedUri,
+          kind: 'image',
+        }]
+      : [];
+    const all = [...multiCaptures, ...currentCapture];
+    // Send all captures via onCaptureBatch if available, else fall back
+    if (onCaptureBatch) {
+      onCaptureBatch(all);
+    } else if (all.length > 0) {
+      onCapture(all[0].uri);
     }
     setMultiCaptures([]);
     setMultiCaptureMode(false);
-  }, [multiCaptures, capturedUri, haptic, onCapture]);
+  }, [multiCaptures, capturedUri, haptic, onCapture, onCaptureBatch]);
 
   // ── Multi-capture: toggle mode ──
   const toggleMultiCapture = useCallback(() => {
@@ -587,6 +629,12 @@ export default function CreatorCamera({
     setMultiCaptureMode((p) => !p);
     if (multiCaptures.length > 0) setMultiCaptures([]);
   }, [haptic, multiCaptures.length]);
+
+  // ── Multi-capture: remove a specific capture from the tray ──
+  const handleRemoveCapture = useCallback((captureId: string) => {
+    haptic.selection();
+    setMultiCaptures((prev) => prev.filter((c) => c.id !== captureId));
+  }, [haptic]);
 
   const handleSaveToGallery = useCallback(async () => {
     if (!capturedUri) return;
@@ -599,29 +647,17 @@ export default function CreatorCamera({
     }
   }, [capturedUri, haptic, show]);
 
+  // ── P0.4: Truthful tap-to-focus visual indicator ──────────────────
+  // Expo Camera's public surface exposes focus mode rather than arbitrary
+  // point focus. We keep a visual tap indicator (FocusReticle) so the user
+  // gets feedback that their tap was registered, but we do NOT claim AE/AF
+  // lock or simulate a camera capability with UI-only animation. The native
+  // camera continues to use its own continuous autofocus.
   const handleTapFocus = useCallback((evt: GestureResponderEvent) => {
-    // If focus is locked, tap to unlock (iOS Camera pattern)
-    if (focusLocked) {
-      setFocusLocked(false);
-      setFocusLockPoint(null);
-      haptic.light();
-      return;
-    }
     const { locationX, locationY } = evt.nativeEvent;
     setFocusPoint({ x: locationX, y: locationY });
     // FocusReticle component handles its own spring animation + haptic + auto-dismiss
-  }, [focusLocked, haptic]);
-
-  // ── Long-press to lock AE/AF (Snapchat 2026 / iOS Camera pattern) ──
-  // Long-press on the viewfinder locks focus + exposure at the touch point.
-  // A persistent "AE/AF LOCK" badge appears. Tap anywhere to unlock.
-  const handleLongPressFocus = useCallback((evt: GestureResponderEvent) => {
-    const { locationX, locationY } = evt.nativeEvent;
-    setFocusLocked(true);
-    setFocusLockPoint({ x: locationX, y: locationY });
-    setFocusPoint({ x: locationX, y: locationY });
-    haptic.medium(); // medium impact on lock
-  }, [haptic]);
+  }, []);
 
   const handleOpenSettings = useCallback(() => Linking.openSettings(), []);
 
@@ -654,12 +690,10 @@ export default function CreatorCamera({
         {/* Double-tap gesture for camera flip (wrapped around camera feed) */}
         <GestureDetector gesture={doubleTapGesture}>
           <View style={StyleSheet.absoluteFill}>
-            {/* Full-screen camera feed with tap-to-focus + long-press focus lock + 3D flip rotation */}
+            {/* Full-screen camera feed with tap-to-focus visual indicator + 3D flip rotation */}
             <Pressable
               style={StyleSheet.absoluteFill}
               onPress={handleTapFocus}
-              onLongPress={handleLongPressFocus}
-              delayLongPress={400}
             >
               <Reanimated.View style={[StyleSheet.absoluteFill, cameraFlipStyle]}>
                 <CameraView
@@ -667,7 +701,7 @@ export default function CreatorCamera({
                   style={StyleSheet.absoluteFill}
                   facing={facing}
                   flash={flash}
-                  mode={cameraMode === 'video' ? 'video' : 'picture'}
+                  mode="picture"
                   enableTorch={flash === 'on'}
                   zoom={effectiveZoom}
                 />
@@ -704,39 +738,19 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* Focus reticle — extracted component with spring animation + color transition */}
+      {/* Focus reticle — visual tap indicator only (P0.4: no AE/AF lock claim) */}
       <FocusReticle
         focusPoint={focusPoint}
         size={FOCUS_RETICLE_SIZE}
         onDismiss={() => {
-          // Don't auto-clear focusPoint when locked — the lock badge persists
-          if (!focusLocked) setFocusPoint(null);
+          setFocusPoint(null);
         }}
       />
 
-      {/* AE/AF LOCK badge — persistent indicator when focus is locked (iOS Camera pattern) */}
-      {focusLocked && focusLockPoint && (
-        <View
-          style={[
-            styles.focusLockBadge,
-            {
-              left: focusLockPoint.x - 60,
-              top: focusLockPoint.y + FOCUS_RETICLE_SIZE / 2 + 8,
-            },
-          ]}
-          pointerEvents="none"
-          accessibilityLabel="Auto exposure and auto focus locked. Tap to unlock."
-          accessibilityRole="text"
-        >
-          <Ionicons name="lock-closed" size={11} color="#fff" />
-          <Text style={styles.focusLockText}>AE/AF LOCK</Text>
-        </View>
-      )}
-
-      {/* Zoom level indicator — spring appearance (0.5x/1x/2x/3x) */}
+      {/* Zoom level indicator — spring appearance (1×/2×/3×) */}
       <Reanimated.View style={[styles.zoomIndicator, zoomIndicatorStyle]} pointerEvents="none">
         <Text style={styles.zoomIndicatorText}>
-          {zoom === 0.5 ? '0.5' : zoom}×
+          {zoomLabel}
         </Text>
       </Reanimated.View>
 
@@ -808,13 +822,13 @@ export default function CreatorCamera({
         </View>
       </View>
 
-      {/* Vertical controls rail — right side (TikTok pattern) */}
+      {/* Vertical controls rail — right side (TikTok/Snapchat pattern) */}
       <ControlsRail
         top={Math.max(insets.top, 16) + 60}
         isVisualSearch={isVisualSearch}
         onFlip={toggleFacing}
         onCycleZoom={cycleZoom}
-        zoom={zoom}
+        zoomLabel={zoomLabel}
         onCycleTimer={cycleTimer}
         timerOption={timerOption}
         onToggleGrid={toggleGrid}
@@ -823,6 +837,8 @@ export default function CreatorCamera({
         multiCaptureMode={multiCaptureMode}
         multiCaptureCount={multiCaptures.length}
         hasCapturedUri={!!capturedUri}
+        showTools={showTools}
+        onToggleTools={() => { haptic.light(); setShowTools((p) => !p); }}
         accentColor={colors.antiqueGold}
       />
 
@@ -841,8 +857,9 @@ export default function CreatorCamera({
         {/* Shutter — the hero control with recording ring */}
         <ShutterButton
           onPress={handleShutterPress}
+          onLongPress={handleShutterLongPress}
+          onPressOut={handleShutterPressOut}
           isRecording={isRecording}
-          cameraMode={cameraMode}
           disabled={countdown !== null}
           recordingProgress={recordingProgress}
           recordingRingScale={recordingRingScale}
@@ -851,35 +868,6 @@ export default function CreatorCamera({
         {/* Spacer — flip is in the right rail, this keeps the shutter centered */}
         <View style={styles.bottomSpacer} />
       </View>
-
-      {/* Camera mode switcher — Photo / Video / Boomerang with spring underline */}
-      {!renderBottomOverlay && (
-        <View style={[styles.modeSwitcher, { bottom: Math.max(insets.bottom, 16) + 130 }]} pointerEvents="box-none">
-          {CAMERA_MODES.map((m) => {
-            const isActive = cameraMode === m.mode;
-            return (
-              <Pressable
-                key={m.mode}
-                style={styles.modeTab}
-                onPress={() => handleModeSwitch(m.mode)}
-                hitSlop={8}
-                accessibilityLabel={`${m.label} mode`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text style={[styles.modeTabText, isActive && styles.modeTabTextActive]}>
-                  {m.label}
-                </Text>
-                {isActive && (
-                  <Reanimated.View
-                    style={[styles.modeUnderline, modeUnderlineStyle, { backgroundColor: colors.antiqueGold }]}
-                  />
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
 
       {/* Recording timer badge — shown while recording */}
       {isRecording && (

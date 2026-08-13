@@ -161,6 +161,7 @@ export default function AppNavigator() {
       <Stack.Screen name="MarketLedger" getComponent={() => require('../screens/MarketLedgerScreen').default} />
       <Stack.Screen name="CoOwnHub" getComponent={() => require('../screens/SyndicateHubScreen').default} />
       <Stack.Screen name="AssetDetail" getComponent={() => require('../screens/AssetDetailScreen').default} />
+      <Stack.Screen name="AssetDueDiligence" getComponent={() => require('../screens/AssetDueDiligenceScreen').default} />
       <Stack.Screen name="Trade" getComponent={() => require('../screens/TradeScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="Portfolio" getComponent={() => require('../screens/PortfolioScreen').default} />
       <Stack.Screen name="MyBids" getComponent={() => require('../screens/MyBidsScreen').default} />

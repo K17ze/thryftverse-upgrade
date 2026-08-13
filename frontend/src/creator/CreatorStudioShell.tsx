@@ -81,7 +81,7 @@ function CreatorStudioInner() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
-  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, updatePageDuration, reorderPages, commitLayerTransform, isLoadingDraft, setDocument, saveDraft } = useCreator();
+  const { document, activePageIndex, setActivePageIndex, selectedLayerId, selectLayer, canUndo, canRedo, undo, redo, isDirty, removeLayer, duplicateLayer, reorderLayer, updateLayer, addLayer, addPage, removePage, duplicatePage, updatePageDuration, reorderPages, commitLayerTransform, isLoadingDraft, setDocument, saveDraft, addPosterFrames } = useCreator();
 
   const [showLayers, setShowLayers] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
@@ -285,12 +285,42 @@ function CreatorStudioInner() {
     saveDraft();
   }, [saveDraft]);
 
-  // Handle media selection from entry screen — add all layers to the
-  // first page, then enter the editor.
-  const handleEntryMediaSelected = useCallback((layers: CreatorLayer[]) => {
-    layers.forEach((layer) => addLayer(layer));
+  // Handle media selection from entry screen. The entry screen now
+  // returns a typed CreatorInitialMedia[] payload in tap/selection order.
+  // For Poster, each asset becomes its own page (frame) via the semantic
+  // addPosterFrames helper. For Look, each asset becomes a stacked media
+  // layer on the current page via the generic addLayer.
+  const handleEntryMediaSelected = useCallback((media: CreatorInitialMedia[]) => {
+    if (document.type === 'poster') {
+      addPosterFrames(media);
+    } else {
+      media.forEach((asset, i) => {
+        const layer: CreatorLayer = {
+          id: `media_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+          type: 'media',
+          x: 0.5,
+          y: 0.5,
+          width: 1,
+          height: 1,
+          scale: 1,
+          rotation: 0,
+          zIndex: i,
+          locked: false,
+          hidden: false,
+          opacity: 1,
+          payload: {
+            mediaUri: asset.uri,
+            mediaType: asset.kind,
+            contentFit: 'cover',
+            videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
+            opacity: 1,
+          },
+        };
+        addLayer(layer);
+      });
+    }
     setEntryComplete(true);
-  }, [addLayer]);
+  }, [document.type, addPosterFrames, addLayer]);
 
   const handleEntryBlankStart = useCallback(() => {
     setEntryComplete(true);

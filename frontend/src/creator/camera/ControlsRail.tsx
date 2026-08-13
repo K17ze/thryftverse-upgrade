@@ -18,7 +18,7 @@ export interface ControlsRailProps {
   onFlip: () => void;
   // ── Zoom ──
   onCycleZoom: () => void;
-  zoom: number;
+  zoomLabel: string;
   // ── Timer ──
   onCycleTimer: () => void;
   timerOption: TimerOption;
@@ -30,6 +30,9 @@ export interface ControlsRailProps {
   multiCaptureMode: boolean;
   multiCaptureCount: number;
   hasCapturedUri: boolean;
+  // ── Tools disclosure ──
+  showTools: boolean;
+  onToggleTools: () => void;
   /** Antique-gold accent colour from the active theme. */
   accentColor: string;
 }
@@ -49,7 +52,7 @@ export function ControlsRail({
   isVisualSearch,
   onFlip,
   onCycleZoom,
-  zoom,
+  zoomLabel,
   onCycleTimer,
   timerOption,
   onToggleGrid,
@@ -58,6 +61,8 @@ export function ControlsRail({
   multiCaptureMode,
   multiCaptureCount,
   hasCapturedUri,
+  showTools,
+  onToggleTools,
   accentColor,
 }: ControlsRailProps) {
   return (
@@ -79,10 +84,10 @@ export function ControlsRail({
         style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
         onPress={onCycleZoom}
         hitSlop={12}
-        accessibilityLabel={`Zoom ${zoom}x`}
+        accessibilityLabel={`Zoom ${zoomLabel}`}
         accessibilityRole="button"
       >
-        <Text style={styles.zoomLabel}>{zoom === 0.5 ? '½' : zoom}×</Text>
+        <Text style={styles.zoomLabel}>{zoomLabel}</Text>
         <Text style={styles.railLabel}>Zoom</Text>
       </Pressable>
 
@@ -137,6 +142,22 @@ export function ControlsRail({
           </Text>
         </Pressable>
       )}
+
+      {/* Tools disclosure — timer/grid live behind this when collapsed */}
+      <Pressable
+        style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
+        onPress={onToggleTools}
+        hitSlop={12}
+        accessibilityLabel={showTools ? 'Hide tools' : 'Show tools'}
+        accessibilityRole="button"
+      >
+        <Ionicons
+          name={showTools ? 'options' : 'options-outline'}
+          size={CONTROL_RAIL_ICON}
+          color={showTools ? accentColor : '#fff'}
+        />
+        <Text style={styles.railLabel}>Tools</Text>
+      </Pressable>
     </View>
   );
 }

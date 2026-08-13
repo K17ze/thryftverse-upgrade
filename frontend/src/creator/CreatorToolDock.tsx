@@ -412,16 +412,16 @@ function buildDefaultTools(
   onLayoutPresets?: () => void,
 ): RailTool[] {
   if (isLook) {
-    // Look: collage-first, product-tagging, editorial layouts.
-    // Primary tools (Media, Text) lead with brand fill; secondary tools follow.
+    // Look: collage-first tool set. Per Phase D spec:
+    // Visible: add item/media, cutout, text, product, background, more.
+    // Primary tools (Media, Text) lead with brand fill; secondary tools
+    // (cutout, product, background, layout) follow a divider.
     return [
       { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
       { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
+      { icon: 'cut-outline', label: 'Cutout', action: () => onToolPress('media') },
       { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
-      { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
-      { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
-      { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
-      { icon: 'shapes-outline', label: 'Elements', action: () => onToolPress('shape') },
+      { icon: 'color-fill-outline', label: 'Background', action: () => onToolPress('shape') },
       ...(onLayoutPresets ? [{ icon: 'grid-outline' as const, label: 'Layout', action: onLayoutPresets }] : []),
     ];
   }
@@ -480,17 +480,23 @@ function buildSelectionTools(
     tools.push({ icon: 'create-outline', label: 'Edit', action: () => onEditLayer(layer) });
   } else if (layer.type === 'media') {
     if (isLook) {
-      // Look media: crop + cutout (collage-specific)
-      // Use dedicated crop/cutout handlers when available; fall back to edit
+      // Look media selection: swap, remove background/refine cutout, flip.
+      // Per Phase D spec: swap, remove background/refine cutout,
+      // duplicate, forward/back, flip.
       tools.push({
-        icon: 'crop-outline',
-        label: 'Crop',
-        action: () => (onCropLayer ? onCropLayer(layer) : onEditLayer(layer)),
+        icon: 'swap-horizontal-outline',
+        label: 'Swap',
+        action: () => onEditLayer(layer),
       });
       tools.push({
         icon: 'cut-outline',
-        label: 'Trace Cutout (Manual)',
+        label: 'Cut out',
         action: () => (onCutoutLayer ? onCutoutLayer(layer) : onEditLayer(layer)),
+      });
+      tools.push({
+        icon: 'crop-outline',
+        label: 'Refine',
+        action: () => (onCropLayer ? onCropLayer(layer) : onEditLayer(layer)),
       });
     } else {
       // Poster media: replace + trim (story-specific)
@@ -536,6 +542,11 @@ function buildSelectionTools(
   // Layer ordering
   tools.push({ icon: 'arrow-up', label: 'Forward', action: () => onReorderLayer(layer.id, 'forward') });
   tools.push({ icon: 'arrow-down', label: 'Back', action: () => onReorderLayer(layer.id, 'backward') });
+
+  // Flip (Look only — collage direct manipulation)
+  if (isLook && layer.type === 'media') {
+    tools.push({ icon: 'swap-horizontal', label: 'Flip', action: () => onEditLayer(layer) });
+  }
 
   // Duplicate
   tools.push({ icon: 'copy-outline', label: 'Copy', action: () => onDuplicateLayer(layer.id) });

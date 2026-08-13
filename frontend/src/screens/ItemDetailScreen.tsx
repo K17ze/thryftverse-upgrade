@@ -19,7 +19,6 @@ import Reanimated, {
   withSpring,
   withSequence,
   runOnJS,
-  FadeInDown,
   type SharedValue,
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
@@ -1248,11 +1247,11 @@ export default function ItemDetailScreen() {
           ) : null}
         </CommerceDetailSection>
 
-        {/* ── Zone F — Price insight ──
+        {/* ── Zone F — Pricing ──
             Only render facts that are genuinely supported. No fabricated
             history. Spec 05 §6. */}
         {priceInsightRows.length > 0 ? (
-          <CommerceDetailSection label="Price insight" divider variant="editorial">
+          <CommerceDetailSection label="Pricing" divider variant="editorial">
             {priceInsightRows.map((row) => (
               <CommerceDetailMetricRow
                 key={row.label}
@@ -1325,17 +1324,15 @@ export default function ItemDetailScreen() {
             Order: Bundle upsell → Seen in Looks → More like this.
             Removed generic recommendation rail mapping and DiscoveryGrid
             to stay within the three-module budget. */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(220).delay(80)}>
-          <BundleUpsellRow
-            items={bundleItems}
-            currentListingId={item.id}
-            shippingPayer={commerce.shippingPayer}
-            onPressItem={handlePressRecommendation}
-            sellerId={item.seller?.id ?? undefined}
-            sellerName={item.seller?.username ?? undefined}
-            onOpenBundleBag={(sellerId, sellerName) => navigation.navigate('BundleBag', { sellerId, sellerName })}
-          />
-        </Reanimated.View>
+        <BundleUpsellRow
+          items={bundleItems}
+          currentListingId={item.id}
+          shippingPayer={commerce.shippingPayer}
+          onPressItem={handlePressRecommendation}
+          sellerId={item.seller?.id ?? undefined}
+          sellerName={item.seller?.username ?? undefined}
+          onOpenBundleBag={(sellerId, sellerName) => navigation.navigate('BundleBag', { sellerId, sellerName })}
+        />
 
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
           <View style={styles.recommendationSection}>
@@ -1365,8 +1362,7 @@ export default function ItemDetailScreen() {
             ? `More ${item.category.toLowerCase()}`
             : 'More like this';
           return (
-            <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(220).delay(120)}>
-              <CommerceDetailSection label={discoveryLabel} divider variant="discovery">
+            <CommerceDetailSection label={discoveryLabel} divider variant="discovery">
                 <View style={styles.moreLikeThisGrid}>
                   {visualSimilar.map((simItem) => (
                     <Pressable
@@ -1403,7 +1399,6 @@ export default function ItemDetailScreen() {
                   ))}
                 </View>
               </CommerceDetailSection>
-            </Reanimated.View>
           );
         })()}
 

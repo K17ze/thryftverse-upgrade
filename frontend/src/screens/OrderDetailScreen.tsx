@@ -421,7 +421,6 @@ export default function OrderDetailScreen() {
     counterpartyBtn: { borderColor: colors.border },
     counterpartyBtnText: { color: colors.brand },
     escrowBanner: { backgroundColor: `${colors.success}08`, borderColor: `${colors.success}25` },
-    escrowIconWrap: { backgroundColor: `${colors.success}15` },
     escrowTitle: { color: colors.textPrimary },
     escrowSub: { color: colors.textSecondary },
     escrowCountdown: { color: colors.textMuted },
@@ -1320,9 +1319,7 @@ export default function OrderDetailScreen() {
         {/* 4c. Escrow status indicator — shows when funds are held */}
         {isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
           <View style={[styles.escrowBanner, t.escrowBanner]}>
-            <View style={[styles.escrowIconWrap, t.escrowIconWrap]}>
-              <Ionicons name="lock-closed" size={14} color={colors.success} />
-            </View>
+            <Ionicons name="lock-closed" size={16} color={colors.success} />
             <View style={styles.escrowTextWrap}>
               <Text style={[styles.escrowTitle, t.escrowTitle]}>Funds held in escrow</Text>
               <Text style={[styles.escrowSub, t.escrowSub]}>
@@ -1456,8 +1453,7 @@ export default function OrderDetailScreen() {
             >
               <Ionicons name="help-circle-outline" size={20} color={colors.brand} />
               <View style={styles.supportInfo}>
-                <Text style={[styles.supportLabel, t.supportLabel]}>Need help with this order?</Text>
-                <Text style={[styles.supportSub, t.supportSub]}>Get support</Text>
+                <Text style={[styles.supportLabel, t.supportLabel]}>Get support</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
@@ -1805,13 +1801,6 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  escrowIconWrap: {
-    width: Space.lg + 4,
-    height: Space.lg + 4,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   escrowTextWrap: {
     flex: 1,

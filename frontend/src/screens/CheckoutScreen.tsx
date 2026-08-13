@@ -344,7 +344,7 @@ export default function CheckoutScreen() {
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
-  const { showError, showSuccess, showInfo } = useNotifications();
+  const { showError, showInfo } = useNotifications();
   const { formatFromFiat } = useFormattedPrice();
 
   const createdOrderIdRef = useRef<string | null>(null);
@@ -816,7 +816,6 @@ export default function CheckoutScreen() {
         // Brief success state so the user sees confirmation before navigation
         // (audit 09: canonical payment state — succeeded is a visible state).
         setStage('payment_succeeded');
-        showSuccess('Payment completed', 'Your payment was successful.');
         pendingIntentIdRef.current = null;
         isSubmittingRef.current = false;
         // Performance mark: checkout flow complete (payment settled).
@@ -827,7 +826,6 @@ export default function CheckoutScreen() {
 
       if (settlementStatus === 'pending') {
         setStage('payment_pending');
-        showInfo('Payment processing', 'We\'ll update your order shortly.');
         isSubmittingRef.current = false;
         handleSettlementNavigation('pending', orderId, attemptId);
         return;
@@ -866,7 +864,6 @@ export default function CheckoutScreen() {
     savedAddress?.id,
     savedPaymentMethod?.id,
     showError,
-    showSuccess,
     showInfo,
     handleSettlementNavigation,
     cancelStaleOrder,
@@ -1233,7 +1230,7 @@ export default function CheckoutScreen() {
     if (!addressLoaded && paymentLoaded) {
       return {
         icon: 'location-outline' as const,
-        message: 'Add a delivery address to continue. Your payment methods are ready.',
+        message: 'Add a delivery address to continue.',
         action: { label: 'Add address', onPress: () => handleAddressPress() },
       };
     }
@@ -1242,7 +1239,7 @@ export default function CheckoutScreen() {
     if (!paymentLoaded && addressLoaded) {
       return {
         icon: 'card-outline' as const,
-        message: 'Add a payment method to continue. Your delivery address is ready.',
+        message: 'Add a payment method to continue.',
         action: {
           label: 'Add payment',
           onPress: () => {
@@ -1343,7 +1340,7 @@ export default function CheckoutScreen() {
         }
       >
         {/* 2. Product and seller summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
         <CheckoutItemSummary
           title={item.title}
           imageUrl={getListingCoverUri(item.images, '')}
@@ -1421,7 +1418,7 @@ export default function CheckoutScreen() {
           }
           accessibilityHint="Add or change your payment method"
         />
-        </Reanimated.View>
+        </View>
 
         {/* 5b. Buyer protection strip — the single authored trust moment,
             placed after selection rows and before the price breakdown.
@@ -1429,17 +1426,14 @@ export default function CheckoutScreen() {
             irreversible payment step." The footer trust badges were removed
             to avoid duplicate trust signalling — this strip carries the
             escrow narrative; the breakdown sheet has the full policy. */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
         <View style={styles.protectionStripWrap}>
           <BuyerProtectionStrip compact />
         </View>
-        </Reanimated.View>
 
         {/* 6a. Balance-at-checkout toggle — kept inline so the user can
             apply wallet credit before reviewing the compact total in the
             sticky footer. */}
         {walletBalance > 0 && !balanceLoading && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
           <View style={styles.balanceRow}>
             <Pressable
               style={({ pressed }) => [styles.balanceToggle, t.balanceToggle, pressed && styles.balanceTogglePressed]}
@@ -1462,7 +1456,6 @@ export default function CheckoutScreen() {
               </View>
             </Pressable>
           </View>
-          </Reanimated.View>
         )}
 
         {useBalance && balanceApplied > 0 && (
@@ -1565,16 +1558,12 @@ export default function CheckoutScreen() {
             quick-scan trust signals right where anxiety peaks. */}
         <View style={styles.trustBadges}>
           <View style={styles.trustBadgeItem}>
-            <View style={[styles.trustBadgeIcon, { backgroundColor: `${colors.success}14` }]}>
-              <Ionicons name="lock-closed" size={12} color={colors.success} />
-            </View>
+            <Ionicons name="lock-closed" size={14} color={colors.success} />
             <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Secure payment</Text>
           </View>
           <View style={[styles.trustBadgeDivider, t.trustBadgeDot]} />
           <View style={styles.trustBadgeItem}>
-            <View style={[styles.trustBadgeIcon, { backgroundColor: `${colors.success}14` }]}>
-              <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
-            </View>
+            <Ionicons name="shield-checkmark-outline" size={14} color={colors.success} />
             <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Buyer protection</Text>
           </View>
         </View>
@@ -2305,13 +2294,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-  },
-  trustBadgeIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   trustBadgeText: {
     fontSize: TypographyV2.body.size,

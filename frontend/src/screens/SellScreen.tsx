@@ -11,7 +11,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
@@ -40,7 +39,6 @@ import { ListingPublishFooter } from '../components/listing/ListingPublishFooter
 import { calculateListingQuality } from '../utils/listingQuality';
 import { useListingAutofill } from '../hooks/useListingAutofill';
 import { useSoldComps } from '../hooks/useSoldComps';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useBackendData } from '../context/BackendDataContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -203,7 +201,6 @@ export default function SellScreen() {
 
   const currency = useCurrencyPref();
   const currencySymbol = CURRENCIES[currency.currencyCode].symbol;
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
 
   // AI autofill suggestions from first photo filename
@@ -1096,7 +1093,7 @@ export default function SellScreen() {
                 </Pressable>
               </View>
               <Text style={[styles.autofillDesc, t.autofillDesc]}>
-                From your photos. Review and apply to empty fields.
+                From your photos.
               </Text>
               <View style={styles.autofillChips}>
                 {autofillSuggestion.title && (
@@ -1142,7 +1139,7 @@ export default function SellScreen() {
           </View>
 
           {/* -- 4. PRODUCT DETAILS -- */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
@@ -1260,10 +1257,10 @@ export default function SellScreen() {
             </Pressable>
             {errors.condition ? <Text style={[styles.fieldError, t.fieldError]}>{errors.condition}</Text> : null}
             <View style={[styles.hairline, t.hairline]} />
-          </Reanimated.View>
+          </View>
 
           {/* -- 5. MODE-SPECIFIC PRICING -- */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             {listingMode === 'sell_now' && (
@@ -1564,10 +1561,10 @@ export default function SellScreen() {
                 </View>
               </>
             )}
-          </Reanimated.View>
+          </View>
 
           {/* -- 6. DESCRIPTION AND TAGS -- */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
 
             <View style={styles.fieldGroup}>
@@ -1617,10 +1614,10 @@ export default function SellScreen() {
               />
             </View>
             <Text style={[styles.fieldHelper, t.fieldHelper]}>Press space or comma to add. Up to 8 tags.</Text>
-          </Reanimated.View>
+          </View>
 
           {/* -- 7. SHIPPING -- */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
 
             <View style={styles.fieldGroup}>
@@ -1669,11 +1666,11 @@ export default function SellScreen() {
                 })}
               </View>
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* -- CO-OWN AUTHENTICATION MEDIA -- */}
           {listingMode === 'co_own' && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
+            <View style={styles.sectionGroup}>
               <Text style={[styles.sectionHeading, t.sectionHeading]}>Authentication photos</Text>
               <Text style={[styles.fieldHelper, t.fieldHelper]}>Attach proof-of-authenticity photos for investor confidence.</Text>
               {errors.authPhotos ? <Text style={[styles.fieldError, t.fieldError]}>{errors.authPhotos}</Text> : null}
@@ -1706,7 +1703,7 @@ export default function SellScreen() {
                   </Pressable>
                 )}
               </View>
-            </Reanimated.View>
+            </View>
           )}
 
           {/* -- error message (inline, above footer) -- */}

@@ -69,6 +69,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
       // Co-Own / syndicate
       CoOwnHub: 'co-own',
       AssetDetail: 'asset/:assetId',
+      AssetDueDiligence: 'asset/:assetId/due-diligence',
       Portfolio: 'portfolio',
       CoOwnOrderHistory: 'co-own/orders',
 

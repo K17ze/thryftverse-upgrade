@@ -545,7 +545,7 @@ interface ListUserMarketHistoryResponse {
   };
 }
 
-interface ListAuctionsOptions {
+export interface ListAuctionsOptions {
   status?: 'live' | 'scheduled' | 'ended' | 'all';
   query?: string;
   category?: string;
@@ -554,6 +554,8 @@ interface ListAuctionsOptions {
   seller?: 'me';
   cursor?: string;
   limit?: number;
+  priceMin?: number;
+  priceMax?: number;
 }
 
 // ── Auction House home aggregate ──
@@ -604,6 +606,16 @@ export interface AuctionHomeResponse {
   sellerSummary?: SellerSummary;
   sellerAuctions: MarketAuction[];
   watchlist: MarketAuction[];
+}
+
+// ── Auction browse scope & facets (Phase 2 canonical browse state) ──
+
+export type AuctionScope = 'live' | 'upcoming' | 'results' | 'watching';
+
+export interface AuctionFacets {
+  categories: { id: string; label: string; count: number }[];
+  price: { min: number; max: number };
+  statusCounts: Record<AuctionScope, number>;
 }
 
 interface ListAuctionBidsOptions {
@@ -703,6 +715,8 @@ export async function listAuctions(options: ListAuctionsOptions = {}): Promise<{
     seller: options.seller,
     cursor: options.cursor,
     limit: options.limit,
+    priceMin: options.priceMin,
+    priceMax: options.priceMax,
   });
   const payload = await fetchJson<ListAuctionsResponse>(`/auctions${query}`);
   return { items: payload.items, nextCursor: payload.nextCursor, serverNow: payload.serverNow };

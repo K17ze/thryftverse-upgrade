@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
-  FadeInDown,
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
@@ -41,8 +40,6 @@ import { MoodboardCollectionGrid } from '../components/profile/MoodboardCollecti
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-
 import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
@@ -122,8 +119,6 @@ export default function ClosetScreen() {
   const loadCollectionsFromApi = useStore((state) => state.loadCollectionsFromApi);
   const currentUser = useStore((state) => state.currentUser);
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
-  const reducedMotionEnabled = useReducedMotion();
-
   React.useEffect(() => {
     let mounted = true;
     void loadCollectionsFromApi()
@@ -445,7 +440,7 @@ export default function ClosetScreen() {
       );
     }
     return (
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+      <>
         {renderSortBar()}
         {renderSortMenu()}
         {/* Brand filter chips */}
@@ -456,7 +451,7 @@ export default function ClosetScreen() {
           onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
           showSaveButton
         />
-      </Reanimated.View>
+      </>
     );
   };
 
@@ -474,7 +469,7 @@ export default function ClosetScreen() {
       );
     }
     return (
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+      <>
         {renderSortBar()}
         {renderSortMenu()}
         {/* Brand filter chips */}
@@ -505,7 +500,7 @@ export default function ClosetScreen() {
           onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
           showWishlistButton
         />
-      </Reanimated.View>
+      </>
     );
   };
 
@@ -515,7 +510,7 @@ export default function ClosetScreen() {
         <EmptyState
           graphic={<BoardEmptyGraphic title="No collections" subtitle="Create your first board" icon="folder-open-outline" size={140} />}
           title="No collections yet"
-          subtitle="Group your saved items into boards to organise your finds by style, season, or vibe."
+          subtitle="Group saved items by style, season, or vibe."
           ctaLabel="Create collection"
           onCtaPress={handleCreateCollection}
         />
@@ -539,7 +534,7 @@ export default function ClosetScreen() {
     });
 
     return (
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+      <>
         {renderSortBar()}
         <MoodboardCollectionGrid
           boards={boardData}
@@ -552,7 +547,7 @@ export default function ClosetScreen() {
           onPress={handleCreateCollection}
           style={styles.createCollectionBtn}
         />
-      </Reanimated.View>
+      </>
     );
   };
 
@@ -591,7 +586,7 @@ export default function ClosetScreen() {
     });
 
     return (
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+      <>
         <View style={styles.outfitsGrid}>
           {outfitBoardData.map((outfit) => (
             <OutfitCard
@@ -628,7 +623,7 @@ export default function ClosetScreen() {
           onPress={handleCreateOutfit}
           style={styles.createCollectionBtn}
         />
-      </Reanimated.View>
+      </>
     );
   };
 

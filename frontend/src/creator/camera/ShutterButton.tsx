@@ -22,10 +22,12 @@ export interface ShutterButtonProps {
   /** Called when the user presses the shutter. The press spring animation
    *  runs automatically before this callback fires. */
   onPress: () => void;
+  /** Called when the user long-presses the shutter (start video recording). */
+  onLongPress?: () => void;
+  /** Called when the user releases the shutter (stop video recording). */
+  onPressOut?: () => void;
   /** Whether a recording is currently in progress (changes inner shape). */
   isRecording: boolean;
-  /** Current camera mode — determines whether the recording ring is shown. */
-  cameraMode: CameraMode;
   /** Disables the shutter (e.g. during countdown). */
   disabled?: boolean;
   /** Recording progress 0→1 — drives the ring stroke. */
@@ -38,15 +40,16 @@ export interface ShutterButtonProps {
  * Large 80pt shutter button with press-spring animation.
  *
  * On press, the outer ring springs down to 0.92× (snappy) then back to 1×
- * (smooth). In video/boomerang mode a `RecordingRing` wraps the button and
- * fills over the recording duration.
+ * (smooth). When recording, a `RecordingRing` wraps the button and fills
+ * over the recording duration. Tap = photo, press-and-hold = video.
  *
  * All spring configs come from `useMotionConfig`. Respects reduced-motion.
  */
 export function ShutterButton({
   onPress,
+  onLongPress,
+  onPressOut,
   isRecording,
-  cameraMode,
   disabled,
   recordingProgress,
   recordingRingScale,
@@ -69,18 +72,17 @@ export function ShutterButton({
     onPress();
   }, [reducedMotion, shutterScale, spring, onPress]);
 
-  const showRing = cameraMode === 'video' || cameraMode === 'boomerang';
+  const showRing = isRecording;
 
   return (
     <Pressable
       onPress={handlePress}
+      onLongPress={onLongPress}
+      onPressOut={onPressOut}
+      delayLongPress={250}
       hitSlop={24}
       accessibilityLabel={
-        cameraMode === 'video'
-          ? isRecording
-            ? 'Stop recording'
-            : 'Start recording'
-          : 'Take photo'
+        isRecording ? 'Stop recording' : 'Take photo or hold for video'
       }
       accessibilityRole="button"
       disabled={disabled}

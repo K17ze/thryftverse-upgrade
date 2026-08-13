@@ -224,15 +224,15 @@ function ListingMediaPlaceholder({ category }: { category?: string }) {
   // or gradients (audit §01: anti-AI art direction; fallback art made neutral).
   // Uses the same quiet surface tokens as the rest of the feed so a missing
   // image recedes rather than becoming a decorative element.
+  // No icon circle — the glyph sits directly on the flat canvas (anti-AI:
+  // icon circles with no state/function reason).
   return (
     <View
       style={styles.listingMediaPlaceholder}
       accessibilityLabel="Product image unavailable"
       accessibilityRole="image"
     >
-      <View style={styles.listingMediaPlaceholderIcon}>
-        <Ionicons name={icon} size={28} color={colors.textMuted} />
-      </View>
+      <Ionicons name={icon} size={32} color={colors.textMuted} />
     </View>
   );
 }
@@ -1094,14 +1094,14 @@ export default function HomeScreen() {
                   <EmptyState
                     density="compact"
                     icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
-                    title={followingFeed.hasFollowing ? 'No new drops from sellers you follow' : 'Follow sellers to see their drops here'}
+                    title={followingFeed.hasFollowing ? 'No new drops yet' : 'Follow sellers to see their drops'}
                     subtitle={followingFeed.hasFollowing
-                      ? 'When sellers you follow list new items, they\u2019ll appear here in chronological order. Pull to refresh.'
-                      : 'Build your following feed by tapping follow on seller profiles. Their latest listings will show up here.'
+                      ? 'Pull to refresh.'
+                      : 'Tap follow on seller profiles to build your feed.'
                     }
                     ctaLabel={followingFeed.hasFollowing ? 'Refresh' : 'Discover sellers'}
                     onCtaPress={followingFeed.hasFollowing ? () => void handleRefresh() : () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-                    secondaryCtaLabel={followingFeed.hasFollowing ? 'Explore all' : undefined}
+                    secondaryCtaLabel={followingFeed.hasFollowing ? 'Browse all' : undefined}
                     onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
                   />
                 </Reanimated.View>
@@ -1114,7 +1114,7 @@ export default function HomeScreen() {
                     density="compact"
                     icon="cube-outline"
                     title="No drops live yet"
-                    subtitle="The community hasn't listed anything live yet. Pull to refresh or explore curated categories."
+                    subtitle="Pull to refresh or browse categories."
                     ctaLabel="Browse all"
                     onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
                     secondaryCtaLabel="Refresh"
@@ -1873,16 +1873,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
-  },
-  listingMediaPlaceholderIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
   },
   exploreDetails: {
     paddingTop: Space.sm,
