@@ -722,6 +722,43 @@ export async function listAuctions(options: ListAuctionsOptions = {}): Promise<{
   return { items: payload.items, nextCursor: payload.nextCursor, serverNow: payload.serverNow };
 }
 
+// ── Server-driven facets (Phase 2: canonical category endpoint) ──
+// Returns stable category/price/status facets independent of loaded inventory.
+// The filter sheet uses these instead of deriving categories from home payload.
+
+export interface AuctionFacetsOptions {
+  scope?: AuctionScope;
+  query?: string;
+  category?: string;
+  priceMin?: number;
+  priceMax?: number;
+}
+
+interface AuctionFacetsResponse {
+  ok: true;
+  facets: AuctionFacets;
+  serverNow: string;
+}
+
+export async function getAuctionFacets(options: AuctionFacetsOptions = {}): Promise<AuctionFacets> {
+  // Inline scope→status mapping to avoid circular dependency on auctionHomeLogic.
+  const scopeStatus: string | undefined = options.scope
+    ? options.scope === 'live' ? 'live'
+      : options.scope === 'upcoming' ? 'scheduled'
+      : options.scope === 'results' ? 'ended'
+      : undefined // 'watching' → no server-side status filter
+    : undefined;
+  const query = toQuery({
+    status: scopeStatus,
+    query: options.query,
+    category: options.category,
+    priceMin: options.priceMin,
+    priceMax: options.priceMax,
+  });
+  const payload = await fetchJson<AuctionFacetsResponse>(`/auctions/facets${query}`);
+  return payload.facets;
+}
+
 // ── Dev mock fallback for /auctions/home ──
 // Used only when ENABLE_RUNTIME_MOCKS is true and the backend is unreachable.
 // Follows the same pattern as BackendDataContext falling back to MOCK_LISTINGS.

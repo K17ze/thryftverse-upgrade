@@ -1095,26 +1095,25 @@ export default function SellScreen() {
               <Text style={[styles.autofillDesc, t.autofillDesc]}>
                 From your photos.
               </Text>
-              <View style={styles.autofillChips}>
-                {autofillSuggestion.title && (
-                  <View style={[styles.autofillChip, t.autofillChip]}>
-                    <Text style={[styles.autofillChipLabel, t.autofillChipLabel]}>Title</Text>
-                    <Text style={[styles.autofillChipValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.title}</Text>
-                  </View>
-                )}
-                {autofillSuggestion.brand && (
-                  <View style={[styles.autofillChip, t.autofillChip]}>
-                    <Text style={[styles.autofillChipLabel, t.autofillChipLabel]}>Brand</Text>
-                    <Text style={[styles.autofillChipValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.brand}</Text>
-                  </View>
-                )}
-                {autofillSuggestion.category && (
-                  <View style={[styles.autofillChip, t.autofillChip]}>
-                    <Text style={[styles.autofillChipLabel, t.autofillChipLabel]}>Category</Text>
-                    <Text style={[styles.autofillChipValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.category}</Text>
-                  </View>
-                )}
-              </View>
+              {/* Flattened rows — no nested bordered chips (AGENTS.md §4: no card-on-card) */}
+              {autofillSuggestion.title && (
+                <View style={styles.autofillRow}>
+                  <Text style={[styles.autofillRowLabel, t.autofillChipLabel]}>Title</Text>
+                  <Text style={[styles.autofillRowValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.title}</Text>
+                </View>
+              )}
+              {autofillSuggestion.brand && (
+                <View style={styles.autofillRow}>
+                  <Text style={[styles.autofillRowLabel, t.autofillChipLabel]}>Brand</Text>
+                  <Text style={[styles.autofillRowValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.brand}</Text>
+                </View>
+              )}
+              {autofillSuggestion.category && (
+                <View style={styles.autofillRow}>
+                  <Text style={[styles.autofillRowLabel, t.autofillChipLabel]}>Category</Text>
+                  <Text style={[styles.autofillRowValue, t.autofillChipValue]} numberOfLines={1}>{autofillSuggestion.category}</Text>
+                </View>
+              )}
               <Pressable
                 style={({ pressed }) => [styles.autofillApplyBtn, t.autofillApplyBtn, pressed && { opacity: 0.6 }]}
                 onPress={handleApplyAutofill}
@@ -1900,13 +1899,28 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
     marginBottom: Space.sm,
   },
-  autofillChip: {
-    paddingHorizontal: Space.sm + 2,
+  autofillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: Space.xs + 2,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-    borderWidth: Stroke.hairline,
-    minWidth: Space.xxl + Space.lg,
-    maxWidth: Space.xxl + Space.xxl + Space.sm,
+    borderBottomWidth: Stroke.hairline,
+  },
+  autofillRowLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    textTransform: 'uppercase',
+    letterSpacing: TypographyV2.label.letterSpacing,
+  },
+  autofillRowValue: {
+    flex: 1,
+    marginLeft: Space.sm,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'right',
   },
   autofillChipLabel: {
     fontSize: TypographyV2.meta.size,

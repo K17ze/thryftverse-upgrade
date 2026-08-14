@@ -84,27 +84,22 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     });
   });
 
-  // ── §5 Dossier collapse ──
-  describe('dossier collapse', () => {
-    it('has dossierExpanded state', () => {
-      expect(src).toContain('dossierExpanded');
-      expect(src).toContain('setDossierExpanded');
+  // ── §5 Dossier moved to Due Diligence screen ──
+  describe('dossier moved to due diligence', () => {
+    it('does not have dossierExpanded state on main screen', () => {
+      // The dossier has moved to the dedicated Due Diligence screen.
+      // The main screen no longer carries inline dossier expansion.
+      expect(src).not.toContain('dossierExpanded');
+      expect(src).not.toContain('setDossierExpanded');
     });
 
-    it('shows summary facts by default (maximum five)', () => {
-      expect(src).toContain('Authenticity');
-      expect(src).toContain('Condition');
-      expect(src).toContain('Storage');
-      expect(src).toContain('Insurance');
-      expect(src).toContain('Latest appraisal');
+    it('navigates to AssetDueDiligence for full dossier', () => {
+      expect(src).toContain('AssetDueDiligence');
     });
 
-    it('has "View full asset dossier" disclosure', () => {
-      expect(src).toContain('View full asset dossier');
-    });
-
-    it('full dossier renders only when expanded', () => {
-      expect(src).toContain('{dossierExpanded && (');
+    it('asset story excerpt is shown before market data', () => {
+      expect(src).toContain('assetStoryText');
+      expect(src).toContain('Read the full story');
     });
   });
 
@@ -123,8 +118,9 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
       expect(src).toContain('publicFloat: null');
     });
 
-    it('supply summary uses "Available · allocated · holders"', () => {
-      expect(src).toContain('Available · allocated · holders');
+    it('supply summary uses "Available · allocated · holders" in due diligence', () => {
+      const ddSrc = readScreen('AssetDueDiligenceScreen.tsx');
+      expect(ddSrc).toContain('Available · allocated · holders');
     });
 
     it('does not use "Authorised · issued · float · treasury" summary', () => {
@@ -162,16 +158,18 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
       expect(src).toContain('setRiskDisclosureVisible');
     });
 
-    it('has "View risk disclosure" disclosure row', () => {
-      expect(src).toContain('View risk disclosure');
+    it('has "Risks" disclosure row (not "View risk disclosure")', () => {
+      // Per spec 09: use "Risks" instead of "View risk disclosure".
+      expect(src).toContain('"Risks"');
+      expect(src).not.toContain('label="View risk disclosure"');
     });
 
-    it('does not render CoOwnRiskDisclosure inline in the section', () => {
+    it('does not render CoOwnRiskDisclosure inline in the Due diligence section', () => {
       // The old code rendered <CoOwnRiskDisclosure ... /> directly in
       // the section. The new code opens it in a modal.
-      const rightsSection = src.match(/CommerceDetailSection label="Rights & risks"[\s\S]*?<\/CommerceDetailSection>/);
-      expect(rightsSection).toBeTruthy();
-      expect(rightsSection![0]).not.toContain('<CoOwnRiskDisclosure');
+      const ddSection = src.match(/CommerceDetailSection label="Due diligence"[\s\S]*?<\/CommerceDetailSection>/);
+      expect(ddSection).toBeTruthy();
+      expect(ddSection![0]).not.toContain('<CoOwnRiskDisclosure');
     });
 
     it('risk disclosure opens in a BottomSheet', () => {
@@ -196,6 +194,47 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     it('uses "Reference vs NAV" not "Last trade vs NAV"', () => {
       expect(src).toContain('Reference vs NAV');
       expect(src).not.toContain('Last trade vs NAV');
+    });
+  });
+
+  // ── §11 Holder P&L (spec 09 upgrade) ──
+  describe('holder P&L', () => {
+    it('stores the full holding object for P&L computation', () => {
+      expect(src).toContain('yourHolding');
+      expect(src).toContain('MarketCoOwnHolding');
+    });
+
+    it('computes avg entry, unrealized P&L, and P&L percentage', () => {
+      expect(src).toContain('avgEntryPriceGbp');
+      expect(src).toContain('unrealizedPnlGbp');
+      expect(src).toContain('unrealizedPnlPct');
+    });
+
+    it('displays avg entry in the holder position', () => {
+      expect(src).toContain('Avg. entry');
+    });
+  });
+
+  // ── §12 Dock cleanup (spec 09 upgrade) ──
+  describe('dock cleanup', () => {
+    it('does not show thumbnail in dock (avoids ecommerce cart look)', () => {
+      // Per spec 09: avoid putting a thumbnail into dock if it makes the
+      // dock look like an ecommerce cart when the asset hero is already clear.
+      // The thumbnailUri prop should not be passed in the tradable dock.
+      // Match the actual JSX usage (starts with <CommerceDetailStateDock),
+      // not the import or type reference.
+      const dockMatch = src.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
+      expect(dockMatch).toBeTruthy();
+      expect(dockMatch![0]).not.toContain('thumbnailUri');
+    });
+
+    it('does not show redundant price in dock when price is above', () => {
+      // Per spec 09: do not show redundant value if same price is
+      // immediately above. The tradable dock should not pass value=.
+      const dockMatch = src.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
+      expect(dockMatch).toBeTruthy();
+      expect(dockMatch![0]).not.toContain('value={');
+      expect(dockMatch![0]).not.toContain('valueLabel=');
     });
   });
 });

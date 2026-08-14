@@ -118,6 +118,8 @@ export default function FilterScreen() {
   const [selectedCondition, setSelectedCondition] = useState<ConditionOption>(browseFilters.condition);
   const [showAllBrands, setShowAllBrands] = useState(false);
   const [sustainableOnly, setSustainableOnly] = useState<boolean>(browseFilters.sustainableOnly);
+  const [priceMin, setPriceMin] = useState<string>(browseFilters.priceMin != null ? String(browseFilters.priceMin) : '');
+  const [priceMax, setPriceMax] = useState<string>(browseFilters.priceMax != null ? String(browseFilters.priceMax) : '');
 
   const translateY = useSharedValue(height);
   const contextY = useSharedValue(0);
@@ -289,6 +291,12 @@ export default function FilterScreen() {
         return false;
       }
 
+      // Price range filter (GBP)
+      const minVal = priceMin.trim() ? Number(priceMin.trim()) : null;
+      const maxVal = priceMax.trim() ? Number(priceMax.trim()) : null;
+      if (minVal != null && !Number.isNaN(minVal) && listing.price < minVal) return false;
+      if (maxVal != null && !Number.isNaN(maxVal) && listing.price > maxVal) return false;
+
       // Sustainable — client-side heuristic: only A/B graded items.
       if (
         sustainableOnly &&
@@ -313,15 +321,21 @@ export default function FilterScreen() {
     setSelectedSizes([]);
     setSelectedCondition('Any');
     setSustainableOnly(false);
+    setPriceMin('');
+    setPriceMax('');
   };
 
   const handleApply = () => {
+    const parsedMin = priceMin.trim() ? Number(priceMin.trim()) : null;
+    const parsedMax = priceMax.trim() ? Number(priceMax.trim()) : null;
     updateBrowseFilters({
       sort: activeSort,
       brands: selectedBrands,
       sizes: selectedSizes,
       condition: selectedCondition,
       sustainableOnly,
+      priceMin: parsedMin != null && !Number.isNaN(parsedMin) ? parsedMin : null,
+      priceMax: parsedMax != null && !Number.isNaN(parsedMax) ? parsedMax : null,
     });
     closeBottomSheet();
   };
@@ -350,7 +364,7 @@ export default function FilterScreen() {
   };
 
   const hasActiveSelection =
-    selectedBrands.length > 0 || selectedSizes.length > 0 || selectedCondition !== 'Any' || activeSort !== 'Recommended' || sustainableOnly;
+    selectedBrands.length > 0 || selectedSizes.length > 0 || selectedCondition !== 'Any' || activeSort !== 'Recommended' || sustainableOnly || priceMin.trim() !== '' || priceMax.trim() !== '';
 
   const resultCount = getResultsCount();
   const applyLabel = showFilterLoadingState ? 'Loading options...' : `Show ${resultCount} items`;
@@ -704,6 +718,40 @@ export default function FilterScreen() {
                     />
                   </View>
                 </Pressable>
+
+                <View style={styles.sectionDivider} />
+
+                {/* Price Range Section */}
+                <Text style={styles.sectionHeading}>Price Range</Text>
+                <View style={styles.priceRangeRow}>
+                  <View style={styles.priceInputWrap}>
+                    <Text style={styles.priceInputLabel}>Min</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="£0"
+                      placeholderTextColor={colors.textMuted}
+                      value={priceMin}
+                      onChangeText={setPriceMin}
+                      keyboardType="numeric"
+                      returnKeyType="done"
+                      accessibilityLabel="Minimum price in pounds"
+                    />
+                  </View>
+                  <Text style={styles.priceRangeDash}>—</Text>
+                  <View style={styles.priceInputWrap}>
+                    <Text style={styles.priceInputLabel}>Max</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="No limit"
+                      placeholderTextColor={colors.textMuted}
+                      value={priceMax}
+                      onChangeText={setPriceMax}
+                      keyboardType="numeric"
+                      returnKeyType="done"
+                      accessibilityLabel="Maximum price in pounds"
+                    />
+                  </View>
+                </View>
               </>
             )}
 
@@ -1128,6 +1176,40 @@ function createStyles(colors: ThemeColors) {
   },
   applyBtnTextDisabled: {
     color: colors.textMuted,
+  },
+
+  // ── Price range ──
+  priceRangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.xl,
+    gap: Space.sm,
+  },
+  priceInputWrap: {
+    flex: 1,
+  },
+  priceInputLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
+    marginBottom: Space.xs,
+  },
+  priceInput: {
+    height: Space.xxl - Space.xs,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textPrimary,
+    backgroundColor: colors.background,
+  },
+  priceRangeDash: {
+    fontSize: Type.bodyLarge.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    marginTop: Space.md + Space.xs,
   },
   });
 }

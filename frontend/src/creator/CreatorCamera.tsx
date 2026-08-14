@@ -9,6 +9,8 @@ import {
   GestureResponderEvent,
   Linking,
   ScrollView,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library/legacy';
@@ -507,6 +509,25 @@ export default function CreatorCamera({
         recordingPromiseRef.current = null;
       }
     };
+  }, []);
+
+  // ── Cleanup recording on app background ────────────────────────────
+  // When the app goes to background (user switches apps, notification
+  // overlay, etc.), stop any active recording immediately. An orphaned
+  // recording promise on background can hang indefinitely on iOS.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'background' || state === 'inactive') {
+        if (recordingPromiseRef.current) {
+          cameraRef.current?.stopRecording();
+        }
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+      }
+    });
+    return () => subscription.remove();
   }, []);
 
   // ── Shutter: tap=photo, press-and-hold=video (Snapchat 2026 pattern) ──
@@ -1143,23 +1164,6 @@ const styles = StyleSheet.create({
     width: FOCUS_RETICLE_SIZE,
     height: FOCUS_RETICLE_SIZE,
     pointerEvents: 'none',
-  },
-  // AE/AF LOCK badge — persistent pill below the locked focus reticle (iOS Camera pattern)
-  focusLockBadge: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-  },
-  focusLockText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.meta.size,
-    color: '#fff',
-    letterSpacing: 0.5,
   },
   // Pinch zoom indicator — subtle pill at bottom center
   zoomIndicator: {

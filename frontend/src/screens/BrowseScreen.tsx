@@ -495,7 +495,9 @@ export default function BrowseScreen() {
     browseFilters.brands.length > 0 ||
     browseFilters.sizes.length > 0 ||
     browseFilters.condition !== 'Any' ||
-    browseFilters.sustainableOnly;
+    browseFilters.sustainableOnly ||
+    browseFilters.priceMin != null ||
+    browseFilters.priceMax != null;
 
   // Filtered-empty vs. regular empty: user-applied filters (brand, size,
   // condition, sustainable, query, sort) produce a filtered-empty state
@@ -514,6 +516,8 @@ export default function BrowseScreen() {
       sizes: [],
       condition: 'Any',
       sustainableOnly: false,
+      priceMin: null,
+      priceMax: null,
     });
   }, [updateBrowseFilters]);
 
@@ -591,6 +595,10 @@ export default function BrowseScreen() {
         return false;
       }
 
+      // Price range filter (GBP)
+      if (browseFilters.priceMin != null && listing.price < browseFilters.priceMin) return false;
+      if (browseFilters.priceMax != null && listing.price > browseFilters.priceMax) return false;
+
       // Sustainable — client-side heuristic: only A/B graded items.
       if (
         browseFilters.sustainableOnly &&
@@ -645,9 +653,9 @@ export default function BrowseScreen() {
   const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
 
   const renderBrowseLoadingState = () => (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200)} style={styles.loadingStateWrap}>
+    <View style={styles.loadingStateWrap}>
       <MasonrySkeleton numColumns={gridDensity === 'compact' ? 3 : 2} itemCount={gridDensity === 'compact' ? 9 : 6} horizontalPadding={Space.md} gap={3} />
-    </Reanimated.View>
+    </View>
   );
 
   // Sustainability is a client-side heuristic, so it must be applied to both
@@ -676,7 +684,7 @@ export default function BrowseScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Heavy Typography Header */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)} style={styles.header}>
+      <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Go back">
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
@@ -695,14 +703,14 @@ export default function BrowseScreen() {
             <Ionicons name="search" size={20} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.titleContainer}>
+      <View style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <Text style={styles.itemCountText} accessibilityLiveRegion="polite">{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(90)} style={styles.filterBar}>
+      <View style={styles.filterBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <AnimatedPressable
             style={[styles.filterPill, hasActiveFilters && styles.filterPillActive]}
@@ -807,7 +815,7 @@ export default function BrowseScreen() {
             </AnimatedPressable>
           )}
         </ScrollView>
-      </Reanimated.View>
+      </View>
 
       {sortMenuOpen ? (
         <View style={styles.sortMenu}>
@@ -957,7 +965,7 @@ export default function BrowseScreen() {
         ) : hasAnyFiltering ? (
           // Filtered-empty — filters returned no results. Friendly, not an
           // error: the user can adjust or clear filters to recover.
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+          <View style={{ flex: 1 }}>
             <EmptyState
               icon="filter-outline"
               title="No items match your filters"
@@ -965,11 +973,11 @@ export default function BrowseScreen() {
               ctaLabel="Clear filters"
               onCtaPress={handleClearFilters}
             />
-          </Reanimated.View>
+          </View>
         ) : (
           // Regular empty — no data at all for this category/search. Distinct
           // from filtered-empty: there is nothing to show regardless of filters.
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+          <View style={{ flex: 1 }}>
             <EmptyState
               icon="pricetag-outline"
               title="No items here yet"
@@ -977,7 +985,7 @@ export default function BrowseScreen() {
               ctaLabel="Explore all"
               onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
             />
-          </Reanimated.View>
+          </View>
         )}
       </View>
     </SafeAreaView>

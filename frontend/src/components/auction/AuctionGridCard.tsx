@@ -69,7 +69,7 @@ export function AuctionGridCard({
       activeOpacity={0.95}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${priceLabel ?? ''} ${izeText}, ${countdownText}, ${bidCount} bids`}
+      accessibilityLabel={`${title}, ${priceLabel ?? ''} ${izeText}, ${countdownText}${bidCount > 0 ? `, ${bidCount} ${bidCount === 1 ? 'bid' : 'bids'}` : ''}`}
       testID={testID}
     >
       <View style={styles.imageWrap}>
@@ -106,7 +106,9 @@ export function AuctionGridCard({
         />
         <View style={styles.metaRow}>
           <AuctionCountdown text={countdownText} urgent={urgent} compact />
-          <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+          {bidCount > 0 && (
+            <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+          )}
         </View>
       </View>
     </AnimatedPressable>

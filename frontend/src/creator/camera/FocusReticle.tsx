@@ -34,11 +34,14 @@ export interface FocusReticleProps {
 }
 
 /**
- * Tap-to-focus animated reticle.
+ * Tap-to-focus visual indicator (truthful — no AE/AF lock claim).
  *
- * Springs in from scale 0→1 with a bouncy entrance, transitions the ring
- * colour from blue (#4A90D9, focusing) to green (#4ADE80, locked) after
- * 600ms, then fades out after 1.5s.
+ * Springs in from scale 0→1 with a bouncy entrance, holds briefly to
+ * confirm the tap was registered, then fades out after ~1.2s. The ring
+ * stays a single neutral-white colour — it does NOT transition to green
+ * or show "AE/AF LOCK" because Expo Camera's public surface does not
+ * expose arbitrary point focus/lock. The native camera continues to use
+ * its own continuous autofocus.
  *
  * All spring configs come from `useMotionConfig` — no hardcoded values.
  * Respects reduced-motion (springs become critically damped, durations 0).
@@ -49,7 +52,6 @@ export function FocusReticle({ focusPoint, size = DEFAULT_SIZE, onDismiss }: Foc
   const reducedMotion = useReducedMotion();
 
   const focusAnim = useSharedValue(0);
-  const focusLockAnim = useSharedValue(0); // 0 = focusing (blue), 1 = locked (green)
 
   // ── Spring scale (0→1) with bouncy entrance ──
   const reticleStyle = useAnimatedStyle(() => {
@@ -60,49 +62,33 @@ export function FocusReticle({ focusPoint, size = DEFAULT_SIZE, onDismiss }: Foc
     };
   });
 
-  // ── Ring colour: blue while focusing → green when locked ──
-  // Focus-specific feedback colours interpolated in RGB. The theme has no
-  // `info`/`accent` token that maps to these bright feedback hues (success is
-  // #215634, too dark to read on the dark camera preview), so the literal
-  // blue (#4A90D9 → focusing) and green (#4ADE80 → locked) are retained as
-  // purpose-built focus-feedback colours.
-  const reticleProps = useAnimatedProps(() => {
-    const lockProgress = interpolate(focusLockAnim.value, [0, 1], [0, 1], Extrapolation.CLAMP);
-    const r = Math.round(74 + (74 - 74) * lockProgress); // 74→74
-    const g = Math.round(144 + (222 - 144) * lockProgress); // 144→222
-    const b = Math.round(217 + (128 - 217) * lockProgress); // 217→128
-    return {
-      stroke: `rgb(${r},${g},${b})`,
-    };
-  });
+  // ── Ring colour: steady white — tap registered, no lock claim ──
+  const reticleProps = useAnimatedProps(() => ({
+    stroke: 'rgba(255,255,255,0.9)',
+  }));
 
   // ── Trigger animation lifecycle whenever focusPoint changes ──
   useEffect(() => {
     if (!focusPoint) return;
 
-    haptic.light(); // light impact on focus
+    haptic.light(); // light impact on tap
 
     // Entrance: 0→1 with bouncy spring
     focusAnim.value = 0;
-    focusLockAnim.value = 0; // start as blue (focusing)
     focusAnim.value = withSpring(1, spring.lift);
 
-    // After 600ms, transition to locked (green)
-    focusLockAnim.value = withDelay(600, withSpring(1, spring.success));
-
-    // Auto-dismiss after 1.5s with fade
+    // Auto-dismiss after 1.2s with fade
     focusAnim.value = withDelay(
-      1500,
+      1200,
       withTiming(0, { duration: reducedMotion ? 0 : 300, easing: Easing.in(Easing.cubic) }),
     );
 
     const timeout = setTimeout(() => {
       onDismiss?.();
-      focusLockAnim.value = 0;
-    }, reducedMotion ? 0 : 1900);
+    }, reducedMotion ? 0 : 1600);
 
     return () => clearTimeout(timeout);
-  }, [focusPoint, haptic, reducedMotion, spring, focusAnim, focusLockAnim, onDismiss]);
+  }, [focusPoint, haptic, reducedMotion, spring, focusAnim, onDismiss]);
 
   if (!focusPoint) return null;
 

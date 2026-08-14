@@ -56,7 +56,6 @@ import type { Listing as CatalogListing } from '../data/mockData';
 import {
   ProductDescription,
   RecommendationRail,
-  SeenInLooksRail,
   ProductDetailSkeleton,
   FullscreenMediaViewer,
   ProductFamilyBadge,
@@ -105,7 +104,6 @@ import {
   buildCapabilities,
   isRecommendationLook,
 } from '../platform/product';
-import type { RecommendationLook } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
 import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -657,7 +655,6 @@ export default function ItemDetailScreen() {
     authenticity: serverCommerce.authenticity,
   } : undefined);
   const recommendationSections = recommendationsData?.sections ?? [];
-  const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
 
   // Bundle upsell: items from the same seller (more_from_seller section)
   const moreFromSellerSection = recommendationSections.find((s) => s.key === 'more_from_seller');
@@ -669,10 +666,6 @@ export default function ItemDetailScreen() {
 
   const handlePressRecommendation = (recItem: Listing) => {
     navigation.push('ItemDetail', { itemId: recItem.id });
-  };
-
-  const handlePressLook = (lookItem: RecommendationLook) => {
-    navigation.navigate('LookDetail', { lookId: lookItem.id });
   };
 
   // ── Identity composition ──
@@ -848,6 +841,7 @@ export default function ItemDetailScreen() {
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
           showDefaultControls={false}
+          showPageIndicator={false}
           overlayTopContent={
             <View style={styles.familyBadgeOverlay}>
               <ProductFamilyBadge
@@ -992,17 +986,25 @@ export default function ItemDetailScreen() {
             Per AGENTS.md §4: flat canvas, no card containers. Inline
             icon+text pairs separated by spacing, not borders. */}
         {(() => {
+          // Evidence-based trust chips — per spec 12: "Trust UI should show
+          // evidence, not generic shield decoration." Each chip carries the
+          // actual policy label from the commerce context, not a generic
+          // "Buyer protection" string. The protection policy label (e.g.
+          // "Thryftverse Buyer Protection") is the evidence; the icon is
+          // secondary scannability, not the primary signal.
           const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
           if (commerce.shippingMethod) {
             trustChips.push({
               icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'cube-outline',
-              label: commerce.shippingPayer === 'seller' ? 'Free shipping' : 'Tracked shipping',
+              label: commerce.shippingPayer === 'seller'
+                ? `Free ${commerce.shippingMethod}`
+                : commerce.shippingMethod,
             });
           }
           if (commerce.protectionPolicy?.available) {
             trustChips.push({
               icon: 'shield-checkmark-outline',
-              label: 'Buyer protection',
+              label: commerce.protectionPolicy.label ?? 'Buyer protection',
             });
           }
           if (commerce.returnPolicy?.accepted) {
@@ -1320,10 +1322,13 @@ export default function ItemDetailScreen() {
         </CommerceDetailSection>
 
         {/* ── Zone H — Discovery ──
-            Per spec 04_DIRECT §4: maximum three discovery modules.
-            Order: Bundle upsell → Seen in Looks → More like this.
-            Removed generic recommendation rail mapping and DiscoveryGrid
-            to stay within the three-module budget. */}
+            Per spec 12: "One high-quality continuation section is better
+            than 3 repetitive rails." Consolidated to two focused modules:
+            Bundle upsell (unique multi-item purchase incentive) → More like
+            this (visual-similar grid). Seen in Looks rail removed to reduce
+            repetition — look context is available from the item's looks tab
+            and the seller profile. The "More from this seller" rail above
+            is contextual to the seller section, not a discovery module. */}
         <BundleUpsellRow
           items={bundleItems}
           currentListingId={item.id}
@@ -1333,15 +1338,6 @@ export default function ItemDetailScreen() {
           sellerName={item.seller?.username ?? undefined}
           onOpenBundleBag={(sellerId, sellerName) => navigation.navigate('BundleBag', { sellerId, sellerName })}
         />
-
-        {seenInLooksSection && seenInLooksSection.items.length > 0 && (
-          <View style={styles.recommendationSection}>
-            <SeenInLooksRail
-              items={seenInLooksSection.items.filter(isRecommendationLook) as RecommendationLook[]}
-              onPressItem={handlePressLook}
-            />
-          </View>
-        )}
 
         {/* More like this — visual-similar grid by category/brand.
             Contextual heading: prefer brand when available, fall back
@@ -2146,9 +2142,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
   },
   // ── Discovery ──
-  recommendationSection: {
-    marginTop: Space.md,
-  },
   railLoading: {
     flexDirection: 'row',
     alignItems: 'center',

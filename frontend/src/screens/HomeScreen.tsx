@@ -143,6 +143,10 @@ type ExploreTile = {
   category?: string;
   aspectRatio: number;
   isSaved?: boolean;
+  /** When true, this tile spans both columns as a wider editorial card.
+   *  Per spec 11: asymmetric rhythm — 6-12 normal tiles, one larger
+   *  featured unit, continue feed. Breaks the uniform grid silhouette. */
+  featured?: boolean;
 };
 
 type StoryBubble = {
@@ -611,7 +615,7 @@ export default function HomeScreen() {
   const wishlist = useStore((state) => state.wishlist);
 
   const exploreData = React.useMemo<ExploreTile[]>(() => {
-    return listings.map((item): ExploreTile => {
+    return listings.map((item, index): ExploreTile => {
       const primaryMediaUri = item.images?.[0] ?? '';
       const posterUri = item.images?.find((uri) => !isVideoUri(uri));
 
@@ -631,13 +635,17 @@ export default function HomeScreen() {
           ? resolveListingMediaHeightRatio(item)
           : MISSING_MEDIA_HEIGHT_RATIO,
         isSaved: wishlist.includes(item.id),
+        // Asymmetric editorial rhythm: every 8th tile spans both columns
+        // as a wider featured card (spec 11: 6-12 normal tiles, one larger
+        // unit, continue feed).
+        featured: (index + 1) % 8 === 0,
       };
     });
   }, [listings, wishlist]);
 
   // Following feed: transform following listings into the same ExploreTile shape
   const followingExploreData = React.useMemo<ExploreTile[]>(() => {
-    return followingFeed.listings.map((item): ExploreTile => {
+    return followingFeed.listings.map((item, index): ExploreTile => {
       const primaryMediaUri = item.images?.[0] ?? '';
       const posterUri = item.images?.find((uri) => !isVideoUri(uri));
 
@@ -657,13 +665,14 @@ export default function HomeScreen() {
           ? resolveListingMediaHeightRatio(item)
           : MISSING_MEDIA_HEIGHT_RATIO,
         isSaved: wishlist.includes(item.id),
+        featured: (index + 1) % 8 === 0,
       };
     });
   }, [followingFeed.listings, wishlist]);
 
   // For You feed: transform personalised recommendations into ExploreTile shape
   const forYouExploreData = React.useMemo<ExploreTile[]>(() => {
-    return forYouFeed.listings.map((item): ExploreTile => {
+    return forYouFeed.listings.map((item, index): ExploreTile => {
       const primaryMediaUri = item.images?.[0] ?? '';
       const posterUri = item.images?.find((uri) => !isVideoUri(uri));
 
@@ -683,6 +692,7 @@ export default function HomeScreen() {
           ? resolveListingMediaHeightRatio(item)
           : MISSING_MEDIA_HEIGHT_RATIO,
         isSaved: wishlist.includes(item.id),
+        featured: (index + 1) % 8 === 0,
       };
     });
   }, [forYouFeed.listings, wishlist]);
@@ -929,11 +939,16 @@ export default function HomeScreen() {
   const renderFeedItem = React.useCallback(
     ({ item, index }: { item: ExploreTile; index: number }) => {
       const listing = activeListings.find((l) => l.id === item.routeId);
+      // Featured tiles span both columns — pass the full row width so the
+      // media and overlay scale up for the editorial rhythm break.
+      const tileWidth = item.featured
+        ? Math.floor(windowWidth - Space.sm * 2)
+        : gridTileWidth;
       return (
         <View style={styles.flashListItem}>
           <ExploreGridItem
             item={item}
-            tileWidth={gridTileWidth}
+            tileWidth={tileWidth}
             formatPrice={formatFromFiat}
             onPress={handleTilePress}
             onLongPress={handleTileLongPress}
@@ -948,6 +963,7 @@ export default function HomeScreen() {
     [
       activeListings,
       gridTileWidth,
+      windowWidth,
       formatFromFiat,
       handleTilePress,
       handleTileLongPress,
@@ -1025,8 +1041,9 @@ export default function HomeScreen() {
         keyExtractor={(item: ExploreTile) => item.id}
         getItemType={getItemType}
         renderItem={renderFeedItem}
-        overrideItemLayout={(layout: { span?: number }) => {
-          layout.span = 1;
+        overrideItemLayout={(layout: { span?: number }, item: ExploreTile) => {
+          // Featured tiles span both columns for asymmetric editorial rhythm
+          layout.span = item.featured ? 2 : 1;
         }}
         ListHeaderComponent={
           <View>

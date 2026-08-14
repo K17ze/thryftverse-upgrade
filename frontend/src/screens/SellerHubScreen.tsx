@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -17,7 +16,6 @@ import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadg
 import { useStore } from '../store/useStore';
 import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -42,11 +40,9 @@ interface AttentionItem {
   accessibilityLabel: string;
 }
 
-const enter = (delay: number) => FadeInDown.duration(300).delay(delay);
 
 export default function SellerHubScreen() {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
@@ -291,7 +287,7 @@ export default function SellerHubScreen() {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
         {/* Hero -- seller overview (one dominant panel) */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : enter(0)}>
+        <View>
           <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.heroIdentity}>
               <View style={[styles.heroAvatar, { borderColor: colors.border }]}>
@@ -307,9 +303,6 @@ export default function SellerHubScreen() {
                 )}
               </View>
               <View style={styles.heroIdentityText}>
-                <Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>
-                  Seller Hub
-                </Text>
                 <View style={styles.heroNameRow}>
                   <Text style={[styles.heroName, { color: colors.textPrimary }]} numberOfLines={1}>
                     {sellerName}
@@ -366,11 +359,11 @@ export default function SellerHubScreen() {
                 : 'No listings yet \u2014 your shop is ready for its first item.'}
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Needs attention -- task-first panel (only when actionable items exist) */}
         {hasAttention ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : enter(60)}>
+          <View>
             <View style={styles.eyebrowRow}>
               <Text style={[styles.eyebrow, { color: colors.warning }]}>Needs attention</Text>
               <Text style={[styles.eyebrowCount, { color: colors.textMuted }]}>
@@ -399,12 +392,12 @@ export default function SellerHubScreen() {
                 </AnimatedPressable>
               ))}
             </View>
-          </Reanimated.View>
+          </View>
         ) : null}
 
         {/* Get Verified CTA -- shown when seller is not yet verified */}
         {sellerTrust && !sellerTrust.verified ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : enter(hasAttention ? 90 : 60)}>
+          <View>
             <View style={[styles.verifyCta, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.verifyCtaInfo}>
                 <Ionicons name="shield-checkmark-outline" size={20} color={colors.brand} />
@@ -425,12 +418,12 @@ export default function SellerHubScreen() {
                 <Text style={[styles.verifyCtaBtnText, { color: colors.textInverse }]}>Start</Text>
               </AnimatedPressable>
             </View>
-          </Reanimated.View>
+          </View>
         ) : null}
 
         {/* Performance overview (flat hairline grid) or onboarding empty */}
         {hasListings ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : enter(hasAttention ? 120 : 90)}>
+          <View>
             <Text style={[styles.eyebrow, { color: colors.textMuted }]}>Performance</Text>
             <View style={[styles.metricGrid, { borderColor: colors.borderSubtle }]}>
               <View style={styles.metricCell}>
@@ -458,9 +451,9 @@ export default function SellerHubScreen() {
                 <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Likes</Text>
               </View>
             </View>
-          </Reanimated.View>
+          </View>
         ) : (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : enter(hasAttention ? 120 : 90)}>
+          <View>
             <View style={[styles.emptyPanel, { borderColor: colors.borderSubtle }]}>
               <Ionicons name="cube-outline" size={26} color={colors.textMuted} />
               <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
@@ -470,11 +463,11 @@ export default function SellerHubScreen() {
                 List your first item to unlock sales, insights and seller tools.
               </Text>
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Seller tools */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : enter(hasAttention ? 180 : 150)}>
+        <View>
           {/* Primary action -- full-width, prominent */}
           <AppButton
             title="Create new listing"
@@ -504,7 +497,7 @@ export default function SellerHubScreen() {
               </View>
             </View>
           ))}
-        </Reanimated.View>
+        </View>
       </ScrollView>
     </FlagshipScreen>
   );
@@ -567,13 +560,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       gap: 1,
     },
-    heroEyebrow: {
-      fontSize: TypographyV2.label.size,
-      fontFamily: FontFamily.semibold,
-      letterSpacing: TypographyV2.label.letterSpacing,
-      textTransform: 'uppercase',
-    },
-    heroNameRow: {
+      heroNameRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,

@@ -28,6 +28,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { CreatorProvider, useCreator } from './CreatorContext';
 import type { CreatorInitialMedia } from '../navigation/types';
 import type { CreatorLayer } from './composition';
+import { computeLookLayout } from './composition';
 import { CreatorCanvas } from './CreatorCanvas';
 import { CreatorLayersSheet } from './CreatorLayersSheet';
 import { CreatorToolDock } from './CreatorToolDock';
@@ -47,6 +48,7 @@ import { lookToDocument } from './viewerAdapters';
 import type { CreatorTemplate } from './templates';
 import { PageMenu } from './studio/PageMenu';
 import { OverflowMenu } from './studio/OverflowMenu';
+import { FrameTray } from './studio/FrameTray';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -98,6 +100,7 @@ function CreatorStudioInner() {
   const [pageMenuIndex, setPageMenuIndex] = useState<number | null>(null);
   const [editingLookId, setEditingLookId] = useState<string | null>(null);
   const [isLoadingSourceLook, setIsLoadingSourceLook] = useState(false);
+  const [showFrameTray, setShowFrameTray] = useState(false);
 
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
 
@@ -149,6 +152,18 @@ function CreatorStudioInner() {
   const isPoster = document.type === 'poster';
 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  // Auto-show the frame tray briefly when a new frame is added or when
+  // the active page changes, so the user sees frame order. Per doc 04:
+  // "show a bottom frame tray that appears when frame change occurs or
+  // user adds another frame." The tray auto-collapses after 3.5s to
+  // restore full-screen canvas.
+  useEffect(() => {
+    if (!isPoster || document.pages.length <= 1) return;
+    setShowFrameTray(true);
+    const timer = setTimeout(() => setShowFrameTray(false), 3500);
+    return () => clearTimeout(timer);
+  }, [isPoster, document.pages.length, activePageIndex]);
 
   // ── Full-screen immersive canvas (Instagram Stories pattern) ──────
   // The canvas fills the ENTIRE screen. Chrome floats over it with
@@ -288,39 +303,47 @@ function CreatorStudioInner() {
   // Handle media selection from entry screen. The entry screen now
   // returns a typed CreatorInitialMedia[] payload in tap/selection order.
   // For Poster, each asset becomes its own page (frame) via the semantic
-  // addPosterFrames helper. For Look, each asset becomes a stacked media
-  // layer on the current page via the generic addLayer.
+  // addPosterFrames helper. For Look, each asset becomes an auto-arranged
+  // media layer on page 0 — never N identical full-bleed overlaps.
   const handleEntryMediaSelected = useCallback((media: CreatorInitialMedia[]) => {
     if (document.type === 'poster') {
       addPosterFrames(media);
     } else {
-      media.forEach((asset, i) => {
-        const layer: CreatorLayer = {
-          id: `media_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
-          type: 'media',
-          x: 0.5,
-          y: 0.5,
-          width: 1,
-          height: 1,
-          scale: 1,
-          rotation: 0,
-          zIndex: i,
-          locked: false,
-          hidden: false,
+      // Look: build auto-arranged layers and set the document in one
+      // operation. This avoids multiple history entries from looping
+      // addLayer, and ensures the canvas is immediately useful with
+      // proper layout (hero, pair, dominant, or collage) per doc 05.
+      const mediaLayers: CreatorLayer[] = media.map((asset, i) => ({
+        id: `media_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+        type: 'media' as const,
+        x: 0.5,
+        y: 0.5,
+        width: 1,
+        height: 1,
+        scale: 1,
+        rotation: 0,
+        zIndex: i,
+        locked: false,
+        hidden: false,
+        opacity: 1,
+        payload: {
+          mediaUri: asset.uri,
+          mediaType: asset.kind,
+          contentFit: 'cover' as const,
+          videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
           opacity: 1,
-          payload: {
-            mediaUri: asset.uri,
-            mediaType: asset.kind,
-            contentFit: 'cover',
-            videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
-            opacity: 1,
-          },
-        };
-        addLayer(layer);
-      });
+        },
+      }));
+      const arranged = computeLookLayout(mediaLayers);
+      const newDoc = {
+        ...document,
+        pages: [{ id: document.pages[0]?.id ?? 'page_1', layers: arranged }],
+        updatedAt: new Date().toISOString(),
+      };
+      setDocument(newDoc);
     }
     setEntryComplete(true);
-  }, [document.type, addPosterFrames, addLayer]);
+  }, [document, addPosterFrames, setDocument]);
 
   const handleEntryBlankStart = useCallback(() => {
     setEntryComplete(true);
@@ -588,6 +611,17 @@ function CreatorStudioInner() {
                 </View>
               </Pressable>
             ))}
+            {/* Frame tray toggle — compact film icon that re-opens the
+                collapsible frame filmstrip when it has auto-collapsed. */}
+            <PressScale
+              onPress={() => { haptic.light(); setShowFrameTray((p) => !p); }}
+              style={styles.pageSegmentToggle}
+              accessibilityLabel="Toggle frame tray"
+              accessibilityHint="Shows or hides the bottom frame thumbnail tray"
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+            >
+              <Ionicons name="film-outline" size={14} color={showFrameTray ? '#fff' : 'rgba(255,255,255,0.5)'} />
+            </PressScale>
             {/* Add page — compact + at end of segment row */}
             {document.pages.length < 10 && (
               <PressScale
@@ -668,6 +702,22 @@ function CreatorStudioInner() {
           />
         </LiquidGlassBackdrop>
       </View>
+
+      {/* ── Poster frame tray (collapsible filmstrip) ─────────────────── */}
+      {/* Per doc 04: a bottom thumbnail tray that appears when frame change
+          occurs or user adds another frame. Auto-collapses after 3.5s.
+          Sits above the tool dock. Tapping the active frame collapses it. */}
+      {isPoster && showFrameTray && document.pages.length > 1 && (
+        <FrameTray
+          pages={document.pages}
+          activePageIndex={activePageIndex}
+          onSelectPage={(i) => { selectLayer(null); setActivePageIndex(i); }}
+          onLongPressPage={(i) => setPageMenuIndex(i)}
+          onAddPage={() => { haptic.light(); selectLayer(null); addPage(); }}
+          onCollapse={() => setShowFrameTray(false)}
+          bottomOffset={insets.bottom + 120}
+        />
+      )}
 
       {/* ── Overflow menu ────────────────────────────────────────────── */}
       <OverflowMenu
@@ -1015,6 +1065,12 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pageSegmentToggle: {
+    width: 22,
+    height: 22,
     justifyContent: 'center',
     alignItems: 'center',
   },

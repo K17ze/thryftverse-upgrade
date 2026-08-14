@@ -4,7 +4,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -39,7 +38,6 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, FontFamily, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import {
   CoOwnMarketHeader,
@@ -81,7 +79,6 @@ export default function TradeScreen() {
   const route = useRoute<RouteT>();
   const { colors, isDark } = useAppTheme();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < 360;
@@ -386,7 +383,7 @@ export default function TradeScreen() {
         onScrollBeginDrag={Keyboard.dismiss}
       >
         {/* Buy/Sell selector */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <AppSegmentControl
             options={TRADE_SIDE_OPTIONS}
             value={side}
@@ -394,11 +391,11 @@ export default function TradeScreen() {
             fullWidth
             style={styles.sideSwitcher}
           />
-        </Reanimated.View>
+        </View>
 
         {/* Compliance alert */}
         {!eligibility.ok && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <View>
             <View style={[styles.alertCard, { backgroundColor: colors.danger + '12', borderColor: colors.danger + '40' }]}>
               <View style={styles.alertRow}>
                 <Ionicons name="warning-outline" size={16} color={colors.danger} />
@@ -406,12 +403,12 @@ export default function TradeScreen() {
               </View>
               <Text style={[styles.alertText, { color: colors.textSecondary }]}>{eligibility.message}</Text>
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Rights incomplete alert — spec 10 §9.3: TBC blocks trading on live instruments */}
         {hasIncompleteRights && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(70)}>
+          <View>
             <View style={[styles.alertCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
               <View style={styles.alertRow}>
                 <Ionicons name="document-text-outline" size={16} color={colors.warning} />
@@ -436,7 +433,7 @@ export default function TradeScreen() {
                 </Text>
               )}
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         <View style={[
@@ -459,7 +456,7 @@ export default function TradeScreen() {
         </View>
 
         {/* Trade composer — product identity, availability, quote, reservation, expandable details */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+        <View>
           <CoOwnTradeComposer
             imageUri={asset.imageUrl}
             title={asset.title}
@@ -496,13 +493,13 @@ export default function TradeScreen() {
             postTradePreview={postTradePreview}
             rightsVersion={asset.rightsVersion ?? undefined}
           />
-        </Reanimated.View>
+        </View>
 
         {/* ── Unified order ticket ──
             One surface containing: order type, quantity, limit price, duration,
             and market context. Previously these were separate cards forcing the
             user to move between editable fields and the calculated result. */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(90)}>
+        <View>
           <View style={[styles.ticketCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {/* Order type */}
             <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Order type</Text>
@@ -643,34 +640,34 @@ export default function TradeScreen() {
               </>
             )}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Phase 6: Concierge CTA — shown when the market is thin (no opposite side) */}
         {visibleBook.asks.length === 0 && side === 'buy' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <View>
             <CoOwnConciergeCTA
               reason="no_opposite_side"
               assetTitle={asset?.title}
               onRequestQuote={() => navigation.navigate('HelpSupport')}
               onContactConcierge={() => navigation.navigate('HelpSupport')}
             />
-          </Reanimated.View>
+          </View>
         )}
         {visibleBook.bids.length === 0 && side === 'sell' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <View>
             <CoOwnConciergeCTA
               reason="no_opposite_side"
               assetTitle={asset?.title}
               onRequestQuote={() => navigation.navigate('HelpSupport')}
               onContactConcierge={() => navigation.navigate('HelpSupport')}
             />
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Risk disclosure */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
+        <View>
           <CoOwnRiskDisclosure />
-        </Reanimated.View>
+        </View>
       </KeyboardAwareScrollView>
 
       {/* Sticky action dock — thin-market substitution per spec §05 */}

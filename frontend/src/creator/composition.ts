@@ -588,6 +588,60 @@ function mapTextStyle(old: string | undefined): 'headline' | 'editorial' | 'clea
   }
 }
 
+// ── Look layout helper ──────────────────────────────────────────────
+// Computes initial positions/sizes for N media layers on a Look canvas
+// so that multi-select never produces N identical full-bleed overlaps.
+// Mirrors the layout logic in CreatorContext.autoArrangeLook but is a
+// pure function usable during document seeding (before state settles).
+
+export function computeLookLayout(layers: CreatorLayer[]): CreatorLayer[] {
+  const mediaLayers = layers.filter((l) => l.type === 'media');
+  const otherLayers = layers.filter((l) => l.type !== 'media');
+  if (mediaLayers.length === 0) return layers;
+
+  let arranged: CreatorLayer[];
+  const n = mediaLayers.length;
+
+  if (n === 1) {
+    // 1 → hero composition
+    arranged = [{ ...mediaLayers[0], x: 0.5, y: 0.5, width: 0.9, height: 0.9, scale: 1, rotation: 0 }];
+  } else if (n === 2) {
+    // 2 → balanced editorial pairing
+    arranged = [
+      { ...mediaLayers[0], x: 0.27, y: 0.5, width: 0.44, height: 0.8, scale: 1, rotation: 0 },
+      { ...mediaLayers[1], x: 0.73, y: 0.5, width: 0.44, height: 0.8, scale: 1, rotation: 0 },
+    ];
+  } else if (n === 3) {
+    // 3 → dominant + two supporting
+    arranged = [
+      { ...mediaLayers[0], x: 0.5, y: 0.42, width: 0.7, height: 0.7, scale: 1, rotation: 0 },
+      { ...mediaLayers[1], x: 0.22, y: 0.82, width: 0.3, height: 0.3, scale: 1, rotation: 0 },
+      { ...mediaLayers[2], x: 0.78, y: 0.82, width: 0.3, height: 0.3, scale: 1, rotation: 0 },
+    ];
+  } else {
+    // 4+ → scattered collage with collision avoidance
+    arranged = mediaLayers.map((layer, i) => {
+      const angle = (i / n) * Math.PI * 2;
+      const radius = 0.28;
+      const cx = 0.5 + Math.cos(angle) * radius;
+      const cy = 0.5 + Math.sin(angle) * radius;
+      const size = 0.34;
+      return {
+        ...layer,
+        x: Math.max(0.18, Math.min(0.82, cx)),
+        y: Math.max(0.18, Math.min(0.82, cy)),
+        width: size,
+        height: size,
+        scale: 1,
+        rotation: (i % 2 === 0 ? 1 : -1) * 4,
+      };
+    });
+  }
+
+  // Reassign zIndex in order, preserve non-media layers
+  return [...arranged, ...otherLayers].map((l, i) => ({ ...l, zIndex: i }));
+}
+
 // ── Canonical aspect-ratio constants ───────────────────────────────
 // aspectRatio is ALWAYS width / height.
 // Poster (Stories) default: 9:16 portrait → 9 / 16 = 0.5625

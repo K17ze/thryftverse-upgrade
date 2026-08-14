@@ -62,12 +62,14 @@ import {
 import {
   listAuctions,
   getAuctionHome,
+  getAuctionFacets,
   type MarketAuction,
   type AttentionReason,
   type CategoryWorld,
   type AuctionHomeActivity,
   type SellerSummary,
   type AuctionScope,
+  type AuctionFacets,
 } from '../services/marketApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -361,6 +363,11 @@ export default function AuctionHomeScreen() {
   const [filterSheetVisible, setFilterSheetVisible] = React.useState(false);
   const [draftBrowse, setDraftBrowse] = useState<AuctionBrowseState>(DEFAULT_BROWSE_STATE);
 
+  // ── Server-driven facets (canonical category endpoint, not derived from inventory) ──
+  const [facets, setFacets] = React.useState<AuctionFacets | null>(null);
+  const [facetsLoading, setFacetsLoading] = React.useState(false);
+  const facetsReqIdRef = React.useRef(0);
+
   const isBrowsing = hasActiveFilters(browseState);
   const isSearching = searchState.status !== 'idle';
 
@@ -460,6 +467,34 @@ export default function AuctionHomeScreen() {
       void fetchHome();
     }
   }, [needsResync, fetchHome]);
+
+  // ── Fetch server-driven facets when the filter sheet opens ──
+  // Provides canonical category list + price range + status counts
+  // independent of loaded home inventory (Phase 2 Finding D fix).
+  const fetchFacets = React.useCallback(async (scope: AuctionScope) => {
+    setFacetsLoading(true);
+    const reqId = ++facetsReqIdRef.current;
+    try {
+      const result = await getAuctionFacets({ scope });
+      if (reqId !== facetsReqIdRef.current) return;
+      setFacets(result);
+    } catch {
+      // Non-fatal — filter sheet falls back to derived categories
+      if (reqId === facetsReqIdRef.current) {
+        setFacets(null);
+      }
+    } finally {
+      if (reqId === facetsReqIdRef.current) {
+        setFacetsLoading(false);
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (filterSheetVisible) {
+      void fetchFacets(draftBrowse.scope);
+    }
+  }, [filterSheetVisible, draftBrowse.scope, fetchFacets]);
 
   // ── Search ──
   const searchReqIdRef = useRef(0);
@@ -739,13 +774,39 @@ export default function AuctionHomeScreen() {
   }, [secondClock, navigateToDetail, formatValueLockup]);
 
   // ── Category options for filter sheet ──
+  // Prefer server-driven facets (canonical endpoint) over derived inventory.
+  // Falls back to derived categories only if facets are unavailable.
   const categoryOptions = useMemo(() => {
+    if (facets && facets.categories.length > 0) {
+      return facets.categories.map((c) => c.id);
+    }
     const cats = new Set<string>();
     [...homeData.live, ...homeData.upcoming, ...homeData.recentlyClosed].forEach((a) => {
       if (a.category) cats.add(a.category);
     });
     return Array.from(cats).sort();
-  }, [homeData]);
+  }, [facets, homeData]);
+
+  // ── Category labels from facets (canonical display names) ──
+  const categoryLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (facets) {
+      for (const c of facets.categories) {
+        map[c.id] = c.label;
+      }
+    }
+    return map;
+  }, [facets]);
+
+  // ── Result count for filter sheet CTA ──
+  // Uses statusCounts from facets when available, otherwise falls back to
+  // the active filter count.
+  const filterResultCount = useMemo(() => {
+    if (facets) {
+      return facets.statusCounts[draftBrowse.scope] ?? 0;
+    }
+    return undefined;
+  }, [facets, draftBrowse.scope]);
 
   // ── Active filter chips (individually removable) ──
   const activeFilterChips = useMemo(() => {
@@ -762,7 +823,8 @@ export default function AuctionHomeScreen() {
       chips.push({ key: 'sort', label: sortLabels[browseState.sort], type: 'sort' });
     }
     for (const cat of browseState.categories) {
-      chips.push({ key: `cat-${cat}`, label: `Category: ${cat}`, type: 'category', value: cat });
+      const label = categoryLabels[cat] ?? cat;
+      chips.push({ key: `cat-${cat}`, label: `Category: ${label}`, type: 'category', value: cat });
     }
     if (browseState.priceMin != null) {
       chips.push({ key: 'priceMin', label: `Over £${browseState.priceMin}`, type: 'priceMin' });
@@ -774,7 +836,7 @@ export default function AuctionHomeScreen() {
       chips.push({ key: 'query', label: `"${browseState.query}"`, type: 'query' });
     }
     return chips;
-  }, [browseState]);
+  }, [browseState, categoryLabels]);
 
   const renderLoadingState = useCallback(() => (
     <AuctionSkeletons />
@@ -1115,10 +1177,13 @@ export default function AuctionHomeScreen() {
           visible={filterSheetVisible}
           onDismiss={() => setFilterSheetVisible(false)}
           categoryOptions={categoryOptions}
+          categoryLabels={categoryLabels}
           draftBrowse={draftBrowse}
           setDraftBrowse={setDraftBrowse}
           onReset={resetDraftFilters}
           onApply={applyDraftFilters}
+          resultCount={filterResultCount}
+          facetsLoading={facetsLoading}
         />
       </View>
     );
@@ -1242,6 +1307,7 @@ export default function AuctionHomeScreen() {
                         key={item.id}
                         title={item.title}
                         imageUrl={item.imageUrl || null}
+                        brand={item.brand}
                         izeText={valueLockup.izeText}
                         localText={valueLockup.localText}
                         valueState="current"
@@ -1691,10 +1757,13 @@ export default function AuctionHomeScreen() {
         visible={filterSheetVisible}
         onDismiss={() => setFilterSheetVisible(false)}
         categoryOptions={categoryOptions}
+        categoryLabels={categoryLabels}
         draftBrowse={draftBrowse}
         setDraftBrowse={setDraftBrowse}
         onReset={resetDraftFilters}
         onApply={applyDraftFilters}
+        resultCount={filterResultCount}
+        facetsLoading={facetsLoading}
       />
     </View>
   );
@@ -1724,18 +1793,24 @@ const FilterSheet = memo(function FilterSheet({
   visible,
   onDismiss,
   categoryOptions,
+  categoryLabels,
   draftBrowse,
   setDraftBrowse,
   onReset,
   onApply,
+  resultCount,
+  facetsLoading,
 }: {
   visible: boolean;
   onDismiss: () => void;
   categoryOptions: string[];
+  categoryLabels?: Record<string, string>;
   draftBrowse: AuctionBrowseState;
   setDraftBrowse: React.Dispatch<React.SetStateAction<AuctionBrowseState>>;
   onReset: () => void;
   onApply: () => void;
+  resultCount?: number;
+  facetsLoading?: boolean;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -1868,6 +1943,7 @@ const FilterSheet = memo(function FilterSheet({
             <View style={styles.filterCategoryList}>
               {categoryOptions.map((cat) => {
                 const selected = draftBrowse.categories.includes(cat);
+                const displayLabel = categoryLabels?.[cat] ?? cat;
                 return (
                   <Pressable
                     key={cat}
@@ -1877,11 +1953,11 @@ const FilterSheet = memo(function FilterSheet({
                     ]}
                     onPress={() => toggleCategory(cat)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Category ${cat}`}
+                    accessibilityLabel={`Category ${displayLabel}`}
                     accessibilityState={{ selected }}
                   >
                     <Text style={[styles.filterCategoryRowText, selected && styles.filterCategoryRowTextActive]}>
-                      {cat}
+                      {displayLabel}
                     </Text>
                     <View style={styles.filterCheckbox}>
                       {selected && <Ionicons name="checkmark" size={16} color={colors.brand} />}
@@ -1893,7 +1969,7 @@ const FilterSheet = memo(function FilterSheet({
           </>
         )}
 
-        {/* ── Bottom CTA with count ── */}
+        {/* ── Bottom CTA with result count ── */}
         <View style={styles.filterActionsRow}>
           <Pressable
             style={styles.filterResetBtn}
@@ -1909,10 +1985,21 @@ const FilterSheet = memo(function FilterSheet({
             onPress={onApply}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={`Show ${activeCount > 0 ? activeCount + ' filter' : 'results'}`}
+            accessibilityLabel={
+              resultCount != null
+                ? `Show ${resultCount} results`
+                : activeCount > 0
+                  ? `Show ${activeCount} ${activeCount === 1 ? 'filter' : 'filters'}`
+                  : 'Show results'
+            }
           >
             <Text style={styles.filterApplyText}>
-              {activeCount > 0 ? `Show ${activeCount} ${activeCount === 1 ? 'filter' : 'filters'}` : 'Show results'}
+              {resultCount != null
+                ? `Show ${resultCount} ${resultCount === 1 ? 'result' : 'results'}`
+                : activeCount > 0
+                  ? `Show ${activeCount} ${activeCount === 1 ? 'filter' : 'filters'}`
+                  : 'Show results'
+              }
             </Text>
           </Pressable>
         </View>

@@ -41,8 +41,6 @@ export interface SellerInfoCardProps {
 }
 
 interface StatCell {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
   value: string;
 }
 
@@ -64,35 +62,27 @@ export function SellerInfoCard({
     cb();
   };
 
-  // ── Truthful stats — only render cells with real values ──
+  // ── Truthful stats — concise inline values (spec 12: no KPI card) ──
   const stats: StatCell[] = [];
   if (seller.rating != null) {
     stats.push({
-      icon: 'star',
-      label: 'Rating',
-      value: `${seller.rating.toFixed(1)}${seller.reviewCount != null ? ` (${seller.reviewCount})` : ''}`,
+      value: `${seller.rating.toFixed(1)}★${seller.reviewCount != null ? ` (${seller.reviewCount})` : ''}`,
     });
   }
   if (seller.completedSales != null) {
     stats.push({
-      icon: 'pricetag-outline',
-      label: 'Sold',
       value: seller.completedSales >= 1000
-        ? `${(seller.completedSales / 1000).toFixed(1)}k`
-        : String(seller.completedSales),
+        ? `${(seller.completedSales / 1000).toFixed(1)}k sold`
+        : `${seller.completedSales} sold`,
     });
   }
   if (seller.responseRate != null) {
     stats.push({
-      icon: 'chatbubble-ellipses-outline',
-      label: 'Responds',
-      value: `${Math.round(seller.responseRate * 100)}%`,
+      value: `${Math.round(seller.responseRate * 100)}% responds`,
     });
   }
   if (seller.dispatchTimeLabel) {
     stats.push({
-      icon: 'cube-outline',
-      label: 'Ships',
       value: seller.dispatchTimeLabel,
     });
   }
@@ -148,26 +138,14 @@ export function SellerInfoCard({
         ) : null}
       </Pressable>
 
-      {/* Stats row — flat cells, hairline-separated, no nested card */}
+      {/* Concise trust line — replaces the former 4-cell KPI stats row.
+          Per spec 12: "Keep response/dispatch/reviews concise. Avoid
+          transforming seller trust into a KPI card." A single inline
+          text line with middot separators is scannable and quiet. */}
       {stats.length > 0 ? (
-        <View style={[styles.statsRow, { borderTopColor: colors.borderSubtle, borderBottomColor: colors.borderSubtle }]}>
-          {stats.map((stat, i) => (
-            <React.Fragment key={stat.label}>
-              <View style={styles.statCell}>
-                <Ionicons name={stat.icon} size={15} color={colors.textSecondary} />
-                <Text style={[styles.statValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {stat.value}
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.textMuted }]} numberOfLines={1}>
-                  {stat.label}
-                </Text>
-              </View>
-              {i < stats.length - 1 ? (
-                <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
-              ) : null}
-            </React.Fragment>
-          ))}
-        </View>
+        <Text style={[styles.trustLine, { color: colors.textSecondary }]} numberOfLines={2}>
+          {stats.map((stat) => stat.value).join(' · ')}
+        </Text>
       ) : null}
 
       {/* Trust signals — reuse canonical badge primitives */}
@@ -285,34 +263,13 @@ const styles = StyleSheet.create({
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
   },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: Space.sm,
-  },
-  statCell: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs / 2,
-    paddingHorizontal: Space.xs,
-  },
-  statValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
+  // Concise trust line — single inline text, no KPI card chrome.
+  // Per spec 12: avoid transforming seller trust into a KPI card.
+  trustLine: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
-  },
-  statLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
   },
   actionsRow: {
     flexDirection: 'row',

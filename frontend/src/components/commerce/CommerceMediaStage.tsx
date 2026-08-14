@@ -693,6 +693,14 @@ export interface CommerceMediaStageProps {
   onActiveIndexChange?: (index: number) => void;
   /** Keeps the inline stage aligned with the last fullscreen page. */
   initialIndex?: number;
+  /**
+   * When false, suppresses the built-in dot/counter page indicator.
+   * Callers that overlay their own indicator (e.g. the iOS Photos
+   * pill-stretch PaginationDots on ItemDetailScreen) set this to false
+   * to avoid duplicate indicators competing for attention.
+   * Defaults to true for backward compatibility.
+   */
+  showPageIndicator?: boolean;
 }
 
 export function CommerceMediaStage({
@@ -723,6 +731,7 @@ export function CommerceMediaStage({
   showThumbnailStrip = false,
   onActiveIndexChange,
   initialIndex = 0,
+  showPageIndicator = true,
 }: CommerceMediaStageProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -986,7 +995,7 @@ export function CommerceMediaStage({
         </Reanimated.View>
       )}
 
-      {mediaItems.length > 1 && (
+      {showPageIndicator && mediaItems.length > 1 && (
         <Pressable
           style={({ pressed }) => [styles.indexBadge, pressed && styles.indexBadgePressed]}
           onPress={() => onOpenFullscreen(activeIndex)}

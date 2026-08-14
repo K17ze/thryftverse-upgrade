@@ -15,6 +15,38 @@ const STAGE_LABELS: Record<CountdownStage, string | null> = {
   ended: null,
 };
 
+// ── Accessibility threshold labels ──
+// Rate-limits screen reader announcements to meaningful thresholds only,
+// not every second. Per spec 08: "Countdown should not announce every second.
+// Update accessibility announcements only at meaningful thresholds and
+// state changes."
+function resolveA11yThreshold(text: string, stage: CountdownStage): string | null {
+  if (stage === 'ended') return 'Auction ended';
+  if (stage === 'upcoming') return 'Auction scheduled';
+  if (stage === 'final') {
+    // In final minutes, announce at 60s, 30s, 10s, and ended boundaries
+    if (text === 'Ended') return 'Auction ended';
+    const parts = text.split(':');
+    if (parts.length === 2) {
+      const mins = parseInt(parts[0], 10);
+      const secs = parseInt(parts[1], 10);
+      if (mins === 1 && secs === 0) return '1 minute remaining';
+      if (mins === 0 && secs === 30) return '30 seconds remaining';
+      if (mins === 0 && secs === 10) return '10 seconds remaining';
+    }
+    return null; // Don't announce every second
+  }
+  if (stage === 'moderate' || stage === 'urgent') {
+    // Announce at hour and half-hour boundaries
+    if (text.includes('h ') && text.endsWith('0m')) return `${text} left`;
+    if (text === '60m' || text === '30m' || text === '15m') return `${text} left`;
+    return null;
+  }
+  // plenty — announce only at day/hour boundaries
+  if (text.includes('d ')) return `${text} left`;
+  return null;
+}
+
 interface Props {
   text: string;
   urgent?: boolean;
@@ -58,12 +90,25 @@ export function AuctionCountdown({ text, urgent, compact, progress, stage, showP
   const fontSize = prominent ? 20 : compact ? 12 : 14;
   const isFinalOrUrgent = resolvedStage === 'final' || resolvedStage === 'urgent';
 
+  // Rate-limited accessibility label — only meaningful thresholds, not every tick.
+  // The visual text updates every second during final minutes, but the
+  // accessibility label stays stable between threshold changes so VoiceOver
+  // doesn't announce every second.
+  const a11yLabel = React.useMemo(() => {
+    const thresholdLabel = resolveA11yThreshold(text, resolvedStage);
+    if (thresholdLabel) return thresholdLabel;
+    // Fall back to a stable stage-level label between thresholds
+    if (resolvedStage === 'final') return 'Final moments — auction ending soon';
+    if (resolvedStage === 'moderate' || resolvedStage === 'urgent') return 'Auction ending soon';
+    return `${text}${stageLabel ? `, ${stageLabel}` : ''}`;
+  }, [text, resolvedStage, stageLabel]);
+
   return (
     <View
       style={styles.container}
       accessible
       accessibilityRole="timer"
-      accessibilityLabel={`${text}${stageLabel ? `, ${stageLabel}` : ''}`}
+      accessibilityLabel={a11yLabel}
     >
       <View style={styles.row}>
         <Ionicons

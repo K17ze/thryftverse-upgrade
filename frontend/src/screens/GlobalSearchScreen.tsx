@@ -39,6 +39,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { searchListingsFromApi } from '../services/feedApi';
 import { friendlyBackendError } from '../services/listingMapper';
 import type { ListingCondition } from '../services/listingsApi';
+import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -198,6 +199,17 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  // Scope tabs: Items | People — per spec 11, search results should offer
+  // scope切换 after query entry so users can find sellers, not just items.
+  const [searchScope, setSearchScope] = useState<'items' | 'people'>('items');
+  const [peopleResults, setPeopleResults] = useState<UserSearchResult[]>([]);
+  const [isSearchingPeople, setIsSearchingPeople] = useState(false);
+
+  // Reset scope to Items whenever the query changes
+  useEffect(() => {
+    setSearchScope('items');
+  }, [normalizedQuery]);
+
   useEffect(() => {
     if (!normalizedQuery || normalizedQuery.length < 2) {
       setBackendSearchResults([]);
@@ -244,6 +256,36 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       })
       .finally(() => {
         if (!cancelled) setIsSearching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [normalizedQuery]);
+
+  // People search — fetches matching users when scope is 'people' and a
+  // query is active. Uses the same debounced pattern as listing search.
+  useEffect(() => {
+    if (!normalizedQuery || normalizedQuery.length < 2) {
+      setPeopleResults([]);
+      setIsSearchingPeople(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchingPeople(true);
+
+    searchUsers(normalizedQuery, 20)
+      .then((results) => {
+        if (cancelled) return;
+        setPeopleResults(results);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPeopleResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSearchingPeople(false);
       });
 
     return () => {
@@ -342,7 +384,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const activeFilterCount =
     browseFilters.brands.length
     + browseFilters.sizes.length
-    + (browseFilters.condition !== 'Any' ? 1 : 0);
+    + (browseFilters.condition !== 'Any' ? 1 : 0)
+    + (browseFilters.priceMin != null ? 1 : 0)
+    + (browseFilters.priceMax != null ? 1 : 0);
 
   const hasActiveDiscoverFilters = activeFilterCount > 0;
 
@@ -378,6 +422,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
       if (browseFilters.condition !== 'Any') {
         if (!listing.condition || listing.condition !== browseFilters.condition) return false;
       }
+      // Price range filter (GBP)
+      if (browseFilters.priceMin != null && listing.price < browseFilters.priceMin) return false;
+      if (browseFilters.priceMax != null && listing.price > browseFilters.priceMax) return false;
       return true;
     });
 
@@ -403,7 +450,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     }
 
     return normalizedQuery ? sorted.slice(0, 16) : sorted;
-  }, [browseFilters.brands, browseFilters.condition, browseFilters.sizes, browseFilters.sort, rankedListings, listings, normalizedQuery]);
+  }, [browseFilters.brands, browseFilters.condition, browseFilters.sizes, browseFilters.sort, browseFilters.priceMin, browseFilters.priceMax, rankedListings, listings, normalizedQuery]);
 
   useEffect(() => {
     focusProgress.value = withTiming(isSearchFocused ? 1 : 0, { duration: Motion.timing.focus });
@@ -1027,13 +1074,101 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   />
                 ) : null}
 
-                {isSearching && (
+                {isSearching && searchScope === 'items' && (
                   <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
                     <SkeletonLoader width="40%" height={14} borderRadius={7} />
                   </View>
                 )}
 
-                {/* Sort + Filter bar */}
+                {/* Scope tabs — Items | People */}
+                <View style={styles.scopeTabBar} accessibilityRole="tablist">
+                  {(['items', 'people'] as const).map((scope) => {
+                    const isActive = searchScope === scope;
+                    const label = scope === 'items' ? 'Items' : 'People';
+                    return (
+                      <AnimatedPressable
+                        key={scope}
+                        style={styles.scopeTab}
+                        onPress={() => setSearchScope(scope)}
+                        accessibilityLabel={`${label} tab`}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: isActive }}
+                      >
+                        <Text style={[
+                          styles.scopeTabText,
+                          { color: isActive ? colors.textPrimary : colors.textMuted },
+                          isActive && { fontFamily: FontFamily.semibold },
+                        ]}>
+                          {label}
+                        </Text>
+                        {isActive && (
+                          <View style={[styles.scopeTabIndicator, { backgroundColor: colors.textPrimary }]} />
+                        )}
+                      </AnimatedPressable>
+                    );
+                  })}
+                </View>
+
+                {/* People results */}
+                {searchScope === 'people' && (
+                  <View style={styles.sectionWrap}>
+                    {isSearchingPeople ? (
+                      <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                        <SkeletonLoader width="60%" height={14} borderRadius={7} />
+                      </View>
+                    ) : peopleResults.length > 0 ? (
+                      <View style={styles.peopleResultsList}>
+                        {peopleResults.map((user) => (
+                          <AnimatedPressable
+                            key={user.id}
+                            style={[styles.peopleResultRow, { borderColor: colors.border }]}
+                            onPress={() => navigation.navigate('UserProfile', { userId: user.id })}
+                            accessibilityLabel={`View profile: ${user.displayName || user.username}`}
+                            accessibilityRole="button"
+                          >
+                            {user.avatar ? (
+                              <CachedImage
+                                uri={user.avatar}
+                                style={styles.peopleResultAvatar}
+                                contentFit="cover"
+                                downscaleWidth={96}
+                              />
+                            ) : (
+                              <View style={[styles.peopleResultAvatarFallback, { backgroundColor: colors.surfaceAlt }]}>
+                                <Ionicons name="person" size={18} color={colors.textMuted} />
+                              </View>
+                            )}
+                            <View style={styles.peopleResultInfo}>
+                              <Text style={[styles.peopleResultName, { color: colors.textPrimary }]} numberOfLines={1}>
+                                {user.displayName || `@${user.username}`}
+                              </Text>
+                              {user.displayName && (
+                                <Text style={[styles.peopleResultUsername, { color: colors.textMuted }]} numberOfLines={1}>
+                                  @{user.username}
+                                </Text>
+                              )}
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                          </AnimatedPressable>
+                        ))}
+                      </View>
+                    ) : (
+                      <View style={[styles.noResultsState, { borderColor: colors.border }]}>
+                        <Ionicons name="people-outline" size={22} color={colors.textMuted} />
+                        <Text style={[styles.noResultsTitle, { color: colors.textPrimary }]}>
+                          No people found for "{query.trim()}"
+                        </Text>
+                        <Text style={[styles.noResultsSubtitle, { color: colors.textSecondary }]}>
+                          Try a different name or username.
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Sort + Filter bar — only for Items scope */}
+                {searchScope === 'items' && (
+                <>
                 <View style={styles.filterBar}>
                   <AnimatedPressable style={[styles.sortChip, t.sortChip]} onPress={handleCycleSort} accessibilityLabel={`Sort by ${browseFilters.sort}`} accessibilityRole="button">
                     <Ionicons name="swap-vertical" size={16} color={colors.textSecondary} />
@@ -1059,7 +1194,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 </View>
 
                 {/* Recommendation text */}
-                <Reanimated.View entering={FadeInDown.delay(100).duration(400)} style={styles.sectionWrap}>
+                <View style={styles.sectionWrap}>
                   <View style={styles.recoHeaderRow}>
                     <Text style={[styles.recoHeaderTitle, t.recoHeaderTitle]}>
                       {normalizedQuery ? `Search: ${normalizedQuery}` : 'Discover'}
@@ -1101,10 +1236,10 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       )}
                     </View>
                   </View>
-                </Reanimated.View>
+                </View>
 
                 {/* Masonry grid */}
-                <Reanimated.View entering={FadeInDown.delay(200).duration(400)} style={styles.sectionWrap}>
+                <View style={styles.sectionWrap}>
                   {discoverListings.length > 0 ? (
                     <View style={styles.masonryGrid}>
                       <View style={styles.masonryColumn}>
@@ -1210,7 +1345,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       </View>
                     </View>
                   )}
-                </Reanimated.View>
+                </View>
+                </>
+                )}
               </>
             )}
           </>
@@ -1620,5 +1757,69 @@ const styles = StyleSheet.create({
   noResultsSecondaryCtaText: {
     fontSize: 13,
     fontFamily: FontFamily.semibold,
+  },
+
+  // Scope tabs (Items | People)
+  scopeTabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+    gap: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  scopeTab: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  scopeTabText: {
+    fontSize: 15,
+    fontFamily: FontFamily.medium,
+  },
+  scopeTabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    borderRadius: 1,
+  },
+
+  // People results
+  peopleResultsList: {
+    gap: 0,
+  },
+  peopleResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  peopleResultAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  peopleResultAvatarFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  peopleResultInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  peopleResultName: {
+    fontSize: 15,
+    fontFamily: FontFamily.semibold,
+  },
+  peopleResultUsername: {
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
   },
 });

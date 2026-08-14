@@ -638,7 +638,7 @@ export default function ClosetScreen() {
       {/* Header */}
       <View style={styles.header}>
         <AnimatedPressable style={[styles.backBtn, t.backBtn]} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, t.headerTitle]}>Closet</Text>

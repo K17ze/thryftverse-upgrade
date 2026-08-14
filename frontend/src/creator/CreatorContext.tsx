@@ -7,6 +7,7 @@ import {
   removeLayerFromPage,
   reorderLayerZ,
   duplicateLayerInPage,
+  computeLookLayout,
 } from './composition';
 import { HistoryStack } from './history';
 import { CreatorDraftService } from './drafts';
@@ -189,33 +190,38 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
           });
           return { ...prev, pages, updatedAt: new Date().toISOString() };
         }
-        // ── Look: multi-media as stacked layers on page 0 ──
-        let doc = prev;
-        initialMedia.forEach((asset, i) => {
-          const mediaLayer: CreatorLayer = {
-            id: createStableId('media'),
-            type: 'media',
-            x: 0.5,
-            y: 0.5,
-            width: 1,
-            height: 1,
-            scale: 1,
-            rotation: 0,
-            zIndex: i,
-            locked: false,
-            hidden: false,
+        // ── Look: multi-media as auto-arranged layers on page 0 ──
+        // Per doc 05: "Default should never produce four identical
+        // full-bleed images stacked at center." We use computeLookLayout
+        // to position assets based on count (hero, pair, dominant,
+        // collage) so the canvas is immediately useful.
+        const lookLayers: CreatorLayer[] = initialMedia.map((asset, i) => ({
+          id: createStableId('media'),
+          type: 'media' as const,
+          x: 0.5,
+          y: 0.5,
+          width: 1,
+          height: 1,
+          scale: 1,
+          rotation: 0,
+          zIndex: i,
+          locked: false,
+          hidden: false,
+          opacity: 1,
+          payload: {
+            mediaUri: asset.uri,
+            mediaType: asset.kind,
+            contentFit: 'cover' as const,
+            videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
             opacity: 1,
-            payload: {
-              mediaUri: asset.uri,
-              mediaType: asset.kind,
-              contentFit: 'cover',
-              videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
-              opacity: 1,
-            },
-          };
-          doc = addLayerToPage(doc, 0, mediaLayer);
+          },
+        }));
+        const arrangedLayers = computeLookLayout(lookLayers);
+        let lookDoc = prev;
+        arrangedLayers.forEach((layer) => {
+          lookDoc = addLayerToPage(lookDoc, 0, layer);
         });
-        return doc;
+        return lookDoc;
       });
       return;
     }
@@ -678,6 +684,10 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (document.type !== 'poster') return;
     setDocumentState((prev) => {
       if (prev.pages.length >= MAX_PAGES) return prev;
+      // If the document has only the initial empty page (from
+      // createEmptyDocument), replace it rather than appending.
+      const hasOnlyEmptyPage =
+        prev.pages.length === 1 && prev.pages[0].layers.length === 0;
       const mediaLayer: CreatorLayer | null = media ? {
         id: createStableId('media'),
         type: 'media',
@@ -705,7 +715,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       };
       const doc = {
         ...prev,
-        pages: [...prev.pages, newPage],
+        pages: hasOnlyEmptyPage ? [newPage] : [...prev.pages, newPage],
         updatedAt: new Date().toISOString(),
       };
       historyRef.current.push(doc, 'Add frame');
@@ -721,7 +731,14 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
   const addPosterFrames = useCallback((media: CreatorInitialMedia[]) => {
     if (document.type !== 'poster') return;
     setDocumentState((prev) => {
-      const remaining = MAX_PAGES - prev.pages.length;
+      // If the document has only the initial empty page (from
+      // createEmptyDocument), replace it rather than appending so that
+      // selecting N assets produces exactly N pages — not N+1 with a
+      // leading empty frame.
+      const hasOnlyEmptyPage =
+        prev.pages.length === 1 && prev.pages[0].layers.length === 0;
+      const basePages = hasOnlyEmptyPage ? [] : prev.pages;
+      const remaining = MAX_PAGES - basePages.length;
       if (remaining <= 0) return prev;
       const toAdd = media.slice(0, remaining);
       const newPages: CreatorPage[] = toAdd.map((asset, i) => {
@@ -753,7 +770,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       });
       const doc = {
         ...prev,
-        pages: [...prev.pages, ...newPages],
+        pages: [...basePages, ...newPages],
         updatedAt: new Date().toISOString(),
       };
       historyRef.current.push(doc, `Add ${newPages.length} frame${newPages.length > 1 ? 's' : ''}`);

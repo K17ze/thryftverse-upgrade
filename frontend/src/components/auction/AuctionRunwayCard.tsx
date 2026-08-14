@@ -134,7 +134,9 @@ export function AuctionRunwayCard({
           />
           <View style={styles.belowMetaRow}>
             <AuctionCountdown text={countdownText} urgent={urgent} compact />
-            <Text style={styles.belowBidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+            {bidCount > 0 && (
+              <Text style={styles.belowBidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+            )}
           </View>
           {/* Personal action — single, no duplication */}
           {personalActionLabel && onPersonalAction && (
@@ -208,7 +210,9 @@ export function AuctionRunwayCard({
           />
           <View style={styles.metaRow}>
             <AuctionCountdown text={countdownText} urgent={urgent} compact />
-            <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+            {bidCount > 0 && (
+              <Text style={styles.bidCount}>{bidCount} {bidCount === 1 ? 'bid' : 'bids'}</Text>
+            )}
           </View>
         </View>
       </View>

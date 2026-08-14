@@ -27,6 +27,7 @@ import {
   refreshCoOwnAppraisal,
   type CoOwnOrderBookSnapshot,
   type MarketCoOwnAsset,
+  type MarketCoOwnHolding,
   createCoOwnPriceAlert,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -133,6 +134,7 @@ export default function AssetDetailScreen() {
   const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [orderBookError, setOrderBookError] = React.useState(false);
   const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
+  const [yourHolding, setYourHolding] = React.useState<MarketCoOwnHolding | null>(null);
   const [holdingsError, setHoldingsError] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
@@ -207,6 +209,7 @@ export default function AssetDetailScreen() {
     setHoldingsError(false);
     setOrderBook(null);
     setYourUnits(currentUser?.id ? null : 0);
+    setYourHolding(null);
 
     void Promise.allSettled([
       fetchCoOwnAssetById(assetId),
@@ -234,10 +237,12 @@ export default function AssetDetailScreen() {
 
       if (holdingsResult.status === 'fulfilled') {
         const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
+        setYourHolding(holding ?? null);
         setYourUnits(holding?.unitsOwned ?? 0);
       } else {
         setHoldingsError(true);
         setYourUnits(null);
+        setYourHolding(null);
       }
 
       setIsLoading(false);
@@ -260,10 +265,12 @@ export default function AssetDetailScreen() {
     void fetchCoOwnHoldings(currentUser.id)
       .then((holdings) => {
         const holding = holdings.find((entry) => entry.assetId === assetId);
+        setYourHolding(holding ?? null);
         setYourUnits(holding?.unitsOwned ?? 0);
       })
       .catch(() => {
         setYourUnits(null);
+        setYourHolding(null);
         setHoldingsError(true);
       });
   }, [assetId, currentUser?.id]);
@@ -290,10 +297,12 @@ export default function AssetDetailScreen() {
       }
       if (holdingsResult.status === 'fulfilled') {
         const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
+        setYourHolding(holding ?? null);
         setYourUnits(holding?.unitsOwned ?? 0);
         setHoldingsError(false);
       } else if (currentUser?.id) {
         setYourUnits(null);
+        setYourHolding(null);
         setHoldingsError(true);
       }
       setRefreshing(false);
@@ -417,6 +426,22 @@ export default function AssetDetailScreen() {
     ? Math.round((yourUnits / totalUnits) * 100 * 10) / 10
     : null;
   const feePct = Math.round(CO_OWN_FEE_RATE * 100);
+
+  // ── Holder P&L ──
+  // Per spec 09: "Your position / 12 units · £1,248 value / Avg. entry
+  // £98.20 · +£69.60 (+5.9%)". Only show P&L if authoritative data exists
+  // (avgEntryPriceGbp from the backend holdings contract).
+  const avgEntryPriceGbp = yourHolding?.avgEntryPriceGbp ?? null;
+  const positionValueGbp = yourUnits != null ? asset.unitPriceGbp * yourUnits : null;
+  const positionCostGbp = avgEntryPriceGbp != null && yourUnits != null
+    ? avgEntryPriceGbp * yourUnits
+    : null;
+  const unrealizedPnlGbp = positionValueGbp != null && positionCostGbp != null
+    ? positionValueGbp - positionCostGbp
+    : null;
+  const unrealizedPnlPct = positionCostGbp != null && positionCostGbp > 0 && unrealizedPnlGbp != null
+    ? (unrealizedPnlGbp / positionCostGbp) * 100
+    : null;
 
   const bestBid = orderBook && orderBook.bids.length > 0 ? orderBook.bids[0] : null;
   const bestAsk = orderBook && orderBook.asks.length > 0 ? orderBook.asks[0] : null;
@@ -755,6 +780,35 @@ export default function AssetDetailScreen() {
           />
         </View>
 
+        {/* ── Asset story — emotional object meaning before financial
+            abstraction (Rally psychology: collectible story precedes
+            investing/trading). A quiet editorial paragraph of the
+            provenance, not a card or a section block. Only rendered
+            when the backend has published a provenance narrative.
+            Full provenance/condition/detail lives in Due Diligence. */}
+        {asset.provenance ? (
+          <View style={styles.assetStoryWrap}>
+            <Text
+              style={[styles.assetStoryText, { color: colors.textSecondary }]}
+              numberOfLines={3}
+            >
+              {asset.provenance}
+            </Text>
+            <Pressable
+              onPress={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
+              hitSlop={8}
+              style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.5 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Read full asset story"
+            >
+              <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>
+                Read the full story
+              </Text>
+              <Ionicons name="chevron-forward" size={12} color={colors.brand} />
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* ── Layer 1 — Compact market overview ──
             The one non-media surface near the top: reference price,
             trading state, and a thin allocation indicator. Order book
@@ -898,6 +952,11 @@ export default function AssetDetailScreen() {
                 <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary }]}>
                   Your settled position
                 </Text>
+                {avgEntryPriceGbp != null && (
+                  <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary }]}>
+                    Avg. entry {formatCoOwnIze(avgEntryPriceGbp)}
+                  </Text>
+                )}
               </View>
               <View style={styles.viewerPositionCopy}>
                 <Text style={[styles.viewerPositionMarketValue, { color: colors.textPrimary }]}>
@@ -906,6 +965,18 @@ export default function AssetDetailScreen() {
                 <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary, textAlign: 'right' }]}>
                   Reference value
                 </Text>
+                {unrealizedPnlGbp != null && unrealizedPnlPct != null ? (
+                  <Text style={[
+                    styles.viewerPositionMeta,
+                    {
+                      color: unrealizedPnlGbp >= 0 ? colors.coownUp : colors.coownDown,
+                      textAlign: 'right',
+                      fontFamily: FontFamily.semibold,
+                    },
+                  ]}>
+                    {unrealizedPnlGbp >= 0 ? '+' : ''}{formatCoOwnIze(unrealizedPnlGbp)} ({unrealizedPnlPct >= 0 ? '+' : ''}{unrealizedPnlPct.toFixed(1)}%)
+                  </Text>
+                ) : null}
               </View>
             </View>
           ) : null}
@@ -1217,11 +1288,12 @@ export default function AssetDetailScreen() {
 
         // Tradable states — per spec 03_COOWN §7: holder primary =
         // "Sell", secondary = "Buy more"; non-holder primary = "Buy units".
+        // Per spec 09: do not show redundant value if the same price is
+        // immediately above in the transaction surface; avoid a thumbnail
+        // that makes the dock look like an ecommerce cart when the asset
+        // hero is already clear. The dock focuses on action, not repetition.
         return (
           <CommerceDetailStateDock
-            value={formatCoOwnIze(asset.unitPriceGbp)}
-            valueLabel="Unit price"
-            thumbnailUri={asset.imageUrl ?? undefined}
             showProtectionStrip={asset.buyerProtection ?? false}
             primaryAction={
               isHolder
@@ -1479,6 +1551,35 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
     paddingBottom: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  // ── Asset story — quiet editorial paragraph before market data ──
+  // Rally psychology: collectible story precedes financial abstraction.
+  // Flat canvas, no card, no border. Just the provenance narrative as
+  // body text, with a quiet "Read the full story" link to Due Diligence.
+  assetStoryWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.sm,
+    gap: Space.xs,
+  },
+  assetStoryText: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  assetStoryLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: Space.xs,
+    minHeight: Control.hit,
+  },
+  assetStoryLinkText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Elevated trust strip (near trade decision point) ──
   // Flat inline icon+text pairs, no card container. Per AGENTS.md §4.
