@@ -77,7 +77,7 @@ function layerTypeLabel(type: CreatorLayer['type']): string {
   }
 }
 
-function CreatorStudioInner() {
+export function CreatorStudioInner() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { colors } = useAppTheme();
@@ -928,8 +928,27 @@ export function CreatorStudioScreen() {
     );
   }
 
-  // Poster: existing CreatorStudioInner (a parallel subagent is creating
-  // a dedicated PosterComposerScreen for Poster).
+  // ── Poster V3: dedicated frame-native composer ──────────────────
+  // Per spec 09 (Poster Architecture V3), Poster gets its own screen
+  // that expresses the temporal frame mental model. The
+  // PosterComposerScreen wraps itself in CreatorProvider, so we return
+  // it directly for Poster documents.
+  if (initialType === 'poster') {
+    const { PosterComposerScreen } = require('./poster/PosterComposerScreen');
+    return (
+      <PosterComposerScreen
+        draftId={draftId}
+        templateId={templateId}
+        sourceDocumentId={sourceDocumentId}
+        initialMediaUri={initialMediaUri}
+        initialMedia={initialMedia}
+        startBlank={startBlank}
+        openTemplates={openTemplates}
+      />
+    );
+  }
+
+  // Fallback (should not reach here — Look and Poster are both branched above)
   return (
     <CreatorProvider
       initialType={initialType}

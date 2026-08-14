@@ -1,5 +1,6 @@
 export { CreatorStudioScreen } from './CreatorStudioShell';
 export { LookComposerScreen } from './look/LookComposerScreen';
+export { PosterComposerScreen } from './poster/PosterComposerScreen';
 export { CreatorDraftListScreen } from './CreatorDraftListScreen';
 export { CreatorProvider, useCreator } from './CreatorContext';
 export { CreatorCanvas } from './CreatorCanvas';
