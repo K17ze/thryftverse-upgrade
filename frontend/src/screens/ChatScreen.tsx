@@ -552,6 +552,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     scrollToMessage,
     pushMessage,
     appendToConversationStore,
+    confirmAgentDraft,
     sendMessage: hookSendMessage,
     sendMediaMessage,
     handleRetryUpload,
@@ -1221,6 +1222,12 @@ export default function ChatScreen({ navigation, route }: Props) {
             isTranslated={translatedMessageIds.has(msg.id)}
             isAgent={msg.isAgent}
             agentAvatar={msg.agentAvatar}
+            isDraft={msg.isAgent && msg.status === "draft"}
+            onConfirmDraft={
+              msg.isAgent && msg.status === "draft"
+                ? () => confirmAgentDraft(msg.id)
+                : undefined
+            }
             status={
               isMe
                 ? msg.status === "sending"

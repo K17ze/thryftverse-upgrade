@@ -22,7 +22,7 @@ interface MessageBubbleProps {
   isMe: boolean;
   senderLabel?: string;
   timestamp?: string;
-  status?: 'sending' | 'sent' | 'failed';
+  status?: 'sending' | 'sent' | 'failed' | 'draft';
   readStatus?: 'sending' | 'sent' | 'delivered' | 'read';
   reactions?: Reaction[];
   mediaUri?: string;
@@ -40,11 +40,16 @@ interface MessageBubbleProps {
   isAgent?: boolean;
   /** Ionicon name for the agent avatar glyph — used when isAgent is true. */
   agentAvatar?: string;
+  /** When true, renders the message as an unconfirmed agent draft with a
+   *  muted bubble, a "Draft" label, and a "Send" confirmation action. */
+  isDraft?: boolean;
   onLongPress?: () => void;
   onReactionPress?: () => void;
   onRetry?: () => void;
   onMediaPress?: () => void;
   onReplyPress?: () => void;
+  /** Called when the user confirms an agent draft. */
+  onConfirmDraft?: () => void;
 }
 
 function MessageBubbleBase({
@@ -67,6 +72,8 @@ function MessageBubbleBase({
   isTranslated = false,
   isAgent = false,
   agentAvatar,
+  isDraft = false,
+  onConfirmDraft,
   onLongPress,
   onReactionPress,
   onRetry,
@@ -157,6 +164,7 @@ function MessageBubbleBase({
             isMedia ? [styles.bubbleMedia, mediaRadius] : (isMe ? meRadius : themRadius),
             { opacity: pressed ? 0.88 : 1 },
             hasFailed && styles.bubbleFailed,
+            isDraft && styles.bubbleDraft,
           ]}
         >
           {replyTo ? (
@@ -209,6 +217,12 @@ function MessageBubbleBase({
                   <Text style={[styles.translatedLabel, { color: metaColor }]}>Translated</Text>
                 </View>
               ) : null}
+              {isDraft ? (
+                <View style={styles.draftBadge}>
+                  <Ionicons name="create-outline" size={10} color={colors.textMuted} />
+                  <Text style={[styles.draftLabel, { color: colors.textMuted }]}>Draft</Text>
+                </View>
+              ) : null}
               <Text style={[styles.messageText, { color: bubbleText }]}>{text}</Text>
             </>
           ) : null}
@@ -246,6 +260,22 @@ function MessageBubbleBase({
           <Pressable onPress={onRetry} style={styles.retryBadge}>
             <Ionicons name="refresh" size={11} color={colors.danger} />
             <Text style={styles.retryText}>Tap to retry</Text>
+          </Pressable>
+        ) : null}
+
+        {isDraft && onConfirmDraft ? (
+          <Pressable
+            onPress={onConfirmDraft}
+            style={({ pressed }) => [
+              styles.draftConfirmBadge,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Send agent draft"
+          >
+            <Ionicons name="send" size={11} color={colors.brand} />
+            <Text style={[styles.draftConfirmText, { color: colors.brand }]}>Send</Text>
           </Pressable>
         ) : null}
 
@@ -353,6 +383,40 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: `${colors.danger}12`,
     borderWidth: 1,
     borderColor: `${colors.danger}30`,
+  },
+  bubbleDraft: {
+    backgroundColor: `${colors.surfaceAlt}80`,
+    borderWidth: 1,
+    borderColor: `${colors.border}80`,
+    borderStyle: 'dashed',
+  },
+  draftBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: Space.xs,
+  },
+  draftLabel: {
+    fontSize: Type.meta.size - 2,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.metaElevated.letterSpacing,
+  },
+  draftConfirmBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: Space.xs,
+    marginLeft: Space.xs,
+    paddingHorizontal: Space.sm - 1,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.full,
+    backgroundColor: `${colors.brand}12`,
+    alignSelf: 'flex-start',
+    minHeight: 32,
+  },
+  draftConfirmText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
   },
   replyBlock: {
     borderLeftWidth: 2,

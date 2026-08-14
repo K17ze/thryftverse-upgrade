@@ -236,6 +236,19 @@ export function useConversationMessages({
     setMessages((prev) => [...prev, next]);
   }, []);
 
+  // Per spec 16: agent drafts are not sent messages. Confirming a draft
+  // promotes it to "sent" so it enters the message history permanently.
+  const confirmAgentDraft = useCallback((messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId && m.isAgent && m.status === "draft"
+          ? { ...m, status: "sent" as const }
+          : m,
+      ),
+    );
+    haptic.light();
+  }, [haptic]);
+
   const appendToConversationStore = useCallback(
     (next: Message, senderIdOverride?: string) => {
       if (!conversationId) return;
@@ -342,7 +355,9 @@ export function useConversationMessages({
             senderId: agentResponse.agentId,
             senderLabel: `${deployedChatAgents[0]?.name ?? "AI Agent"} · AI`,
             text: agentResponse.content,
-            status: "sent",
+            // Per spec 16: agent drafts are not sent messages. They enter the
+            // history only after the user confirms them via confirmAgentDraft.
+            status: "draft",
             isAgent: true,
             agentAvatar: deployedChatAgents[0]?.avatar,
           };
@@ -671,6 +686,7 @@ export function useConversationMessages({
     scrollToMessage,
     pushMessage,
     appendToConversationStore,
+    confirmAgentDraft,
     sendMessage,
     sendMediaMessage,
     handleRetryUpload,
