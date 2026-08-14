@@ -118,6 +118,11 @@ export function useConversationMessages({
   const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
   const [composerSending, setComposerSending] = useState(false);
 
+  // Ref mirror of the local message list so async callbacks (e.g.
+  // confirmAgentDraft) can read the latest messages without re-subscribing.
+  const messagesRef = useRef<Message[]>(messages);
+  messagesRef.current = messages;
+
   const listRef = React.useRef<FlashListRef<Message>>(null);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,18 +241,9 @@ export function useConversationMessages({
     setMessages((prev) => [...prev, next]);
   }, []);
 
-  // Per spec 16: agent drafts are not sent messages. Confirming a draft
-  // promotes it to "sent" so it enters the message history permanently.
-  const confirmAgentDraft = useCallback((messageId: string) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === messageId && m.isAgent && m.status === "draft"
-          ? { ...m, status: "sent" as const }
-          : m,
-      ),
-    );
-    haptic.light();
-  }, [haptic]);
+  // NOTE: confirmAgentDraft is defined after `appendToConversationStore`
+  // below, because it performs the canonical server send and only then
+  // inserts the confirmed message into the conversation store.
 
   const appendToConversationStore = useCallback(
     (next: Message, senderIdOverride?: string) => {
@@ -271,6 +267,72 @@ export function useConversationMessages({
       });
     },
     [conversationId, appendConversationMessage, currentUser?.id],
+  );
+
+  // Per spec 16: agent drafts are ephemeral local state. Confirming a draft
+  // performs the canonical server send exactly once; only on server success
+  // does the message enter the conversation store with status "sent". On
+  // failure the draft is marked "failed" with a retry affordance.
+  const confirmAgentDraft = useCallback(
+    async (messageId: string) => {
+      const draftMsg = messagesRef.current.find(
+        (m) => m.id === messageId && m.isAgent && (m.status === "draft" || m.status === "failed"),
+      );
+      if (!draftMsg || !conversationId) return;
+
+      // Mark as sending while the server request is in flight.
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, status: "sending" as const } : m,
+        ),
+      );
+      haptic.light();
+
+      try {
+        // Canonical server send — exactly once. The agent identity is
+        // preserved via metadata so the backend can attribute the message.
+        const serverMsg = await sendConversationMessageOnApi(
+          conversationId,
+          draftMsg.text ?? "",
+          { agentId: draftMsg.senderId },
+        );
+
+        // Replace the local draft with the server-confirmed message.
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, id: serverMsg.id, status: "sent" as const }
+              : m,
+          ),
+        );
+
+        // NOW insert into the conversation store — only after the server
+        // confirms. The draft was never in the store, so this is the first
+        // and only store insertion.
+        appendToConversationStore(
+          { ...draftMsg, id: serverMsg.id, status: "sent" },
+          draftMsg.senderId,
+        );
+      } catch {
+        // Mark as failed with retry affordance.
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId ? { ...m, status: "failed" as const } : m,
+          ),
+        );
+        show("Failed to send agent draft. Tap to retry.", "error");
+      }
+    },
+    [conversationId, haptic, show, appendToConversationStore],
+  );
+
+  // Retry handler for failed agent drafts — re-invokes confirmAgentDraft,
+  // which re-attempts the canonical server send.
+  const retryAgentDraft = useCallback(
+    (messageId: string) => {
+      void confirmAgentDraft(messageId);
+    },
+    [confirmAgentDraft],
   );
 
   const sendMessage = useCallback(
@@ -356,13 +418,15 @@ export function useConversationMessages({
             senderLabel: `${deployedChatAgents[0]?.name ?? "AI Agent"} · AI`,
             text: agentResponse.content,
             // Per spec 16: agent drafts are not sent messages. They enter the
-            // history only after the user confirms them via confirmAgentDraft.
+            // history only after the user confirms them via confirmAgentDraft,
+            // which performs the canonical server send and only then inserts
+            // the message into the conversation store. The draft is ephemeral
+            // local state so the user can review it before it is committed.
             status: "draft",
             isAgent: true,
             agentAvatar: deployedChatAgents[0]?.avatar,
           };
           pushMessage(agentMsg);
-          appendToConversationStore(agentMsg, agentResponse.agentId);
           setChatAgentSuggestionsExternal(
             getChatAgentSuggestions(conversationId, agentResponse.content),
           );
@@ -687,6 +751,7 @@ export function useConversationMessages({
     pushMessage,
     appendToConversationStore,
     confirmAgentDraft,
+    retryAgentDraft,
     sendMessage,
     sendMediaMessage,
     handleRetryUpload,

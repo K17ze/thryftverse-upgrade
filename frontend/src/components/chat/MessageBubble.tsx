@@ -50,6 +50,8 @@ interface MessageBubbleProps {
   onReplyPress?: () => void;
   /** Called when the user confirms an agent draft. */
   onConfirmDraft?: () => void;
+  /** Called when the user taps a failed agent draft to retry the send. */
+  onRetryDraft?: () => void;
 }
 
 function MessageBubbleBase({
@@ -74,6 +76,7 @@ function MessageBubbleBase({
   agentAvatar,
   isDraft = false,
   onConfirmDraft,
+  onRetryDraft,
   onLongPress,
   onReactionPress,
   onRetry,
@@ -258,6 +261,22 @@ function MessageBubbleBase({
 
         {hasFailed && onRetry ? (
           <Pressable onPress={onRetry} style={styles.retryBadge}>
+            <Ionicons name="refresh" size={11} color={colors.danger} />
+            <Text style={styles.retryText}>Tap to retry</Text>
+          </Pressable>
+        ) : null}
+
+        {isAgent && status === 'failed' && onRetryDraft ? (
+          <Pressable
+            onPress={onRetryDraft}
+            style={({ pressed }) => [
+              styles.retryBadge,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Retry sending agent draft"
+          >
             <Ionicons name="refresh" size={11} color={colors.danger} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>

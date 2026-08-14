@@ -553,6 +553,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     pushMessage,
     appendToConversationStore,
     confirmAgentDraft,
+    retryAgentDraft,
     sendMessage: hookSendMessage,
     sendMediaMessage,
     handleRetryUpload,
@@ -1228,6 +1229,11 @@ export default function ChatScreen({ navigation, route }: Props) {
                 ? () => confirmAgentDraft(msg.id)
                 : undefined
             }
+            onRetryDraft={
+              msg.isAgent && msg.status === "failed"
+                ? () => retryAgentDraft(msg.id)
+                : undefined
+            }
             status={
               isMe
                 ? msg.status === "sending"
@@ -1239,7 +1245,9 @@ export default function ChatScreen({ navigation, route }: Props) {
                       : msg.uploadStatus === "failed"
                         ? "failed"
                         : "sent"
-                : undefined
+                : msg.isAgent && (msg.status === "sending" || msg.status === "failed")
+                  ? msg.status
+                  : undefined
             }
             readStatus={isMe ? msg.readStatus : undefined}
             onLongPress={() => handleMessageLongPress(msg)}
@@ -1287,7 +1295,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             onRetry={
               msg.uploadStatus === "failed"
                 ? () => handleRetryUpload(msg.id)
-                : msg.status === "failed"
+                : msg.status === "failed" && !msg.isAgent
                   ? () => handleRetrySendMessage(msg.id)
                   : undefined
             }

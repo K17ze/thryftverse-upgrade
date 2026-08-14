@@ -194,6 +194,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Wallet" getComponent={() => require('../screens/WalletScreen').default} />
       {/* Wallet V3 — focused money-movement destinations (spec 17) */}
       <Stack.Screen name="SellerEarnings" getComponent={() => require('../screens/SellerEarningsScreen').default} />
+      <Stack.Screen name="WalletConvert" getComponent={() => require('../screens/WalletConvertScreen').default} />
       <Stack.Screen name="WalletActivity" getComponent={() => require('../screens/WalletActivityScreen').default} />
       <Stack.Screen name="MyOrders" getComponent={() => require('../screens/MyOrdersScreen').default} />
       <Stack.Screen name="Personalisation" getComponent={() => require('../screens/PersonalisationScreen').default} />

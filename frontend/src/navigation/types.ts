@@ -155,6 +155,7 @@ export type RootStackParamList = {
   Wallet: undefined;
   // Wallet V3 — focused money-movement destinations (spec 17)
   SellerEarnings: undefined;
+  WalletConvert: undefined;
   WalletActivity: undefined;
   MyOrders: undefined;
   Personalisation: undefined;

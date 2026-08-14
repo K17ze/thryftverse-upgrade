@@ -109,36 +109,38 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
   openai: {
     id: 'openai',
     name: 'OpenAI',
-    description: 'GPT-4o, GPT-4 Turbo, GPT-3.5 Turbo and o-series reasoning models.',
+    // No hardcoded model catalogue — models are discovered dynamically from
+    // the provider's /v1/models endpoint (spec 04: provider-authoritative).
+    description: 'OpenAI chat and reasoning models. Available models are discovered from your account.',
     icon: 'cube-outline',
     keyPrefixes: ['sk-'],
     minKeyLength: 20,
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'o1', 'o1-mini', 'o3-mini'],
+    models: [],
     supportsBaseUrl: false,
     keyPlaceholder: 'sk-...',
   },
   anthropic: {
     id: 'anthropic',
     name: 'Anthropic Claude',
-    description: 'Claude 3.5 Sonnet, Claude 3 Opus and Haiku chat models.',
+    description: 'Anthropic Claude chat models. Available models are discovered from your account.',
     icon: 'chatbubbles-outline',
     keyPrefixes: ['sk-ant-'],
     minKeyLength: 40,
-    models: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
+    models: [],
     supportsBaseUrl: false,
     keyPlaceholder: 'sk-ant-...',
   },
   gemini: {
     id: 'gemini',
     name: 'Google Gemini',
-    description: 'Gemini 1.5 Pro / Flash and Gemini 2.0 Flash multimodal models.',
+    description: 'Google Gemini multimodal models. Available models are discovered from your account.',
     icon: 'globe-outline',
     // Google API keys are commonly prefixed with 'AIza' but the platform does
     // not strictly enforce it; we accept the prefix when present and otherwise
     // only enforce length.
     keyPrefixes: ['AIza'],
     minKeyLength: 30,
-    models: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'],
+    models: [],
     supportsBaseUrl: false,
     keyPlaceholder: 'AIza...',
   },
@@ -149,7 +151,7 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     icon: 'server-outline',
     keyPrefixes: [],
     minKeyLength: 8,
-    models: ['Configured by your endpoint'],
+    models: [],
     supportsBaseUrl: true,
     keyPlaceholder: 'API key (optional for local servers)',
   },
@@ -273,6 +275,82 @@ export function validateBaseUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Returns `true` when the host is a private/loopback/reserved address that
+ * must not be reachable from a production build (SSRF guard). Hostnames that
+ * are not numeric IPs are considered public — only literal IP ranges and
+ * the well-known loopback name are blocked.
+ */
+function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '::1') return true;
+  const parts = h.split('.');
+  if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
+    const [a, b] = parts.map(Number);
+    if (a === 0) return true;                       // 0.0.0.0/8
+    if (a === 10) return true;                      // 10.0.0.0/8 private
+    if (a === 127) return true;                     // 127.0.0.0/8 loopback
+    if (a === 169 && b === 254) return true;        // 169.254.0.0/16 link-local
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
+    if (a === 192 && b === 168) return true;        // 192.168.0.0/16 private
+    if (a === 255) return true;                     // 255.255.255.255 broadcast
+  }
+  return false;
+}
+
+/**
+ * Validate a custom provider endpoint URL for transport safety and SSRF.
+ *
+ * - In production (`!__DEV__`), `http://` is rejected — HTTPS is the default.
+ * - In `__DEV__`, `http://` is allowed but a warning is logged so local
+ *   development servers (Ollama, LM Studio, etc.) keep working.
+ * - In production, private/loopback hosts are rejected to prevent SSRF
+ *   (`127.x`, `10.x`, `172.16–31.x`, `192.168.x`, `localhost`).
+ * - Throws an `Error` on rejection; returns `true` when the URL is acceptable.
+ *
+ * Exported so the hardening tests can exercise it directly.
+ */
+export function validateProviderEndpoint(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    throw new Error('Endpoint URL is required.');
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error('Endpoint URL is not a valid URL.');
+  }
+  if (!parsed.hostname) {
+    throw new Error('Endpoint URL must include a host.');
+  }
+
+  const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
+  if (parsed.protocol === 'http:') {
+    if (!isDev) {
+      throw new Error('Custom endpoints must use HTTPS in production.');
+    }
+    // Dev only — allow but warn so it is obvious this never ships.
+    console.warn(
+      '[aiProviderApi] Insecure http:// custom endpoint allowed in dev only:',
+      trimmed,
+    );
+  } else if (parsed.protocol !== 'https:') {
+    throw new Error(
+      `Unsupported endpoint protocol "${parsed.protocol}". Use https://.`,
+    );
+  }
+
+  // SSRF guard — only enforced in production. In dev, pointing at a local
+  // server (e.g. http://localhost:1234) is the common case.
+  if (!isDev && isPrivateHost(parsed.hostname)) {
+    throw new Error('Private/loopback endpoints are not allowed in production.');
+  }
+
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -478,23 +556,73 @@ async function probeProviderConnection(
 // into the common DiscoveredModel shape (spec 04).
 // ---------------------------------------------------------------------------
 
-/** Default capability set — conservative assumptions when the provider
- *  does not expose per-model capability metadata. */
-function defaultCapabilities(modelId: string): DiscoveredModel['capabilities'] {
-  const id = modelId.toLowerCase();
+/**
+ * Conservative default capability set used when the provider does not
+ * expose authoritative per-model capability metadata. We assume MINIMAL
+ * capabilities — never infer vision / tool-use / structured-output from
+ * the model id, because model IDs are not a reliable capability signal
+ * and overclaiming breaks truthful UI (AGENTS.md §11).
+ *
+ * Only `text` is assumed `true` (a model that cannot produce text is not a
+ * chat model). `vision`, `toolCalling`, `structuredOutput` and `reasoning`
+ * are all `false` until the provider explicitly says otherwise.
+ *
+ * Exported so the hardening tests can exercise it directly.
+ */
+export function defaultCapabilities(): DiscoveredModel['capabilities'] {
   return {
     text: true,
-    vision: id.includes('vision') || id.includes('4o') || id.includes('gemini'),
-    toolCalling: true,
-    structuredOutput: true,
-    reasoning: id.includes('o1') || id.includes('o3') || id.includes('reasoning'),
+    vision: false,
+    toolCalling: false,
+    structuredOutput: false,
+    reasoning: false,
+  };
+}
+
+/**
+ * Read capability flags from a provider model object when it exposes
+ * authoritative per-model capability metadata. Returns `null` when no
+ * capability metadata is present — callers then fall back to the safe
+ * `defaultCapabilities()`. We never infer capabilities from the model id.
+ */
+function capabilitiesFromMetadata(m: any): DiscoveredModel['capabilities'] | null {
+  if (!m || typeof m !== 'object') return null;
+  const caps = m.capabilities ?? m.capability ?? m.supports;
+  if (!caps || typeof caps !== 'object') return null;
+  const pick = (key: string): boolean | undefined => {
+    const v = (caps as any)[key];
+    return typeof v === 'boolean' ? v : undefined;
+  };
+  const text = pick('text') ?? pick('input') ?? pick('completion');
+  const vision = pick('vision') ?? pick('image_input') ?? pick('images');
+  const toolCalling = pick('toolCalling') ?? pick('tool_use') ?? pick('tools') ?? pick('functionCalling');
+  const structuredOutput = pick('structuredOutput') ?? pick('structured_output') ?? pick('json_mode');
+  const reasoning = pick('reasoning');
+  // Only treat as authoritative if at least one flag was explicitly set.
+  if (
+    text === undefined &&
+    vision === undefined &&
+    toolCalling === undefined &&
+    structuredOutput === undefined &&
+    reasoning === undefined
+  ) {
+    return null;
+  }
+  return {
+    text: text ?? true,
+    vision: vision ?? false,
+    toolCalling: toolCalling ?? false,
+    structuredOutput: structuredOutput ?? false,
+    reasoning: reasoning ?? false,
   };
 }
 
 /**
  * Parse a provider's /models response body into a normalised list of
  * DiscoveredModel entries. Each provider uses a slightly different schema,
- * so we handle them individually and fall back gracefully.
+ * so we handle them individually and fall back gracefully. Capabilities
+ * are only set from authoritative provider metadata — never inferred from
+ * the model id (AGENTS.md §11 truthful UI).
  */
 function parseProviderModels(provider: AIProvider, body: unknown): DiscoveredModel[] {
   if (!body || typeof body !== 'object') return [];
@@ -513,7 +641,7 @@ function parseProviderModels(provider: AIProvider, body: unknown): DiscoveredMod
             return {
               providerModelId: id,
               displayName: id,
-              capabilities: defaultCapabilities(id),
+              capabilities: capabilitiesFromMetadata(m) ?? defaultCapabilities(),
               deprecated: m?.deprecated === true,
             };
           })
@@ -530,7 +658,7 @@ function parseProviderModels(provider: AIProvider, body: unknown): DiscoveredMod
             return {
               providerModelId: id,
               displayName: typeof m?.display_name === 'string' ? m.display_name : id,
-              capabilities: defaultCapabilities(id),
+              capabilities: capabilitiesFromMetadata(m) ?? defaultCapabilities(),
               deprecated: m?.deprecated === true,
             };
           })
@@ -546,19 +674,23 @@ function parseProviderModels(provider: AIProvider, body: unknown): DiscoveredMod
             if (!rawName) return null;
             // Gemini returns "models/gemini-1.5-pro" — strip the prefix.
             const id = rawName.replace(/^models\//, '');
+            // `supportedGenerationMethods` is authoritative provider metadata
+            // for which generation modes the model supports. We only derive
+            // `text` from it (generateContent => text). Vision, tool-calling
+            // and structured-output are NOT encoded in this list, so we leave
+            // them as safe defaults rather than guessing from the model id.
             const methods: string[] = Array.isArray(m?.supportedGenerationMethods)
               ? m.supportedGenerationMethods
               : [];
+            const fromMeta = capabilitiesFromMetadata(m);
+            const caps: DiscoveredModel['capabilities'] = fromMeta ?? {
+              ...defaultCapabilities(),
+              text: methods.length === 0 || methods.includes('generateContent'),
+            };
             return {
               providerModelId: id,
               displayName: id,
-              capabilities: {
-                text: methods.length === 0 || methods.includes('generateContent'),
-                vision: id.includes('vision') || id.includes('pro') || id.includes('flash'),
-                toolCalling: methods.includes('generateContent'),
-                structuredOutput: methods.includes('generateContent'),
-                reasoning: false,
-              },
+              capabilities: caps,
             };
           })
           .filter((m: DiscoveredModel | null): m is DiscoveredModel => m !== null);
