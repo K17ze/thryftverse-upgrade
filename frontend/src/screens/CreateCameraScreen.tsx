@@ -318,11 +318,11 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         style={[
           s.modeBar,
           {
-            // Position ABOVE the bottom bar (bottom bar is ~140pt tall
-            // including safe area padding + shutter + gallery thumbnail).
+            // Position ABOVE the bottom bar (bottom bar is ~112pt tall
+            // including safe area padding + 78pt shutter + 44pt gallery).
             // Kept tight to the shutter so the mode switcher reads as part
             // of the capture cluster, not a disconnected floating deck.
-            bottom: Math.max(insets.bottom, 16) + 132,
+            bottom: Math.max(insets.bottom, 16) + 112,
             opacity,
           },
         ]}

@@ -19,7 +19,6 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
-import { AppButton } from '../components/ui/AppButton';
 import { haptics } from '../utils/haptics';
 import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
 import { parseApiError } from '../lib/apiClient';
@@ -31,13 +30,12 @@ import {
 } from '../services/walletApi';
 import {
   CoOwnMarketHeader,
-  CoOwnWalletBreakdown,
-  CoOwnWalletBreakdownSkeleton,
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
   type CoOwn1ZeBalance,
 } from '../components/coown';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
@@ -182,6 +180,17 @@ export default function WalletScreen({ navigation }: Props) {
   // ── Derived values ──
   const isWalletOperational = balance.reconciliationState === 'reconciled' && !isOffline;
 
+  // ── Derived sub-balance values (preserving reconciliation truth) ──
+  const settledClaim =
+    balance.settledCustomerClaim ??
+    (balance.available + balance.reservedForOrders + balance.redemptionInProgress + balance.otherHolds);
+  const withdrawable = balance.withdrawable ?? balance.available;
+  const hasPendingAttention = balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0;
+
+  // ── Balance formatting (tabular-nums, 2dp) ──
+  const formatBalance = (value: number) =>
+    value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   // ── Local-fiat indication for spendable hero ──
   const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
   const localFiatLabel = balance.available > 0 && localFiatRate > 0
@@ -245,7 +254,7 @@ export default function WalletScreen({ navigation }: Props) {
     );
   }
 
-  // ── Loading state ──
+  // ── Loading state — skeleton matching final layout ──
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -254,7 +263,36 @@ export default function WalletScreen({ navigation }: Props) {
           title="Wallet"
           onBack={handleBack}
         />
-        <CoOwnWalletBreakdownSkeleton />
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Balance hero skeleton */}
+          <SkeletonLoader width="35%" height={13} borderRadius={Radius.sm} />
+          <View style={{ height: Space.sm }} />
+          <SkeletonLoader width="60%" height={40} borderRadius={Radius.sm} />
+          <View style={{ height: Space.xs }} />
+          <SkeletonLoader width="40%" height={14} borderRadius={Radius.sm} />
+          {/* Action buttons skeleton */}
+          <View style={{ height: Space.lg }} />
+          <View style={styles.actionRow}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.actionBtn}>
+                <SkeletonLoader width="100%" height={44} borderRadius={Radius.md} />
+              </View>
+            ))}
+          </View>
+          {/* Sub-balance rows skeleton */}
+          <View style={{ height: Space.lg }} />
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} style={styles.skeletonSubRow}>
+              <SkeletonLoader width="35%" height={14} borderRadius={Radius.sm} />
+              <View style={{ flex: 1 }} />
+              <SkeletonLoader width={70} height={16} borderRadius={Radius.sm} />
+            </View>
+          ))}
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -338,21 +376,136 @@ export default function WalletScreen({ navigation }: Props) {
           />
         }
       >
-        {/* ── Wallet breakdown — spendable hero + sub-balances (spec 17 viewport 1+2) ── */}
-        <CoOwnWalletBreakdown
-          balance={balance}
-          localFiatLabel={localFiatLabel}
-          localFiatSource={currencyCode}
-          balanceHidden={balanceHidden}
-          onTogglePrivacy={handleTogglePrivacy}
-        />
+        {/* ── Balance hero — flat, largest text on screen (spec 17 viewport 1) ── */}
+        <View style={styles.balanceHero}>
+          <View style={styles.balanceHeader}>
+            <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>Spendable now</Text>
+            <Pressable
+              onPress={() => { haptics.tap(); handleTogglePrivacy(); }}
+              style={styles.eyeToggle}
+              accessibilityRole="button"
+              accessibilityLabel={balanceHidden ? 'Show balance' : 'Hide balance'}
+              accessibilityHint="Toggles privacy for your wallet balance"
+            >
+              <Ionicons
+                name={balanceHidden ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          </View>
+          {balanceHidden ? (
+            <Text
+              style={[styles.balanceMasked, { color: colors.textMuted }]}
+              accessibilityLabel="Balance hidden"
+              accessibilityHint="Activate the eye control to reveal your spendable balance"
+            >
+              ••••••
+            </Text>
+          ) : (
+            <Text
+              style={[styles.balanceValue, { color: colors.textPrimary }]}
+              accessibilityLabel={`${formatBalance(balance.available)} 1ZE`}
+            >
+              {formatBalance(balance.available)}
+              <Text style={[styles.balanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+            </Text>
+          )}
+          {localFiatLabel && !balanceHidden && (
+            <View style={styles.localFiatRow}>
+              <Ionicons name="cash-outline" size={12} color={colors.textMuted} />
+              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1}>
+                {localFiatLabel}
+                {currencyCode ? ` · ${currencyCode}` : ''}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── Primary actions — 3 equal-width buttons in a row (spec 17 viewport 1) ── */}
+        <View style={styles.actionRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBtn,
+              styles.actionBtnPrimary,
+              { backgroundColor: colors.brand },
+              pressed && { opacity: 0.85 },
+              !isWalletOperational && { opacity: 0.5 },
+            ]}
+            onPress={handleAddMoney}
+            disabled={!isWalletOperational}
+            accessibilityRole="button"
+            accessibilityLabel="Add money to your wallet"
+            accessibilityHint="Opens the add money flow"
+          >
+            <Ionicons name="add-circle-outline" size={20} color={colors.background} />
+            <Text style={[styles.actionBtnLabel, { color: colors.background }]}>Add money</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBtn,
+              styles.actionBtnSecondary,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              pressed && { opacity: 0.7 },
+              !isWalletOperational && { opacity: 0.5 },
+            ]}
+            onPress={handleWithdraw}
+            disabled={!isWalletOperational}
+            accessibilityRole="button"
+            accessibilityLabel="Withdraw from your wallet"
+            accessibilityHint="Opens the withdraw flow"
+          >
+            <Ionicons name="arrow-down-circle-outline" size={20} color={colors.textPrimary} />
+            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Withdraw</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBtn,
+              styles.actionBtnSecondary,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              pressed && { opacity: 0.7 },
+              (balance.available <= 0 || !isWalletOperational) && { opacity: 0.5 },
+            ]}
+            onPress={handleConvert}
+            disabled={balance.available <= 0 || !isWalletOperational}
+            accessibilityRole="button"
+            accessibilityLabel="Convert 1ZE to fiat"
+            accessibilityHint="Opens the convert screen"
+          >
+            <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} />
+            <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Convert</Text>
+          </Pressable>
+        </View>
+
+        {/* ── Pending attention — if real (spec 17 viewport 1) ── */}
+        {hasPendingAttention && !balanceHidden && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.pendingRow,
+              { borderBottomColor: colors.border },
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={handleViewEarnings}
+            accessibilityRole="button"
+            accessibilityLabel={`Pending attention: ${formatBalance(balance.pendingDeposit)} 1ZE deposit, ${formatBalance(balance.unsettledSaleProceeds)} 1ZE unsettled proceeds`}
+            accessibilityHint="View seller earnings and release schedule"
+          >
+            <Ionicons name="time-outline" size={16} color={colors.warning} />
+            <Text style={[styles.pendingText, { color: colors.textPrimary }]} numberOfLines={1}>
+              {balance.pendingDeposit > 0 && `${formatBalance(balance.pendingDeposit)} 1ZE deposit pending`}
+              {balance.pendingDeposit > 0 && balance.unsettledSaleProceeds > 0 && ' · '}
+              {balance.unsettledSaleProceeds > 0 && `${formatBalance(balance.unsettledSaleProceeds)} 1ZE proceeds unsettled`}
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+          </Pressable>
+        )}
 
         {/* ── Seller earnings summary (spec 17: "Seller earnings · £X available · £Y pending") ── */}
         {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
           <Pressable
             style={({ pressed }) => [
               styles.earningsSummaryRow,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              { borderBottomColor: colors.border },
               pressed && { opacity: 0.7 },
             ]}
             onPress={handleViewEarnings}
@@ -377,46 +530,55 @@ export default function WalletScreen({ navigation }: Props) {
           </Pressable>
         )}
 
-        {/* ── Add money — primary action, dominant (spec 17 viewport 1) ── */}
-        <AppButton
-          title="Add money"
-          icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
-          onPress={handleAddMoney}
-          variant="primary"
-          size="md"
-          accessibilityLabel="Add money to your wallet"
-          accessibilityHint="Opens the add money flow"
-          hapticFeedback="medium"
-          style={styles.primaryAction}
-          disabled={!isWalletOperational}
-        />
+        {/* ── Sub-balances — flat rows, below the fold (spec 17 viewport 2) ── */}
+        <View style={styles.subBalanceSection}>
+          <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>Settled claim</Text>
+          {settledClaim === 0 ? (
+            <Text style={[styles.subBalanceEmpty, { color: colors.textMuted }]}>
+              No settled 1ZE yet.
+            </Text>
+          ) : (
+            <>
+              <SubBalanceRow label="Available" value={balance.available} formatBalance={formatBalance} colors={colors} emphasis />
+              {balance.reservedForOrders > 0 && (
+                <SubBalanceRow label="Reserved for orders" value={balance.reservedForOrders} formatBalance={formatBalance} colors={colors} />
+              )}
+              {balance.redemptionInProgress > 0 && (
+                <SubBalanceRow label="Redemption pending" value={balance.redemptionInProgress} formatBalance={formatBalance} colors={colors} />
+              )}
+              {balance.otherHolds > 0 && (
+                <SubBalanceRow label="Other holds" value={balance.otherHolds} formatBalance={formatBalance} colors={colors} />
+              )}
+              <View style={[styles.subBalanceTotalRow, { borderTopColor: colors.border }]}>
+                <Text style={[styles.subBalanceTotalLabel, { color: colors.textPrimary }]}>Settled claim</Text>
+                <Text style={[styles.subBalanceTotalValue, { color: colors.textPrimary }]}>
+                  {formatBalance(settledClaim)}
+                  <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
 
-        {/* ── Withdraw + Convert — secondary actions, restrained (spec 17) ── */}
-        <View style={styles.secondaryActionRow}>
-          <AppButton
-            title="Withdraw"
-            icon={<Ionicons name="arrow-down-circle-outline" size={18} color={colors.textPrimary} />}
-            onPress={handleWithdraw}
-            variant="secondary"
-            size="md"
-            accessibilityLabel="Withdraw from your wallet"
-            accessibilityHint="Opens the withdraw flow"
-            hapticFeedback="medium"
-            style={styles.secondaryActionBtn}
-            disabled={!isWalletOperational}
-          />
-          <AppButton
-            title="Convert"
-            icon={<Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />}
-            onPress={handleConvert}
-            variant="secondary"
-            size="md"
-            accessibilityLabel="Convert 1ZE to fiat"
-            accessibilityHint="Opens the convert screen"
-            hapticFeedback="medium"
-            style={styles.secondaryActionBtn}
-            disabled={balance.available <= 0 || !isWalletOperational}
-          />
+        {/* ── Pending section (not yet settled) ── */}
+        {(balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
+          <View style={styles.subBalanceSection}>
+            <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>Pending</Text>
+            <SubBalanceRow label="Pending deposit" value={balance.pendingDeposit} formatBalance={formatBalance} colors={colors} />
+            <SubBalanceRow label="Unsettled sale proceeds" value={balance.unsettledSaleProceeds} formatBalance={formatBalance} colors={colors} />
+          </View>
+        )}
+
+        {/* ── Withdrawable ── */}
+        <View style={[styles.withdrawableRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+          <View style={styles.withdrawableLeft}>
+            <Ionicons name="arrow-down-circle-outline" size={15} color={colors.textSecondary} />
+            <Text style={[styles.withdrawableLabel, { color: colors.textSecondary }]}>Withdrawable</Text>
+          </View>
+          <Text style={[styles.withdrawableValue, { color: colors.textPrimary }]}>
+            {formatBalance(withdrawable)}
+            <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+          </Text>
         </View>
 
         {/* ── Transaction history (spec 17 viewport 2: latest activity) ── */}
@@ -502,23 +664,169 @@ export default function WalletScreen({ navigation }: Props) {
 
 // ── Helper sub-components ──
 
+/** Flat sub-balance row — label left, tabular-nums value right. */
+function SubBalanceRow({
+  label,
+  value,
+  formatBalance,
+  colors,
+  emphasis,
+}: {
+  label: string;
+  value: number;
+  formatBalance: (v: number) => string;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+  emphasis?: boolean;
+}) {
+  return (
+    <View
+      style={styles.subBalanceRow}
+      accessibilityRole="text"
+      accessibilityLabel={`${label}: ${formatBalance(value)} 1ZE`}
+    >
+      <Text
+        style={[
+          styles.subBalanceLabel,
+          { color: emphasis ? colors.textPrimary : colors.textSecondary },
+          emphasis && { fontFamily: Typography.family.semibold },
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[
+          styles.subBalanceValue,
+          { color: colors.textPrimary },
+          emphasis && { fontFamily: Typography.family.semibold },
+        ]}
+      >
+        {formatBalance(value)}
+        <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
   },
-  // ── Seller earnings summary row (spec 17 — compact, taps to SellerEarningsScreen) ──
+
+  // ── Balance hero — flat, no card (spec 17 viewport 1) ──
+  balanceHero: {
+    paddingVertical: Space.sm,
+  },
+  balanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  balanceLabel: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  // 44pt transparent hit area — visible eye glyph is 20pt
+  eyeToggle: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -Space.xs,
+  },
+  balanceMasked: {
+    fontSize: 40,
+    lineHeight: 44,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 2,
+    marginTop: Space.xs,
+  },
+  // Largest text on screen — tabular-nums, bold
+  balanceValue: {
+    fontSize: 40,
+    lineHeight: 44,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -1,
+    marginTop: Space.xs,
+  },
+  balanceUnit: {
+    fontSize: 20,
+    lineHeight: 44,
+    fontFamily: Typography.family.semibold,
+  },
+  localFiatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.xs + 2,
+  },
+  localFiatText: {
+    flex: 1,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+
+  // ── Primary actions — 3 equal-width buttons in a row ──
+  actionRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.md,
+  },
+  actionBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs - 1,
+    paddingVertical: Space.sm,
+  },
+  actionBtnPrimary: {
+    borderWidth: 0,
+  },
+  actionBtnSecondary: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  actionBtnLabel: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+  },
+
+  // ── Pending attention row ──
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.md,
+  },
+  pendingText: {
+    flex: 1,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
+  },
+
+  // ── Seller earnings summary row (flat, not carded) ──
   earningsSummaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   earningsSummaryInfo: {
     flexDirection: 'row',
@@ -533,16 +841,102 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
     flexShrink: 1,
   },
-  // ── Actions — clear primary/secondary hierarchy (spec 17 viewport 1) ──
-  primaryAction: {
+
+  // ── Sub-balance flat rows ──
+  subBalanceSection: {
     marginTop: Space.lg,
   },
-  secondaryActionRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.sm,
+  subBalanceSectionLabel: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+    marginBottom: Space.xs + 2,
   },
-  secondaryActionBtn: { flex: 1 },
+  subBalanceEmpty: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    paddingVertical: Space.sm,
+  },
+  subBalanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space.sm + 2,
+    gap: Space.md,
+  },
+  subBalanceLabel: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  subBalanceValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  subBalanceUnit: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  subBalanceTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Space.sm + 2,
+    marginTop: Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Space.md,
+  },
+  subBalanceTotalLabel: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  subBalanceTotalValue: {
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: Type.priceList.letterSpacing,
+  },
+
+  // ── Withdrawable ──
+  withdrawableRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 0,
+    paddingVertical: Space.sm + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Space.md,
+    marginTop: Space.lg,
+  },
+  withdrawableLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  withdrawableLabel: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  withdrawableValue: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
 
   // ── Transaction history ──
   txHistorySection: {
@@ -554,7 +948,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: Space.sm,
   },
-  // Section title uses subtitle for clear hierarchy — not a tiny uppercase label
   txHistoryTitle: {
     fontSize: Type.subtitle.size,
     lineHeight: Type.subtitle.lineHeight,
@@ -566,6 +959,13 @@ const styles = StyleSheet.create({
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.captionElevated.letterSpacing,
+  },
+
+  // ── Skeleton ──
+  skeletonSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Space.sm + 2,
   },
 
   // ── Safeguarding info ──

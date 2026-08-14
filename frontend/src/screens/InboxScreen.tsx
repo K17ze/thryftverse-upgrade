@@ -389,7 +389,7 @@ export default function InboxScreen() {
     ) : (
       <AvatarRing
         uri={item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? counterpartySummary?.avatar ?? undefined : undefined)}
-        size={56}
+        size={40}
         isUnread={item.unread}
             ringWidth={2}
         fallbackInitials={safeDisplayTitle === 'Thryft user' ? 'T' : safeDisplayTitle.slice(0, 2).toUpperCase()}
@@ -684,7 +684,7 @@ export default function InboxScreen() {
           <View style={styles.skeletonList}>
             {Array.from({ length: 6 }).map((_, i) => (
               <View key={i} style={styles.skeletonRow}>
-                <SkeletonLoader width={56} height={56} borderRadius={RadiusRoleValue.pillAvatar} />
+                <SkeletonLoader width={40} height={40} borderRadius={RadiusRoleValue.pillAvatar} />
                 <View style={styles.skeletonText}>
                   <SkeletonLoader width="70%" height={16} borderRadius={RadiusRoleValue.compactControl} />
                   <SkeletonLoader width="40%" height={14} borderRadius={RadiusRoleValue.compactControl} />
@@ -938,13 +938,13 @@ const styles = StyleSheet.create({
   },
   rowSeparator: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: Space.xxl + Space.lg,
+    marginLeft: Space.md + 40 + Space.sm + 2,
     marginRight: Space.md,
   },
   avatarWrap: { position: 'relative' },
   groupAvatar: {
-    width: Space.xxl + Space.sm,
-    height: Space.xxl + Space.sm,
+    width: 40,
+    height: 40,
     borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center',

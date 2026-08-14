@@ -36,6 +36,7 @@ import { CreatorEntryScreen } from '../CreatorEntryScreen';
 import { CreatorCropSheet } from '../CreatorCropSheet';
 import { CreatorCutoutSheet } from '../CreatorCutoutSheet';
 import { PressScale } from '../CreatorAnimations';
+import { LookSourceTray } from './LookSourceTray';
 import { useHaptic } from '../../hooks/useHaptic';
 import { fetchLookByIdFromApi } from '../../services/looksApi';
 import { lookToDocument } from '../viewerAdapters';
@@ -127,6 +128,8 @@ function LookComposerInner() {
   const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
   const [editingLookId, setEditingLookId] = useState<string | null>(null);
   const [isLoadingSourceLook, setIsLoadingSourceLook] = useState(false);
+  // ── Commerce source tray (spec 10: pull in items from closet/listings/search) ──
+  const [showSourceTray, setShowSourceTray] = useState(false);
 
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
 
@@ -406,6 +409,28 @@ function LookComposerInner() {
     setPickerMode('product');
   }, [haptic]);
 
+  // ── Source tray: add item from closet/listings/search ──
+  // Tapping an item in the source tray adds it as a product tag layer
+  // via addLookProduct. The tray stays open so the user can add multiple
+  // items in quick succession.
+  const handleSourceTrayAddItem = useCallback((item: {
+    listingId: string;
+    snapshotTitle: string;
+    snapshotImageUrl?: string;
+    snapshotPriceGbp?: number;
+  }) => {
+    addLookProduct({
+      listingId: item.listingId,
+      snapshotTitle: item.snapshotTitle,
+      snapshotImageUrl: item.snapshotImageUrl,
+      snapshotPriceGbp: item.snapshotPriceGbp,
+    });
+  }, [addLookProduct]);
+
+  const handleToggleSourceTray = useCallback(() => {
+    setShowSourceTray((p) => !p);
+  }, []);
+
   const handleAddPhoto = useCallback(() => {
     haptic.light();
     setPickerMode('media');
@@ -683,12 +708,28 @@ function LookComposerInner() {
         </View>
       )}
 
+      {/* ── Commerce source tray (spec 10: pull in items from closet/listings/search) ── */}
+      {/* A bottom tray where users can pull in items from their closet, their
+          own listings, or search for products. Sits above the bottom action
+          bar. Collapsible so the canvas remains dominant. Only shown when
+          no layer is selected (the context toolbar takes over on selection). */}
+      {!selectedLayer && (
+        <View style={[styles.sourceTrayContainer, { bottom: insets.bottom + 56 }]}>
+          <LookSourceTray
+            expanded={showSourceTray}
+            onToggle={handleToggleSourceTray}
+            onAddItem={handleSourceTrayAddItem}
+          />
+        </View>
+      )}
+
       {/* ── Bottom action bar (default — no selection) ────────────────── */}
-      {/* Per spec 10: Add item · Add photo · Cutout · Text · Layout
+      {/* Per spec 10 + 2026 HIG: Add item · Add photo · Cutout · Text · Layout
           These are the five default bottom actions for the collage-native
           workspace. They are flat, transparent targets — no glass dock,
           no card-on-card. The "Try arrangement" assistance button sits
-          at the end per spec 10. */}
+          at the end per spec 10. The "Items" button toggles the source tray
+          for pulling in commerce items (closet/listings/search). */}
       {!selectedLayer && (
         <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
           <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
@@ -698,10 +739,11 @@ function LookComposerInner() {
               contentContainerStyle={styles.bottomBarContent}
             >
               <BottomAction
-                icon="pricetag-outline"
-                label="Add item"
-                onPress={handleAddItem}
+                icon="bag-outline"
+                label="Items"
+                onPress={handleToggleSourceTray}
                 colors={colors}
+                accent={showSourceTray}
               />
               <BottomAction
                 icon="images-outline"
@@ -1271,6 +1313,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
+  },
+  // ── Source tray container ──
+  // Sits above the bottom action bar. The LookSourceTray component
+  // manages its own expand/collapse content; this container positions it.
+  sourceTrayContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 99,
   },
   bottomBar: {
     flexDirection: 'row',

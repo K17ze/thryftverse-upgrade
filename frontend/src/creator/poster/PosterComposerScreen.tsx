@@ -21,6 +21,7 @@ import { Space, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useToast } from '../../context/ToastContext';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
 import type { CreatorLayer } from '../composition';
@@ -94,6 +95,7 @@ function PosterComposerInner() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const { show } = useToast();
   const {
     document,
     activePageIndex,
@@ -635,11 +637,16 @@ function PosterComposerInner() {
       </View>
 
       {/* ── Context toolbar (selected layer only) ────────────────────── */}
-      {/* Per spec 09: selected object produces a context toolbar, not a
-          permanent dock. Only tools relevant to the current selection are
-          shown. Z-order (Front/Back) only appears when there are 2+ layers
-          to reorder. Opacity is shown only when the layer has non-default
-          opacity or when there are multiple layers (advanced context). */}
+      {/* Per spec 09 + 2026 HIG: selected object produces a context toolbar,
+          not a permanent dock. Only tools relevant to the current selection
+          are shown:
+            - Text: Edit (font/size/color/alignment via picker), alignment quick toggle
+            - Media: Replace, (crop/trim coming in future update)
+            - Product: Change link
+            - Sticker/decorative: no type-specific primary
+          Z-order (Front/Back) only appears when there are 2+ layers.
+          Opacity is shown only when multiple layers (advanced context).
+          Delete is always available, separated by a hairline. */}
       {selectedLayer && (
         <View style={[styles.contextToolbarContainer, { bottom: insets.bottom + 88 }]}>
           <ScrollView
@@ -647,21 +654,59 @@ function PosterComposerInner() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.contextToolbarContent}
           >
-            {/* Type-specific primary action */}
+            {/* ── Text-specific controls ── */}
             {selectedLayer.type === 'text' && (
-              <FrameTool
-                icon="create-outline"
-                label="Edit"
-                onPress={() => handleEditLayer(selectedLayer)}
-              />
+              <>
+                <FrameTool
+                  icon="create-outline"
+                  label="Edit"
+                  onPress={() => handleEditLayer(selectedLayer)}
+                />
+                {/* Alignment quick toggle — cycles left/center/right */}
+                <FrameTool
+                  icon={
+                    selectedLayer.payload.alignment === 'left' ? 'arrow-undo' :
+                    selectedLayer.payload.alignment === 'right' ? 'arrow-redo' :
+                    'remove'
+                  }
+                  label="Align"
+                  onPress={() => {
+                    haptic.light();
+                    const current = selectedLayer.payload.alignment ?? 'center';
+                    const next = current === 'left' ? 'center' : current === 'center' ? 'right' : 'left';
+                    updateLayer(selectedLayer.id, {
+                      type: 'text',
+                      payload: { ...selectedLayer.payload, alignment: next },
+                    }, 'Change alignment');
+                  }}
+                />
+              </>
             )}
+
+            {/* ── Media-specific controls ── */}
             {selectedLayer.type === 'media' && (
-              <FrameTool
-                icon="swap-horizontal-outline"
-                label="Replace"
-                onPress={() => handleEditLayer(selectedLayer)}
-              />
+              <>
+                <FrameTool
+                  icon="swap-horizontal-outline"
+                  label="Replace"
+                  onPress={() => handleEditLayer(selectedLayer)}
+                />
+                {/* Video trim/mute — truthful "coming in future update" label.
+                    Do NOT implement fake trim/mute (AGENTS.md §11). */}
+                {selectedLayer.payload.mediaType === 'video' && (
+                  <FrameTool
+                    icon="crop-outline"
+                    label="Trim (soon)"
+                    onPress={() => {
+                      haptic.light();
+                      show('Video trim and mute are coming in a future update', 'info');
+                    }}
+                  />
+                )}
+              </>
             )}
+
+            {/* ── Product-specific controls ── */}
             {selectedLayer.type === 'product' && (
               <FrameTool
                 icon="pricetag-outline"

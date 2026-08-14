@@ -260,31 +260,38 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
   return result;
 }
 
-type NotificationGroupKey = 'orders' | 'social' | 'system';
+type NotificationGroupKey = 'today' | 'yesterday' | 'earlier';
 
-const NOTIFICATION_GROUP_ORDER: NotificationGroupKey[] = ['orders', 'social', 'system'];
+const NOTIFICATION_GROUP_ORDER: NotificationGroupKey[] = ['today', 'yesterday', 'earlier'];
 
 const NOTIFICATION_GROUP_LABELS: Record<NotificationGroupKey, string> = {
-  orders: 'Orders',
-  social: 'Social',
-  system: 'System',
+  today: 'Today',
+  yesterday: 'Yesterday',
+  earlier: 'Earlier',
 };
 
-function getNotificationGroupKey(type: NotificationCardType): NotificationGroupKey {
-  if (type === 'order' || type === 'resolution') return 'orders';
-  if (type === 'like' || type === 'review' || type === 'new_item') return 'social';
-  return 'system';
+function getNotificationGroupKey(createdAt: string): NotificationGroupKey {
+  const now = new Date();
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return 'earlier';
+
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday.getTime() - 86_400_000);
+
+  if (created >= startOfToday) return 'today';
+  if (created >= startOfYesterday) return 'yesterday';
+  return 'earlier';
 }
 
 function groupNotifications(notifications: NotificationCard[]) {
   const buckets: Record<NotificationGroupKey, NotificationCard[]> = {
-    orders: [],
-    social: [],
-    system: [],
+    today: [],
+    yesterday: [],
+    earlier: [],
   };
 
   notifications.forEach((notification) => {
-    const groupKey = getNotificationGroupKey(notification.type);
+    const groupKey = getNotificationGroupKey(notification.createdAt);
     buckets[groupKey].push(notification);
   });
 

@@ -228,13 +228,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   metaIcon: {
     marginLeft: 1,
   },
-  // Timestamp: Type.caption — quiet metadata
+  // Timestamp: Type.caption — quiet metadata, tabular-nums for stable layout
   time: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textMuted,
     paddingLeft: Space.xs,
     letterSpacing: Type.caption.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   timeUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,

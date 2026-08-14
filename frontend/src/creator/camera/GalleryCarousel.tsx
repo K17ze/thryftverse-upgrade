@@ -4,7 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Typography, Radius, Type, Space } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 
-const GALLERY_THUMB_SIZE = 64;
+// 2026 Apple HIG: gallery thumbnail is a compact 44pt — large enough to
+// read the last capture, small enough to keep the viewfinder dominant.
+// Rounded corners (Radius.md) instead of a full circle for a calmer,
+// more editorial feel. The hit zone is 44pt (meets touch-target minimum).
+const GALLERY_THUMB_SIZE = 44;
 
 export interface GalleryCarouselProps {
   /** Most recent gallery image URI (shown as the 64×64 thumbnail). */
@@ -110,37 +114,38 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   recentThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.lg,
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
   },
   galleryBtn: {
     alignItems: 'center',
-    gap: 6,
-    width: 72,
-    minHeight: 72,
+    gap: 4,
+    width: 56,
+    minHeight: 56,
     justifyContent: 'center',
   },
+  // 44pt rounded-rect thumbnail — calmer than a circle, still clearly tappable.
   galleryThumb: {
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
-    borderRadius: GALLERY_THUMB_SIZE / 2,
-    borderWidth: 2,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.9)',
   },
   galleryThumbPlaceholder: {
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
-    borderRadius: GALLERY_THUMB_SIZE / 2,
-    borderWidth: 2,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   bottomLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-    color: 'rgba(255,255,255,0.85)',
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.7)',
   },
   btnPressed: {
     opacity: 0.7,

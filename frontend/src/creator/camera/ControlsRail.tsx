@@ -203,6 +203,9 @@ const styles = StyleSheet.create({
     gap: 16,
     alignItems: 'center',
   },
+  // 44pt minimum touch target (AGENTS.md §13). The visible glyph is 22pt
+  // but the hit zone is 48×56 to exceed the minimum. Labels are 10pt to
+  // keep the rail compact — the viewfinder dominates, not the controls.
   railBtn: {
     width: 48,
     height: 56,

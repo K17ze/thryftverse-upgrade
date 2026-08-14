@@ -62,10 +62,10 @@ const RISK_GROUPS: Array<{
   title: string;
   hint: string;
 }> = [
-  { risk: 'low', title: 'Read access', hint: 'Auto-approved after you grant once.' },
-  { risk: 'medium', title: 'Drafts & edits', hint: 'Reversible — nothing is committed externally.' },
-  { risk: 'high', title: 'Publish & send', hint: 'Asks before every publication or message.' },
-  { risk: 'critical', title: 'Money & security', hint: 'Always requires explicit approval — never auto-allowed.' },
+  { risk: 'low', title: 'Low risk — read access', hint: 'Auto-approved after you grant once.' },
+  { risk: 'medium', title: 'Medium risk — drafts & edits', hint: 'Reversible — nothing is committed externally.' },
+  { risk: 'high', title: 'High risk — publish & send', hint: 'Asks before every publication or message.' },
+  { risk: 'critical', title: 'Critical — money & security', hint: 'Always requires explicit approval — never auto-allowed.' },
 ];
 
 const RISK_DOT: Record<RiskLevel, string> = {
@@ -517,7 +517,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
 
         <Section
           title="Capabilities"
-          detail="Control what this agent can do. Actions that publish or spend always need your approval."
+          detail="Control what this agent can do. High-risk and critical actions always need your approval."
         >
           {RISK_GROUPS.map((group) => {
             const groupGrants = capabilityGrants.filter(

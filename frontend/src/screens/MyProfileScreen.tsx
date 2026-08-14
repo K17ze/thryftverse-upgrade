@@ -146,7 +146,7 @@ export default function MyProfileScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
-  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'portfolio' | 'about'>('listings');
+  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'saved' | 'about'>('listings');
 
   const { show } = useToast();
   const haptic = useHaptic();
@@ -447,6 +447,11 @@ export default function MyProfileScreen() {
 
   const wishlistCount = useStore((state) => state.wishlist.length);
   const savedCount = useStore((state) => state.savedProducts.length);
+  const savedProductIds = useStore((state) => state.savedProducts);
+  const savedListings = React.useMemo(
+    () => listings.filter((item) => savedProductIds.includes(item.id)),
+    [listings, savedProductIds]
+  );
 
   const utilityItems = React.useMemo(
     () => [
@@ -650,99 +655,6 @@ export default function MyProfileScreen() {
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
           />
 
-          {/* ── PROFILE COMPLETION PROMPT — progress + CTA ── */}
-          {showCompletionPrompt ? (
-            <View style={[styles.completionCard, t.completionCard]}>
-              <View style={styles.completionHead}>
-                <View style={styles.completionHeadText}>
-                  <Text style={[styles.completionTitle, t.completionTitle]}>Complete your profile</Text>
-                  <Text style={[styles.completionPercent, t.completionPercent]}>
-                    {completion.percent}% · {completion.done}/{completion.total}
-                  </Text>
-                </View>
-                <AnimatedPressable
-                  style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
-                  onPress={() => { haptic.light(); setCompletionDismissed(true); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Dismiss profile completion prompt"
-                >
-                  <Ionicons name="close" size={15} color={colors.textMuted} />
-                </AnimatedPressable>
-              </View>
-              <View style={[styles.completionTrack, t.completionTrack]}>
-                <View style={[styles.completionFill, t.completionFill, { width: `${completion.percent}%` }]} />
-              </View>
-              <AnimatedPressable
-                style={[styles.completionCta, t.completionCta]}
-                onPress={() => {
-                  haptic.light();
-                  navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={completionCta.label}
-              >
-                <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.textInverse} />
-              </AnimatedPressable>
-            </View>
-          ) : null}
-
-          {/* ── GROWTH TASKS — optional onboarding prompts outside the identity hero ── */}
-          {/* First listing and audience growth are NOT profile-completion
-              requirements. They are surfaced here as optional, dismissible
-              growth prompts with truthful destinations (Sell / analytics). */}
-          {showGrowthPrompt ? (
-            <View style={[styles.growthCard, t.growthCard]}>
-              <View style={styles.growthHead}>
-                <Text style={[styles.growthTitle, t.growthTitle]}>Grow on Thryftverse</Text>
-                <AnimatedPressable
-                  style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
-                  onPress={() => { haptic.light(); setGrowthDismissed(true); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Dismiss growth prompts"
-                >
-                  <Ionicons name="close" size={15} color={colors.textMuted} />
-                </AnimatedPressable>
-              </View>
-
-              {showFirstListingGrowth ? (
-                <AnimatedPressable
-                  style={[styles.growthRow, t.growthRow]}
-                  onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="List your first item"
-                  accessibilityHint="Opens the sell flow to create your first listing"
-                >
-                  <View style={styles.growthRowText}>
-                    <Text style={[styles.growthRowTitle, t.growthRowTitle]}>List your first item</Text>
-                    <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                      Photograph and publish an item to start selling.
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                </AnimatedPressable>
-              ) : null}
-
-              {showAudienceGrowth ? (
-                <AnimatedPressable
-                  style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
-                  onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Grow your audience"
-                  accessibilityHint="Opens creator analytics with audience growth tools"
-                >
-                  <View style={styles.growthRowText}>
-                    <Text style={[styles.growthRowTitle, t.growthRowTitle]}>Grow your audience</Text>
-                    <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                      Share your profile and create content to attract followers.
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                </AnimatedPressable>
-              ) : null}
-            </View>
-          ) : null}
-
           {/* Away-mode indicator — shown when holiday mode is enabled */}
           {holidayMode ? (
             <Pressable
@@ -765,57 +677,16 @@ export default function MyProfileScreen() {
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
           <ProfileUtilityRail items={utilityItems} />
 
-          {/* ── 8b. CO-OWN PORTFOLIO PREVIEW ── */}
-          {coOwnHoldings.length > 0 ? (
-            <AnimatedPressable
-              style={[styles.portfolioPreview, t.portfolioPreview]}
-              onPress={() => { haptic.light(); navigation.navigate('CoOwnHub'); }}
-              accessibilityRole="button"
-              accessibilityLabel="View Co-Own portfolio"
-              accessibilityHint="Opens your Co-Own holdings hub"
-            >
-              <View style={styles.portfolioHeader}>
-                <Text style={[styles.portfolioLabel, t.portfolioLabel]}>CO-OWN PORTFOLIO</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 }}>
-                  <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>View all</Text>
-                  <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-                </View>
-              </View>
-              <View style={styles.portfolioHoldings}>
-                {coOwnHoldings.slice(0, 3).map((h) => (
-                  <View key={h.id} style={styles.portfolioHoldingCard}>
-                    {h.image ? (
-                      <CachedImage
-                        uri={h.image}
-                        style={styles.portfolioHoldingImage}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={[styles.portfolioHoldingImage, { backgroundColor: colors.surfaceAlt }]} />
-                    )}
-                    <View style={styles.portfolioHoldingInfo}>
-                      <Text style={[styles.portfolioHoldingTitle, t.portfolioHoldingTitle]} numberOfLines={1}>
-                        {h.title}
-                      </Text>
-                      <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>
-                        {h.yourUnits} {h.yourUnits === 1 ? 'unit' : 'units'}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </AnimatedPressable>
-          ) : null}
-
           {/* ── 9. STICKY FLAT TAB RAIL ── */}
           <MyProfileTabRail
             tabs={[
               { key: 'listings', label: 'Listings', count: allOwnedListings.length },
               { key: 'looks', label: 'Looks', count: myLooks.length },
+              { key: 'saved', label: 'Saved', count: savedCount + wishlistCount },
               { key: 'about', label: 'About' },
             ]}
             activeKey={activeTab}
-            onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
+            onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'saved' | 'about')}
           />
         </Reanimated.View>
 
@@ -931,12 +802,115 @@ export default function MyProfileScreen() {
           </View>
         )}
 
+        {/* SAVED TAB — saved items and wishlist */}
+        {activeTab === 'saved' && (
+          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+            {savedCount + wishlistCount === 0 ? (
+              <EmptyState
+                density="compact"
+                icon="bookmark-outline"
+                title="Nothing saved yet"
+                subtitle="Tap the bookmark on any listing to save it for later."
+                ctaLabel="Browse listings"
+                onCtaPress={() => navigation.navigate('MainTabs')}
+              />
+            ) : (
+              <>
+                <View style={styles.gridHeader}>
+                  <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>
+                    {savedCount + wishlistCount} saved
+                  </Text>
+                  <Pressable
+                    onPress={() => navigation.navigate('Closet')}
+                    accessibilityRole="button"
+                    accessibilityLabel="View all saved items"
+                    hitSlop={13}
+                  >
+                    <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>View All</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.grid}>
+                  {savedListings.slice(0, 9).map((item) => (
+                    <AnimatedPressable
+                      key={item.id}
+                      style={[styles.gridCard, { width: CARD_WIDTH }]}
+                      onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${item.title}`}
+                    >
+                      <SharedTransitionView
+                        style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
+                        sharedTransitionTag={`image-${item.id}-saved`}
+                      >
+                        <CachedImage
+                          uri={item.images?.[0] ?? ''}
+                          style={styles.gridImage}
+                          containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
+                          contentFit="cover"
+                        />
+                      </SharedTransitionView>
+                      <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
+                        {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+                      </Text>
+                      {item.brand ? (
+                        <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
+                      ) : null}
+                    </AnimatedPressable>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+        )}
+
         {/* ABOUT TAB — flat editorial layout */}
         {/* Bio, location, and member-since are shown in the IdentityHero above.
             The About tab shows only information NOT already visible: website,
-            and shop policies (the canonical home for dispatch/response details). */}
+            shop policies, and Co-Own portfolio (recessed from the hero). */}
         {activeTab === 'about' && (
           <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
+            {/* ── CO-OWN PORTFOLIO PREVIEW — recessed into About tab ── */}
+            {coOwnHoldings.length > 0 ? (
+              <AnimatedPressable
+                style={[styles.portfolioPreview, t.portfolioPreview]}
+                onPress={() => { haptic.light(); navigation.navigate('CoOwnHub'); }}
+                accessibilityRole="button"
+                accessibilityLabel="View Co-Own portfolio"
+                accessibilityHint="Opens your Co-Own holdings hub"
+              >
+                <View style={styles.portfolioHeader}>
+                  <Text style={[styles.portfolioLabel, t.portfolioLabel]}>CO-OWN PORTFOLIO</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 }}>
+                    <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>View all</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+                  </View>
+                </View>
+                <View style={styles.portfolioHoldings}>
+                  {coOwnHoldings.slice(0, 3).map((h) => (
+                    <View key={h.id} style={styles.portfolioHoldingCard}>
+                      {h.image ? (
+                        <CachedImage
+                          uri={h.image}
+                          style={styles.portfolioHoldingImage}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View style={[styles.portfolioHoldingImage, { backgroundColor: colors.surfaceAlt }]} />
+                      )}
+                      <View style={styles.portfolioHoldingInfo}>
+                        <Text style={[styles.portfolioHoldingTitle, t.portfolioHoldingTitle]} numberOfLines={1}>
+                          {h.title}
+                        </Text>
+                        <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>
+                          {h.yourUnits} {h.yourUnits === 1 ? 'unit' : 'units'}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </AnimatedPressable>
+            ) : null}
+
             {user.website ? (
               <View style={styles.aboutContainer}>
                 <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
@@ -991,6 +965,98 @@ export default function MyProfileScreen() {
             )}
           </View>
         )}
+
+        {/* ── COMPLETION & GROWTH PROMPTS — below the fold, not competing with identity ── */}
+        {/* These are optional onboarding prompts that recede below the tab
+            content so identity dominates the first viewport. They are still
+            accessible by scrolling down. */}
+        {showCompletionPrompt ? (
+          <View style={[styles.completionCard, t.completionCard]}>
+            <View style={styles.completionHead}>
+              <View style={styles.completionHeadText}>
+                <Text style={[styles.completionTitle, t.completionTitle]}>Complete your profile</Text>
+                <Text style={[styles.completionPercent, t.completionPercent]}>
+                  {completion.percent}% · {completion.done}/{completion.total}
+                </Text>
+              </View>
+              <AnimatedPressable
+                style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
+                onPress={() => { haptic.light(); setCompletionDismissed(true); }}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss profile completion prompt"
+              >
+                <Ionicons name="close" size={15} color={colors.textMuted} />
+              </AnimatedPressable>
+            </View>
+            <View style={[styles.completionTrack, t.completionTrack]}>
+              <View style={[styles.completionFill, t.completionFill, { width: `${completion.percent}%` }]} />
+            </View>
+            <AnimatedPressable
+              style={[styles.completionCta, t.completionCta]}
+              onPress={() => {
+                haptic.light();
+                navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={completionCta.label}
+            >
+              <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textInverse} />
+            </AnimatedPressable>
+          </View>
+        ) : null}
+
+        {showGrowthPrompt ? (
+          <View style={[styles.growthCard, t.growthCard]}>
+            <View style={styles.growthHead}>
+              <Text style={[styles.growthTitle, t.growthTitle]}>Grow on Thryftverse</Text>
+              <AnimatedPressable
+                style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
+                onPress={() => { haptic.light(); setGrowthDismissed(true); }}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss growth prompts"
+              >
+                <Ionicons name="close" size={15} color={colors.textMuted} />
+              </AnimatedPressable>
+            </View>
+
+            {showFirstListingGrowth ? (
+              <AnimatedPressable
+                style={[styles.growthRow, t.growthRow]}
+                onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
+                accessibilityRole="button"
+                accessibilityLabel="List your first item"
+                accessibilityHint="Opens the sell flow to create your first listing"
+              >
+                <View style={styles.growthRowText}>
+                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>List your first item</Text>
+                  <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                    Photograph and publish an item to start selling.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
+            ) : null}
+
+            {showAudienceGrowth ? (
+              <AnimatedPressable
+                style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
+                onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
+                accessibilityRole="button"
+                accessibilityLabel="Grow your audience"
+                accessibilityHint="Opens creator analytics with audience growth tools"
+              >
+                <View style={styles.growthRowText}>
+                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>Grow your audience</Text>
+                  <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                    Share your profile and create content to attract followers.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </AnimatedPressable>
+            ) : null}
+          </View>
+        ) : null}
       </Reanimated.ScrollView>
     </View>
   );

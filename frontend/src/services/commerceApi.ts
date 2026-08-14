@@ -706,7 +706,7 @@ export interface SellerAnalytics {
 
 export async function fetchSellerAnalytics(
   sellerId: string,
-  period: '7d' | '30d' | '90d' = '30d'
+  period: '7d' | '30d' | '90d' | '1y' = '30d'
 ): Promise<SellerAnalytics> {
   const payload = await fetchJson<{ ok: true; analytics: SellerAnalytics }>(
     `/sellers/${encodeURIComponent(sellerId)}/analytics?period=${period}`

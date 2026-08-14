@@ -65,11 +65,12 @@ import type { CreatorInitialMedia } from '../navigation/types';
 // This is a dedicated component — not inline in a screen.
 // The entry screen renders <CreatorCamera /> and receives captures.
 
-const SHUTTER_SIZE = 80;
-const SHUTTER_INNER = 64;
+// Shutter constants kept in sync with ShutterButton.tsx (78pt outer, 60pt inner).
+const SHUTTER_SIZE = 78;
+const SHUTTER_INNER = 60;
 const CORNER_SIZE = 32;
 const CORNER_STROKE = 2;
-const GALLERY_THUMB_SIZE = 64;
+const GALLERY_THUMB_SIZE = 44;
 const CONTROL_RAIL_ICON = 22;
 // Zoom is normalized 0..1 per Expo Camera contract. UI labels (1×, 2×, 3×)
 // are digital zoom multipliers mapped honestly to the normalized range.
@@ -867,7 +868,7 @@ export default function CreatorCamera({
           lastImageUri={lastImageUri}
           recentImages={recentImages}
           showRecentCarousel={showRecentCarousel}
-          carouselBottom={Math.max(insets.bottom, 16) + 140}
+          carouselBottom={Math.max(insets.bottom, 16) + 112}
           onGallery={onGallery}
           onLongPress={handleGalleryLongPress}
         />
@@ -1349,7 +1350,8 @@ const styles = StyleSheet.create({
     fontSize: Type.captionElevated.size,
     color: '#fff',
   },
-  // Bottom bar
+  // Bottom bar — compact: shutter (78pt) + gallery (44pt) + spacer.
+  // Reduced from 120pt to 100pt minHeight so the viewfinder dominates more.
   bottomBar: {
     position: 'absolute',
     left: 0,
@@ -1360,34 +1362,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: Space.lg,
     paddingTop: 10,
-    minHeight: 120,
+    minHeight: 100,
   },
   galleryBtn: {
     alignItems: 'center',
-    gap: 6,
-    width: 72,
-    minHeight: 72,
+    gap: 4,
+    width: 56,
+    minHeight: 56,
     justifyContent: 'center',
   },
   galleryThumb: {
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
-    borderRadius: GALLERY_THUMB_SIZE / 2,
-    borderWidth: 2,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.9)',
   },
   galleryThumbPlaceholder: {
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
-    borderRadius: GALLERY_THUMB_SIZE / 2,
-    borderWidth: 2,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   bottomSpacer: {
-    width: 72,
-    minHeight: 72,
+    width: 56,
+    minHeight: 56,
   },
   bottomLabel: {
     fontFamily: Typography.family.medium,

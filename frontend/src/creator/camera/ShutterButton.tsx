@@ -13,8 +13,12 @@ import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { RecordingRing } from './RecordingRing';
 
-const SHUTTER_SIZE = 80;
-const SHUTTER_INNER = 64;
+// 2026 Apple HIG: the capture button is the hero control. 78pt outer with
+// a 5pt brand-color ring and 60pt inner fill — large enough to dominate
+// the bottom bar, small enough to leave the viewfinder unobstructed.
+const SHUTTER_SIZE = 78;
+const SHUTTER_INNER = 60;
+const SHUTTER_RING_WIDTH = 5;
 
 export type CameraMode = 'photo' | 'video' | 'boomerang';
 
@@ -87,7 +91,7 @@ export function ShutterButton({
       accessibilityRole="button"
       disabled={disabled}
     >
-      <Reanimated.View style={[styles.outer, shutterStyle]}>
+      <Reanimated.View style={[styles.outer, { borderColor: colors.brand }, shutterStyle]}>
         {showRing && (
           <RecordingRing progress={recordingProgress} scale={recordingRingScale} />
         )}
@@ -107,12 +111,14 @@ const styles = StyleSheet.create({
   // Camera overlay — always high contrast on dark preview. The shutter ring
   // + inner fill are white on the dark camera preview in both themes; the
   // theme has no `textOnMedia` token, so literal white is retained here.
+  // Outer ring — brand color border (applied inline via colors.brand).
+  // The white inner fill remains for high contrast on the dark preview.
   outer: {
     width: SHUTTER_SIZE,
     height: SHUTTER_SIZE,
     borderRadius: SHUTTER_SIZE / 2,
-    borderWidth: 5,
-    borderColor: '#fff',
+    borderWidth: SHUTTER_RING_WIDTH,
+    // borderColor applied inline via colors.brand (theme token)
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',

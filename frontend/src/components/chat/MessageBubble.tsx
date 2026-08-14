@@ -92,10 +92,11 @@ function MessageBubbleBase({
   const bubbleBg = isMe
     ? colors.brand
     : isAgent
-      ? colors.surfaceAlt
+      ? `${colors.brand}0D`
       : colors.surfaceAlt;
   const bubbleText = isMe ? colors.textInverse : colors.textPrimary;
   const metaColor = isMe ? `${colors.textInverse}80` : colors.textMuted;
+  const bubbleBorder = isAgent && !isMe ? `${colors.brand}26` : undefined;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
   const isTop = isFirstInCluster && !isLastInCluster;
@@ -129,11 +130,11 @@ function MessageBubbleBase({
     <View style={[styles.row, isMe && styles.rowRight]}>
       {showAvatar && !isMe ? (
         isAgent ? (
-          <View style={[styles.agentAvatar, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={[styles.agentAvatar, { backgroundColor: `${colors.brand}12`, borderColor: `${colors.brand}26` }]}>
             <Ionicons
               name={(agentAvatar ?? 'cube-outline') as keyof typeof Ionicons.glyphMap}
               size={14}
-              color={colors.textSecondary}
+              color={colors.brand}
             />
           </View>
         ) : (
@@ -150,9 +151,9 @@ function MessageBubbleBase({
           <View style={styles.senderLabelRow}>
             <Text style={styles.senderName}>{senderLabel}</Text>
             {isAgent ? (
-              <View style={[styles.aiChip, { backgroundColor: colors.surface }]}>
-                <Ionicons name="cube-outline" size={9} color={colors.textSecondary} />
-                <Text style={[styles.aiChipText, { color: colors.textSecondary }]}>AI</Text>
+              <View style={[styles.aiChip, { backgroundColor: `${colors.brand}12`, borderColor: `${colors.brand}26` }]}>
+                <Ionicons name="cube-outline" size={9} color={colors.brand} />
+                <Text style={[styles.aiChipText, { color: colors.brand }]}>AI</Text>
               </View>
             ) : null}
           </View>
@@ -163,11 +164,12 @@ function MessageBubbleBase({
           delayLongPress={350}
           style={({ pressed }) => [
             styles.bubble,
-            isMe ? styles.bubbleMe : styles.bubbleThem,
+            isMe ? styles.bubbleMe : isAgent ? styles.bubbleAgent : styles.bubbleThem,
             isMedia ? [styles.bubbleMedia, mediaRadius] : (isMe ? meRadius : themRadius),
             { opacity: pressed ? 0.88 : 1 },
             hasFailed && styles.bubbleFailed,
             isDraft && styles.bubbleDraft,
+            !!bubbleBorder && { borderColor: bubbleBorder },
           ]}
         >
           {replyTo ? (
@@ -341,6 +343,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Space.xs,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   avatarText: {
     fontSize: Type.meta.size,
@@ -373,6 +376,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   aiChipText: {
     fontSize: Type.meta.size,
@@ -393,6 +397,10 @@ const createStyles = (colors: any) => StyleSheet.create({
   bubbleMe: {
     backgroundColor: colors.brand,
     alignSelf: 'flex-end',
+  },
+  bubbleAgent: {
+    alignSelf: 'flex-start',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   bubbleThem: {
     backgroundColor: colors.surfaceAlt,

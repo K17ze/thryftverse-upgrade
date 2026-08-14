@@ -290,13 +290,13 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 1,
       borderRadius: Radius.full,
-      backgroundColor: colors.surface,
+      backgroundColor: `${colors.brand}0D`,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      borderColor: `${colors.brand}26`,
     },
 
     agentChipPressed: {
-      backgroundColor: colors.surfaceAlt,
+      backgroundColor: `${colors.brand}14`,
     },
 
     agentChipText: {
@@ -1703,8 +1703,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 ]}
                 accessibilityLabel={
                   deployedChatAgents.length === 1
-                    ? `${deployedChatAgents[0].name} active. Manage agents.`
-                    : `${deployedChatAgents.length} agents active. Manage agents.`
+                    ? `${deployedChatAgents[0].name} is active. Tap to manage agents.`
+                    : `${deployedChatAgents.length} agents are active. Tap to manage agents.`
                 }
                 accessibilityRole="button"
                 accessibilityHint="Open agent management"
@@ -1712,12 +1712,12 @@ export default function ChatScreen({ navigation, route }: Props) {
                 <Ionicons
                   name={(deployedChatAgents[0]?.avatar as keyof typeof Ionicons.glyphMap) || 'cube-outline'}
                   size={13}
-                  color={colors.textSecondary}
+                  color={colors.brand}
                 />
-                <Text style={styles.agentChipText}>
+                <Text style={[styles.agentChipText, { color: colors.brand }]}>
                   {deployedChatAgents.length === 1
-                    ? deployedChatAgents[0].name
-                    : `${deployedChatAgents.length} agents`}
+                    ? `${deployedChatAgents[0].name} active`
+                    : `${deployedChatAgents.length} agents active`}
                 </Text>
               </Pressable>
             </View>
