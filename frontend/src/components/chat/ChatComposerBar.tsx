@@ -183,11 +183,6 @@ export function ChatComposerBar({
         </ScrollView>
       ) : null}
 
-      {/* Subtle separator when safety banners are present */}
-      {(dangerWarning || cautionWarning || safetyWarning) ? (
-        <View style={styles.bannerDivider} />
-      ) : null}
-
       <View style={styles.inputRow}>
         <AnimatedPressable
           onPress={onAttachmentPress}
@@ -199,7 +194,7 @@ export function ChatComposerBar({
           accessibilityRole="button"
           disabled={disabled || isSending || isVoiceRecording}
         >
-          <Ionicons name="add-outline" size={26} color={colors.textSecondary} />
+          <Ionicons name="add-outline" size={24} color={colors.textSecondary} />
         </AnimatedPressable>
 
         {isVoiceRecording ? (
@@ -420,10 +415,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? Space.sm : 6,
     gap: Space.xs,
   },
-  bannerDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-  },
   actionBtn: {
     width: 44,
     height: 44,
@@ -462,14 +453,13 @@ const createStyles = (colors: any) => StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'flex-end',
-    marginBottom: 2,
   },
   sendBtnActive: {
     backgroundColor: colors.brand,

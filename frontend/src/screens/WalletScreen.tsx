@@ -23,7 +23,6 @@ import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
-import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
 import { formatIzeAmount } from '../utils/currency';
 import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
@@ -108,6 +107,8 @@ export default function WalletScreen({ navigation }: Props) {
   const [convertIzeInput, setConvertIzeInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [addMoneyVisible, setAddMoneyVisible] = useState(false);
+  // ── Privacy eye (spec 17 viewport 1) ──
+  const [balanceHidden, setBalanceHidden] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const convertInputRef = useRef<TextInput>(null);
@@ -244,6 +245,11 @@ export default function WalletScreen({ navigation }: Props) {
     setAddMoneyVisible(true);
   }, []);
 
+  // ── Privacy eye toggle (spec 17 viewport 1) ──
+  const handleTogglePrivacy = React.useCallback(() => {
+    setBalanceHidden((prev) => !prev);
+  }, []);
+
   // ── Activity (canonical WalletActivityScreen — spec 17) ──
   const handleViewActivity = React.useCallback(() => {
     haptics.tap();
@@ -281,7 +287,6 @@ export default function WalletScreen({ navigation }: Props) {
           header={
             <CoOwnMarketHeader
               title="Wallet"
-              subtitle="Your 1ZE settlement balance"
               onBack={handleBack}
             />
           }
@@ -298,7 +303,6 @@ export default function WalletScreen({ navigation }: Props) {
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <CoOwnMarketHeader
           title="Wallet"
-          subtitle="Your 1ZE settlement balance"
           onBack={handleBack}
         />
         <CoOwnWalletBreakdownSkeleton />
@@ -313,7 +317,6 @@ export default function WalletScreen({ navigation }: Props) {
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <CoOwnMarketHeader
           title="Wallet"
-          subtitle="Your 1ZE settlement balance"
           onBack={handleBack}
         />
         <CoOwnStateCanvas
@@ -332,7 +335,6 @@ export default function WalletScreen({ navigation }: Props) {
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <CoOwnMarketHeader
           title="Wallet"
-          subtitle="Your 1ZE settlement balance"
           onBack={handleBack}
         />
         <CoOwnStateCanvas
@@ -361,7 +363,6 @@ export default function WalletScreen({ navigation }: Props) {
 
       <CoOwnMarketHeader
         title="Wallet"
-        subtitle="Your 1ZE settlement balance"
         onBack={handleBack}
         actions={[
           { icon: 'receipt-outline', label: 'Activity', onPress: handleViewActivity },
@@ -388,11 +389,13 @@ export default function WalletScreen({ navigation }: Props) {
           />
         }
       >
-        {/* ── Wallet breakdown — spendable hero + sub-balances + safeguarding ── */}
+        {/* ── Wallet breakdown — spendable hero + sub-balances (spec 17 viewport 1+2) ── */}
         <CoOwnWalletBreakdown
           balance={balance}
           localFiatLabel={localFiatLabel}
           localFiatSource={currencyCode}
+          balanceHidden={balanceHidden}
+          onTogglePrivacy={handleTogglePrivacy}
         />
 
         {/* ── Seller earnings summary (spec 17: "Seller earnings · £X available · £Y pending") ── */}
@@ -425,30 +428,44 @@ export default function WalletScreen({ navigation }: Props) {
           </Pressable>
         )}
 
-        {/* ── Add money / Redeem 1ZE — primary actions (spec 17 Viewport 1) ── */}
-        <View style={styles.actionRow}>
+        {/* ── Add money — primary action, dominant (spec 17 viewport 1) ── */}
+        <AppButton
+          title="Add money"
+          icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
+          onPress={handleAddMoney}
+          variant="primary"
+          size="md"
+          accessibilityLabel="Add money to your wallet"
+          accessibilityHint="Opens the add money flow"
+          hapticFeedback="medium"
+          style={styles.primaryAction}
+          disabled={!isWalletOperational}
+        />
+
+        {/* ── Withdraw + Redeem 1ZE — secondary actions, restrained (spec 17) ── */}
+        <View style={styles.secondaryActionRow}>
           <AppButton
-            title="Add money"
-            icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
-            onPress={handleAddMoney}
-            variant="primary"
+            title="Withdraw"
+            icon={<Ionicons name="arrow-down-circle-outline" size={18} color={colors.textPrimary} />}
+            onPress={handleWithdraw}
+            variant="secondary"
             size="md"
-            accessibilityLabel="Add money to your wallet"
-            accessibilityHint="Opens the add money flow"
+            accessibilityLabel="Withdraw from your wallet"
+            accessibilityHint="Opens the withdraw flow"
             hapticFeedback="medium"
-            style={styles.actionBtn}
+            style={styles.secondaryActionBtn}
             disabled={!isWalletOperational}
           />
           <AppButton
             title="Redeem 1ZE"
-            icon={<Ionicons name="arrow-down-circle-outline" size={18} color={colors.textPrimary} />}
+            icon={<Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />}
             onPress={() => expandFlow('redeem')}
             variant={activeFlow === 'redeem' ? 'primary' : 'secondary'}
             size="md"
             accessibilityLabel="Redeem 1ZE to fiat"
             accessibilityHint={activeFlow === 'redeem' ? 'Collapses the redeem form' : 'Expands the redeem form'}
             hapticFeedback="medium"
-            style={styles.actionBtn}
+            style={styles.secondaryActionBtn}
             disabled={balance.available <= 0 || !isWalletOperational}
           />
         </View>
@@ -496,23 +513,7 @@ export default function WalletScreen({ navigation }: Props) {
           </View>
         )}
 
-        {/* ── Quick actions: Withdraw + Activity (spec 17 — one Activity destination) ── */}
-        <View style={styles.quickActionsRow}>
-          <QuickAction
-            icon="library-outline"
-            label="Withdraw"
-            onPress={handleWithdraw}
-            colors={colors}
-          />
-          <QuickAction
-            icon="receipt-outline"
-            label="Activity"
-            onPress={handleViewActivity}
-            colors={colors}
-          />
-        </View>
-
-        {/* ── Transaction history ── */}
+        {/* ── Transaction history (spec 17 viewport 2: latest activity) ── */}
         <View style={styles.txHistorySection}>
           <View style={styles.txHistoryHeader}>
             <Text style={[styles.txHistoryTitle, { color: colors.textPrimary }]}>Recent activity</Text>
@@ -528,7 +529,7 @@ export default function WalletScreen({ navigation }: Props) {
           <WalletTransactionHistory limit={20} />
         </View>
 
-        {/* ── Safeguarding & redemption info ── */}
+        {/* ── Safeguarding & 1ZE disclosure — lower down, not competing with balance (spec 17) ── */}
         <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.infoHeader}>
             <Ionicons name="shield-checkmark-outline" size={15} color={colors.brand} />
@@ -566,10 +567,9 @@ export default function WalletScreen({ navigation }: Props) {
               ) : null}
             </View>
           ) : null}
-        </View>
 
-        {/* ── 1ZE disclosure — what 1ZE is, per research doc §1.1 ── */}
-        <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.infoDivider, { borderColor: colors.border }]} />
+
           <View style={styles.infoHeader}>
             <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
             <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
@@ -627,34 +627,6 @@ function SummaryRow({
   );
 }
 
-function QuickAction({
-  icon,
-  label,
-  onPress,
-  colors,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-}) {
-  return (
-    <AnimatedPressable
-      style={[styles.quickAction, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      scaleValue={0.97}
-      hapticFeedback="light"
-    >
-      <View style={styles.quickActionCircle}>
-        <Ionicons name={icon} size={20} color={colors.textPrimary} />
-      </View>
-      <Text style={[styles.quickActionLabel, { color: colors.textSecondary }]}>{label}</Text>
-    </AnimatedPressable>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: {
@@ -686,14 +658,16 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
     flexShrink: 1,
   },
-  // 24pt section spacing between major sections per spec
-  actionRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
+  // ── Actions — clear primary/secondary hierarchy (spec 17 viewport 1) ──
+  primaryAction: {
     marginTop: Space.lg,
   },
-  // Sections after the main wallet breakdown use 24pt (Space.lg) spacing
-  actionBtn: { flex: 1 },
+  secondaryActionRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.sm,
+  },
+  secondaryActionBtn: { flex: 1 },
 
   // ── Flow cards (inline Redeem / Convert) ──
   flowCard: {
@@ -765,35 +739,6 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
 
-  // ── Quick actions ──
-  quickActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: Space.lg,
-    gap: Space.sm,
-  },
-  quickAction: {
-    flex: 1,
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  quickActionCircle: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickActionLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
-  },
-
   // ── Transaction history ──
   txHistorySection: {
     marginTop: Space.lg,
@@ -853,5 +798,9 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.wide,
     textTransform: 'uppercase',
+  },
+  infoDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginVertical: Space.sm,
   },
 });

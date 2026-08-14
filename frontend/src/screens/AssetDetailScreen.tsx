@@ -600,24 +600,28 @@ export default function AssetDetailScreen() {
             family badge (redundant inside Co-Own). No card surface.
             ════════════════════════════════════════════════════════════ */}
         <View style={[styles.collectibleIdentity, { borderBottomColor: colors.borderSubtle }]}>
-          {/* One context line — legal vehicle / category eyebrow */}
-          {asset.legalVehicleName ? (
-            <Text
-              style={[styles.collectibleEyebrow, { color: colors.textSecondary }]}
-              numberOfLines={1}
-            >
-              {asset.legalVehicleName}
-            </Text>
-          ) : null}
+          {/* Title group — eyebrow + title tightly paired so the legal
+              vehicle reads as a caption to the asset name, not as a
+              separate section. */}
+          <View style={styles.collectibleTitleGroup}>
+            {asset.legalVehicleName ? (
+              <Text
+                style={[styles.collectibleEyebrow, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {asset.legalVehicleName}
+              </Text>
+            ) : null}
 
-          {/* Asset title — the dominant text object under media */}
-          <Text
-            style={[styles.collectibleTitle, { color: colors.textPrimary }]}
-            numberOfLines={2}
-            accessibilityRole="header"
-          >
-            {asset.title}
-          </Text>
+            {/* Asset title — the dominant text object under media */}
+            <Text
+              style={[styles.collectibleTitle, { color: colors.textPrimary }]}
+              numberOfLines={2}
+              accessibilityRole="header"
+            >
+              {asset.title}
+            </Text>
+          </View>
 
           {/* Issuer — compact row with avatar, name, verification,
               and message action. Taps into issuer profile. */}
@@ -647,7 +651,7 @@ export default function AssetDetailScreen() {
                 </Text>
                 {(asset.issuerVerification?.tier === 'id' || asset.issuerVerification?.tier === 'seller') ? (
                   <View style={styles.collectibleIssuerVerified}>
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                    <Ionicons name="checkmark-circle" size={14} color={colors.success} />
                     <Text style={[styles.collectibleIssuerVerifiedText, { color: colors.textSecondary }]}>
                       {asset.issuerVerification?.tier === 'seller' ? 'Trusted Seller' : 'ID Verified'}
                     </Text>
@@ -763,7 +767,7 @@ export default function AssetDetailScreen() {
               <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>
                 Read the full story
               </Text>
-              <Ionicons name="chevron-forward" size={12} color={colors.brand} />
+              <Ionicons name="chevron-forward" size={14} color={colors.brand} />
             </Pressable>
           </View>
         ) : null}
@@ -794,7 +798,7 @@ export default function AssetDetailScreen() {
               <Text style={[styles.trustFactualText, { color: colors.textSecondary }]}>
                 {trustFacts.join(' · ')}
               </Text>
-              <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
             </Pressable>
           );
         })()}
@@ -1438,12 +1442,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   // ── Collectible-first identity (Viewport 1, spec 14 V3) ──
+  // No card surface — clean canvas with a hairline separator below.
+  // Spacing is deliberate: title group is tight, issuer and price
+  // get breathing room, availability is a footnote to price.
   collectibleIdentity: {
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
     paddingBottom: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: Space.sm,
+  },
+  collectibleTitleGroup: {
+    gap: Space.xs,
   },
   collectibleEyebrow: {
     fontSize: TypographyV2.meta.size,
@@ -1453,16 +1462,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   collectibleTitle: {
-    fontSize: TypographyV2.itemTitle.size,
-    lineHeight: TypographyV2.itemTitle.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.itemTitle.letterSpacing,
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
   },
   collectibleIssuerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
+    marginTop: Space.md,
   },
   collectibleIssuerTarget: {
     flexDirection: 'row',
@@ -1514,6 +1524,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Space.xs,
+    marginTop: Space.md,
   },
   collectiblePriceValue: {
     fontSize: TypographyV2.priceHero.size,
@@ -1532,6 +1543,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
     flexWrap: 'wrap',
+    marginTop: Space.xs,
   },
   collectibleAvailabilityText: {
     fontSize: TypographyV2.body.size,
@@ -1568,6 +1580,7 @@ const styles = StyleSheet.create({
   // ── Holder position summary (spec 14 V3: quiet) ──
   holderPositionSummary: {
     paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
     paddingBottom: Space.md,
   },
   holderPositionText: {
@@ -1579,7 +1592,7 @@ const styles = StyleSheet.create({
   // ── Asset story — quiet editorial paragraph before market data ──
   assetStoryWrap: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
+    paddingTop: Space.md,
     paddingBottom: Space.sm,
     gap: Space.xs,
   },

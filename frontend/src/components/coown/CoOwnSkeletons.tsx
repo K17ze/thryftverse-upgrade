@@ -62,28 +62,37 @@ export function CoOwnAssetDetailSkeleton() {
 
   return (
     <View style={[styles.detailSkeleton, { backgroundColor: colors.background }]}>
+      {/* Media stage — unobstructed hero */}
       <SkeletonBlock width={width} height={heroHeight} radius={0} />
+      {/* Collectible-first identity — flat canvas, no card.
+          Matches AssetDetailScreen collectibleIdentity:
+          eyebrow + title group, issuer row, price, availability. */}
       <View style={styles.detailIdentity}>
         <SkeletonBlock width={82} height={11} radius={Radius.sm} />
-        <SkeletonBlock width="82%" height={28} radius={Radius.sm} />
-        <SkeletonBlock width="52%" height={13} radius={Radius.sm} />
+        <SkeletonBlock width="82%" height={24} radius={Radius.sm} />
       </View>
-      <View style={[styles.detailHairline, { backgroundColor: colors.borderSubtle }]} />
       <View style={styles.detailIssuer}>
-        <SkeletonBlock width={44} height={44} radius={Radius.full} />
+        <SkeletonBlock width={28} height={28} radius={Radius.full} />
         <View style={styles.detailIssuerCopy}>
           <SkeletonBlock width="52%" height={14} radius={Radius.sm} />
-          <SkeletonBlock width="70%" height={11} radius={Radius.sm} />
+          <SkeletonBlock width="38%" height={11} radius={Radius.sm} />
         </View>
-        <SkeletonBlock width={48} height={12} radius={Radius.sm} />
+        <SkeletonBlock width={20} height={20} radius={Radius.sm} />
       </View>
-      <View style={[styles.detailTransaction, { backgroundColor: colors.surface }]}>
-        <SkeletonBlock width="38%" height={11} radius={Radius.sm} />
-        <SkeletonBlock width="58%" height={29} radius={Radius.sm} />
-        <View style={styles.detailMetricRow}>
-          <SkeletonBlock width="42%" height={13} radius={Radius.sm} />
-          <SkeletonBlock width={74} height={13} radius={Radius.sm} />
-        </View>
+      <View style={styles.detailPriceRow}>
+        <SkeletonBlock width="46%" height={28} radius={Radius.sm} />
+        <SkeletonBlock width={48} height={11} radius={Radius.sm} />
+      </View>
+      <View style={styles.detailAvailabilityRow}>
+        <SkeletonBlock width={120} height={14} radius={Radius.sm} />
+        <SkeletonBlock width={90} height={14} radius={Radius.sm} />
+      </View>
+      <View style={[styles.detailHairline, { backgroundColor: colors.borderSubtle }]} />
+      {/* Viewport 2 — story + trust placeholders */}
+      <View style={styles.detailStory}>
+        <SkeletonBlock width="90%" height={14} radius={Radius.sm} />
+        <SkeletonBlock width="64%" height={14} radius={Radius.sm} />
+        <SkeletonBlock width={120} height={11} radius={Radius.sm} />
       </View>
     </View>
   );
@@ -340,35 +349,44 @@ const styles = StyleSheet.create({
   },
   detailIdentity: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.sm,
+    paddingTop: Space.lg,
+    paddingBottom: Space.xs,
+    gap: Space.xs,
   },
   detailHairline: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: Space.md,
+    marginTop: Space.lg,
   },
   detailIssuer: {
-    minHeight: 76,
     paddingHorizontal: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+    marginTop: Space.md,
   },
   detailIssuerCopy: {
     flex: 1,
+    gap: 2,
+  },
+  detailPriceRow: {
+    paddingHorizontal: Space.md,
+    flexDirection: 'row',
+    alignItems: 'baseline',
     gap: Space.xs,
+    marginTop: Space.md,
   },
-  detailTransaction: {
-    marginHorizontal: Space.md,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    gap: Space.sm,
-  },
-  detailMetricRow: {
+  detailAvailabilityRow: {
+    paddingHorizontal: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Space.xs,
+    marginTop: Space.xs,
+    paddingBottom: Space.lg,
+  },
+  detailStory: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    gap: Space.xs,
   },
   hubSkeleton: {
     paddingTop: Space.sm,

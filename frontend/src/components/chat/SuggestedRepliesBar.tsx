@@ -2,8 +2,6 @@
  * SuggestedRepliesBar — horizontal scroll of pill-shaped AI-suggested replies
  * shown above the chat input. Each pill has an icon based on the reply type.
  * The bar uses a neutral visual identity (no sparkles) per AGENTS.md §4.
- *
- * Demo mode is indicated subtly (AGENTS.md §11).
  */
 import React, { useMemo } from 'react';
 import {
@@ -14,7 +12,7 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import type { SuggestedReply, SuggestedReplyType } from '../../services/chatAgentsApi';
 
@@ -38,7 +36,6 @@ export function SuggestedRepliesBar({
   suggestions,
   onSelect,
   agentName,
-  agentAvatar,
 }: SuggestedRepliesBarProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -47,27 +44,13 @@ export function SuggestedRepliesBar({
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background, borderBottomColor: colors.borderSubtle }]}>
-      <View style={styles.headerRow}>
-        <View style={[styles.agentIcon, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons
-            name={(agentAvatar ?? 'cube-outline') as keyof typeof Ionicons.glyphMap}
-            size={12}
-            color={colors.textSecondary}
-          />
-        </View>
-        <Text style={[styles.headerLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-          {agentName ? `${agentName} suggests` : 'Suggested replies'}
-        </Text>
-        <View style={[styles.demoBadge, { backgroundColor: colors.surfaceAlt }]}>
-          <Text style={[styles.demoBadgeText, { color: colors.textMuted }]}>demo</Text>
-        </View>
-      </View>
-
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        accessibilityLabel="AI suggested replies"
+        accessibilityLabel={
+          agentName ? `Suggested replies from ${agentName}` : 'Suggested replies'
+        }
       >
         {suggestions.map((reply, index) => {
           const iconName = ICON_BY_TYPE[reply.type] ?? 'chatbubble-ellipses-outline';
@@ -102,39 +85,6 @@ const createStyles = (colors: ThemeColors) =>
       paddingTop: Space.sm - 1,
       paddingBottom: Space.xs + 1,
       borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs + 1,
-      paddingHorizontal: Space.md,
-      marginBottom: Space.xs,
-    },
-    agentIcon: {
-      width: 22,
-      height: 22,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    demoBadge: {
-      paddingHorizontal: 6,
-      paddingVertical: 1,
-      borderRadius: Radius.full,
-      marginLeft: 'auto',
-    },
-    demoBadgeText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: 0.3,
-      textTransform: 'lowercase',
-    },
-    headerLabel: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      flexShrink: 1,
     },
     scrollContent: {
       paddingHorizontal: Space.md,

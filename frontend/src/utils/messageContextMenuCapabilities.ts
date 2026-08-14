@@ -1,4 +1,4 @@
-export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'retry' | 'report' | 'translate';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report' | 'translate';
 
 import type { Ionicons } from '@expo/vector-icons';
 
@@ -35,6 +35,12 @@ export function deriveMessageActions(caps: MessageContextCapabilities): ActionDe
       id: 'translate',
       label: caps.isTranslated ? 'Show original' : 'Translate',
       icon: 'language-outline',
+    });
+    // Ask agent about this message — spec 16 agent invocation path
+    list.push({
+      id: 'askAgent',
+      label: 'Ask agent about this',
+      icon: 'sparkles-outline',
     });
   }
 

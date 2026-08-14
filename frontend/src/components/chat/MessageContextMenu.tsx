@@ -14,7 +14,7 @@ import { Caption, BodyEmphasis } from '../ui/Text';
 import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities';
 import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'delete' | 'retry' | 'report' | 'translate';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report' | 'translate';
 
 interface MessageContextMenuProps {
   visible: boolean;

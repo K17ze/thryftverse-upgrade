@@ -12,11 +12,12 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
+import { haptics } from '../../utils/haptics';
 import type { CoOwn1ZeBalance as CanonicalCoOwn1ZeBalance, CoOwnReconciliationState } from '../../data/coOwnModels';
 
 /**
@@ -52,6 +53,10 @@ export interface CoOwnWalletBreakdownProps {
   pendingDepositEta?: string;
   /** Unsettled proceeds settlement label (e.g. "T+1"). */
   unsettledProceedsEta?: string;
+  /** When true, the spendable balance is masked (privacy eye — spec 17). */
+  balanceHidden?: boolean;
+  /** Toggle the privacy eye (spec 17 viewport 1). */
+  onTogglePrivacy?: () => void;
 }
 
 export function CoOwnWalletBreakdown({
@@ -63,6 +68,8 @@ export function CoOwnWalletBreakdown({
   redemptionEta,
   pendingDepositEta,
   unsettledProceedsEta,
+  balanceHidden = false,
+  onTogglePrivacy,
 }: CoOwnWalletBreakdownProps) {
   const { colors } = useAppTheme();
 
@@ -78,16 +85,44 @@ export function CoOwnWalletBreakdown({
       accessibilityRole="summary"
       accessibilityLabel={`Wallet breakdown. Spendable now ${balance.available} 1ZE. Settled customer claim ${settledClaim} 1ZE. Withdrawable ${withdrawable} 1ZE.`}
     >
-      {/* ── Spendable now hero ── */}
+      {/* ── Spendable now hero — dominant object (spec 17 viewport 1) ── */}
       <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.heroLabel, { color: colors.textMuted }]}>Spendable now</Text>
-        <CoOwnNumericText
-          value={balance.available}
-          unit="1ZE"
-          size="display"
-          align="left"
-        />
-        {localFiatLabel && (
+        <View style={styles.heroHeader}>
+          <Text style={[styles.heroLabel, { color: colors.textMuted }]}>Spendable now</Text>
+          {onTogglePrivacy && (
+            <Pressable
+              hitSlop={12}
+              onPress={() => { haptics.tap(); onTogglePrivacy(); }}
+              accessibilityRole="button"
+              accessibilityLabel={balanceHidden ? 'Show balance' : 'Hide balance'}
+              accessibilityHint="Toggles privacy for your wallet balance"
+              style={styles.eyeToggle}
+            >
+              <Ionicons
+                name={balanceHidden ? 'eye-off-outline' : 'eye-outline'}
+                size={18}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          )}
+        </View>
+        {balanceHidden ? (
+          <Text
+            style={[styles.heroMasked, { color: colors.textMuted }]}
+            accessibilityLabel="Balance hidden"
+            accessibilityHint="Activate the eye control to reveal your spendable balance"
+          >
+            ••••••
+          </Text>
+        ) : (
+          <CoOwnNumericText
+            value={balance.available}
+            unit="1ZE"
+            size="display"
+            align="left"
+          />
+        )}
+        {localFiatLabel && !balanceHidden && (
           <View style={styles.localFiatRow}>
             <Ionicons name="cash-outline" size={12} color={colors.textMuted} />
             <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1}>
@@ -206,17 +241,6 @@ export function CoOwnWalletBreakdown({
           align="right"
         />
       </View>
-
-      {/* ── Safeguarding & redemption info ── */}
-      {safeguardingPartner && (
-        <View style={styles.safeguardInfo}>
-          <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
-          <Text style={[styles.safeguardInfoText, { color: colors.textMuted }]}>
-            Customer 1ZE is safeguarded at {safeguardingPartner}. Redemption to GBP
-            settlement timing depends on your bank and amount.
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -273,6 +297,22 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.xs,
+  },
+  heroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  eyeToggle: {
+    paddingHorizontal: Space.xs,
+    paddingVertical: 2,
+    marginRight: -Space.xs,
+  },
+  heroMasked: {
+    fontSize: Type.display.size,
+    lineHeight: Type.display.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: 2,
   },
   heroLabel: {
     fontSize: Type.meta.size,
@@ -398,19 +438,6 @@ const styles = StyleSheet.create({
     lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.medium,
     letterSpacing: Type.body.letterSpacing,
-  },
-  safeguardInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.xs,
-    paddingHorizontal: Space.xs,
-  },
-  safeguardInfoText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
   },
 });
 

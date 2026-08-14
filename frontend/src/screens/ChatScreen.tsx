@@ -436,34 +436,6 @@ export default function ChatScreen({ navigation, route }: Props) {
       fontFamily: Typography.family.semibold,
     },
 
-    agentHintText: {
-      fontSize: Type.meta.size,
-      color: colors.textMuted,
-      fontFamily: Typography.family.regular,
-    },
-
-    addAgentBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.sm + 2,
-      paddingVertical: Space.xs + 1,
-      borderRadius: Radius.full,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      backgroundColor: colors.background,
-    },
-
-    addAgentBtnPressed: {
-      backgroundColor: colors.surfaceAlt,
-    },
-
-    addAgentBtnText: {
-      fontSize: Type.meta.size,
-      color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
-    },
-
     typingRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1044,6 +1016,14 @@ export default function ChatScreen({ navigation, route }: Props) {
     if (!conversationId) return;
     setDeployedChatAgents(getDeployedChatAgents(conversationId));
   }, [conversationId]);
+
+  // Per spec 16: "Do not stack quick replies + agent suggestions." When agent
+  // suggestions are active (agent deployed, suggestions available, no input),
+  // suppress quick replies so only one suggestion area is visible.
+  const agentSuggestionsActive =
+    deployedChatAgents.length > 0 &&
+    chatAgentSuggestions.length > 0 &&
+    input.trim().length === 0;
 
   const handleDeployChatAgent = useCallback(
     (agent: ChatAgent) => {
@@ -2527,49 +2507,47 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           {/* AI agent suggested replies — shown above the composer when an
               agent is deployed, suggestions are available, and the user has
-              not started typing (so the bar never competes with in-progress
-              input). */}
-          {deployedChatAgents.length > 0 &&
-            chatAgentSuggestions.length > 0 &&
-            input.trim().length === 0 && (
+              not started typing. When agent suggestions are active, quick
+              replies are suppressed so only one suggestion area shows. */}
+          {agentSuggestionsActive && (
             <SuggestedRepliesBar
               suggestions={chatAgentSuggestions}
               onSelect={handleSelectChatAgentSuggestion}
+              agentName={deployedChatAgents[0]?.name}
+              agentAvatar={deployedChatAgents[0]?.avatar}
             />
           )}
 
-          {/* Deployed agent chips — only shown when agents are actively
-              deployed. No permanent "Add assistant" row; agent deployment
-              is opt-in via the attachment picker. */}
+          {/* Deployed agent indicator — a single quiet chip that consolidates
+              all deployed agents. Per spec 16: "a single quiet '2 agents'
+              indicator is enough." Tap to open the agent picker to manage. */}
           {deployedChatAgents.length > 0 && (
             <View style={styles.agentRow}>
-              {deployedChatAgents.map((agent) => (
-                <Pressable
-                  key={agent.id}
-                  onPress={() => handleRemoveChatAgent(agent.id)}
-                  style={({ pressed }) => [
-                    styles.agentChip,
-                    pressed && styles.agentChipPressed,
-                  ]}
-                  accessibilityLabel={`Remove ${agent.name}`}
-                  accessibilityRole="button"
-                  accessibilityHint={`Remove ${agent.name} from this conversation`}
-                >
-                  <Ionicons
-                    name={(agent.avatar as keyof typeof Ionicons.glyphMap) || 'cube-outline'}
-                    size={13}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.agentChipText}>
-                    {agent.name}
-                  </Text>
-                  <Ionicons
-                    name="close-circle"
-                    size={13}
-                    color={colors.textMuted}
-                  />
-                </Pressable>
-              ))}
+              <Pressable
+                onPress={() => setChatAgentPickerVisible(true)}
+                style={({ pressed }) => [
+                  styles.agentChip,
+                  pressed && styles.agentChipPressed,
+                ]}
+                accessibilityLabel={
+                  deployedChatAgents.length === 1
+                    ? `${deployedChatAgents[0].name} active. Manage agents.`
+                    : `${deployedChatAgents.length} agents active. Manage agents.`
+                }
+                accessibilityRole="button"
+                accessibilityHint="Open agent management"
+              >
+                <Ionicons
+                  name={(deployedChatAgents[0]?.avatar as keyof typeof Ionicons.glyphMap) || 'cube-outline'}
+                  size={13}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.agentChipText}>
+                  {deployedChatAgents.length === 1
+                    ? deployedChatAgents[0].name
+                    : `${deployedChatAgents.length} agents`}
+                </Text>
+              </Pressable>
             </View>
           )}
 
@@ -2582,7 +2560,9 @@ export default function ChatScreen({ navigation, route }: Props) {
             placeholder="Message..."
             isSending={composerSending}
             quickReplies={
-              agentQuickReplies.length > 0
+              agentSuggestionsActive
+                ? undefined
+                : agentQuickReplies.length > 0
                 ? agentQuickReplies
                 : linkedListing
                 ? linkedListing.sellerId === currentUser?.id
@@ -2710,6 +2690,20 @@ export default function ChatScreen({ navigation, route }: Props) {
               case "report":
                 show("Report submitted. Thank you.", "success");
                 break;
+              case "askAgent": {
+                // Spec 16: long press message → Ask agent about this.
+                // Pre-fill the composer with the message text so the user can
+                // direct an agent to analyse it. If no agent is deployed yet,
+                // open the agent picker so they can deploy one first.
+                if (deployedChatAgents.length === 0) {
+                  setChatAgentPickerVisible(true);
+                } else {
+                  const msgText = selectedMessage.text ?? "";
+                  const agentName = deployedChatAgents[0]?.name ?? "";
+                  setInput(`@${agentName} ${msgText}`.trim());
+                }
+                break;
+              }
               case "translate": {
                 setTranslatedMessageIds((prev) => {
                   const next = new Set(prev);
