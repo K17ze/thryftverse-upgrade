@@ -141,7 +141,7 @@ export default function PosterViewerScreen() {
   const [mediaRetryKey, setMediaRetryKey] = React.useState(0);
   const [isBuffering, setIsBuffering] = React.useState(false);
   const [heartBurst, setHeartBurst] = React.useState<{ id: number; x: number; y: number } | null>(null);
-  // Caption expand/collapse — Instagram pattern: 3-line clamp with "more" tap.
+  // Caption expand/collapse — 3-line clamp with "more" tap.
   const [captionExpanded, setCaptionExpanded] = React.useState(false);
 
   // Double-tap detection: track last tap timestamp to distinguish double-tap
@@ -243,7 +243,7 @@ export default function PosterViewerScreen() {
       );
     }
     // At the last frame of the last story, do NOT auto-exit.
-    // Instagram/Snapchat pattern: user must manually swipe down or tap X.
+    // User must manually swipe down or tap X.
     // The progress timer simply stops advancing.
   }, [activeStory, frameIndex, storyIndex, stories.length, stories, haptic]);
 
@@ -414,7 +414,7 @@ export default function PosterViewerScreen() {
     if (!activeFrame || isPaused || isLoading) return;
 
     // At the last frame of the last story, don't auto-advance — let the user
-    // manually exit (Instagram/Snapchat pattern).
+    // manually exit.
     const isLastFrameOfLastStory =
       frameIndex >= (activeStory?.frames.length ?? 1) - 1 &&
       storyIndex >= stories.length - 1;
@@ -449,7 +449,7 @@ export default function PosterViewerScreen() {
   // Reset media error, pause, and buffering state when frame changes.
   // For video frames, set buffering=true so the indicator shows until onLoad fires.
   // A short delay threshold prevents the buffering indicator from flashing
-  // for videos that load quickly (Instagram pattern: only show after ~400ms).
+  // for videos that load quickly (only show after ~400ms).
   React.useEffect(() => {
     setMediaError(false);
     setIsPaused(false);
@@ -853,7 +853,7 @@ export default function PosterViewerScreen() {
     }
   };
 
-  // Consolidated "more" menu — Instagram pattern. Archive, delete, and
+  // Consolidated "more" menu. Archive, delete, and
   // copy-link are tucked into an action sheet so the top bar stays clean
   // (only mute + close remain visible). Owner-only actions are gated.
   const handleMoreMenu = () => {
@@ -1002,7 +1002,7 @@ export default function PosterViewerScreen() {
       <View style={styles.backdropOverlay} />
 
       {/* Top gradient scrim — ensures progress bar, username, and close button
-          are always legible regardless of media content. Instagram pattern.
+          are always legible regardless of media content.
           Slightly stronger at the top edge so the meta row reads cleanly over
           bright media (white backgrounds, light product photography). */}
       <LinearGradient
@@ -1031,7 +1031,7 @@ export default function PosterViewerScreen() {
         </View>
       )}
 
-      {/* Pause indicator — subtle pill with "Paused" label (Instagram pattern).
+      {/* Pause indicator — subtle pill with "Paused" label.
           Appears only when paused by long-press. Refined from a bare circle
           to a soft pill so it reads as a status, not a loading spinner. */}
       {isPaused && !mediaError && (
@@ -1042,7 +1042,7 @@ export default function PosterViewerScreen() {
       )}
 
       {/* Video buffering indicator — shows while video is loading/buffering.
-          Instagram pattern: progress bar pauses, subtle spinner shows. */}
+          Progress bar pauses, subtle spinner shows. */}
       {isBuffering && !mediaError && !isPaused && (
         <View style={styles.bufferingIndicator} pointerEvents="none">
           <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" />
@@ -1251,7 +1251,7 @@ export default function PosterViewerScreen() {
         )}
 
         {/* Caption — skipped when rendering canonical composition.
-            Instagram pattern: 3-line clamp with "more" tap to expand.
+            3-line clamp with "more" tap to expand.
             The caption sits above the reply bar with deliberate spacing so
             the reply bar remains the primary interactive element. */}
         <LinearGradient
@@ -1283,7 +1283,7 @@ export default function PosterViewerScreen() {
           )}
 
           {/* Subtle expiry indicator — moved here from the top meta row so the
-              top stays clean (Instagram pattern). Sits between caption and
+              top stays clean. Sits between caption and
               reply bar as quiet metadata, not a loud badge. */}
           {!compositionDoc && (
             <Text style={styles.footerExpiry} pointerEvents="none">
@@ -1502,7 +1502,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
-    // Near-transparent chrome (Instagram/Snapchat pattern). Legibility
+    // Near-transparent chrome. Legibility
     // comes from the top scrim + text shadows, not an opaque pill fill.
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
@@ -1579,7 +1579,7 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
-    // Near-transparent chrome (Instagram/Snapchat pattern). The author
+    // Near-transparent chrome. The author
     // name + posted time carry text shadows for legibility over media.
     backgroundColor: 'rgba(0,0,0,0.08)',
     gap: Space.sm,
@@ -1626,7 +1626,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    // Near-transparent chrome (Instagram/Snapchat pattern). Icons rely
+    // Near-transparent chrome. Icons rely
     // on the top scrim for legibility rather than an opaque dark disc.
     backgroundColor: 'rgba(0,0,0,0.08)',
   },

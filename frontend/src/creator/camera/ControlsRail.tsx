@@ -38,7 +38,7 @@ export interface ControlsRailProps {
 }
 
 /**
- * Vertical controls rail — right-side TikTok/Snapchat pattern.
+ * Vertical controls rail — right-side.
  *
  * Stacked icon + label controls for Flip, Zoom, Timer, Grid and (when not in
  * visual-search mode) Multi-capture. Each control is a transparent 48×56

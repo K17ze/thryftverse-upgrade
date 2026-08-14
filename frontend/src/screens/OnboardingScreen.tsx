@@ -171,7 +171,7 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       {/* Top bar — Back control (left, transparent 44pt) + Skip (right).
-          Psychology: a visible Back control reduces commitment anxiety
+          A visible Back control reduces commitment anxiety
           (§27.1 behavioral). Users know they can revisit previous slides
           without losing context. The step eyebrow gives immediate
           position context ("01 / 04") so users know how much remains. */}
@@ -216,7 +216,7 @@ export default function OnboardingScreen() {
         >
           {/* Icon — the dominant visual anchor for each slide.
               Rendered inside a subtle tinted panel that uses the slide's
-              semantic color. Psychology (§27.1 visceral): color-coded
+              semantic color. Color-coded
               icon panels create immediate visual differentiation between
               slides, aiding recall and orientation. The panel is
               restrained — a soft tint, not a heavy container. */}

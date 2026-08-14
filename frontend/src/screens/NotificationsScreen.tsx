@@ -224,7 +224,7 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
     const firstActor = uniqueActorNames[0] || 'Someone';
 
     // Build clean aggregated text using the notification type — not regex parsing.
-    // Instagram pattern: "username and N others liked your item"
+    // "username and N others liked your item"
     const actionVerbByType: Record<string, string> = {
       like: 'liked',
       price: 'dropped the price on',

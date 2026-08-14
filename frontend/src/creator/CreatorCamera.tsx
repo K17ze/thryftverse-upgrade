@@ -47,8 +47,8 @@ import { PermissionState } from './camera/PermissionState';
 import { CreatorAnalytics } from './creatorAnalytics';
 import type { CreatorInitialMedia } from '../navigation/types';
 
-// ── CreatorCamera — Flagship 2026 Elevation ────────────────────────
-// Snapchat 2026 / TikTok / BeReal-grade camera component with:
+// ── CreatorCamera ────────────────────────────────────────────────────
+// Camera component with:
 //   - tap-to-focus visual indicator (no fake AE/AF lock claim)
 //   - corner brackets (mode-specific aspect ratio guide, refined 2pt)
 //   - center crosshair
@@ -322,7 +322,7 @@ export default function CreatorCamera({
     setShowGrid((p) => !p);
   }, [haptic]);
 
-  // ── Pinch-to-zoom (Snapchat pattern) ──
+  // ── Pinch-to-zoom ──
   // Tracks two-finger pinch and maps it to the normalized 0..1 zoom range
   // required by Expo Camera's zoom prop. The pinch delta is added to the
   // stepped zoom baseline and clamped to 0..1. On release, it snaps to the
@@ -413,7 +413,7 @@ export default function CreatorCamera({
       const captureLatencyMs = Date.now() - captureStart;
       if (photo?.uri) {
         haptic.medium();
-        // Capture flash — white overlay 0→0.8→0 over 200ms (Snapchat pattern)
+        // Capture flash — white overlay 0→0.8→0 over 200ms
         if (!reducedMotion) {
           captureFlash.value = withSequence(
             withTiming(0.8, { duration: 80, easing: Easing.out(Easing.cubic) }),
@@ -480,7 +480,7 @@ export default function CreatorCamera({
       recordingPromiseRef.current = null;
       if (result?.uri) {
         haptic.medium();
-        // Capture flash — white overlay (Snapchat pattern)
+        // Capture flash — white overlay
         if (!reducedMotion) {
           captureFlash.value = withSequence(
             withTiming(0.8, { duration: 80, easing: Easing.out(Easing.cubic) }),
@@ -741,7 +741,7 @@ export default function CreatorCamera({
           </View>
         </GestureDetector>
 
-      {/* Capture flash — subtle white overlay on capture (Snapchat pattern) */}
+      {/* Capture flash — subtle white overlay on capture */}
       <Reanimated.View
         style={[styles.captureFlash, captureFlashStyle]}
         pointerEvents="none"
@@ -796,7 +796,7 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* Corner brackets — mode-specific framing guide (Instagram/Snapchat pattern) */}
+      {/* Corner brackets — mode-specific framing guide */}
       {/* Visual Search: square crop area. Look (4:5): squarer. Poster (9:16): taller. */}
       {(() => {
         const bracketTop = isVisualSearch ? '22%' : isPoster ? '14%' : '16%';
@@ -853,7 +853,7 @@ export default function CreatorCamera({
         </View>
       </View>
 
-      {/* Vertical controls rail — right side (TikTok/Snapchat pattern) */}
+      {/* Vertical controls rail — right side */}
       <ControlsRail
         top={Math.max(insets.top, 16) + 60}
         isVisualSearch={isVisualSearch}
@@ -1038,7 +1038,7 @@ export default function CreatorCamera({
   );
 }
 
-// ── Styles — Flagship 2026 ────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   // ── Camera-overlay whites ──────────────────────────────────────────

@@ -165,7 +165,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Safety tips — empowering, not frightening.
-          Psychology (§27.7 trust architecture): a marketplace that visibly
+          A marketplace that visibly
           educates users on safe trading practices builds reflective trust.
           This section makes safety actionable rather than buried. Research
           (TechVinta 2026): "surface a Report link on every surface" and

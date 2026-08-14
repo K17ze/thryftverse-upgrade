@@ -1609,7 +1609,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
 // ── Text Picker ────────────────────────────────────────────────────
 // Instagram 2025-2026 parity: 10 fonts, text effects, background color,
 // text animations (typewriter, bounce, fade). Each style label renders
-// in its own font (Snapchat pattern).
+// in its own font.
 
 const TEXT_STYLES: Array<{ key: string; label: string }> = [
   { key: 'clean', label: 'Clean' },
@@ -1721,7 +1721,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   return (
     <PickerShell title={isEditing ? 'Edit Text' : 'Add Text'} onClose={onClose}>
       <View style={styles.textPickerBody}>
-        {/* Live preview — shows text with selected style + color (Snapchat pattern) */}
+        {/* Live preview — shows text with selected style + color */}
         <View style={styles.textPreview}>
           <Text
             style={[
@@ -1752,7 +1752,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           accessibilityLabel="Text content"
         />
 
-        {/* Style selector — each label rendered in its own style (Snapchat pattern) */}
+        {/* Style selector — each label rendered in its own style */}
         <Text style={styles.pickerSectionLabel}>Style</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
           {TEXT_STYLES.map((s) => (
@@ -1799,7 +1799,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             />
           ))}
         </View>
-        {/* Spectrum picker — long-press any swatch to open (Instagram pattern) */}
+        {/* Spectrum picker — long-press any swatch to open */}
         {showSpectrum && (
           <View style={styles.spectrumWrap}>
             <LinearGradient
@@ -2159,7 +2159,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 <Text style={styles.drawCanvasHintText}>Draw with your finger</Text>
               </View>
             )}
-            {/* Vertical brush size slider — Instagram pattern (left side, drag up=thicker) */}
+            {/* Vertical brush size slider — left side, drag up=thicker */}
             {activeTool !== 'eraser' && (
               <View style={styles.brushSliderWrap} pointerEvents="box-none">
                 <Pressable
@@ -2281,7 +2281,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           })}
         </View>
 
-        {/* Live stroke preview — Instagram pattern: shows actual brush diameter in active color */}
+        {/* Live stroke preview — shows actual brush diameter in active color */}
         <View style={styles.brushPreviewWrap}>
           <View
             style={[
@@ -4549,7 +4549,7 @@ function createStyles(colors: ThemeColors) {
   spectrumOverlay: { ...StyleSheet.absoluteFill },
   spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: '#fff', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4, left: '50%', marginLeft: -14 },
   spectrumClose: { alignSelf: 'center', paddingVertical: Space.xs },
-  // ── Vertical brush size slider (Instagram pattern) ──
+  // ── Vertical brush size slider ──
   brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10, elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   brushSliderTrack: { width: 28, height: 120, borderRadius: Radius.full, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
   brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.full },

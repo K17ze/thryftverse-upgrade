@@ -54,7 +54,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   const [isMuted, setIsMuted] = React.useState(true);
   const [mediaError, setMediaError] = React.useState(false);
   const [mediaRetryKey, setMediaRetryKey] = React.useState(0);
-  // Caption expand/collapse — Instagram pattern: 3-line clamp with "more" tap.
+  // Caption expand/collapse — 3-line clamp with "more" tap.
   const [captionExpanded, setCaptionExpanded] = React.useState(false);
 
   // Load highlight data
@@ -299,7 +299,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
       <View style={styles.overlay} pointerEvents="box-none" />
 
       {/* Top gradient scrim — ensures progress bar, title, and close button
-          are always legible regardless of media content. Instagram pattern. */}
+          are always legible regardless of media content. */}
       <LinearGradient
         colors={['rgba(0,0,0,0.40)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0)']}
         locations={[0, 0.5, 1]}
@@ -369,7 +369,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
       </View>
 
       {/* Caption (if present and not a text-only frame).
-          Instagram pattern: 3-line clamp with "more" tap to expand.
+          3-line clamp with "more" tap to expand.
           Tappable (not pointerEvents="none") so the user can expand/collapse. */}
       {activeFrame.caption && activeFrame.mediaUrl && (
         <Pressable

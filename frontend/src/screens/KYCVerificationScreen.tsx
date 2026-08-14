@@ -292,7 +292,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
     >
       <View style={styles.root}>
         {/* ── Privacy reassurance banner ──
-            Psychology (§27.7 trust architecture): KYC is the highest-trust
+            KYC is the highest-trust
             moment in onboarding. A visible privacy statement before the form
             reduces abandonment by addressing the user's primary concern
             ("what happens to my data?") before they encounter the camera.

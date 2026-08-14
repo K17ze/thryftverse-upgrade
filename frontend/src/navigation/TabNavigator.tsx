@@ -198,7 +198,7 @@ export default function TabNavigator() {
           headerShown: false,
           tabBarShowLabel: false,
           tabBarHideOnKeyboard: true,
-          // Instagram pattern: edge-to-edge transparent bar with frosted
+          // Edge-to-edge transparent bar with frosted
           // glass blur background. Content scrolls behind the bar, and the
           // LiquidGlassBackdrop applies iOS 26 Liquid Glass on supported
           // devices (BlurView fallback elsewhere). No floating pill, no

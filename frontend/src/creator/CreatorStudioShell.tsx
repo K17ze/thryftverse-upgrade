@@ -463,7 +463,7 @@ export function CreatorStudioInner() {
         )}
       </View>
 
-      {/* ── Top bar — BlurView backdrop + subtle gradient scrim (Snapchat 2026 / TikTok pattern) ── */}
+      {/* ── Top bar — BlurView backdrop + subtle gradient scrim ── */}
       {/* Native blur on iOS makes canvas content visible underneath while keeping
           controls readable. On Android, BlurView falls back to a semi-transparent
           fill, so a subtle gradient overlay ensures legibility on both platforms. */}
@@ -651,13 +651,13 @@ export function CreatorStudioInner() {
       </View>
 
       {/* ── Floating bottom rail with Liquid Glass backdrop ──────────── */}
-      {/* Premium glassmorphism: Liquid Glass on iOS 26+, BlurView fallback
+      {/* Liquid Glass on iOS 26+, BlurView fallback
           elsewhere. The tool dock sits on top of this glass surface. A
           hairline top border grounds the glass against the canvas. */}
       <View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }]}>
         <View style={styles.bottomRailHairline} />
         <LiquidGlassBackdrop intensity={50} tint="dark" absoluteFill={false} style={styles.bottomRailGlass}>
-          {/* Opacity slider — appears when a layer is selected (Instagram pattern) */}
+          {/* Opacity slider — appears when a layer is selected */}
           {selectedLayer && (
             <OpacityBar
               value={selectedLayer.opacity ?? 1}
@@ -834,7 +834,7 @@ export function CreatorStudioInner() {
   );
 }
 
-// ── Opacity bar — drag-based slider for layer opacity (Instagram pattern) ──
+// ── Opacity bar — drag-based slider for layer opacity ──
 // Migrated from PanResponder to Gesture.Pan() from react-native-gesture-handler
 // for worklet-based, 60fps drag updates without setState during drag.
 const OpacityBar = React.memo(function OpacityBar({ value, onChange, onCommit }: { value: number; onChange: (v: number) => void; onCommit: (v: number) => void }) {

@@ -55,7 +55,7 @@ const REACTIONS: Array<{ type: PosterReactionType; glyph: string; label: string 
   { type: 'laugh', glyph: '😂', label: 'Laugh' },
 ];
 
-// Quick reply suggestions — Instagram pattern: tappable chips above the input
+// Quick reply suggestions — tappable chips above the input
 // for fast engagement. Commerce-aware suggestions.
 const QUICK_REPLIES: Array<{ emoji: string; text: string }> = [
   { emoji: '❤️', text: 'Love this!' },
@@ -218,7 +218,7 @@ export function PosterReactionReplyBar({
   const showCounter = replyText.length > REPLY_COUNTER_THRESHOLD;
 
   // ── Owner view ───────────────────────────────────────────────────────
-  // Instagram pattern: owner sees viewer count + "View activity" CTA,
+  // Owner sees viewer count + "View activity" CTA,
   // plus share. No reply bar (owners don't reply to their own story).
   if (isOwner) {
     return (
@@ -302,7 +302,7 @@ export function PosterReactionReplyBar({
         </GestureDetector>
       )}
 
-      {/* Quick reply suggestion chips — Instagram pattern.
+      {/* Quick reply suggestion chips.
           Horizontal scroll of tappable chips above the input for fast engagement. */}
       {showQuickReplies && allowReplies && (
         <ScrollView
@@ -603,7 +603,7 @@ function createStyles(colors: any) {
       lineHeight: 28,
       textAlign: 'center',
     },
-    // Reply input wrapper — frosted glass pill (Instagram pattern).
+    // Reply input wrapper — frosted glass pill.
     // The blur is supplied by LiquidGlassBackdrop; the hairline border
     // remains to define the glass edge against any media.
     replyInputWrap: {
@@ -625,7 +625,7 @@ function createStyles(colors: any) {
     // Glass background layer for the reply input pill. The blur is
     // supplied by LiquidGlassBackdrop; the underlying fill is a subtle
     // rgba(255,255,255,0.08) so the pill reads cleanly even when the
-    // blur fallback renders a flat tint (Instagram pattern).
+    // blur fallback renders a flat tint.
     replyInputGlass: {
       borderRadius: Radius.full,
       backgroundColor: 'rgba(255,255,255,0.08)',
@@ -652,7 +652,7 @@ function createStyles(colors: any) {
     replyCounterLimit: {
       color: 'rgba(255,120,120,0.85)',
     },
-    // Send button — Instagram pattern: a white paper-plane glyph on a
+    // Send button — a white paper-plane glyph on a
     // transparent 44pt hit target (no filled circle). The icon is the
     // affordance; the brand accent is reserved for the icon tint so the
     // control stays restrained and the reply input remains primary.

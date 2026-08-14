@@ -417,7 +417,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
     normX = Math.max(minX, Math.min(maxX, normX));
     normY = Math.max(minY, Math.min(maxY, normY));
 
-    // Spring settle for natural position commit (flagship 2026: spring physics)
+    // Spring settle for natural position commit (spring physics)
     translateX.value = withSpring(normX * canvasWidth, spring.settle);
     translateY.value = withSpring(normY * canvasHeight, spring.settle);
 
@@ -441,7 +441,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
       haptic.light();
     }
 
-    // Spring settle for natural transform commit (flagship 2026: spring physics)
+    // Spring settle for natural transform commit (spring physics)
     scaleSV.value = withSpring(clampedScale, spring.settle);
     rotationSV.value = withSpring(snappedRotation, spring.settle);
     onTransformChange?.(layer.id, { scale: clampedScale, rotation: snappedRotation });

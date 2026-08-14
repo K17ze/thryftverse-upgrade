@@ -69,7 +69,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
   } = useAccessibilityPreferences();
 
   // Live preview text — shows the user exactly how their selected text size
-  // and bold setting will look in context. Psychology (§27.1 behavioral):
+  // and bold setting will look in context.
   // immediate feedback on settings reduces uncertainty and builds confidence
   // that the change is real.
   const previewFontSize = TEXT_SIZES.find((t) => t.value === textSize)?.sample ?? Type.body.size;

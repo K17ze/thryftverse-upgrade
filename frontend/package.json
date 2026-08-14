@@ -21,6 +21,7 @@
     "check:maestro-flows": "node scripts/check-maestro-flows.mjs",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "check:visual-gates": "node scripts/check-visual-release-gates.mjs",
+    "check:residue": "node scripts/check-production-residue.mjs",
     "doctor": "npx expo-doctor",
     "test": "vitest run --dir src",
     "test:watch": "vitest --dir src",

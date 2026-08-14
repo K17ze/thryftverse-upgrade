@@ -587,7 +587,7 @@ function PublishReview({
         ))}
       </ScrollView>
 
-      {/* Cover selection — for multi-page stories (Instagram pattern) */}
+      {/* Cover selection — for multi-page stories */}
       {document.pages.length > 1 && (
         <>
           <Text style={styles.sectionLabel}>Cover</Text>

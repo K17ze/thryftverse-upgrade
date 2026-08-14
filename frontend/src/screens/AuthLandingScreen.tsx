@@ -259,7 +259,7 @@ export default function AuthLandingScreen() {
           </Reanimated.Text>
 
           {/* Trust signals — compact value props with refined icon treatment.
-              Psychology (§27.1 reflective level): trust signals at the entry
+              Trust signals at the entry
               point reduce anxiety and communicate competence before the user
               commits to an action. Icons at 18pt sit above the reading flow
               without competing with the primary CTA. */}
@@ -287,7 +287,7 @@ export default function AuthLandingScreen() {
         </View>
 
         {/* Inline auth error banner — accessible, recoverable.
-            Psychology: a calm error banner with a clear dismiss control
+            A calm error banner with a clear dismiss control
             communicates competence. The danger-tinted surface is restrained
             so it informs without alarming. */}
         {authError ? (
@@ -312,7 +312,7 @@ export default function AuthLandingScreen() {
 
         {/* Bottom — CTAs. Primary action is visually dominant; secondary is
             restrained. Social auth sits below a subtle divider so the email
-            path remains the clear primary. Psychology (§27.7 trust): placing
+            path remains the clear primary. Placing
             social below the primary CTA signals that email signup is the
             recommended path while still offering convenience. */}
         <Reanimated.View

@@ -128,7 +128,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     }).start();
   }, [mode, chipWidths, modeIndicatorX, modeIndicatorWidth, reducedMotion]);
 
-  // ── Swipe gesture to switch modes (Snapchat/TikTok pattern) ──
+  // ── Swipe gesture to switch modes ──
   // Use a ref to hold the current mode so the PanResponder doesn't capture
   // a stale closure of switchMode.
   const modeRef = useRef(mode);

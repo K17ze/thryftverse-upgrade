@@ -181,7 +181,7 @@ export function ProfileHero({
               matching the Instagram/Depop mobile pattern. Three stats:
               For sale · Followers · Following.
 
-              Psychology (2026 research): stats are the "reputation layer" —
+              Stats are the "reputation layer" —
               users process them at 0.5–1.5s. Grouping them in one row
               reduces cognitive load vs scattering across multiple sections.
               Compact notation (1.2K, 3.4M) enables instant scanning while

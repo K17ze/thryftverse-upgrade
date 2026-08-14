@@ -240,7 +240,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   }, [renderViewer, renderReaction, renderReply]);
 
   // ── Summary header card ──────────────────────────────────────────────
-  // Instagram/Snapchat pattern: a compact metrics summary at the top of the
+  // A compact metrics summary at the top of the
   // activity screen showing total views, reactions, replies, and completion
   // rate at a glance.
   const renderSummaryHeader = () => {
