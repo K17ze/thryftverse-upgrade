@@ -17,7 +17,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numeric, Radius } from '../theme/designTokens';
+import { Space, FontFamily, Stroke, Control, Numeric, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
@@ -406,6 +406,79 @@ export default function AssetDueDiligenceScreen() {
             </View>
           )}
         </CommerceDetailSection>
+
+        {/* ── Provenance timeline ──
+            Chronological events with a vertical line and event dots.
+            Combines authenticity, appraisal, trust audit and market audit
+            events into one visual timeline. */}
+        {timelineEvents.length > 0 ? (
+          <CommerceDetailSection label="Timeline" divider variant="editorial">
+            <View style={styles.timelineWrap}>
+              {timelineEvents.map((evt, i) => {
+                const isLast = i === timelineEvents.length - 1;
+                return (
+                  <View key={`${evt.sortKey}-${i}`} style={styles.timelineRow}>
+                    <View style={styles.timelineDotCol}>
+                      <View style={[styles.timelineDot, { backgroundColor: colors.brand }]} />
+                      {!isLast ? (
+                        <View style={[styles.timelineLine, { backgroundColor: colors.borderSubtle }]} />
+                      ) : null}
+                    </View>
+                    <View style={styles.timelineContent}>
+                      <Text style={[styles.timelineEvent, { color: colors.textPrimary }]}>
+                        {evt.event}
+                      </Text>
+                      <Text style={[styles.timelineDate, { color: colors.textMuted }]}>
+                        {evt.date.toLocaleDateString(undefined, {
+                          year: 'numeric', month: 'short', day: 'numeric',
+                        })}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </CommerceDetailSection>
+        ) : null}
+
+        {/* ── Documents ──
+            Legal/technical documents as flat rows with icons.
+            Links open externally; non-link rows show reference text. */}
+        {documentRows.length > 0 ? (
+          <CommerceDetailSection label="Documents" divider variant="editorial">
+            <View style={styles.documentList}>
+              {documentRows.map((doc, i) => (
+                <Pressable
+                  key={`${doc.title}-${i}`}
+                  style={({ pressed }) => [
+                    styles.documentRow,
+                    { borderBottomColor: colors.borderSubtle },
+                    pressed && { opacity: 0.5 },
+                  ]}
+                  onPress={doc.isLink && doc.url ? () => Linking.openURL(doc.url!) : undefined}
+                  disabled={!doc.isLink || !doc.url}
+                  accessibilityRole={doc.isLink && doc.url ? 'link' : undefined}
+                  accessibilityLabel={doc.isLink && doc.url ? `Open ${doc.title}` : doc.title}
+                >
+                  <Ionicons name={doc.icon as React.ComponentProps<typeof Ionicons>['name']} size={18} color={colors.textMuted} />
+                  <View style={styles.documentInfo}>
+                    <Text style={[styles.documentTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {doc.title}
+                    </Text>
+                    {doc.subtitle ? (
+                      <Text style={[styles.documentSubtitle, { color: colors.textMuted }]} numberOfLines={1}>
+                        {doc.subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {doc.isLink && doc.url ? (
+                    <Ionicons name="open-outline" size={14} color={colors.brand} />
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
+          </CommerceDetailSection>
+        ) : null}
 
         {/* ── Valuation ──
             Appraisal value, NAV, reference vs NAV, next report. */}
@@ -1016,5 +1089,70 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
+  },
+  // ── Timeline ──
+  timelineWrap: {
+    paddingVertical: Space.xs,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  timelineDotCol: {
+    alignItems: 'center',
+    width: Space.sm,
+  },
+  timelineDot: {
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: Radius.full,
+    marginTop: Space.xs + 1,
+  },
+  timelineLine: {
+    flex: 1,
+    width: StyleSheet.hairlineWidth,
+    marginTop: Space.xs,
+  },
+  timelineContent: {
+    flex: 1,
+    paddingBottom: Space.md,
+  },
+  timelineEvent: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
+    textTransform: 'capitalize',
+  },
+  timelineDate: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+    marginTop: 1,
+  },
+  // ── Documents ──
+  documentList: {
+    paddingVertical: Space.xs,
+  },
+  documentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    minHeight: Control.hit,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  documentInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  documentTitle: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
+  },
+  documentSubtitle: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
 });

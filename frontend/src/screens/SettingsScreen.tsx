@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -34,7 +34,6 @@ import { FlatRow } from '../components/ui/FlatRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
-import { useAppTheme as useTheme } from '../theme/ThemeContext';
 
 import { Space, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -110,7 +109,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const savedAddress = useStore((state) => state.savedAddress);
   const blockedCount = useStore((s) => s.blockedUsers.length);
   const { show } = useToast();
-  const { colors } = useTheme();
+  const { colors } = useAppTheme();
 
   const {
     language: selectedLanguage,
@@ -326,7 +325,10 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       </View>
 
-      {isSearching ? (
+      {isHydrating ? (
+        /* ── HYDRATION SKELETON — persist store loading user/session data ── */
+        <SettingsListSkeleton />
+      ) : isSearching ? (
         /* ── SEARCH RESULTS — flat filtered list ── */
         <SettingsSection title={searchResults.length > 0 ? 'Results' : 'All settings'} noCard>
           {searchResults.length === 0 ? (
@@ -382,344 +384,344 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           ) : null}
 
-      {/* ── ACCOUNT ── */}
-      <SettingsSection title="Account" icon="person-circle-outline" noCard>
-        <SettingsRow
-          icon="shield-checkmark-outline"
-          iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
-          titleStyle={currentUser?.emailVerified ? { color: colors.success } : undefined}
-          title="Verification"
-          subtitle={currentUser?.emailVerified ? 'Verified' : 'Get the verified badge'}
-          onPress={() => navigation.navigate('Verification')}
-          isFirst
-        />
-        <SettingsRow
-          icon="key-outline"
-          title="Change password"
-          subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
-          onPress={() => navigation.navigate('ChangePassword')}
-        />
-        <SettingsRow
-          icon="link-outline"
-          title="Connected accounts"
-          subtitle="Google, Apple sign-in"
-          onPress={() => navigation.navigate('ConnectedAccounts')}
-        />
-        <SettingsRow
-          icon="phone-portrait-outline"
-          title="Devices & sessions"
-          onPress={() => navigation.navigate('ActiveSessions')}
-        />
-        <SettingsRow
-          icon="shield-outline"
-          title="Account control"
-          subtitle="Security, sessions, password"
-          onPress={() => navigation.navigate('AccountControl')}
-        />
-        <SettingsRow
-          icon="download-outline"
-          title="Download my data"
-          subtitle="Export your account data"
-          onPress={() => navigation.navigate('DataExport')}
-        />
-        <SettingsRow
-          icon="trash-outline"
-          title="Delete account"
-          subtitle="Permanently erase your account"
-          danger
-          onPress={() => navigation.navigate('DeleteAccount')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── PRIVACY & SAFETY ── */}
-      <SettingsSection title="Privacy & safety" icon="lock-closed-outline" noCard>
-        <SettingsRow
-          icon="eye-outline"
-          title="Privacy & safety"
-          subtitle="Visibility, blocked users"
-          onPress={() => navigation.navigate('PrivacySettings')}
-          isFirst
-        />
-        <SettingsRow
-          icon="chatbubble-outline"
-          title="Chat privacy"
-          subtitle="Who can message you"
-          onPress={() => navigation.navigate('ChatSettings')}
-        />
-        <SettingsRow
-          icon="lock-closed-outline"
-          title="Data & privacy"
-          subtitle="Privacy controls and retention"
-          onPress={() => navigation.navigate('DataPrivacy')}
-        />
-        <SettingsRow
-          icon="ban-outline"
-          title="Blocked users"
-          subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None'}
-          onPress={() => navigation.navigate('BlockedUsers')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── BUYING ── */}
-      <SettingsSection title="Buying" icon="bag-outline" noCard>
-        <SettingsRow
-          icon="location-outline"
-          title="Saved addresses"
-          subtitle={savedAddress ? '1 saved' : 'None saved'}
-          onPress={() => navigation.navigate('SavedAddresses')}
-          isFirst
-        />
-        <SettingsRow
-          icon="card-outline"
-          title="Payment methods"
-          subtitle={savedPaymentMethod ? savedPaymentMethod.label : 'None saved'}
-          onPress={() => navigation.navigate('Payments')}
-        />
-        <SettingsRow
-          icon="heart-outline"
-          title="Saved & collections"
-          onPress={() => navigation.navigate('Closet')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── SELLING & PAYOUTS ── */}
-      <SettingsSection title="Selling & payouts" icon="cash-outline" noCard>
-        <SettingsRow
-          icon="wallet-outline"
-          title="Payout account"
-          subtitle="Balance and wallet"
-          onPress={() => navigation.navigate('Wallet')}
-          isFirst
-        />
-        <SettingsRow
-          icon="cube-outline"
-          title="Shipping preferences"
-          onPress={() => navigation.navigate('Postage')}
-        />
-        <SettingsRow
-          icon="cash-outline"
-          title="Payout history"
-          onPress={() => navigation.navigate('BalanceHistory')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── NOTIFICATIONS ── */}
-      <SettingsSection title="Notifications" icon="notifications-outline" noCard>
-        <SettingsRow
-          icon="notifications"
-          title="Enable notifications"
-          subtitle={pushPermissionGranted === null ? 'Permission unknown' : pushPermissionGranted ? 'Allowed' : 'Not allowed'}
-          toggleValue={pushPermissionGranted === true}
-          onToggle={(v) => void handleTogglePushPermission(v)}
-          disabled={isTogglingPush}
-          isFirst
-        />
-        <SettingsRow
-          icon="notifications-outline"
-          title="Notification categories"
-          subtitle={notificationSummary}
-          onPress={() => navigation.navigate('PushNotifications')}
-        />
-        <SettingsRow
-          icon="options-outline"
-          title="Notification preferences"
-          subtitle="Quiet hours, preview"
-          onPress={() => navigation.navigate('NotificationPreferences')}
-        />
-        <SettingsRow
-          icon="mail-outline"
-          title="Email preferences"
-          subtitle={emailNotificationsEnabled ? 'On' : 'Off'}
-          onPress={() => navigation.navigate('EmailNotifications')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── PERSONALISATION & APPEARANCE ── */}
-      <SettingsSection title="Personalisation & appearance" icon="color-palette-outline" noCard>
-        <SettingsRow
-          icon="color-palette-outline"
-          title="Theme"
-          value={getThemePreferenceLabel(themePreference)}
-          onPress={() => setThemePickerVisible(true)}
-          isFirst
-        />
-        <SettingsRow
-          icon="swap-horizontal-outline"
-          title="Currency display"
-          value={displayModeLabel}
-          onPress={cycleDisplayMode}
-        />
-        <SettingsRow
-          icon="globe-outline"
-          title="Local currency"
-          value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
-          onPress={() => setCurrencyPickerVisible(true)}
-        />
-        <SettingsRow
-          icon="language-outline"
-          title="Language"
-          value={selectedLanguage}
-          onPress={() => setLanguagePickerVisible(true)}
-        />
-        <SettingsRow
-          icon="options-outline"
-          title="Content preferences"
-          subtitle="Feed and recommendations"
-          onPress={() => navigation.navigate('Personalisation')}
-        />
-        <SettingsRow
-          icon="bulb-outline"
-          title="Listing suggestions"
-          subtitle="Photo enhancement, title and price suggestions"
-          onPress={() => navigation.navigate('AIPreferences')}
-        />
-        <SettingsRow
-          icon="analytics-outline"
-          title="Your feed"
-          subtitle="Recommendations and transparency"
-          onPress={() => navigation.navigate('YourAlgorithm')}
-        />
-        <SettingsRow
-          icon="leaf-outline"
-          title="Sustainability"
-          subtitle="Goals, shipping, impact"
-          onPress={() => navigation.navigate('SustainabilityPreferences')}
-        />
-        <SettingsRow
-          icon="accessibility-outline"
-          title="Accessibility"
-          subtitle="Text size, motion, contrast"
-          onPress={() => navigation.navigate('AccessibilitySettings')}
-        />
-        <SettingsRow
-          icon="time-outline"
-          title="Search history"
-          subtitle="Clear recent searches"
-          onPress={() => void handleClearSearchHistory()}
-        />
-        <SettingsRow
-          icon="analytics-outline"
-          title="Data sharing"
-          subtitle="Analytics and personalization"
-          toggleValue={!analyticsOptOut}
-          onToggle={(v) => setAnalyticsOptOut(!v)}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── CO-OWN ── */}
-      <SettingsSection title="Co-Own" icon="diamond-outline" noCard>
-        <SettingsRow
-          icon="notifications-outline"
-          title="Price alerts"
-          subtitle="Notify on price thresholds"
-          onPress={() => navigation.navigate('CoOwnPriceAlerts')}
-          isFirst
-        />
-        <SettingsRow
-          icon="repeat-outline"
-          title="Auto-invest plans"
-          subtitle="Recurring buy schedules"
-          onPress={() => navigation.navigate('CoOwnRecurringOrders')}
-        />
-        <SettingsRow
-          icon="document-text-outline"
-          title="Tax documents"
-          subtitle="Annual statements & P&L"
-          onPress={() => navigation.navigate('CoOwnTaxDocuments')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── AGENTS & CONNECTIONS ── */}
-      {/* Per spec 18: Agents are a normal product destination, not hidden
-          behind developer mode. Create Agent is intentionally excluded from
-          Settings — it lives in the Agents home and profile menu. */}
-      <SettingsSection title="Agents & connections" icon="hardware-chip-outline" noCard>
-        <SettingsRow
-          icon="people-outline"
-          title="Agents"
-          subtitle="Browse and manage agent permissions"
-          onPress={() => navigation.navigate('BotDirectory')}
-          isFirst
-        />
-        <SettingsRow
-          icon="key-outline"
-          title="Connections"
-          subtitle="Provider keys and endpoints"
-          onPress={() => navigation.navigate('AIAgentIntegration')}
-        />
-        <SettingsRow
-          icon="person-circle-outline"
-          title="Your agents"
-          subtitle="Agents you have created"
-          onPress={() => navigation.navigate('CustomBots')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── HELP & ABOUT ── */}
-      <SettingsSection title="Help & about" icon="help-circle-outline" noCard>
-
-        <SettingsRow
-          icon="help-circle-outline"
-          title="Help Centre"
-          onPress={() => navigation.navigate('HelpSupport')}
-          isFirst
-        />
-        <SettingsRow
-          icon="folder-open-outline"
-          title="Resolution Centre"
-          onPress={() => navigation.navigate('ResolutionCentre')}
-        />
-        <SettingsRow
-          icon="document-text-outline"
-          title="Terms of Service"
-          onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
-        />
-        <SettingsRow
-          icon="shield-checkmark-outline"
-          title="Privacy Policy"
-          onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
-        />
-        <SettingsRow
-          icon="information-circle-outline"
-          title="About Thryftverse"
-          value="v1.0.0"
-          onPress={() => navigation.navigate('About')}
-          isLast
-        />
-      </SettingsSection>
-
-      {/* ── ADVANCED & DEVELOPER ── */}
-      {/* Per spec 18: Developer mode keeps only raw debugging tools — not
-          consumer agent features, which now live in "Agents & connections"
-          above. Gated behind developer mode (Settings → About → tap version
-          7 times) so ordinary consumers never see implementation technology. */}
-      {showAdvancedDeveloper ? (
-        <SettingsSection title="Advanced & developer" icon="code-working-outline" noCard>
-          <SettingsRow
-            icon="terminal-outline"
-            title="Runtime smoke test"
-            subtitle="Diagnostic checks for local runtime"
-            onPress={() => navigation.navigate('RuntimeSmokeTest')}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
-      ) : null}
-
-      {/* ── SIGN OUT ── */}
-      {/* Sign Out action is rendered via SettingsSignOutRow for destructive separation */}
-      <View style={{ marginTop: Space.lg, marginBottom: Space.md }}>
-        <SettingsSignOutRow username={currentUser?.username} onSignOut={handleLogout} />
-      </View>
-        </>
+          {/* ── ACCOUNT ── */}
+          <SettingsSection title="Account" icon="person-circle-outline" noCard>
+            <SettingsRow
+              icon="shield-checkmark-outline"
+              iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
+              titleStyle={currentUser?.emailVerified ? { color: colors.success } : undefined}
+              title="Verification"
+              subtitle={currentUser?.emailVerified ? 'Verified' : 'Get the verified badge'}
+              onPress={() => navigation.navigate('Verification')}
+              isFirst
+            />
+            <SettingsRow
+              icon="key-outline"
+              title="Change password"
+              subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
+              onPress={() => navigation.navigate('ChangePassword')}
+            />
+            <SettingsRow
+              icon="link-outline"
+              title="Connected accounts"
+              subtitle="Google, Apple sign-in"
+              onPress={() => navigation.navigate('ConnectedAccounts')}
+            />
+            <SettingsRow
+              icon="phone-portrait-outline"
+              title="Devices & sessions"
+              onPress={() => navigation.navigate('ActiveSessions')}
+            />
+            <SettingsRow
+              icon="shield-outline"
+              title="Account control"
+              subtitle="Security, sessions, password"
+              onPress={() => navigation.navigate('AccountControl')}
+            />
+            <SettingsRow
+              icon="download-outline"
+              title="Download my data"
+              subtitle="Export your account data"
+              onPress={() => navigation.navigate('DataExport')}
+            />
+            <SettingsRow
+              icon="trash-outline"
+              title="Delete account"
+              subtitle="Permanently erase your account"
+              danger
+              onPress={() => navigation.navigate('DeleteAccount')}
+              isLast
+            />
+          </SettingsSection>
+    
+          {/* ── PRIVACY & SAFETY ── */}
+          <SettingsSection title="Privacy & safety" icon="lock-closed-outline" noCard>
+            <SettingsRow
+              icon="eye-outline"
+              title="Privacy & safety"
+              subtitle="Visibility, blocked users"
+              onPress={() => navigation.navigate('PrivacySettings')}
+              isFirst
+            />
+            <SettingsRow
+              icon="chatbubble-outline"
+              title="Chat privacy"
+              subtitle="Who can message you"
+              onPress={() => navigation.navigate('ChatSettings')}
+            />
+            <SettingsRow
+              icon="lock-closed-outline"
+              title="Data & privacy"
+              subtitle="Privacy controls and retention"
+              onPress={() => navigation.navigate('DataPrivacy')}
+            />
+            <SettingsRow
+              icon="ban-outline"
+              title="Blocked users"
+              subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None'}
+              onPress={() => navigation.navigate('BlockedUsers')}
+              isLast
+            />
+          </SettingsSection>
+    
+          {/* ── BUYING ── */}
+          <SettingsSection title="Buying" icon="bag-outline" noCard>
+            <SettingsRow
+              icon="location-outline"
+              title="Saved addresses"
+              subtitle={savedAddress ? '1 saved' : 'None saved'}
+              onPress={() => navigation.navigate('SavedAddresses')}
+              isFirst
+            />
+            <SettingsRow
+              icon="card-outline"
+              title="Payment methods"
+              subtitle={savedPaymentMethod ? savedPaymentMethod.label : 'None saved'}
+              onPress={() => navigation.navigate('Payments')}
+            />
+            <SettingsRow
+              icon="heart-outline"
+              title="Saved & collections"
+              onPress={() => navigation.navigate('Closet')}
+              isLast
+            />
+          </SettingsSection>
+    
+          {/* ── SELLING & PAYOUTS ── */}
+          <SettingsSection title="Selling & payouts" icon="cash-outline" noCard>
+            <SettingsRow
+              icon="wallet-outline"
+              title="Payout account"
+              subtitle="Balance and wallet"
+              onPress={() => navigation.navigate('Wallet')}
+              isFirst
+            />
+            <SettingsRow
+              icon="cube-outline"
+              title="Shipping preferences"
+              onPress={() => navigation.navigate('Postage')}
+            />
+            <SettingsRow
+              icon="cash-outline"
+              title="Payout history"
+              onPress={() => navigation.navigate('BalanceHistory')}
+              isLast
+            />
+          </SettingsSection>
+    
+          {/* ── NOTIFICATIONS ── */}
+          <SettingsSection title="Notifications" icon="notifications-outline" noCard>
+            <SettingsRow
+              icon="notifications"
+              title="Enable notifications"
+              subtitle={pushPermissionGranted === null ? 'Permission unknown' : pushPermissionGranted ? 'Allowed' : 'Not allowed'}
+              toggleValue={pushPermissionGranted === true}
+              onToggle={(v) => void handleTogglePushPermission(v)}
+              disabled={isTogglingPush}
+              isFirst
+            />
+            <SettingsRow
+              icon="notifications-outline"
+              title="Notification categories"
+              subtitle={notificationSummary}
+              onPress={() => navigation.navigate('PushNotifications')}
+            />
+            <SettingsRow
+              icon="options-outline"
+              title="Notification preferences"
+              subtitle="Quiet hours, preview"
+              onPress={() => navigation.navigate('NotificationPreferences')}
+            />
+            <SettingsRow
+              icon="mail-outline"
+              title="Email preferences"
+              subtitle={emailNotificationsEnabled ? 'On' : 'Off'}
+              onPress={() => navigation.navigate('EmailNotifications')}
+              isLast
+            />
+          </SettingsSection>
+    
+          {/* ── PERSONALISATION & APPEARANCE ── */}
+          <SettingsSection title="Personalisation & appearance" icon="color-palette-outline" noCard>
+            <SettingsRow
+              icon="color-palette-outline"
+              title="Theme"
+              value={getThemePreferenceLabel(themePreference)}
+              onPress={() => setThemePickerVisible(true)}
+              isFirst
+            />
+            <SettingsRow
+              icon="swap-horizontal-outline"
+              title="Currency display"
+              value={displayModeLabel}
+              onPress={cycleDisplayMode}
+            />
+            <SettingsRow
+              icon="globe-outline"
+              title="Local currency"
+              value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
+              onPress={() => setCurrencyPickerVisible(true)}
+            />
+            <SettingsRow
+              icon="language-outline"
+              title="Language"
+              value={selectedLanguage}
+              onPress={() => setLanguagePickerVisible(true)}
+            />
+            <SettingsRow
+              icon="options-outline"
+              title="Content preferences"
+              subtitle="Feed and recommendations"
+              onPress={() => navigation.navigate('Personalisation')}
+            />
+            <SettingsRow
+              icon="bulb-outline"
+              title="Listing suggestions"
+              subtitle="Photo enhancement, title and price suggestions"
+              onPress={() => navigation.navigate('AIPreferences')}
+            />
+            <SettingsRow
+              icon="analytics-outline"
+              title="Your feed"
+              subtitle="Recommendations and transparency"
+              onPress={() => navigation.navigate('YourAlgorithm')}
+            />
+            <SettingsRow
+              icon="leaf-outline"
+              title="Sustainability"
+              subtitle="Goals, shipping, impact"
+              onPress={() => navigation.navigate('SustainabilityPreferences')}
+            />
+            <SettingsRow
+              icon="accessibility-outline"
+              title="Accessibility"
+              subtitle="Text size, motion, contrast"
+              onPress={() => navigation.navigate('AccessibilitySettings')}
+            />
+            <SettingsRow
+              icon="time-outline"
+              title="Search history"
+              subtitle="Clear recent searches"
+              onPress={() => void handleClearSearchHistory()}
+            />
+            <SettingsRow
+              icon="analytics-outline"
+              title="Data sharing"
+              subtitle="Analytics and personalization"
+              toggleValue={!analyticsOptOut}
+              onToggle={(v) => setAnalyticsOptOut(!v)}
+              isLast
+            />
+          </SettingsSection>
+    
+          {/* ── CO-OWN ── */}
+          <SettingsSection title="Co-Own" icon="diamond-outline" noCard>
+            <SettingsRow
+              icon="notifications-outline"
+              title="Price alerts"
+              subtitle="Notify on price thresholds"
+              onPress={() => navigation.navigate('CoOwnPriceAlerts')}
+              isFirst
+            />
+            <SettingsRow
+              icon="repeat-outline"
+              title="Auto-invest plans"
+              subtitle="Recurring buy schedules"
+              onPress={() => navigation.navigate('CoOwnRecurringOrders')}
+            />
+            <SettingsRow
+              icon="document-text-outline"
+              title="Tax documents"
+              subtitle="Annual statements & P&L"
+              onPress={() => navigation.navigate('CoOwnTaxDocuments')}
+              isLast
+            />
+          </SettingsSection>
+    
+          {/* ── AGENTS & CONNECTIONS ── */}
+          {/* Per spec 18: Agents are a normal product destination, not hidden
+              behind developer mode. Create Agent is intentionally excluded from
+              Settings — it lives in the Agents home and profile menu. */}
+          <SettingsSection title="Agents & connections" icon="hardware-chip-outline" noCard>
+            <SettingsRow
+              icon="people-outline"
+              title="Agents"
+              subtitle="Browse and manage agent permissions"
+              onPress={() => navigation.navigate('BotDirectory')}
+              isFirst
+            />
+            <SettingsRow
+              icon="key-outline"
+              title="Connections"
+              subtitle="Provider keys and endpoints"
+              onPress={() => navigation.navigate('AIAgentIntegration')}
+            />
+            <SettingsRow
+              icon="person-circle-outline"
+              title="Your agents"
+              subtitle="Agents you have created"
+              onPress={() => navigation.navigate('CustomBots')}
+              isLast
+            />
+          </SettingsSection>
+    
+          {/* ── HELP & ABOUT ── */}
+          <SettingsSection title="Help & about" icon="help-circle-outline" noCard>
+    
+            <SettingsRow
+              icon="help-circle-outline"
+              title="Help Centre"
+              onPress={() => navigation.navigate('HelpSupport')}
+              isFirst
+            />
+            <SettingsRow
+              icon="folder-open-outline"
+              title="Resolution Centre"
+              onPress={() => navigation.navigate('ResolutionCentre')}
+            />
+            <SettingsRow
+              icon="document-text-outline"
+              title="Terms of Service"
+              onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
+            />
+            <SettingsRow
+              icon="shield-checkmark-outline"
+              title="Privacy Policy"
+              onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
+            />
+            <SettingsRow
+              icon="information-circle-outline"
+              title="About Thryftverse"
+              value="v1.0.0"
+              onPress={() => navigation.navigate('About')}
+              isLast
+            />
+          </SettingsSection>
+    
+          {/* ── ADVANCED & DEVELOPER ── */}
+          {/* Per spec 18: Developer mode keeps only raw debugging tools — not
+              consumer agent features, which now live in "Agents & connections"
+              above. Gated behind developer mode (Settings → About → tap version
+              7 times) so ordinary consumers never see implementation technology. */}
+          {showAdvancedDeveloper ? (
+            <SettingsSection title="Advanced & developer" icon="code-working-outline" noCard>
+              <SettingsRow
+                icon="terminal-outline"
+                title="Runtime smoke test"
+                subtitle="Diagnostic checks for local runtime"
+                onPress={() => navigation.navigate('RuntimeSmokeTest')}
+                isFirst
+                isLast
+              />
+            </SettingsSection>
+          ) : null}
+    
+          {/* ── SIGN OUT ── */}
+          {/* Sign Out action is rendered via SettingsSignOutRow for destructive separation */}
+          <View style={{ marginTop: Space.lg, marginBottom: Space.md }}>
+            <SettingsSignOutRow username={currentUser?.username} onSignOut={handleLogout} />
+          </View>
+          </>
       )}
 
       <BottomSheetPicker

@@ -708,6 +708,25 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     });
   };
 
+  // Category shortcut — navigates to Browse with the real categoryId so
+  // BrowseScreen filters by listing.category (client-side) and passes the
+  // category to the backend listings API. This is distinct from
+  // handlePillPress (text search): category IDs like 'women' / 'men' are
+  // structural filters, not free-text queries. Using handlePillPress here
+  // was a front/back-end mismatch — it treated 'women' as a search term
+  // instead of a category filter (AGENTS.md §11: truthful UI).
+  const handleCategoryPress = (categoryId: string, label: string) => {
+    const normalizedId = categoryId.trim();
+    if (!normalizedId) return;
+    // Clear any stale query so BrowseScreen does not mix text search with
+    // category filtering.
+    updateBrowseFilters({ query: '' });
+    navigation.navigate('Browse', {
+      categoryId: normalizedId,
+      title: label,
+    });
+  };
+
   const searchStatus = React.useMemo(
     () =>
       getBackendSyncStatus({
@@ -1037,8 +1056,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           <AnimatedPressable
                             key={idx}
                             style={[styles.trendingFocusPill, t.trendingFocusPill]}
-                            onPress={() => handlePillPress(cat.query)}
-                            accessibilityLabel={`Search ${cat.label} category`}
+                            onPress={() => handleCategoryPress(cat.query, cat.label)}
+                            accessibilityLabel={`Browse ${cat.label} category`}
                             accessibilityRole="button"
                           >
                             <Text style={styles.trendingFocusIcon}>{cat.icon}</Text>
@@ -1143,8 +1162,8 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       <AnimatedPressable
                         key={idx}
                         style={[styles.trendingFocusPill, t.trendingFocusPill]}
-                        onPress={() => handlePillPress(cat.query)}
-                        accessibilityLabel={`Search ${cat.label} category`}
+                        onPress={() => handleCategoryPress(cat.query, cat.label)}
+                        accessibilityLabel={`Browse ${cat.label} category`}
                         accessibilityRole="button"
                       >
                         <Text style={styles.trendingFocusIcon}>{cat.icon}</Text>
@@ -1645,6 +1664,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: FontFamily.medium,
+    fontVariant: ['tabular-nums'],
   },
   filterBarActions: {
     flexDirection: 'row',

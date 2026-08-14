@@ -1928,28 +1928,34 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   exploreSellerText: {
     display: 'none',
   },
-  // Bottom gradient scrim for price overlay legibility
+  // Bottom gradient scrim for price overlay legibility. Height tuned to
+  // the 15pt overlay price so the scrim covers the text zone without
+  // over-darkening shorter cards (spec §06: price visually quieter than
+  // imagery but stronger than metadata).
   exploreBottomScrim: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 52,
+    height: 40,
   },
   explorePriceOverlay: {
     position: 'absolute',
-    bottom: Space.xs + 1,
+    bottom: Space.sm - 2,
     left: Space.xs + 1,
     right: Space.xs + 1,
   },
+  // Price overlay: 15pt semibold (bodyStrong) — quieter than the 20pt
+  // priceList used on PDP/Browse info sections, appropriate for a card
+  // overlay where media must dominate (spec §06 micro-detail pass).
   explorePriceOverlayText: {
-    fontSize: TypographyV2.priceList.size,
-    lineHeight: TypographyV2.priceList.lineHeight,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.priceList.letterSpacing,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: 'rgba(0,0,0,0.55)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },

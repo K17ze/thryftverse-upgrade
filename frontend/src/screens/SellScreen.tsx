@@ -2017,11 +2017,13 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: TypographyV2.priceList.size,
     fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
     marginRight: Space.xs,
   },
   priceInput: {
     fontSize: TypographyV2.priceHero.size,
     fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'],
     minWidth: Space.xxl + Space.lg + Space.sm,
     padding: 0,
   },

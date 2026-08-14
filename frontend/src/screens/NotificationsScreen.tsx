@@ -6,7 +6,6 @@ import {
   StyleSheet,
   RefreshControl,
   Pressable,
-  ScrollView,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -34,6 +34,7 @@ import {
 import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { Motion } from '../constants/motion';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
@@ -315,6 +316,7 @@ export default function NotificationsScreen() {
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
   const { quietHours } = useSettingsPreferences();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -807,6 +809,10 @@ export default function NotificationsScreen() {
         </View>
       ) : null}
 
+      {isOffline ? (
+        <OfflineBanner onRetry={() => void handleRefresh()} />
+      ) : null}
+
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
@@ -1258,25 +1264,6 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: 0,
-  },
-  notifActorAvatarWrap: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-  },
-  notifActorAvatar: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-  },
-  notifActorAvatarFallback: {
-    minWidth: Space.md + 4,
-    height: Space.md + 4,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Space.sm,
   },
   notifActorText: {
     flex: 1,

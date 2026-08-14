@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
@@ -14,11 +14,12 @@ import { useStore } from '../store/useStore';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type TopPerformerListing } from '../services/commerceApi';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const TOP_LISTING_CARD_WIDTH = 140;
 
 interface KpiRow {
@@ -43,6 +44,7 @@ export default function SellerAnalyticsScreen() {
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
   const reducedMotionEnabled = useReducedMotion();
+  const { isOffline } = useConnectivity();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [analytics, setAnalytics] = React.useState<SellerAnalytics | null>(null);
@@ -50,6 +52,7 @@ export default function SellerAnalyticsScreen() {
   const [period, setPeriod] = React.useState<Period>('30d');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -62,8 +65,12 @@ export default function SellerAnalyticsScreen() {
       setListings(listingsRes.items);
       if (analyticsData) setAnalytics(analyticsData);
       setTopPerformersData(topData);
+      setIsError(false);
     } catch {
-      // silent — fall back to client-side derived metrics
+      // If the primary listings fetch fails, surface an error state so the
+      // user can retry rather than seeing a silently degraded zero-metrics
+      // view (AGENTS.md §14 — error state with retry).
+      setIsError(true);
     }
   }, [currentUser?.id, period]);
 
@@ -248,12 +255,33 @@ export default function SellerAnalyticsScreen() {
     );
   }
 
+  // ── Error state — primary listings fetch failed; offer retry (AGENTS.md §14) ──
+  if (isError && listings.length === 0) {
+    return (
+      <FlagshipScreen
+        header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+      >
+        <EmptyState
+          icon="cloud-offline-outline"
+          iconColor={colors.danger}
+          title="Couldn't load analytics"
+          subtitle="We couldn't load your seller data. Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => { setIsError(false); setIsLoading(true); void load().finally(() => setIsLoading(false)); }}
+        />
+      </FlagshipScreen>
+    );
+  }
+
   return (
     <FlagshipScreen
       header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
+      {isOffline ? (
+        <OfflineBanner onRetry={() => void onRefresh()} />
+      ) : null}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}

@@ -116,7 +116,7 @@ export default function SearchScreen() {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: 'transparent',
     borderWidth: 0,
     borderColor: 'transparent',
     alignItems: 'center',
@@ -177,7 +177,7 @@ export default function SearchScreen() {
           style={styles.searchBar}
           onPress={() => navigation.navigate('GlobalSearch')}
           accessibilityRole="search"
-          accessibilityLabel="Search items, brands and people"
+          accessibilityLabel="Search"
         >
           <Ionicons name="search" size={19} color={colors.textMuted} />
           <Text style={styles.searchPlaceholder} numberOfLines={1}>Search items, brands and people</Text>
@@ -185,7 +185,7 @@ export default function SearchScreen() {
         <AnimatedPressable
           style={styles.visualSearchButton}
           onPress={() => navigation.navigate('VisualSearch')}
-          accessibilityLabel="Search with an image"
+          accessibilityLabel="Visual search"
           accessibilityRole="button"
         >
           <Ionicons name="camera-outline" size={20} color={colors.textPrimary} />

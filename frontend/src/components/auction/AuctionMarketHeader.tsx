@@ -249,6 +249,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.bold,
     fontSize: 9,
     color: colors.textInverse,
+    fontVariant: ['tabular-nums'],
   },
   overflowBackdrop: {
     flex: 1,

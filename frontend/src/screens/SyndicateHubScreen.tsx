@@ -69,7 +69,6 @@ interface HubAsset {
 
 type HubRow =
   | { kind: 'highlights'; key: 'highlights' }
-  | { kind: 'sectionBreak'; key: 'section-break' }
   | { kind: 'tabs'; key: 'tabs' }
   | { kind: 'positions'; key: 'positions' }
   | { kind: 'instrumentsHeader'; key: 'instruments-header' }
@@ -365,14 +364,18 @@ export default function CoOwnHubScreen() {
     const hasPositions = yourPositions.length > 0;
     const rows: HubRow[] = [];
 
-    // Holders: positions first (personal portfolio), then market.
-    // Non-holders: market highlights first (education/discovery), then market.
+    // Holders: positions first (personal portfolio), then market tabs + grid.
+    // Non-holders: market highlights first (education/discovery), then tabs + grid.
+    // Per doc 42: "Do not always put generic highlights before existing holdings."
+    // This keeps tabs at index 1 so stickyHeaderIndices={[1]} always pins the
+    // market segment selector (holders: positions[0] → tabs[1]; non-holders:
+    // highlights[0] → tabs[1]).
     if (hasPositions) {
       rows.push({ kind: 'positions', key: 'positions' });
-      rows.push({ kind: 'sectionBreak', key: 'section-break' });
+    } else {
+      rows.push({ kind: 'highlights', key: 'highlights' });
     }
 
-    rows.push({ kind: 'highlights', key: 'highlights' });
     rows.push({ kind: 'tabs', key: 'tabs' });
     rows.push({ kind: 'instrumentsHeader', key: 'instruments-header' });
 
@@ -419,7 +422,7 @@ export default function CoOwnHubScreen() {
   }, [format1ze, formatLocal, navigation, totalPositionValue]);
 
   const renderTabs = React.useCallback(() => (
-    <View style={[styles.tabsSurface, { backgroundColor: colors.background, borderBottomColor: colors.border }]}> 
+    <View style={[styles.tabsSurface, { backgroundColor: colors.background, borderBottomColor: colors.border, borderTopColor: colors.border }]}>
       <View style={styles.tabsRow} accessibilityRole="tablist">
         {SEGMENTS.map((segment) => {
           const isActive = activeSegment === segment;
@@ -458,16 +461,6 @@ export default function CoOwnHubScreen() {
   ), [activeSegment, colors, segmentCounts]);
 
   const renderRow = React.useCallback(({ item }: { item: HubRow }) => {
-    if (item.kind === 'sectionBreak') {
-      return (
-        <View style={[styles.sectionBreak, { borderTopColor: colors.border }]} accessibilityRole="header">
-          <Text style={[styles.sectionBreakLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
-            MARKET
-          </Text>
-        </View>
-      );
-    }
-
     if (item.kind === 'highlights') {
       return (
         <View style={styles.highlightsSection}>
@@ -842,22 +835,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  sectionBreak: {
-    paddingTop: Space.lg,
-    paddingBottom: Space.sm,
-    paddingHorizontal: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  sectionBreakLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.caps,
-    textTransform: 'uppercase',
-  },
   tabsSurface: {
     minHeight: Control.hit + 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: StyleSheet.hairlineWidth,
     justifyContent: 'flex-end',
   },
   tabsRow: {

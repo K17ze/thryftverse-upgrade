@@ -140,5 +140,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.regular,
     fontSize: Type.meta.size,
     color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
   },
 });
