@@ -65,7 +65,6 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import {
-  CoOwnOwnershipPanel,
   CoOwnRiskDisclosure,
   CoOwnAssetDetailSkeleton,
   CoOwnStateCanvas,
@@ -852,7 +851,7 @@ export default function AssetDetailScreen() {
                 ]}
               />
             </View>
-            <Text style={[styles.allocationIndicatorText, { color: colors.textSecondary }]}>
+            <Text style={[styles.allocationIndicatorText, { color: colors.textSecondary }]} numberOfLines={1}>
               {allocatedPct}% allocated · {availableUnits} units available
             </Text>
             <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />

@@ -918,11 +918,14 @@ export default function AuctionHomeScreen() {
       .sort((a, b) => {
         // Urgency sort: ending soonest first, then upcoming soonest.
         // Ended/cancelled items sink to the bottom.
+        // Uses the server-aligned minuteClock so the sort stays accurate
+        // even if the device clock drifts, and recomputes every minute
+        // as auctions transition between live/upcoming/ended states.
         const aEnd = new Date(a.endsAt).getTime();
         const bEnd = new Date(b.endsAt).getTime();
         const aStart = new Date(a.startsAt).getTime();
         const bStart = new Date(b.startsAt).getTime();
-        const now = Date.now();
+        const now = minuteClock;
         const aLive = aEnd > now && aStart <= now;
         const bLive = bEnd > now && bStart <= now;
         const aUpcoming = aStart > now;
@@ -936,7 +939,7 @@ export default function AuctionHomeScreen() {
         if (aUpcoming && bUpcoming) return aStart - bStart;
         return 0; // both ended — preserve server order
       }),
-    [homeData.watchlist, spotlightIds]
+    [homeData.watchlist, spotlightIds, minuteClock]
   );
 
   const hasAnyContent =

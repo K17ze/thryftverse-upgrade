@@ -64,6 +64,15 @@ interface Props {
 function resolveStage(urgent: boolean | undefined, text: string): CountdownStage {
   if (text === 'Ended' || text === 'Cancelled' || text === 'Settled') return 'ended';
   if (text.startsWith('Starts')) return 'upcoming';
+  // Final minutes: MM:SS format (e.g., "02:34") from formatFinalMinutesCountdown
+  if (/^\d{1,2}:\d{2}$/.test(text)) return 'final';
+  // Days format (e.g., "2d 3h left") — plenty
+  if (/\d+d\b/.test(text)) return 'plenty';
+  // Minutes-only format (e.g., "45m left") — under 1 hour, ending soon
+  if (/^\d{1,3}m\b/.test(text)) return 'moderate';
+  // Hours format (e.g., "3h 20m left") — 1+ hours
+  if (/\d+h\b/.test(text)) return 'plenty';
+  // Fallback: use urgent flag for unrecognized formats
   if (urgent) return 'final';
   return 'plenty';
 }

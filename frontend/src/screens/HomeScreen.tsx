@@ -1103,7 +1103,7 @@ export default function HomeScreen() {
               />
             ) : null}
 
-            {showFeedLoadingSkeleton || showFollowingLoading ? (
+            {showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading ? (
               renderExploreLoadingState()
             ) : feedGridData.length === 0 ? (
               feedMode === 'following' ? (

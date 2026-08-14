@@ -101,6 +101,24 @@ export default function ManageListingScreen() {
     scrollY.value = event.contentOffset.y;
   });
 
+  // ── Animated header styles ──
+  // Must be called unconditionally before any early returns (Rules of Hooks).
+  const headerBgStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { backgroundColor: colors.background };
+    }
+    const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
+    return { backgroundColor: `${colors.background}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` };
+  });
+
+  const headerTitleStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return { opacity: 1 };
+    }
+    const opacity = interpolate(scrollY.value, [60, 140], [0, 1], Extrapolation.CLAMP);
+    return { opacity };
+  });
+
   const images = React.useMemo(() => {
     if (!item) return [];
     return item.images?.length ? item.images : (item.imageUrl ? [item.imageUrl] : []);
@@ -175,23 +193,10 @@ export default function ManageListingScreen() {
     );
   }
 
-  const headerBgStyle = useAnimatedStyle(() => {
-    if (reducedMotion) {
-      return { backgroundColor: colors.background };
-    }
-    const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
-    return { backgroundColor: `${colors.background}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` };
-  });
-
-  const headerTitleStyle = useAnimatedStyle(() => {
-    if (reducedMotion) {
-      return { opacity: 1 };
-    }
-    const opacity = interpolate(scrollY.value, [60, 140], [0, 1], Extrapolation.CLAMP);
-    return { opacity };
-  });
-
-  const handleShare = React.useCallback(async () => {
+  // Regular function (not useCallback) — defined after early returns where
+  // `item` is guaranteed non-null. Using useCallback here would violate the
+  // Rules of Hooks (hooks must not be called after conditional returns).
+  const handleShare = async () => {
     try {
       await Share.share({
         message: `Check out my listing "${item.title}" on Thryftverse for ${formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}.`,
@@ -199,7 +204,7 @@ export default function ManageListingScreen() {
     } catch {
       // silently fail
     }
-  }, [item.title, item.priceGbp, formatFromFiat]);
+  };
 
   const handleBumpListing = () => {
     setBoostSheetVisible(true);

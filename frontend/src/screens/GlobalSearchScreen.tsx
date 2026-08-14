@@ -713,8 +713,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     filterBadgeText: { color: colors.textInverse },
     clearChip: { backgroundColor: colors.surface, borderColor: colors.danger },
     clearChipText: { color: colors.danger },
-    recoHeaderTitle: { color: colors.textPrimary },
-    topicSearchBtn: { backgroundColor: colors.surfaceAlt },
     saveSearchBtn: { borderColor: colors.border, backgroundColor: colors.surface },
     saveSearchBtnActive: { borderColor: colors.brand, backgroundColor: colors.surfaceAlt },
     saveSearchText: { color: colors.textSecondary },
@@ -1217,51 +1215,37 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                       <Text style={[styles.clearChipText, t.clearChipText]}>Clear</Text>
                     </AnimatedPressable>
                   )}
-                </View>
 
-                {/* Recommendation text */}
-                <View style={styles.sectionWrap}>
-                  <View style={styles.recoHeaderRow}>
-                    <Text style={[styles.recoHeaderTitle, t.recoHeaderTitle]}>
-                      {normalizedQuery ? `Search: ${normalizedQuery}` : 'Discover'}
-                    </Text>
-                    <View style={styles.recoHeaderActions}>
-                      {normalizedQuery && (
-                        <AnimatedPressable
-                          style={[
-                            styles.saveSearchBtn,
-                            t.saveSearchBtn,
-                            isCurrentQuerySaved && styles.saveSearchBtnActive,
-                            isCurrentQuerySaved && t.saveSearchBtnActive,
-                          ]}
-                          onPress={isCurrentQuerySaved ? undefined : handleSaveSearch}
-                          accessibilityLabel={isCurrentQuerySaved ? 'Search saved with alerts' : 'Save this search with alerts'}
-                          accessibilityRole="button"
-                        >
-                          <Ionicons
-                            name={isCurrentQuerySaved ? 'notifications' : 'notifications-outline'}
-                            size={16}
-                            color={isCurrentQuerySaved ? colors.brand : colors.textSecondary}
-                          />
-                          <Text
-                            style={[
-                              styles.saveSearchText,
-                              t.saveSearchText,
-                              isCurrentQuerySaved && styles.saveSearchTextActive,
-                              isCurrentQuerySaved && t.saveSearchTextActive,
-                            ]}
-                          >
-                            {isCurrentQuerySaved ? 'Saved' : 'Save search'}
-                          </Text>
-                        </AnimatedPressable>
-                      )}
-                      {!normalizedQuery && (
-                        <AnimatedPressable style={[styles.topicSearchBtn, t.topicSearchBtn]} onPress={handleSearchSubmit}>
-                          <Ionicons name="search" size={18} color={colors.textPrimary} />
-                        </AnimatedPressable>
-                      )}
-                    </View>
-                  </View>
+                  {normalizedQuery && (
+                    <AnimatedPressable
+                      style={[
+                        styles.saveSearchBtn,
+                        t.saveSearchBtn,
+                        isCurrentQuerySaved && styles.saveSearchBtnActive,
+                        isCurrentQuerySaved && t.saveSearchBtnActive,
+                        { marginLeft: 'auto' },
+                      ]}
+                      onPress={isCurrentQuerySaved ? undefined : handleSaveSearch}
+                      accessibilityLabel={isCurrentQuerySaved ? 'Search saved with alerts' : 'Save this search with alerts'}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons
+                        name={isCurrentQuerySaved ? 'notifications' : 'notifications-outline'}
+                        size={16}
+                        color={isCurrentQuerySaved ? colors.brand : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.saveSearchText,
+                          t.saveSearchText,
+                          isCurrentQuerySaved && styles.saveSearchTextActive,
+                          isCurrentQuerySaved && t.saveSearchTextActive,
+                        ]}
+                      >
+                        {isCurrentQuerySaved ? 'Saved' : 'Save'}
+                      </Text>
+                    </AnimatedPressable>
+                  )}
                 </View>
 
                 {/* Masonry grid */}
@@ -1537,7 +1521,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: RadiusRoleValue.dominantPanel,
+    borderRadius: RadiusRoleValue.pillAvatar,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
@@ -1550,7 +1534,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: RadiusRoleValue.dominantPanel,
+    borderRadius: RadiusRoleValue.pillAvatar,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
@@ -1578,7 +1562,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: RadiusRoleValue.dominantPanel,
+    borderRadius: RadiusRoleValue.pillAvatar,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
@@ -1588,32 +1572,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // Masonry
-  recoHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    gap: 8,
-  },
-  recoHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  recoHeaderTitle: {
-    fontSize: 22,
-    fontFamily: FontFamily.bold,
-    letterSpacing: -0.5,
-    flexShrink: 1,
-  },
-  topicSearchBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // Save search button (in filter bar)
   saveSearchBtn: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -62,9 +62,7 @@ import {
   SizeGuideSheet,
   BundleUpsellRow,
   ListingQA,
-  SustainabilityBadge,
 } from '../components/product';
-import { computeSustainabilityScore } from '../utils/sustainabilityScore';
 import {
   CommerceMediaStage,
   CommerceStateCanvas,
@@ -83,7 +81,6 @@ import {
   COMMERCE_DETAIL_COMPACT_WIDTH,
   SellerInfoCard,
   ShippingReturnsInfo,
-  SustainabilityImpact,
   MakeOfferSheet,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
@@ -233,7 +230,6 @@ export default function ItemDetailScreen() {
   const [qaSheetVisible, setQaSheetVisible] = useState(false);
   const [purchaseDetailsVisible, setPurchaseDetailsVisible] = useState(false);
   const [overflowVisible, setOverflowVisible] = useState(false);
-  const [sustainabilityExpanded, setSustainabilityExpanded] = useState(false);
   const [makeOfferVisible, setMakeOfferVisible] = useState(false);
   const [conditionInfoVisible, setConditionInfoVisible] = useState(false);
 
@@ -547,28 +543,12 @@ export default function ItemDetailScreen() {
   const listingEngagement = item?.engagement ?? null;
 
   // Seller trust summary — moved before conditional returns so the
-  // sustainabilityScore useMemo can reference it (Rules of Hooks).
+  // moreFromSellerRailItems useMemo can reference it (Rules of Hooks).
   const seller = sellerTrustData
     ? sellerTrustData
     : item
       ? buildSellerTrustSummary(item.seller)
       : null;
-
-  // Sustainability score — moved before conditional returns to satisfy
-  // Rules of Hooks. Returns null when item is not yet loaded.
-  const sustainabilityScore = useMemo(
-    () =>
-      item
-        ? computeSustainabilityScore({
-            condition: item.condition,
-            category: item.category,
-            subcategory: item.subcategory,
-            brand: item.brand,
-            sellerLocation: seller?.location ?? item.seller?.location ?? null,
-          })
-        : null,
-    [item?.condition, item?.category, item?.subcategory, item?.brand, seller?.location, item?.seller?.location],
-  );
 
   // "More from this seller" browse rail — moved before conditional returns.
   const moreFromSellerRailItems: Listing[] = useMemo(
@@ -2048,23 +2028,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     paddingTop: Space.xs,
-  },
-  // ── Sustainability row ──
-  sustainabilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    minHeight: Control.hit,
-  },
-  sustainabilitySummary: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.body.letterSpacing / 2,
-  },
-  sustainabilityDetailWrap: {
-    marginTop: Space.sm,
   },
   // ── Price insight alert row ──
   alertRow: {

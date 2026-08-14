@@ -1073,6 +1073,75 @@ export default function CheckoutScreen() {
     return sellerId === currentUser.id;
   }, [item, currentUser?.id]);
 
+  // --- Partial data state (§14) ---
+  // Computed before early returns so the useMemo hook order is stable
+  // regardless of which guard branch fires (Rules of Hooks).
+  const addressLoaded = backendAddresses.length > 0 || !!savedAddress?.id;
+  const paymentLoaded = backendPaymentMethods.length > 0 || !!savedPaymentMethod?.id;
+
+  const partialDataPrompt = useMemo(() => {
+    if (isHydrating || isInteractionLocked) return null;
+
+    // Shipping quote failed but address + payment are ready → proceed with
+    // standard (estimated) shipping. The carrier is still selected, only the
+    // live quote is unavailable.
+    if (shippingError && addressLoaded && paymentLoaded && !!postageOption.carrierId) {
+      return {
+        icon: 'cube-outline' as const,
+        message: 'Shipping quote unavailable — proceeding with standard shipping.',
+        action: { label: 'Try again', onPress: (): void => void hydrateCheckout() },
+      };
+    }
+
+    // Address missing but payment methods loaded → prompt to add an address.
+    if (!addressLoaded && paymentLoaded) {
+      return {
+        icon: 'location-outline' as const,
+        message: 'Add a delivery address to continue.',
+        action: { label: 'Add address', onPress: () => handleAddressPress() },
+      };
+    }
+
+    // Payment methods missing but address loaded → prompt to add a payment method.
+    if (!paymentLoaded && addressLoaded) {
+      return {
+        icon: 'card-outline' as const,
+        message: 'Add a payment method to continue.',
+        action: {
+          label: 'Add payment',
+          onPress: () => {
+            haptics.tap();
+            if (!allowCardPayments && checkoutCapabilities) {
+              navigation.navigate('Payments');
+              return;
+            }
+            if (backendPaymentMethods.length > 1) {
+              setPaymentSelectorVisible(true);
+            } else {
+              setAddCardSheetVisible(true);
+            }
+          },
+        },
+      };
+    }
+
+    return null;
+  }, [
+    isHydrating,
+    isInteractionLocked,
+    shippingError,
+    addressLoaded,
+    paymentLoaded,
+    postageOption.carrierId,
+    hydrateCheckout,
+    handleAddressPress,
+    haptics,
+    allowCardPayments,
+    checkoutCapabilities,
+    navigation,
+    backendPaymentMethods.length,
+  ]);
+
   // --- Render ---
 
   if (!item) {
@@ -1202,78 +1271,6 @@ export default function CheckoutScreen() {
       : stage === 'payment_pending'
         ? 'Waiting for confirmation…'
         : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
-
-  // --- Partial data state (§14) ---
-  // Some checkout data is available but other parts are missing. The checkout
-  // remains usable — these are inline prompts, not full error states. Distinct
-  // from the row-level errorText (which surfaces fetch failures); these guide
-  // the user to complete the missing piece or proceed with a safe default.
-  const addressLoaded = backendAddresses.length > 0 || !!savedAddress?.id;
-  const paymentLoaded = backendPaymentMethods.length > 0 || !!savedPaymentMethod?.id;
-  const shippingReady = !!postageOption.carrierId && !!postageOption.quoteId;
-
-  const partialDataPrompt = useMemo(() => {
-    if (isHydrating || isInteractionLocked) return null;
-
-    // Shipping quote failed but address + payment are ready → proceed with
-    // standard (estimated) shipping. The carrier is still selected, only the
-    // live quote is unavailable.
-    if (shippingError && addressLoaded && paymentLoaded && !!postageOption.carrierId) {
-      return {
-        icon: 'cube-outline' as const,
-        message: 'Shipping quote unavailable — proceeding with standard shipping.',
-        action: { label: 'Try again', onPress: (): void => void hydrateCheckout() },
-      };
-    }
-
-    // Address missing but payment methods loaded → prompt to add an address.
-    if (!addressLoaded && paymentLoaded) {
-      return {
-        icon: 'location-outline' as const,
-        message: 'Add a delivery address to continue.',
-        action: { label: 'Add address', onPress: () => handleAddressPress() },
-      };
-    }
-
-    // Payment methods missing but address loaded → prompt to add a payment method.
-    if (!paymentLoaded && addressLoaded) {
-      return {
-        icon: 'card-outline' as const,
-        message: 'Add a payment method to continue.',
-        action: {
-          label: 'Add payment',
-          onPress: () => {
-            haptics.tap();
-            if (!allowCardPayments && checkoutCapabilities) {
-              navigation.navigate('Payments');
-              return;
-            }
-            if (backendPaymentMethods.length > 1) {
-              setPaymentSelectorVisible(true);
-            } else {
-              setAddCardSheetVisible(true);
-            }
-          },
-        },
-      };
-    }
-
-    return null;
-  }, [
-    isHydrating,
-    isInteractionLocked,
-    shippingError,
-    addressLoaded,
-    paymentLoaded,
-    postageOption.carrierId,
-    hydrateCheckout,
-    handleAddressPress,
-    haptics,
-    allowCardPayments,
-    checkoutCapabilities,
-    navigation,
-    backendPaymentMethods.length,
-  ]);
 
   // Whether the row-level errorText should be suppressed because the partial-
   // data banner already covers that case (avoids duplicate messaging).
