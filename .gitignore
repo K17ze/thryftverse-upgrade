@@ -62,3 +62,10 @@ trash/
 
 # EAS Update code signing private keys (generated outside the repo)
 frontend/keys/
+
+# Bug reports and temp files
+.commit-msg.txt
+bugreport-*/
+
+# Flagship elevation planning docs (all .md)
+thryftverse_flagship_elevation_phase_2_*/
