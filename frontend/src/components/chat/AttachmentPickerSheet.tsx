@@ -43,7 +43,7 @@ const OPTIONS: AttachmentOption[] = [
   { id: 'shareListing', label: 'Share Listing', icon: 'share-outline', colorKey: 'discovery' },
   { id: 'shareOrder', label: 'Order Status', icon: 'cube-outline', colorKey: 'brand' },
   { id: 'requestPayment', label: 'Payment', icon: 'card-outline', colorKey: 'success' },
-  { id: 'inviteBot', label: 'Bot', icon: 'hardware-chip-outline', colorKey: 'social' },
+  { id: 'inviteBot', label: 'Agent', icon: 'hardware-chip-outline', colorKey: 'social' },
   { id: 'report', label: 'Report', icon: 'flag-outline', colorKey: 'danger' },
 ];
 

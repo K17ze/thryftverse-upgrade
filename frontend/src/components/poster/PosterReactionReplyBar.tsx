@@ -42,9 +42,9 @@ const REPLY_COUNTER_THRESHOLD = 400;
 /**
  * Native emoji reaction glyphs.
  *
- * Benchmark (Instagram/Snapchat 2026): quick reactions use real emoji, not
- * outline icons. ThryftVerse's commerce-native reactions map to emoji that
- * communicate the commerce-aware intent (want = shopping bag, style = sparkles).
+ * Quick reactions use real emoji, not outline icons. ThryftVerse's
+ * commerce-native reactions map to emoji that communicate the
+ * commerce-aware intent (want = shopping bag, style = sparkles).
  */
 const REACTIONS: Array<{ type: PosterReactionType; glyph: string; label: string }> = [
   { type: 'love', glyph: '❤️', label: 'Love' },

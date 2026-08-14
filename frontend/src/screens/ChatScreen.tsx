@@ -2538,66 +2538,40 @@ export default function ChatScreen({ navigation, route }: Props) {
             />
           )}
 
-          {/* AI agent deployment row — quick access to deploy/remove agents.
-              Shows deployed agent chips (each with the agent's avatar icon) or
-              a subtle hint + "Add AI assistant" button when none are deployed. */}
-          <View style={styles.agentRow}>
-            {deployedChatAgents.map((agent) => (
-              <Pressable
-                key={agent.id}
-                onPress={() => handleRemoveChatAgent(agent.id)}
-                style={({ pressed }) => [
-                  styles.agentChip,
-                  pressed && styles.agentChipPressed,
-                ]}
-                accessibilityLabel={`Remove ${agent.name}`}
-                accessibilityRole="button"
-                accessibilityHint={`Remove ${agent.name} from this conversation`}
-              >
-                <Ionicons
-                  name={(agent.avatar as keyof typeof Ionicons.glyphMap) || 'cube-outline'}
-                  size={13}
-                  color={colors.textSecondary}
-                />
-                <Text style={styles.agentChipText}>
-                  {agent.name}
-                </Text>
-                <Ionicons
-                  name="close-circle"
-                  size={13}
-                  color={colors.textMuted}
-                />
-              </Pressable>
-            ))}
-
-            {deployedChatAgents.length === 0 && (
-              <Text style={styles.agentHintText}>
-                AI assistants can help with search, styling, offers, and safety
-              </Text>
-            )}
-
-            <Pressable
-              onPress={() => setChatAgentPickerVisible(true)}
-              style={({ pressed }) => [
-                styles.addAgentBtn,
-                pressed && styles.addAgentBtnPressed,
-              ]}
-              accessibilityLabel="Add AI assistant"
-              accessibilityRole="button"
-              accessibilityHint="Browse and deploy AI assistants into this conversation"
-            >
-              <Ionicons
-                name="add-outline"
-                size={15}
-                color={colors.textSecondary}
-              />
-              <Text style={styles.addAgentBtnText}>
-                {deployedChatAgents.length > 0
-                  ? 'Add another'
-                  : 'Add assistant'}
-              </Text>
-            </Pressable>
-          </View>
+          {/* Deployed agent chips — only shown when agents are actively
+              deployed. No permanent "Add assistant" row; agent deployment
+              is opt-in via the attachment picker. */}
+          {deployedChatAgents.length > 0 && (
+            <View style={styles.agentRow}>
+              {deployedChatAgents.map((agent) => (
+                <Pressable
+                  key={agent.id}
+                  onPress={() => handleRemoveChatAgent(agent.id)}
+                  style={({ pressed }) => [
+                    styles.agentChip,
+                    pressed && styles.agentChipPressed,
+                  ]}
+                  accessibilityLabel={`Remove ${agent.name}`}
+                  accessibilityRole="button"
+                  accessibilityHint={`Remove ${agent.name} from this conversation`}
+                >
+                  <Ionicons
+                    name={(agent.avatar as keyof typeof Ionicons.glyphMap) || 'cube-outline'}
+                    size={13}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.agentChipText}>
+                    {agent.name}
+                  </Text>
+                  <Ionicons
+                    name="close-circle"
+                    size={13}
+                    color={colors.textMuted}
+                  />
+                </Pressable>
+              ))}
+            </View>
+          )}
 
           <ChatComposerBar
             value={input}
@@ -2675,6 +2649,8 @@ export default function ChatScreen({ navigation, route }: Props) {
           onSelect={(action) => {
             if (action === "gallery" || action === "camera") {
               handleAttachmentSelect(action);
+            } else if (action === "agent") {
+              setChatAgentPickerVisible(true);
             }
           }}
         />

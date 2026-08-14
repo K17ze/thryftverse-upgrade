@@ -5,7 +5,7 @@ import { Space, Radius, Type, Typography } from "../../theme/designTokens";
 import { useAppTheme } from "../../theme/ThemeContext";
 import { AnimatedPressable } from "../AnimatedPressable";
 
-export type ChatAction = "gallery" | "camera";
+export type ChatAction = "gallery" | "camera" | "agent";
 
 interface ChatActionSheetProps {
   visible: boolean;
@@ -41,6 +41,12 @@ export function ChatActionSheet({
         icon: "camera-outline",
         label: "Camera",
         description: "Take a new photo or video",
+      },
+      {
+        id: "agent",
+        icon: "sparkles-outline",
+        label: "Add assistant",
+        description: "Deploy an AI assistant into this chat",
       },
     ],
     [],

@@ -227,7 +227,6 @@ export default function ItemDetailScreen() {
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [sizeGuideVisible, setSizeGuideVisible] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
-  // Per spec 04_DIRECT §3: Q&A opens in a canonical BottomSheet.
   const [qaSheetVisible, setQaSheetVisible] = useState(false);
   const [purchaseDetailsVisible, setPurchaseDetailsVisible] = useState(false);
   const [overflowVisible, setOverflowVisible] = useState(false);
@@ -530,17 +529,6 @@ export default function ItemDetailScreen() {
   void exploreHasNextPage;
   void exploreFetching;
 
-  // NOTE: All useMemo hooks must run BEFORE any conditional return so the
-  // hook count stays stable across loading → loaded (Rules of Hooks).
-  // Per spec 04_DIRECT §4: "Continue exploring" items are prefetched via
-  // the useContinueExploring hook but not rendered as a fourth discovery
-  // module — the three-module budget (Bundle upsell → Seen in Looks →
-  // More like this) is the canonical order. The prefetched data is
-  // available for downstream navigation surfaces.
-  // ── Listing engagement summary ──
-  // Per spec 04_DIRECT §5: backend-backed engagement summary. The
-  // frontend must not fabricate question counts. listingEngagement is
-  // null until the backend exposes questionCount.
   const listingEngagement = item?.engagement ?? null;
 
   // Seller trust summary — moved before conditional returns so the
@@ -649,12 +637,6 @@ export default function ItemDetailScreen() {
     navigation.push('ItemDetail', { itemId: recItem.id });
   };
 
-  // ── Identity composition ──
-  // One dominant price location (identity). The dock carries a compact
-  // actionable price. No price repetition in between.
-  // Per spec 04_DIRECT §1: do not fabricate "N people interested" by
-  // adding saved-to-collection to likes. Only show truthful likes from
-  // the backend, and only when the count is meaningful (>= 1).
   const interestSignal = (() => {
     if (item.likes && item.likes > 0) return `${item.likes} like${item.likes > 1 ? 's' : ''}`;
     return undefined;
@@ -721,9 +703,6 @@ export default function ItemDetailScreen() {
       muted: true,
     });
   }
-  // Per spec 04_DIRECT §2: do not label likes as "Demand". Likes are
-  // not a demand signal — they are a wishlist signal. The interest
-  // signal in the identity already shows truthful likes.
   const daysListed = item.createdAt
     ? Math.max(0, Math.floor((Date.now() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
     : null;
@@ -868,9 +847,6 @@ export default function ItemDetailScreen() {
           />
         )}
 
-        {/* ── Offline banner ──
-            Per spec 05 §14: offline state must be designed, not a blank
-            screen. Cached listing data may still be visible. */}
         <CommerceDetailOfflineBanner isOffline={isOffline} />
 
         {/* ── Zone B — Identity seam ──
@@ -955,24 +931,7 @@ export default function ItemDetailScreen() {
           ) : null}
         </View>
 
-        {/* ── Trust strip — elevated above seller ──
-            Per 2026 marketplace UX research: "Trust signals must appear
-            above the fold or within first 2 scrolls" and "trust signal
-            at the payment decision point increases conversion more than
-            any other single change." The full "Buying this item" section
-            with its disclosure sheet remains below the seller row, but
-            the top 2-3 trust signals are elevated here so they are
-            visible immediately after the price — the moment the buyer's
-            intent is highest.
-            Per AGENTS.md §4: flat canvas, no card containers. Inline
-            icon+text pairs separated by spacing, not borders. */}
         {(() => {
-          // Evidence-based trust chips — per spec 12: "Trust UI should show
-          // evidence, not generic shield decoration." Each chip carries the
-          // actual policy label from the commerce context, not a generic
-          // "Buyer protection" string. The protection policy label (e.g.
-          // "Thryftverse Buyer Protection") is the evidence; the icon is
-          // secondary scannability, not the primary signal.
           const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
           if (commerce.shippingMethod) {
             trustChips.push({
@@ -1020,27 +979,6 @@ export default function ItemDetailScreen() {
           );
         })()}
 
-        {/* ── Zone C — Seller & verification trust ──
-            Per audit 03 psychology: the seller answers "Can I trust what
-            I am seeing?" — question #2, immediately after the elevated
-            trust strip and BEFORE the logistics breakdown ("Can I get
-            it?"). Benchmark order (Vestiaire/Vinted/Depop 2026): media →
-            title/price → trust line → seller → shipping/returns.
-
-            SellerInfoCard carries the identity row, stats and performance
-            badges (SellerStandardsBadges — fast shipper, responsive, top
-            seller). SellerTrustBadge is layered directly beneath as the
-            verification-trust complement (verified, trusted seller) so the
-            two badge clusters form one cohesive seller-trust composition
-            instead of two duplicated surfaces. limit={2} restricts
-            SellerTrustBadge to the verification badges it uniquely owns;
-            SellerStandardsBadges owns performance. Both components are
-            preserved and given a clear, non-overlapping role.
-
-            Per AGENTS.md §4: flat canvas + hairline, no card-on-card.
-            The "More from this seller" browse rail closes the seller
-            section with a bottom hairline — contextual to the seller,
-            distinct from the Bundle upsell in the discovery tail. */}
         {seller && (
           <View style={[styles.sellerTrustSection, { borderTopColor: colors.borderSubtle }]}>
             <SellerInfoCard
@@ -1128,15 +1066,6 @@ export default function ItemDetailScreen() {
           </View>
         ) : null}
 
-        {/* ── Zone D — Purchase details ──
-            Per audit 03 psychology: answers "Can I get it?" (#3) and
-            "What happens if something goes wrong?" (#4) — placed after
-            the seller trust block so the buyer knows who they are buying
-            from before reviewing the landed cost and policies. Per spec
-            05 §4: "Use a compact summary plus disclosure sheet. Do not
-            render a separate bordered strip for every policy." The
-            elevated strip handles at-a-glance trust; this section handles
-            the detailed breakdown via a disclosure sheet. */}
         {purchaseSummary ? (
           <CommerceDetailSection label="Buying this item" variant="continuation">
             <CommerceDetailDisclosureRow
@@ -1286,11 +1215,6 @@ export default function ItemDetailScreen() {
           </View>
         ) : null}
 
-        {/* ── Zone G — Social proof and Q&A ──
-            Per spec 04_DIRECT §3: collapse Q&A into a disclosure row.
-            Do not render the full Q&A inline by default — it adds
-            vertical length without aiding the purchase decision. The
-            disclosure opens a canonical BottomSheet with the full Q&A. */}
         <CommerceDetailSection label="Questions" variant="compact" divider>
           <CommerceDetailDisclosureRow
             label={qaSummary?.questionCount ? 'View all questions' : 'Ask a question'}
@@ -1302,14 +1226,6 @@ export default function ItemDetailScreen() {
           />
         </CommerceDetailSection>
 
-        {/* ── Zone H — Discovery ──
-            Per spec 12: "One high-quality continuation section is better
-            than 3 repetitive rails." Consolidated to two focused modules:
-            Bundle upsell (unique multi-item purchase incentive) → More like
-            this (visual-similar grid). Seen in Looks rail removed to reduce
-            repetition — look context is available from the item's looks tab
-            and the seller profile. The "More from this seller" rail above
-            is contextual to the seller section, not a discovery module. */}
         <BundleUpsellRow
           items={bundleItems}
           currentListingId={item.id}
@@ -1555,15 +1471,6 @@ export default function ItemDetailScreen() {
           </Pressable>
         </View>
         <View style={styles.purchaseSheetBody}>
-          {/* ── Cost breakdown ──
-              Research (Baymard / EcomEye 2026): unexpected costs are the
-              #1 cause of checkout abandonment — "9% of abandonments
-              [happen] because the final price surprised them." A sheet
-              titled "Confirmed terms" must therefore lead with the
-              landed cost, not policy labels alone.
-              Per Design.md checkout summary spec: line items in
-              tabular numerals, emphasized total, right-aligned.
-              Only backend-supplied values render — never fabricated. */}
           {hasPrice ? (
             <CommerceDetailMetricRow label="Item price" value={formattedPrice} />
           ) : null}
@@ -1621,9 +1528,6 @@ export default function ItemDetailScreen() {
         </View>
       </BottomSheet>
 
-      {/* ── Q&A BottomSheet ──
-          Per spec 04_DIRECT §3: canonical BottomSheet for Q&A. Opens
-          from the "View questions & answers" disclosure row. */}
       <BottomSheet
         visible={qaSheetVisible}
         onDismiss={() => setQaSheetVisible(false)}
@@ -1700,10 +1604,6 @@ export default function ItemDetailScreen() {
         </Pressable>
       </BottomSheet>
 
-      {/* ── Make Offer bottom sheet ──
-          Replaces the full-screen MakeOffer navigation with an inline
-          bottom sheet (2026 UX benchmark — Poshmark/Depop use sheets
-          for offers). Uses the server-authoritative offer API. */}
       <MakeOfferSheet
         visible={makeOfferVisible}
         onDismiss={() => setMakeOfferVisible(false)}
@@ -1729,11 +1629,6 @@ export default function ItemDetailScreen() {
         }}
       />
 
-      {/* ── Condition definition sheet ──
-          Tapping the colour-coded condition badge opens a compact
-          definition so buyers understand exactly what the grade means.
-          Per audit 03 P1: includes a condition-evidence gallery jump so
-          buyers can see the photos that evidence the condition grade. */}
       <BottomSheet
         visible={conditionInfoVisible}
         onDismiss={() => setConditionInfoVisible(false)}
@@ -1765,12 +1660,6 @@ export default function ItemDetailScreen() {
                 {conditionMeta.definition}
               </Text>
             ) : null}
-            {/* Condition-evidence gallery jump — per audit 03 P1.
-                Jumps to the detail/flaw photos in the media gallery.
-                Per photography policy: first image is the silhouette,
-                later images show details/flaws/labels. We jump to the
-                last available photo (most likely to show condition
-                evidence) and open fullscreen for close inspection. */}
             {item.images && item.images.length > 1 ? (
               <Pressable
                 style={({ pressed }) => [styles.conditionEvidenceJump, pressed && styles.pressed]}
@@ -1884,12 +1773,6 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Elevated trust strip ──
-  // Compact inline trust signals placed immediately after the identity
-  // block, before the seller row. Per 2026 research: trust signals
-  // visible right after the price (the moment of highest buyer intent)
-  // increase conversion more than any other single change.
-  // Flat canvas — no card, no surface fill, no border. Just icon+label
-  // pairs with generous spacing. Per AGENTS.md §4 surface budget.
   elevatedTrustStrip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2121,7 +2004,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
   },
-  // ── Q&A BottomSheet header (per spec 04_DIRECT §3) ──
   qaSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2209,9 +2091,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
   },
   // ── Condition evidence gallery jump ──
-  // Per audit 03 P1: a compact row that jumps to the condition evidence
-  // photos in the fullscreen media viewer. Flat inline row with brand
-  // accent — no card chrome (per §4 surface budget).
   conditionEvidenceJump: {
     flexDirection: 'row',
     alignItems: 'center',

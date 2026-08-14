@@ -355,7 +355,6 @@ export type RootStackParamList = {
   LiveStreamViewer: { sessionId: string };
   // Live stream seller — broadcast + manage lots
   LiveStreamSeller: { sessionId?: string };
-  // AI-powered listing creation
   AIPoweredListing: undefined;
   // Pro seller tools
   BulkListing: undefined;

@@ -3,13 +3,6 @@
  * enhancement (background removal, AI shadows, auto-crop, colour correction,
  * background replacement, lighting fix).
  *
- * Context (2026 parity):
- *   Depop's Photoroom integration (AI background removal, AI shadows, image
- *   resizing) drove a 1.5% uplift in listings. eBay AI Snap and Tilt Snap AI
- *   followed. AI photo enhancement is table stakes for 2026 marketplaces.
- *   ThryftVerse has AI listing creation but no AI photo enhancement — this
- *   service closes that gap.
- *
  * Per AGENTS.md §11 (Truthful UI):
  *   The mock is truthful. It does NOT fabricate enhanced images. When
  *   `AI_PHOTO_DEMO_MODE` is true, every function returns the ORIGINAL image

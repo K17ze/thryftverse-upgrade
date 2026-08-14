@@ -208,8 +208,8 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="AI API Integration"
-          subtitle="Bring your own AI provider keys"
+          title="Provider credentials"
+          subtitle="Connect your own provider keys"
           onBack={() => navigation.goBack()}
         />
       }

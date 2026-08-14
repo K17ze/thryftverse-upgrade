@@ -186,7 +186,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           <View style={styles.introCopy}>
             <Text style={styles.introTitle}>A specialist for your conversations</Text>
             <Text style={styles.introBody}>
-              Define how it thinks, when it joins, and exactly what it can read.
+              Configure behavior, triggers, and access.
             </Text>
           </View>
         </View>

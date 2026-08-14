@@ -81,7 +81,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'UserProfile'>;
 
 const COVER_HEIGHT = 160;
 const GRID_GAP = 4;
-const CARD_ASPECT = 4 / 3; // 3:4 portrait — Poshmark 2026 standard
+const CARD_ASPECT = 4 / 3;
 const SHOP_COLS = 3;
 const LOOK_GAP = 4;
 const LOOK_COLS = 3;

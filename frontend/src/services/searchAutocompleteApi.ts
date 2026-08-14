@@ -1,9 +1,8 @@
 /**
  * Search Autocomplete API — AI-powered autocomplete service (mock-ready)
  *
- * Inspired by Vinted's 2026 autocomplete: 20% of search sessions start with
- * autocomplete, sustaining 4,700 QPS at 31ms P99. This module provides the
- * contract + heuristic implementation for ThryftVerse's search autocomplete.
+ * This module provides the contract + heuristic implementation for
+ * ThryftVerse's search autocomplete.
  *
  * TRUTHFUL UI (AGENTS.md §11):
  *   The current implementation is a *heuristic/mock* service. It matches the

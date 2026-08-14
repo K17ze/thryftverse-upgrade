@@ -97,8 +97,6 @@ interface RecommendationItem {
   [key: string]: unknown;
 }
 
-/** Format rights version for the badge — spec wants "v2 · Jul 2026" format.
- *  Accepts raw strings like "Rights v1", "v2", or "v2 · Jul 2026" and normalises. */
 function formatRightsVersion(raw: string): string {
   // Already formatted
   if (raw.includes('·')) return raw;
@@ -177,8 +175,6 @@ export default function AssetDetailScreen() {
   }, [assetId, alertTargetPrice, alertCondition, show]);
 
   const [dataLoadedAt, setDataLoadedAt] = React.useState<number | null>(null);
-  // Per spec 03_COOWN §8: risk disclosure collapsed by default, opens
-  // in a modal sheet via "Risks" disclosure row.
   const [riskDisclosureVisible, setRiskDisclosureVisible] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
 
@@ -424,10 +420,6 @@ export default function AssetDetailScreen() {
     : null;
   const feePct = Math.round(CO_OWN_FEE_RATE * 100);
 
-  // ── Holder P&L ──
-  // Per spec 09: "Your position / 12 units · £1,248 value / Avg. entry
-  // £98.20 · +£69.60 (+5.9%)". Only show P&L if authoritative data exists
-  // (avgEntryPriceGbp from the backend holdings contract).
   const avgEntryPriceGbp = yourHolding?.avgEntryPriceGbp ?? null;
   const positionValueGbp = yourUnits != null ? asset.unitPriceGbp * yourUnits : null;
   const positionCostGbp = avgEntryPriceGbp != null && yourUnits != null
@@ -447,11 +439,6 @@ export default function AssetDetailScreen() {
     : null;
   const reconciliationActive =
     orderBook != null && orderBook.reconciliationState !== 'reconciled';
-  // ── Market snapshot ──
-  // Per spec 03_COOWN §2: backend-backed market snapshot. The frontend
-  // must not label reference price as "Last trade" without settled-
-  // execution proof. marketSnapshot is null until the backend exposes
-  // lastExecutionPriceGbp.
   const marketSnapshot = asset.marketSnapshot ?? null;
   const marketSnapshotLabel = marketSnapshot?.asOf
     ? `Snapshot v${marketSnapshot.version} · ${new Date(marketSnapshot.asOf).toLocaleTimeString('en-GB', {
@@ -462,11 +449,6 @@ export default function AssetDetailScreen() {
       ? `Last update ${dataStaleAgeLabel}`
       : undefined;
 
-  // ── Candle data gating ──
-  // Per spec 03_COOWN §4: only expose the candle toggle when real OHLC
-  // candles exist. Do not pass an empty candle component. The API returns
-  // candles in {timestamp, openGbp, ...} format; the chart expects
-  // {t, o, h, l, c, v} — map at the call site.
   const apiCandles = asset.candles ?? [];
   const hasCandleData = apiCandles.length > 0;
   const candleData = apiCandles.map((c) => ({
@@ -620,11 +602,6 @@ export default function AssetDetailScreen() {
           />
         }
       >
-        {/* ── Offline banner ──
-            Per spec 05 §14: offline state must be designed, not a blank
-            screen. Cached asset data may still be visible. Uses the shared
-            CommerceDetailOfflineBanner for consistency across all detail
-            surfaces. */}
         <CommerceDetailOfflineBanner isOffline={isOffline} />
 
         {/* ── Freshness indicator ──
@@ -753,12 +730,6 @@ export default function AssetDetailScreen() {
           />
         </View>
 
-        {/* ── Asset story — emotional object meaning before financial
-            abstraction (Rally psychology: collectible story precedes
-            investing/trading). A quiet editorial paragraph of the
-            provenance, not a card or a section block. Only rendered
-            when the backend has published a provenance narrative.
-            Full provenance/condition/detail lives in Due Diligence. */}
         {asset.provenance ? (
           <View style={styles.assetStoryWrap}>
             <Text
@@ -828,9 +799,6 @@ export default function AssetDetailScreen() {
               </View>
             }
           >
-          {/* Thin allocation indicator — compact, one line.
-              "78% allocated · 220 units available" pattern per spec 09.
-              Tap → Supply details (opens the supply structure sheet). */}
           <Pressable
             style={({ pressed }) => [
               styles.allocationIndicatorRow,
@@ -860,13 +828,6 @@ export default function AssetDetailScreen() {
           </CommerceDetailTransactionSurface>
         </CoOwnMarketOverview>
 
-        {/* ── Layer 1 — Trust highlights ──
-            2-3 concise trust signals backed by backend data, shown near
-            the trade decision point. Only claims backed by backend data
-            are rendered (fail closed). Per spec 09: "Authenticated ·
-            Insured custody · Rights v2" pattern.
-            Per AGENTS.md §4: flat canvas, no card containers. Inline
-            icon+text pairs separated by spacing, not borders. */}
         {(() => {
           const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
           if (asset.authenticityStatus === 'verified') {
@@ -917,10 +878,6 @@ export default function AssetDetailScreen() {
           divider
           variant="editorial"
         >
-          {/* ── Holder position — high priority if user owns units ──
-              Per spec 09: "Your position / 12 units · £1,248 value /
-              Avg. entry £98.20 · +£69.60 (+5.9%)". Only show P&L if
-              authoritative data exists. */}
           {holdingsError ? (
             <CommerceDetailUnavailableInline
               title="Position unavailable"
@@ -965,10 +922,6 @@ export default function AssetDetailScreen() {
             </View>
           ) : null}
 
-          {/* ── Price chart ──
-              Historical settled/reference price with honest data semantics.
-              Per spec 03_COOWN §4: only expose the candle toggle when real
-              OHLC candles exist. */}
           <CoOwnPriceChart
             assetId={asset.id}
             unitPriceGbp={asset.unitPriceGbp}
@@ -1096,15 +1049,6 @@ export default function AssetDetailScreen() {
           ) : null}
         </CommerceDetailSection>
 
-        {/* ════════════════════════════════════════════════════════════
-            Layer 3 entry — Due diligence
-            One disclosure row navigates to the dedicated full-height
-            Due Diligence screen. All legal/compliance/valuation/
-            provenance/audit depth lives there, not as inline modules.
-            Rights sheet remains accessible here for trading-blocked
-            states (rights incomplete). Per spec 09: "full legal/risk
-            evidence remains reachable in <=2 taps."
-            ════════════════════════════════════════════════════════════ */}
         <CommerceDetailSection label="Due diligence" divider variant="editorial">
           {/* Stale market mark — show when no public market events have
               been logged in >7 days. Fail closed (omit when null). */}
@@ -1140,9 +1084,6 @@ export default function AssetDetailScreen() {
           />
         </CommerceDetailSection>
 
-        {/* ── Zone F — Discovery ──
-            Per spec 03_COOWN §9: maximum one discovery rail. Do not
-            render generic duplicate recommendation rails after that. */}
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
           <View style={styles.recommendationSection}>
             <RecommendationRail
@@ -1270,12 +1211,6 @@ export default function AssetDetailScreen() {
           );
         }
 
-        // Tradable states — per spec 03_COOWN §7: holder primary =
-        // "Sell", secondary = "Buy more"; non-holder primary = "Buy units".
-        // Per spec 09: do not show redundant value if the same price is
-        // immediately above in the transaction surface; avoid a thumbnail
-        // that makes the dock look like an ecommerce cart when the asset
-        // hero is already clear. The dock focuses on action, not repetition.
         return (
           <CommerceDetailStateDock
             showProtectionStrip={asset.buyerProtection ?? false}
@@ -1342,10 +1277,6 @@ export default function AssetDetailScreen() {
         rights={rightsRows}
       />
 
-      {/* Risk disclosure sheet — per spec 03_COOWN §8: collapsed by
-          default, opens in a BottomSheet via "View risk disclosure".
-          Uses the shared BottomSheet primitive for consistency with all
-          other detail surfaces. */}
       <BottomSheet
         visible={riskDisclosureVisible}
         onDismiss={() => setRiskDisclosureVisible(false)}
@@ -1376,10 +1307,6 @@ export default function AssetDetailScreen() {
         </ScrollView>
       </BottomSheet>
 
-      {/* Supply structure sheet — per spec 03_COOWN §6: do not infer
-          treasury, authorised, issued, public float or sponsor locked
-          from available units. Pass null for inferred values until
-          explicit backend fields exist. */}
       <CoOwnSupplySheet
         visible={supplySheetVisible}
         onClose={() => setSupplySheetVisible(false)}
@@ -1527,10 +1454,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   // ── Issuer identity extension ──
-  // Per Design.md between-group spacing: the issuer row is a distinct
-  // group. paddingVertical Space.md (16px) gives proper breathing room
-  // for avatar + name + verification + actions.
-  // Per spec 11_COOWN: 12-16pt between data rows.
   identityExtension: {
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
@@ -1538,9 +1461,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   // ── Asset story — quiet editorial paragraph before market data ──
-  // Rally psychology: collectible story precedes financial abstraction.
-  // Flat canvas, no card, no border. Just the provenance narrative as
-  // body text, with a quiet "Read the full story" link to Due Diligence.
   assetStoryWrap: {
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
@@ -1567,10 +1487,6 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Elevated trust strip (near trade decision point) ──
-  // Flat inline icon+text pairs, no card container. Per AGENTS.md §4.
-  // 2026 benchmark: trust near CTA = 40%+ conversion improvement.
-  // Per spec 11_COOWN: "Trust signals — regulatory, security, transparency.
-  // Professional, not gamified." 16pt vertical padding for breathing room.
   coOwnTrustStrip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1592,9 +1508,6 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Market status row (inside transaction surface) ──
-  // Per spec 11_COOWN: "Standardize market-state color and shape semantics."
-  // Status dot uses semantic colors (success/warning/textMuted) for truth.
-  // Status text uses captionElevated for quiet, professional readability.
   marketStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1635,10 +1548,6 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Market book row (bid/ask inside transaction surface) ──
-  // ── Market book row (bid/ask inside transaction surface) ──
-  // Per spec 11_COOWN: 24pt between sections. Space.lg (24px) top margin
-  // and padding from the status row. Values use Numeric.priceList with
-  // tabular-nums for stable alignment.
   marketBookRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -1647,8 +1556,6 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
   },
   // ── Allocation indicator (Layer 1 compact) ──
-  // Thin bar + one-line summary: "78% allocated · 220 units available".
-  // Per spec 09: compact indicator, not a full supply section.
   allocationIndicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1681,7 +1588,6 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // Market book values — Numeric.priceList (20/24/700) with tabular-nums.
-  // Per spec 11_COOWN: "Values: Type.priceList or Numeric.priceLarge."
   marketBookValue: {
     fontSize: Numeric.priceList.size,
     lineHeight: Numeric.priceList.lineHeight,
@@ -1689,10 +1595,7 @@ const styles = StyleSheet.create({
     letterSpacing: Numeric.priceList.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  // ── Fundamentals — stacked layout (per spec 03_COOWN §1) ──
-  // ── Fundamentals — stacked layout (per spec 03_COOWN §1) ──
-  // Per spec 11_COOWN: 12-16pt between data rows. Space.md (16px) gap
-  // between rows. 24pt from the previous section (Space.lg).
+  // ── Fundamentals — stacked layout ──
   fundamentalsStacked: {
     marginTop: Space.lg,
     paddingTop: Space.lg,
@@ -1714,9 +1617,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   // Fundamentals value — bodyEmphasis (15/21/600) with tabular-nums.
-  // Per spec 11_COOWN: "Values: Type.priceList or Numeric.priceLarge."
-  // Using bodyEmphasis for compact fundamentals rows; priceList is used
-  // for the main market values above.
   fundamentalsValue: {
     fontSize: TypographyV2.bodyStrong.size,
     lineHeight: TypographyV2.bodyStrong.lineHeight,
@@ -1726,9 +1626,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flexShrink: 1,
   },
-  // ── Risk disclosure sheet (per spec 03_COOWN §8) ──
-  // Uses the shared BottomSheet primitive; only the header and scroll
-  // content styles are screen-local.
+  // ── Risk disclosure sheet ──
   riskDisclosureSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1755,9 +1653,6 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   // ── Viewer position header — calm, professional ownership display ──
-  // Per spec 11_COOWN: "Clear ownership stake, current value." 24pt
-  // section spacing (Space.lg) between the header and supply summary.
-  // Values use Numeric.priceLarge with tabular-nums for stable alignment.
   viewerPositionHeader: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -1809,7 +1704,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
-  // ── Discovery — 24pt section spacing per spec 11_COOWN ──
+  // ── Discovery ──
   recommendationSection: {
     marginTop: Space.lg,
   },
@@ -1817,9 +1712,6 @@ const styles = StyleSheet.create({
 
 const priceAlertStyles = StyleSheet.create({
   // ── Price alert sheet — calm, professional modal ──
-  // Per spec 11_COOWN: "Clean, calm, trustworthy." 24pt padding.
-  // Semantic condition colours (success/danger) for above/below —
-  // truthful state, not decoration.
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',

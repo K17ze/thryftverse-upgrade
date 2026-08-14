@@ -1,0 +1,26 @@
+feat(P1+P2): human-first chat composer, production residue cleanup
+
+Chat V3 (P1):
+- Removed permanent "Add assistant" agent chip strip from ChatScreen.
+  Agent deployment is now opt-in via the attachment picker ("Add
+  assistant" action), making the composer human-first. Deployed agent
+  chips still appear when agents are active, but no permanent UI
+  pushes agents when none are deployed.
+- Added "agent" action to ChatActionSheet so users can deploy AI
+  assistants from the attachment menu.
+
+Production residue cleanup (P2):
+- Removed 50+ design-by-reference comments (Poshmark 2026, Instagram,
+  Snapchat, Vinted, Vestiaire, Depop, "per spec", "per audit",
+  "Rally psychology", "2026 benchmark") from ItemDetailScreen,
+  AssetDetailScreen, UserProfileScreen, PosterReactionReplyBar,
+  searchAutocompleteApi, aiPhotoEnhancementApi, navigation types.
+- Renamed user-facing "Bot" strings to "Agent" (system messages,
+  attachment picker label).
+- Rephrased "AI API Integration" to "Provider credentials" and
+  BotBuilder copy from AI-anthropomorphic to neutral configuration
+  language.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
