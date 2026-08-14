@@ -1,4 +1,4 @@
-import { createStableId } from '../utils/createStableId';
+import { createStableId, makeStableId } from '../utils/createStableId';
 import type { CreatorDocument, CreatorLayer, CreatorPage } from './composition';
 
 export interface CreatorTemplate {
@@ -11,7 +11,7 @@ export interface CreatorTemplate {
 }
 
 function page(layers: CreatorLayer[], durationMs?: number): CreatorPage {
-  return { id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, layers, durationMs };
+  return { id: makeStableId('page'), layers, durationMs };
 }
 
 function baseLayer(id: string, zIndex: number): Pick<CreatorLayer, 'id' | 'x' | 'y' | 'scale' | 'rotation' | 'opacity' | 'zIndex' | 'locked' | 'hidden'> {

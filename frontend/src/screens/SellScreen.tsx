@@ -29,6 +29,7 @@ import { sanitizeDecimalInput, sanitizeIntegerInput, calculatePlatformChargeGbp 
 import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
 import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
+import { makeStableId } from '../utils/createStableId';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import { uploadMedia } from '../services/mediaUpload';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
@@ -237,7 +238,7 @@ export default function SellScreen() {
       setPhotos(sellDraft.photos);
       setMediaDraftItems(
         sellDraft.photos.map((uri) => ({
-          id: `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          id: makeStableId('draft'),
           uri,
           kind: 'image' as const,
           source: uri.startsWith('http') ? ('remote' as const) : ('local' as const),
@@ -405,7 +406,7 @@ export default function SellScreen() {
       const next = [
         ...prev,
         {
-          id: `sell_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          id: makeStableId('sell'),
           uri,
           kind: 'image' as const,
           source: 'local' as const,
@@ -653,7 +654,7 @@ export default function SellScreen() {
           throw new Error('A verified cover image is required before creating an auction.');
         }
         const coverImage = coverUpload.publicUrl!;
-        const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        const listingId = makeStableId('listing');
         await createListingOnApi({
           id: listingId,
           sellerId: currentUser.id,
@@ -765,7 +766,7 @@ export default function SellScreen() {
 
       if (!listingId) {
         setPublicationStage('creating_listing');
-        listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        listingId = makeStableId('listing');
         await createListingOnApi({
           id: listingId,
           sellerId: currentUser.id,

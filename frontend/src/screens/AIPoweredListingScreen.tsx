@@ -43,6 +43,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { haptics } from '../utils/haptics';
+import { makeStableId } from '../utils/createStableId';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import {
   createListingOnApi,
@@ -324,7 +325,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         .filter((it) => it.state === 'uploaded' && it.publicUrl)
         .map((it) => it.publicUrl!);
 
-      const listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const listingId = makeStableId('listing');
       await createListingOnApi({
         id: listingId,
         sellerId: currentUser.id,

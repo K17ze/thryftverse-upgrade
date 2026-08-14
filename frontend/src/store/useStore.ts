@@ -6,6 +6,7 @@ import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tr
 import type { ChatBot, Conversation, Message as ConversationMessage } from '../data/mockData';
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
+import { makeStableId } from '../utils/createStableId';
 import { setSentryUser } from '../platform/monitoring/sentry';
 import { updateUserAccountPreferences, updateUserPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
@@ -279,7 +280,7 @@ const makeLedgerEntry = (
   entry: Omit<MarketLedgerEntry, 'id' | 'timestamp'>
 ): MarketLedgerEntry => ({
   ...entry,
-  id: `ml_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  id: makeStableId('ml'),
   timestamp: new Date().toISOString(),
 });
 
@@ -619,7 +620,7 @@ export const useStore = create<StoreState>()(
   isSavedProduct: (id) => get().savedProducts.includes(id),
   collections: [],
   createCollection: (name, description, isPrivate) => {
-    const id = `collection_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const id = makeStableId('collection', 9);
     const now = Date.now();
     set((state) => ({
       collections: [
@@ -1165,7 +1166,7 @@ export const useStore = create<StoreState>()(
       }
       const newSearch: SavedSearch = {
         ...search,
-        id: `saved_search_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId('saved_search'),
         createdAt: new Date().toISOString(),
       };
       return { savedSearches: [newSearch, ...state.savedSearches] };
@@ -1316,7 +1317,7 @@ export const useStore = create<StoreState>()(
     const creator = creatorId ?? get().currentUser?.id ?? 'me';
     const uniqueMemberIds = [...new Set([creator, ...memberIds])].filter((id) => id.trim().length > 0);
     const groupTitle = title.trim() || 'New Group';
-    const conversationId = `g_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const conversationId = makeStableId('g');
 
     const createdMessage: ConversationMessage = {
       id: `msg_${Date.now()}`,
@@ -1367,7 +1368,7 @@ export const useStore = create<StoreState>()(
           : 'An agent was connected to this group.';
 
         const deployedMessage: ConversationMessage = {
-          id: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          id: makeStableId('msg'),
           senderId: 'system',
           isSystem: true,
           systemTitle: 'Agent deployed',
@@ -1405,7 +1406,7 @@ export const useStore = create<StoreState>()(
           : 'An agent was removed from this group.';
 
         const removedMessage: ConversationMessage = {
-          id: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          id: makeStableId('msg'),
           senderId: 'system',
           isSystem: true,
           systemTitle: 'Agent removed',
@@ -1567,7 +1568,7 @@ export const useStore = create<StoreState>()(
   })),
   supportTickets: [],
   createSupportTicket: (ticket) => {
-    const id = `ticket_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const id = makeStableId('ticket', 9);
     const now = Date.now();
     set((state) => ({
       supportTickets: [
@@ -1827,7 +1828,7 @@ export const useStore = create<StoreState>()(
 
   userLooks: [],
   addUserLook: (look) => {
-    const id = `look_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = makeStableId('look');
     const now = Date.now();
     set((state) => ({
       userLooks: [{ ...look, id, createdAt: now }, ...state.userLooks],

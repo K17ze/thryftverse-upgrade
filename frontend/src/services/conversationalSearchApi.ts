@@ -20,6 +20,8 @@
  * change.
  */
 
+import { makeStableId } from '../utils/createStableId';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -88,7 +90,7 @@ export interface SearchSuggestion {
 // When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
-export const CONVERSATIONAL_SEARCH_DEMO_MODE = true;
+export const CONVERSATIONAL_SEARCH_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Mock data — suggested starting queries
@@ -183,7 +185,7 @@ function delay(ms: number): Promise<void> {
 }
 
 function generateId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  return makeStableId(prefix);
 }
 
 function nowIso(): string {

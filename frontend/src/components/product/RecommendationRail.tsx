@@ -14,7 +14,7 @@ import { Typography, Space, Radius, Type, AspectRatio } from '../../theme/design
 import type { RecommendationSection, RecommendationLook } from '../../platform/product';
 import { isRecommendationLook } from '../../platform/product';
 import { ProductAnalytics } from '../../platform/product';
-import { Listing } from '../../data/mockData';
+import type { Listing } from '../../data/mockData';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';

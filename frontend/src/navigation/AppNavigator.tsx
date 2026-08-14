@@ -336,6 +336,8 @@ export default function AppNavigator() {
       <Stack.Screen name="NotificationPreferences" getComponent={() => require('../screens/NotificationPreferencesScreen').default} />
       {/* AI provider API integration — bring-your-own-key for OpenAI / Anthropic / Gemini / custom */}
       <Stack.Screen name="AIAgentIntegration" getComponent={() => require('../screens/AIAgentIntegrationScreen').default} />
+      {/* Agent activity ledger — transparent record of agent actions and approvals */}
+      <Stack.Screen name="AgentActivity" getComponent={() => require('../screens/AgentActivityScreen').default} />
 
       {/* Diagnostic — dev only */}
       {__DEV__ && (

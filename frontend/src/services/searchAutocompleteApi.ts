@@ -22,7 +22,7 @@
 // ---------------------------------------------------------------------------
 
 /** When true, all data returned by this service is mock/illustrative. */
-export const AUTOCOMPLETE_DEMO_MODE = true;
+export const AUTOCOMPLETE_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Types

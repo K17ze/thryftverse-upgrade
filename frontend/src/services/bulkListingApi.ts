@@ -1,6 +1,7 @@
 import { createListingOnApi } from './listingsApi';
 import { formatFiatAmount } from '../utils/currency';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { makeStableId } from '../utils/createStableId';
 
 // ---------------------------------------------------------------------------
 // Bulk Listing — types and orchestration for batch listing creation.
@@ -105,7 +106,7 @@ export async function submitBulkListings(
     const item = items[i];
     try {
       const coverImage = item.images[0];
-      const listingId = `listing_${Date.now()}_${i}_${Math.floor(Math.random() * 10000)}`;
+      const listingId = makeStableId(`listing_${i}`);
       await createListingOnApi({
         id: listingId,
         sellerId,

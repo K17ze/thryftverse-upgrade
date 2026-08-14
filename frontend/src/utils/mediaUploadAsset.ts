@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { makeStableId } from './createStableId';
 
 export interface MediaUploadAsset {
   id: string;
@@ -100,7 +101,7 @@ export function convertPickerAsset(asset: ImagePicker.ImagePickerAsset): MediaUp
     ? generateFileName(asset.fileName)
     : generateFileName('picked_media.jpg');
   return {
-    id: `asset_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: makeStableId('asset'),
     uri: asset.uri,
     fileName,
     mimeType,

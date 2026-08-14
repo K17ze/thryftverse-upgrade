@@ -2,6 +2,7 @@ import { MediaUploadQueue, UploadQueueItemState } from './mediaUploadQueue';
 import { createListingOnApi, createListingImageOnApi } from './listingsApi';
 import { ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import { ListingPublicationRecovery } from '../store/useStore';
+import { makeStableId } from '../utils/createStableId';
 
 export type PublicationStage =
   | 'validating'
@@ -49,7 +50,7 @@ export interface PublicationResult {
 }
 
 function generateClientPublicationId(): string {
-  return `pub_${Date.now()}_${Math.floor(Math.random() * 1_000_000).toString(36)}`;
+  return makeStableId('pub');
 }
 
 function isLocalUri(uri: string): boolean {
@@ -188,7 +189,7 @@ export async function executePublication(
     setStage('creating_listing');
     let listingId = ctx.listingId;
     if (!listingId) {
-      listingId = `listing_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      listingId = makeStableId('listing');
       await createListingOnApi({
         id: listingId,
         sellerId: input.sellerId,

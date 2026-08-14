@@ -16,6 +16,7 @@ import { useToast } from '../context/ToastContext';
 import { cancelCoOwnOrderReservation, placeCoOwnOrder } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useStore } from '../store/useStore';
+import { makeStableId } from '../utils/createStableId';
 import {
   CoOwnMarketHeader,
   CoOwnTradeReceipt,
@@ -69,7 +70,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   // re-confirms, which mounts a fresh instance of this screen (fresh key).
   const idempotencyKeyRef = React.useRef<string | null>(null);
   if (!idempotencyKeyRef.current) {
-    idempotencyKeyRef.current = `${currentUser?.id ?? 'anon'}-${assetId}-${side}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    idempotencyKeyRef.current = `${currentUser?.id ?? 'anon'}-${assetId}-${side}-${makeStableId('key')}`;
   }
 
   const isBuy = side === 'buy';

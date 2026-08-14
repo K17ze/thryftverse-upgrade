@@ -16,6 +16,7 @@ import {
 } from '../preferences/settingsPreferences';
 import { mapLanguageOptionToLocale, setI18nLocale } from '../i18n';
 import { setAnalyticsOptOut } from '../lib/telemetry';
+import { makeStableId } from '../utils/createStableId';
 
 interface SettingsPreferencesContextValue {
   language: SupportedLanguageOption;
@@ -165,7 +166,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
       }
       const newPreset: FilterPreset = {
         ...preset,
-        id: `filter_preset_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId('filter_preset'),
         createdAt: new Date().toISOString(),
       };
       return [newPreset, ...prev].slice(0, 12);

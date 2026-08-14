@@ -20,6 +20,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { makeStableId } from '../../utils/createStableId';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
 import type { CreatorLayer } from '../composition';
@@ -303,7 +304,7 @@ function LookComposerInner() {
   // via computeLookLayout — never N identical full-bleed overlaps.
   const handleEntryMediaSelected = useCallback((media: CreatorInitialMedia[]) => {
     const mediaLayers: CreatorLayer[] = media.map((asset, i) => ({
-      id: `media_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+      id: makeStableId(`media_${i}`),
       type: 'media' as const,
       x: 0.5,
       y: 0.5,

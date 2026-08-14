@@ -25,6 +25,7 @@ import {
   type LookCommentApiItem,
 } from '../../services/looksApi';
 import { formatRelativeTime } from '../../utils/dateFormat';
+import { makeStableId } from '../../utils/createStableId';
 
 export interface LookCommentsSheetProps {
   lookId: string;
@@ -83,7 +84,7 @@ export function LookCommentsSheet({
     if (!body || isSending) return;
     haptic.light();
     setIsSending(true);
-    const tempId = `comment_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const tempId = makeStableId('comment', 6);
     try {
       const res = await createLookCommentOnApi(lookId, { id: tempId, body });
       setComments((prev) => {

@@ -538,6 +538,15 @@ export function getCommands(navigation: CommandNavigation): Command[] {
       action: nav('AIAgentIntegration'),
     },
     {
+      id: 'settings-agent-activity',
+      label: 'Agent activity',
+      subtitle: 'Record of agent actions and approvals',
+      category: 'settings',
+      icon: 'list-outline',
+      keywords: ['agent', 'activity', 'ledger', 'log', 'approval', 'tool'],
+      action: nav('AgentActivity'),
+    },
+    {
       id: 'settings-notifications',
       label: 'Notification preferences',
       subtitle: 'Push, email & in-app alerts',

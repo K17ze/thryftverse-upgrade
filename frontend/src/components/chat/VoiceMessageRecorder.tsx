@@ -23,6 +23,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptic } from '../../hooks/useHaptic';
 import { HapticPatterns } from '../../utils/hapticPatterns';
+import { makeStableId } from '../../utils/createStableId';
 
 export interface VoiceMessageRecorderProps {
   onSend: (uri: string, durationMs: number) => void;
@@ -214,7 +215,7 @@ export function VoiceMessageRecorder({
       return;
     }
 
-    const uri = `voice://${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const uri = `voice://${makeStableId('msg')}`;
     onSend(uri, duration);
   }, [isRecording, micScale, dragX, spring, haptic, onCancel, onSend, notifyRecordingChange]);
 

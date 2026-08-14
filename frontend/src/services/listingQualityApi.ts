@@ -33,7 +33,7 @@ import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 // ---------------------------------------------------------------------------
 
 /** When true, all data returned by this service is mock/illustrative. */
-export const LISTING_QUALITY_DEMO_MODE = true;
+export const LISTING_QUALITY_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Types

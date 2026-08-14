@@ -35,7 +35,11 @@ import {
 import { requestPushPermissionOnce } from "../../lib/pushPermission";
 import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarnings";
 import { isVideoUri } from "../../utils/media";
+import { makeStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
+import type { SuggestedReply } from "../../services/chatAgentsApi";
+import type { SupportedCurrencyCode } from "../../constants/currencies";
+import type { CurrencyDisplayMode } from "../../utils/currency";
 
 import type { Message } from "./types";
 import { INITIAL_MESSAGES, parseMessageDate } from "./types";
@@ -52,7 +56,7 @@ interface UseConversationMessagesOptions {
   } | undefined;
   currentUser?: { id?: string; username?: string } | null;
   hydratedMessages: Message[];
-  formatFromFiat: (amount: number, currency: string, opts?: { displayMode?: string }) => string;
+  formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: { displayMode?: CurrencyDisplayMode }) => string;
   show: (msg: string, type: "success" | "error" | "info") => void;
   haptic: { light: () => void; medium: () => void; success: () => void; selection: () => void };
   onOfferSent: (conversationId: string) => void;
@@ -65,9 +69,9 @@ interface UseConversationMessagesOptions {
   getChatAgentSuggestions: (
     conversationId: string,
     text: string,
-  ) => { text: string; label?: string }[];
+  ) => SuggestedReply[];
   setChatAgentSuggestionsExternal: (
-    suggestions: { text: string; label?: string }[],
+    suggestions: SuggestedReply[],
   ) => void;
   navigation: {
     setParams: (params: Record<string, unknown>) => void;
@@ -183,7 +187,7 @@ export function useConversationMessages({
   useEffect(() => {
     if (!routeOfferPayload || !conversationId) return;
     const { offerId, price, originalPrice, expiresAt, counterRound } = routeOfferPayload;
-    const localId = `offer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const localId = makeStableId('offer', 7);
     const offerMsg: Message = {
       id: localId,
       type: "offer",
@@ -274,7 +278,7 @@ export function useConversationMessages({
 
       setComposerSending(true);
 
-      const localId = String(Date.now()) + "_" + Math.random().toString(36).slice(2, 7);
+      const localId = makeStableId('msg', 7);
       const outgoing: Message = {
         id: localId,
         type: "text",
@@ -458,8 +462,7 @@ export function useConversationMessages({
     (uri: string): Message => {
       const mediaType = isVideoUri(uri) ? "video" : "image";
       return {
-        id:
-          String(Date.now()) + "_" + mediaType + "_" + Math.random().toString(36).slice(2, 7),
+        id: makeStableId(`msg_${mediaType}`, 7),
         type: "media",
         sender: "me",
         senderLabel: currentUser?.username ?? "you",

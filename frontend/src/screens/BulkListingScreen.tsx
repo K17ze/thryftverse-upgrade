@@ -37,6 +37,7 @@ import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
+import { makeStableId } from '../utils/createStableId';
 import {
   validateBulkListing,
   submitBulkListings,
@@ -54,7 +55,7 @@ const CONDITION_OPTIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory']
 type ItemStatus = BulkListingItem['status'];
 
 function makeTempId(): string {
-  return `draft_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+  return makeStableId('draft');
 }
 
 function emptyDraft(): BulkListingItem {

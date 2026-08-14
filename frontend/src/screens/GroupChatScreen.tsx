@@ -31,6 +31,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
+import { makeStableId } from '../utils/createStableId';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { KeyboardStickyView } from '../platform/keyboard/KeyboardProvider';
@@ -156,7 +157,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     setSending(true);
     haptic.light();
 
-    const localId = `g_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const localId = makeStableId('g', 7);
     const outgoing: GroupMessage = {
       id: localId,
       text: trimmed,

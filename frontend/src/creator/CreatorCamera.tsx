@@ -21,6 +21,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { makeStableId } from '../utils/createStableId';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -595,7 +596,7 @@ export default function CreatorCamera({
     // In multi-capture mode, add to stack instead of immediately sending
     if (multiCaptureMode) {
       const media: CreatorInitialMedia = {
-        id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId('capture'),
         uri: capturedUri,
         kind: capturedKind,
       };
@@ -606,7 +607,7 @@ export default function CreatorCamera({
     // If onCaptureBatch is provided, use it for poster/look modes
     if (onCaptureBatch && !isVisualSearch) {
       onCaptureBatch([{
-        id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId('capture'),
         uri: capturedUri,
         kind: capturedKind,
       }]);
@@ -620,7 +621,7 @@ export default function CreatorCamera({
     haptic.selection();
     if (capturedUri) {
       const media: CreatorInitialMedia = {
-        id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId('capture'),
         uri: capturedUri,
         kind: capturedKind,
       };
@@ -637,7 +638,7 @@ export default function CreatorCamera({
     haptic.medium();
     const currentCapture: CreatorInitialMedia[] = capturedUri
       ? [{
-          id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          id: makeStableId('capture'),
           uri: capturedUri,
           kind: capturedKind,
         }]

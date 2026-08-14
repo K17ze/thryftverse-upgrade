@@ -63,11 +63,42 @@ export interface StoredProviderKey {
 }
 
 export type TestResult =
-  | { status: 'valid'; message: string }
+  | { status: 'valid'; message: string; models?: DiscoveredModel[] }
   | { status: 'invalid'; message: string };
 
 export interface ConnectedProvider extends StoredProviderKey {
   config: ProviderConfig;
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic model discovery (provider-authoritative)
+// ---------------------------------------------------------------------------
+
+/**
+ * A model discovered from the provider's API. The provider is the
+ * source-of-truth for which models exist — we do not ship a hardcoded
+ * consumer catalogue (spec 04: "Providers change faster than app releases").
+ */
+export interface DiscoveredModel {
+  /** Provider-authoritative model id (e.g. "gpt-4o"). */
+  providerModelId: string;
+  /** Human-readable display name. Falls back to the id when absent. */
+  displayName: string;
+  capabilities: {
+    text: boolean;
+    vision: boolean;
+    toolCalling: boolean;
+    structuredOutput: boolean;
+    reasoning?: boolean;
+  };
+  /** True when the provider marks the model as deprecated/sunset. */
+  deprecated?: boolean;
+}
+
+/** Cached discovery result so we don't re-fetch on every render. */
+interface CachedDiscovery {
+  models: DiscoveredModel[];
+  discoveredAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +163,53 @@ export const PROVIDER_ORDER: AIProvider[] = ['openai', 'anthropic', 'gemini', 'c
 
 const sessionKeyStore = new Map<AIProvider, string>();
 const sessionBaseUrlStore = new Map<AIProvider, string>();
+
+// ---------------------------------------------------------------------------
+// Model discovery cache (AsyncStorage — not secret, safe to persist)
+// ---------------------------------------------------------------------------
+
+const DISCOVERY_CACHE_PREFIX = '@thryftverse_ai_provider/discovery/';
+const DISCOVERY_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
+
+function discoveryCacheKey(provider: AIProvider): string {
+  return `${DISCOVERY_CACHE_PREFIX}${provider}`;
+}
+
+async function getCachedDiscovery(provider: AIProvider): Promise<DiscoveredModel[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(discoveryCacheKey(provider));
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as CachedDiscovery;
+    const age = Date.now() - new Date(cached.discoveredAt).getTime();
+    if (age > DISCOVERY_TTL_MS) return null;
+    return cached.models;
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedDiscovery(provider: AIProvider, models: DiscoveredModel[]): Promise<void> {
+  try {
+    const entry: CachedDiscovery = { models, discoveredAt: new Date().toISOString() };
+    await AsyncStorage.setItem(discoveryCacheKey(provider), JSON.stringify(entry));
+  } catch {
+    // Cache failure is non-fatal — discovery still works without cache.
+  }
+}
+
+export async function clearDiscoveryCache(provider?: AIProvider): Promise<void> {
+  try {
+    if (provider) {
+      await AsyncStorage.removeItem(discoveryCacheKey(provider));
+    } else {
+      for (const p of PROVIDER_ORDER) {
+        await AsyncStorage.removeItem(discoveryCacheKey(p)).catch(() => {});
+      }
+    }
+  } catch {
+    // Non-fatal.
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Storage keys
@@ -298,18 +376,23 @@ export async function removeApiKey(provider: AIProvider): Promise<void> {
     sessionBaseUrlStore.delete(provider);
   }
   await AsyncStorage.removeItem(metaStorageKey(provider)).catch(() => {});
+  // Clear the model discovery cache so stale models don't persist after
+  // disconnect (spec 04: model list is provider-authoritative).
+  await AsyncStorage.removeItem(discoveryCacheKey(provider)).catch(() => {});
 }
 
 /**
  * Probe a provider endpoint to verify the API key is authorised.
  * Makes a minimal real HTTP request (GET /models or equivalent).
  * Returns a structured result so the UI can show truthful status.
+ * When the probe succeeds, the response body is parsed to discover the
+ * provider-authoritative model list (spec 04: dynamic model discovery).
  */
 async function probeProviderConnection(
   provider: AIProvider,
   apiKey: string,
   baseUrl?: string,
-): Promise<{ ok: boolean; message: string }> {
+): Promise<{ ok: boolean; message: string; models?: DiscoveredModel[] }> {
   const trimmedKey = apiKey.trim();
   const trimmedBase = baseUrl?.trim() || undefined;
   const timeoutMs = 10000;
@@ -368,13 +451,147 @@ async function probeProviderConnection(
       return { ok: false, message: `Provider returned HTTP ${response.status}.` };
     }
 
-    return { ok: true, message: 'Connected — key verified by provider.' };
+    // Parse the model list from the provider's response. This is the
+    // provider-authoritative source — we do not rely on a hardcoded
+    // catalogue (spec 04: dynamic model discovery).
+    let models: DiscoveredModel[] = [];
+    try {
+      const body = await response.json();
+      models = parseProviderModels(provider, body);
+    } catch {
+      // The probe succeeded (HTTP 200) but the body was not JSON or did
+      // not contain a recognisable model list. The connection is still
+      // valid — we just have no discovered models to report.
+    }
+
+    return { ok: true, message: 'Connected — key verified by provider.', models };
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       return { ok: false, message: 'Request timed out — check your connection.' };
     }
     return { ok: false, message: 'Endpoint unreachable — check the URL or your network.' };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Provider model-list parsing — normalises each provider's /models response
+// into the common DiscoveredModel shape (spec 04).
+// ---------------------------------------------------------------------------
+
+/** Default capability set — conservative assumptions when the provider
+ *  does not expose per-model capability metadata. */
+function defaultCapabilities(modelId: string): DiscoveredModel['capabilities'] {
+  const id = modelId.toLowerCase();
+  return {
+    text: true,
+    vision: id.includes('vision') || id.includes('4o') || id.includes('gemini'),
+    toolCalling: true,
+    structuredOutput: true,
+    reasoning: id.includes('o1') || id.includes('o3') || id.includes('reasoning'),
+  };
+}
+
+/**
+ * Parse a provider's /models response body into a normalised list of
+ * DiscoveredModel entries. Each provider uses a slightly different schema,
+ * so we handle them individually and fall back gracefully.
+ */
+function parseProviderModels(provider: AIProvider, body: unknown): DiscoveredModel[] {
+  if (!body || typeof body !== 'object') return [];
+
+  try {
+    switch (provider) {
+      case 'openai':
+      case 'custom': {
+        // OpenAI-compatible: { data: [{ id, ... }] }
+        const data = (body as any).data;
+        if (!Array.isArray(data)) return [];
+        return data
+          .map((m: any): DiscoveredModel | null => {
+            const id = typeof m?.id === 'string' ? m.id : null;
+            if (!id) return null;
+            return {
+              providerModelId: id,
+              displayName: id,
+              capabilities: defaultCapabilities(id),
+              deprecated: m?.deprecated === true,
+            };
+          })
+          .filter((m: DiscoveredModel | null): m is DiscoveredModel => m !== null);
+      }
+      case 'anthropic': {
+        // Anthropic: { data: [{ id, display_name, ... }] } or { models: [...] }
+        const data = (body as any).data ?? (body as any).models;
+        if (!Array.isArray(data)) return [];
+        return data
+          .map((m: any): DiscoveredModel | null => {
+            const id = typeof m?.id === 'string' ? m.id : null;
+            if (!id) return null;
+            return {
+              providerModelId: id,
+              displayName: typeof m?.display_name === 'string' ? m.display_name : id,
+              capabilities: defaultCapabilities(id),
+              deprecated: m?.deprecated === true,
+            };
+          })
+          .filter((m: DiscoveredModel | null): m is DiscoveredModel => m !== null);
+      }
+      case 'gemini': {
+        // Gemini: { models: [{ name: "models/gemini-1.5-pro", supportedGenerationMethods: [...] }] }
+        const models = (body as any).models;
+        if (!Array.isArray(models)) return [];
+        return models
+          .map((m: any): DiscoveredModel | null => {
+            const rawName = typeof m?.name === 'string' ? m.name : null;
+            if (!rawName) return null;
+            // Gemini returns "models/gemini-1.5-pro" — strip the prefix.
+            const id = rawName.replace(/^models\//, '');
+            const methods: string[] = Array.isArray(m?.supportedGenerationMethods)
+              ? m.supportedGenerationMethods
+              : [];
+            return {
+              providerModelId: id,
+              displayName: id,
+              capabilities: {
+                text: methods.length === 0 || methods.includes('generateContent'),
+                vision: id.includes('vision') || id.includes('pro') || id.includes('flash'),
+                toolCalling: methods.includes('generateContent'),
+                structuredOutput: methods.includes('generateContent'),
+                reasoning: false,
+              },
+            };
+          })
+          .filter((m: DiscoveredModel | null): m is DiscoveredModel => m !== null);
+      }
+      default:
+        return [];
+    }
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Discover available models from a connected provider. Uses the cached
+ * result when fresh (within TTL), otherwise makes a live request to the
+ * provider's /models endpoint. Returns an empty array when the provider
+ * is not connected or the request fails — the caller should show a
+ * truthful empty state, not a hardcoded fallback list (spec 04).
+ */
+export async function discoverModels(provider: AIProvider): Promise<DiscoveredModel[]> {
+  // Check cache first.
+  const cached = await getCachedDiscovery(provider);
+  if (cached && cached.length > 0) return cached;
+
+  // Need a stored key to make the request.
+  const stored = await getApiKey(provider);
+  if (!stored || !stored.apiKey) return [];
+
+  const probe = await probeProviderConnection(provider, stored.apiKey, stored.baseUrl);
+  if (!probe.ok || !probe.models || probe.models.length === 0) return [];
+
+  await setCachedDiscovery(provider, probe.models);
+  return probe.models;
 }
 
 /**
@@ -418,9 +635,16 @@ export async function testApiKey(
     await saveApiKey(provider, trimmedKey, baseUrl?.trim() || undefined);
   }
 
+  // Cache discovered models so the UI can show the provider-authoritative
+  // list without re-fetching on every render (spec 04).
+  if (probe.models && probe.models.length > 0) {
+    await setCachedDiscovery(provider, probe.models);
+  }
+
   return {
     status: 'valid',
     message: probe.message,
+    models: probe.models,
   };
 }
 

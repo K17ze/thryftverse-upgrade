@@ -38,7 +38,7 @@ import { Space, Radius, Type, Typography, Control } from '../theme/designTokens'
 type Props = NativeStackScreenProps<RootStackParamList, 'SustainabilityPreferences'>;
 
 // Demo mode flag — the sustainability impact service is mock in this build.
-const SUSTAINABILITY_DEMO_MODE = true;
+const SUSTAINABILITY_DEMO_MODE = __DEV__;
 
 // Carbon-saving target options (kg CO2 per year).
 const CARBON_TARGETS = [10, 25, 50, 100, 250];

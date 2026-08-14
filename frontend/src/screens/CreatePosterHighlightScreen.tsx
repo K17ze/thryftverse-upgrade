@@ -23,6 +23,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { CachedImage } from '../components/CachedImage';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
+import { makeStableId } from '../utils/createStableId';
 import {
   fetchPosterStoryArchive,
   createPosterHighlight,
@@ -155,7 +156,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
 
     setIsSaving(true);
     try {
-      const highlightId = `hl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const highlightId = makeStableId('hl');
       const frameIds = Array.from(selectedFrames.values());
       // Use the user-selected cover frame (falls back to first selected frame)
       const resolvedCoverFrameId = coverFrameId ?? frameIds[0];

@@ -26,7 +26,7 @@ import Reanimated, {
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CreatorDraftService, type DraftMeta } from './drafts';
-import { createStableId } from '../utils/createStableId';
+import { createStableId, makeStableId } from '../utils/createStableId';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SwipeableRow } from '../components/SwipeableRow';
 import { PressScale } from './CreatorAnimations';
@@ -204,10 +204,10 @@ export function CreatorDraftListScreen() {
       },
       pages: doc.pages.map((p) => ({
         ...p,
-        id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId('page'),
         layers: p.layers.map((l) => ({
           ...l,
-          id: `${l.id}_dup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          id: `${l.id}_dup_${createStableId()}`,
         })),
       })),
       createdAt: new Date().toISOString(),

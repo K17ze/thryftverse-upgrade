@@ -25,6 +25,7 @@ import { CURRENCIES } from '../constants/currencies';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import { haptics } from '../utils/haptics';
+import { makeStableId } from '../utils/createStableId';
 import { useStore } from '../store/useStore';
 
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -247,7 +248,7 @@ export default function EditListingScreen() {
         }
 
         const newItems: ListingMediaDraftItem[] = validation.assets.map((asset) => ({
-          id: `edit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          id: makeStableId('edit'),
           uri: asset.uri,
           kind: 'image' as const,
           source: 'local' as const,
@@ -286,7 +287,7 @@ export default function EditListingScreen() {
         }
         for (const a of validation.assets) {
           const newItem: ListingMediaDraftItem = {
-            id: `edit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            id: makeStableId('edit'),
             uri: a.uri,
             kind: 'image' as const,
             source: 'local' as const,

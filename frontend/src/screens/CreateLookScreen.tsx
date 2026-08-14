@@ -23,6 +23,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { uploadMedia } from '../services/mediaUpload';
 import { createLookOnApi } from '../services/looksApi';
 import { useStore } from '../store/useStore';
+import { makeStableId } from '../utils/createStableId';
 import { LookMediaComposer, OutfitTag } from '../components/look/LookMediaComposer';
 import { OutfitPieceEditor } from '../components/look/OutfitPieceEditor';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -113,7 +114,7 @@ export default function CreateLookScreen() {
       try {
         const uploaded = await uploadMedia(imageUri, 'looks');
         const mediaUrl = uploaded.publicUrl;
-        const lookId = `look_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const lookId = makeStableId('look');
         const internalTitle =
           caption
             .trim()

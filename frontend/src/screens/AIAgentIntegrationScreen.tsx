@@ -59,9 +59,15 @@ import {
   getApiKey,
   getConnectedProviders,
   testApiKey,
+  discoverModels,
   type ConnectedProvider,
+  type DiscoveredModel,
   type TestResult,
 } from '../services/aiProviderApi';
+import {
+  pauseAllAgents,
+  getActiveAgentSessionCount,
+} from '../services/chatAgentsApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIAgentIntegration'>;
 
@@ -78,6 +84,10 @@ interface ProviderState {
   baseUrlInput: string;
   testing: boolean;
   testResult: TestResult | null;
+  /** Provider-authoritative models discovered via the /models endpoint.
+   *  Null = not yet discovered; empty array = discovered but none found. */
+  discoveredModels: DiscoveredModel[] | null;
+  discovering: boolean;
 }
 
 export default function AIAgentIntegrationScreen({ navigation }: Props) {
@@ -93,8 +103,9 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     gemini: emptyProviderState(),
     custom: emptyProviderState(),
   });
+  const [activeAgentSessions, setActiveAgentSessions] = React.useState(0);
 
-  // Load stored keys on mount.
+  // Load stored keys on mount, then discover models for connected providers.
   React.useEffect(() => {
     let mounted = true;
     (async () => {
@@ -110,15 +121,34 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             baseUrlInput: c.baseUrl ?? '',
             testing: false,
             testResult: null,
+            discoveredModels: null,
+            discovering: true,
           };
         }
         setProviders(next);
+        setLoading(false);
+
+        // Discover models for each connected provider (spec 04: dynamic
+        // model discovery — provider-authoritative, not hardcoded).
+        for (const c of connected) {
+          const models = await discoverModels(c.provider);
+          if (!mounted) return;
+          setProviders((prev) => ({
+            ...prev,
+            [c.provider]: {
+              ...prev[c.provider],
+              discoveredModels: models,
+              discovering: false,
+            },
+          }));
+        }
       } catch {
         // Storage read failure — leave all providers not-connected.
-      } finally {
         if (mounted) setLoading(false);
       }
     })();
+    // Refresh active agent session count on mount.
+    setActiveAgentSessions(getActiveAgentSessionCount());
     return () => {
       mounted = false;
     };
@@ -189,6 +219,9 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         baseUrlInput: connected?.baseUrl ?? '',
         testing: false,
         testResult: result,
+        // Store the models discovered during the probe (spec 04).
+        discoveredModels: result.models ?? prev[provider].discoveredModels,
+        discovering: false,
       },
     }));
     haptic.selection();
@@ -201,6 +234,14 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       ...prev,
       [provider]: emptyProviderState(),
     }));
+    haptic.selection();
+  };
+
+  const handlePauseAllAgents = () => {
+    if (activeAgentSessions === 0) return;
+    haptic.medium();
+    pauseAllAgents();
+    setActiveAgentSessions(0);
     haptic.selection();
   };
 
@@ -257,6 +298,72 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               </Text>
             </View>
           </View>
+        </View>
+      </Reanimated.View>
+
+      {/* ── Agent management — pause all + activity ledger ── */}
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+        <View style={styles.sectionLabelWrap}>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>AGENT MANAGEMENT</Text>
+        </View>
+        <View style={[styles.agentMgmtCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.mgmtRow,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            onPress={handlePauseAllAgents}
+            disabled={activeAgentSessions === 0}
+            accessibilityRole="button"
+            accessibilityLabel={
+              activeAgentSessions === 0
+                ? 'Pause all agents — none running'
+                : `Pause all agents — ${activeAgentSessions} running`
+            }
+          >
+            <Ionicons
+              name="pause-circle-outline"
+              size={22}
+              color={activeAgentSessions > 0 ? colors.danger : colors.textMuted}
+            />
+            <View style={styles.mgmtText}>
+              <Text
+                style={[
+                  styles.mgmtTitle,
+                  { color: activeAgentSessions > 0 ? colors.textPrimary : colors.textMuted },
+                ]}
+              >
+                Pause all agents
+              </Text>
+              <Text style={[styles.mgmtSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                {activeAgentSessions > 0
+                  ? `${activeAgentSessions} agent session${activeAgentSessions === 1 ? '' : 's'} running`
+                  : 'No agent sessions running'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </Pressable>
+          <View style={[styles.mgmtDivider, { backgroundColor: colors.border }]} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.mgmtRow,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            onPress={() => navigation.navigate('AgentActivity')}
+            accessibilityRole="button"
+            accessibilityLabel="View agent activity ledger"
+          >
+            <Ionicons name="list-outline" size={22} color={colors.textPrimary} />
+            <View style={styles.mgmtText}>
+              <Text style={[styles.mgmtTitle, { color: colors.textPrimary }]}>
+                Agent activity
+              </Text>
+              <Text style={[styles.mgmtSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                Record of agent actions and approvals
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </Pressable>
         </View>
       </Reanimated.View>
 
@@ -326,6 +433,40 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                       <Text style={[styles.validNote, { color: colors.success }]}>
                         {state.testResult.message}
                       </Text>
+                    ) : null}
+                    {/* Discovered models (provider-authoritative) */}
+                    {state.discoveredModels && state.discoveredModels.length > 0 ? (
+                      <View style={styles.modelsWrap}>
+                        <Text style={[styles.modelsLabel, { color: colors.textMuted }]}>
+                          {state.discoveredModels.length} model{state.discoveredModels.length === 1 ? '' : 's'} available
+                        </Text>
+                        <View style={styles.modelChips}>
+                          {state.discoveredModels.slice(0, 8).map((model) => (
+                            <View
+                              key={model.providerModelId}
+                              style={[styles.modelChip, { backgroundColor: colors.surfaceAlt }]}
+                            >
+                              <Text style={[styles.modelChipText, { color: colors.textSecondary }]} numberOfLines={1}>
+                                {model.displayName}
+                              </Text>
+                            </View>
+                          ))}
+                          {state.discoveredModels.length > 8 ? (
+                            <View style={[styles.modelChip, { backgroundColor: colors.surfaceAlt }]}>
+                              <Text style={[styles.modelChipText, { color: colors.textMuted }]} numberOfLines={1}>
+                                +{state.discoveredModels.length - 8} more
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    ) : state.discovering ? (
+                      <View style={styles.modelDiscovering}>
+                        <ActivityIndicator size="small" color={colors.textMuted} />
+                        <Text style={[styles.modelHint, { color: colors.textMuted }]}>
+                          Discovering models…
+                        </Text>
+                      </View>
                     ) : null}
                     <Text style={[styles.storageNote, { color: colors.textMuted }]}>
                       Stored locally · {state.stored.storageClass === 'secure' ? 'Secure storage' : 'Device storage'}
@@ -407,23 +548,44 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                       />
                     </View>
 
-                    {/* Available models (informational) */}
+                    {/* Available models — provider-authoritative (spec 04).
+                        Discovered dynamically from the provider's /models
+                        endpoint after a successful connection. Before the
+                        first connection, we show a truthful placeholder
+                        instead of a hardcoded catalogue. */}
                     <View style={styles.modelsWrap}>
                       <Text style={[styles.modelsLabel, { color: colors.textMuted }]}>
                         Available models
                       </Text>
-                      <View style={styles.modelChips}>
-                        {config.models.map((model) => (
-                          <View
-                            key={model}
-                            style={[styles.modelChip, { backgroundColor: colors.surfaceAlt }]}
-                          >
-                            <Text style={[styles.modelChipText, { color: colors.textSecondary }]} numberOfLines={1}>
-                              {model}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
+                      {state.discoveredModels && state.discoveredModels.length > 0 ? (
+                        <View style={styles.modelChips}>
+                          {state.discoveredModels.map((model) => (
+                            <View
+                              key={model.providerModelId}
+                              style={[styles.modelChip, { backgroundColor: colors.surfaceAlt }]}
+                            >
+                              <Text style={[styles.modelChipText, { color: colors.textSecondary }]} numberOfLines={1}>
+                                {model.displayName}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : state.discovering ? (
+                        <View style={styles.modelDiscovering}>
+                          <ActivityIndicator size="small" color={colors.textMuted} />
+                          <Text style={[styles.modelHint, { color: colors.textMuted }]}>
+                            Discovering models from {config.name}…
+                          </Text>
+                        </View>
+                      ) : state.discoveredModels && state.discoveredModels.length === 0 ? (
+                        <Text style={[styles.modelHint, { color: colors.textMuted }]}>
+                          No models returned by {config.name}.
+                        </Text>
+                      ) : (
+                        <Text style={[styles.modelHint, { color: colors.textMuted }]}>
+                          Models are discovered from {config.name} after you connect.
+                        </Text>
+                      )}
                     </View>
 
                     {state.testResult ? (
@@ -472,7 +634,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             <Text style={[styles.securityTitle, { color: colors.textPrimary }]}>How your keys are stored</Text>
           </View>
           <Text style={[styles.securityBody, { color: colors.textSecondary }]}>
-            Your API keys are stored locally on this device only — they are never sent to ThryftVerse servers or shared with third parties. When hardware-backed secure storage (iOS Keychain / Android Keystore) is available, keys are stored encrypted at rest; otherwise they fall back to on-device AsyncStorage. Removing a key permanently deletes it from this device. When you test a key, a minimal live request (such as listing available models) is sent directly to the provider to confirm the key is authorised — the key is only saved after the provider confirms it.
+            Your API keys are stored locally on this device only — they are never sent to ThryftVerse servers or shared with third parties. When hardware-backed secure storage (iOS Keychain / Android Keystore) is available, keys are stored encrypted at rest; otherwise they are held in process memory only for the current session and never written to plaintext app storage. Removing a key permanently deletes it from this device. When you test a key, a minimal live request (such as listing available models) is sent directly to the provider to confirm the key is authorised — the key is only saved after the provider confirms it, and the returned model list is cached so it stays current as the provider updates it.
           </Text>
         </View>
       </Reanimated.View>
@@ -610,6 +772,8 @@ function emptyProviderState(): ProviderState {
     baseUrlInput: '',
     testing: false,
     testResult: null,
+    discoveredModels: null,
+    discovering: false,
   };
 }
 
@@ -674,6 +838,39 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       marginTop: Space.xs / 2,
+    },
+    agentMgmtCard: {
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      marginBottom: Space.lg,
+      overflow: 'hidden',
+    },
+    mgmtRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md,
+      minHeight: Control.hit,
+    },
+    mgmtText: {
+      flex: 1,
+      minWidth: 0,
+    },
+    mgmtTitle: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.body.letterSpacing,
+    },
+    mgmtSubtitle: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
+      marginTop: Space.xs / 2,
+    },
+    mgmtDivider: {
+      height: StyleSheet.hairlineWidth,
+      marginLeft: Space.md + Control.icon + Space.sm,
     },
     loadingWrap: {
       paddingVertical: Space.xl,
@@ -810,6 +1007,17 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.medium,
       letterSpacing: Type.meta.letterSpacing,
+    },
+    modelDiscovering: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs,
+    },
+    modelHint: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
     },
     modelChips: {
       flexDirection: 'row',

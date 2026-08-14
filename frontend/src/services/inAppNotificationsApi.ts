@@ -11,12 +11,14 @@
  * backend in demo mode.
  */
 
+import { makeStableId } from '../utils/createStableId';
+
 // ---------------------------------------------------------------------------
 // Demo mode flag
 // ---------------------------------------------------------------------------
 
 /** When true, all notifications surfaced by this service are mock/illustrative. */
-export const NOTIFICATION_DEMO_MODE = true;
+export const NOTIFICATION_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,7 +115,7 @@ const dismissTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // ---------------------------------------------------------------------------
 
 function generateId(): string {
-  return `ian-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return makeStableId('ian');
 }
 
 function resolveDuration(type: NotificationType, duration?: number): number {

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Listing, MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
+import type { Listing } from '../data/mockData';
+import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
 import { getApiBaseUrl } from '../lib/apiClient';
 import { fetchListingsFromApi } from '../services/listingsApi';
 import {

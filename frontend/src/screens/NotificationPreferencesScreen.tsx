@@ -42,7 +42,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'NotificationPreferences'>;
 
 // Demo mode flag — live shopping & preview toggles are local-only in this build.
-const NOTIFICATION_PREFS_DEMO_MODE = true;
+const NOTIFICATION_PREFS_DEMO_MODE = __DEV__;
 
 function formatHour(hour: number): string {
   const period = hour >= 12 ? 'PM' : 'AM';

@@ -15,7 +15,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Listing } from '../data/mockData';
+import type { Listing } from '../data/mockData';
 import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT } from '../utils/media';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { useReducedMotion } from '../hooks/useReducedMotion';

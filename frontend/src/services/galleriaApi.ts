@@ -91,7 +91,7 @@ export interface GalleriaCollectionDetail {
 // When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
-export const GALLERIA_DEMO_MODE = true;
+export const GALLERIA_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Mock data

@@ -42,7 +42,7 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 
 // Demo mode flag — privacy controls are persisted locally in this build.
-const DATA_PRIVACY_DEMO_MODE = true;
+const DATA_PRIVACY_DEMO_MODE = __DEV__;
 
 const DATA_CATEGORIES: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; description: string }[] = [
   { icon: 'person-outline', label: 'Profile', description: 'Username, display name, bio, avatar' },

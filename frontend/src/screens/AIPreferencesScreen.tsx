@@ -44,7 +44,7 @@ import { Control, Space, Radius, Type, Typography } from '../theme/designTokens'
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPreferences'>;
 
 // Demo mode flag — the preference service is mock in this build.
-const AI_PREFERENCES_DEMO_MODE = true;
+const AI_PREFERENCES_DEMO_MODE = __DEV__;
 
 export default function AIPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();

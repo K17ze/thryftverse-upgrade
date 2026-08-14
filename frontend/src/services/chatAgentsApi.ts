@@ -20,6 +20,8 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { recordAgentActivity } from './agentActivityLedger';
+import { makeStableId } from '../utils/createStableId';
 
 // ---------------------------------------------------------------------------
 // Demo mode flag — when true, mock responses are generated for development.
@@ -171,7 +173,7 @@ function agentByType(type: ChatAgentType): ChatAgent | undefined {
 }
 
 function makeId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return makeStableId(prefix);
 }
 
 // ---------------------------------------------------------------------------
@@ -201,6 +203,15 @@ export function deployAgent(
   if (!ids.includes(agent.id)) {
     setDeployedIds(conversationId, [...ids, agent.id]);
   }
+  // Record material action in the activity ledger (spec 05).
+  void recordAgentActivity({
+    type: 'agent_deployed',
+    agent: agent.name,
+    session: conversationId,
+    runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+    summary: `Deployed ${agent.name} into conversation`,
+    resultStatus: 'success',
+  });
   return { ...agent };
 }
 
@@ -218,6 +229,15 @@ export function deployCustomAgent(
   if (!ids.includes(agent.id)) {
     setDeployedIds(conversationId, [...ids, agent.id]);
   }
+  // Record material action in the activity ledger (spec 05).
+  void recordAgentActivity({
+    type: 'agent_deployed',
+    agent: agent.name,
+    session: conversationId,
+    runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+    summary: `Deployed custom agent ${agent.name} into conversation`,
+    resultStatus: 'success',
+  });
   return { ...agent };
 }
 
@@ -235,12 +255,63 @@ export function getDeployedAgents(conversationId: string): ChatAgent[] {
  * Removes a deployed agent from a conversation.
  */
 export function removeAgent(conversationId: string, agentId: string): void {
+  const agent = agentById(agentId);
   const ids = getDeployedIds(conversationId).filter((id) => id !== agentId);
   if (ids.length === 0) {
     deployedAgentsByConversation.delete(conversationId);
   } else {
     setDeployedIds(conversationId, ids);
   }
+  // Record material action in the activity ledger (spec 05).
+  void recordAgentActivity({
+    type: 'agent_removed',
+    agent: agent?.name ?? agentId,
+    session: conversationId,
+    runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+    summary: `Removed ${agent?.name ?? agentId} from conversation`,
+    resultStatus: 'success',
+  });
+}
+
+/**
+ * Pause all running agent sessions across every conversation with one
+ * action (spec 22 acceptance: "Pause all agents exists").
+ *
+ * Clears the in-memory deployment registry so no agent is actively
+ * deployed in any conversation. Returns the number of agent sessions
+ * that were paused. Records the action in the activity ledger.
+ */
+export function pauseAllAgents(): number {
+  let pausedCount = 0;
+  for (const ids of deployedAgentsByConversation.values()) {
+    pausedCount += ids.length;
+  }
+  deployedAgentsByConversation.clear();
+
+  if (pausedCount > 0) {
+    void recordAgentActivity({
+      type: 'all_agents_paused',
+      runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+      summary: `Paused all agents (${pausedCount} session${pausedCount === 1 ? '' : 's'})`,
+      resultStatus: 'paused',
+    });
+  }
+
+  return pausedCount;
+}
+
+/**
+ * Returns the total number of currently deployed agent sessions across
+ * all conversations. Used by the UI to show a truthful count on the
+ * "Pause all agents" control (AGENTS.md §11 — truthful disabled state
+ * when no agents are running).
+ */
+export function getActiveAgentSessionCount(): number {
+  let count = 0;
+  for (const ids of deployedAgentsByConversation.values()) {
+    count += ids.length;
+  }
+  return count;
 }
 
 /**

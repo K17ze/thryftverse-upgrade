@@ -16,6 +16,8 @@
  *   need to change.
  */
 
+import { makeStableId } from '../utils/createStableId';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -77,7 +79,7 @@ export interface BackgroundScene {
 // When a real backend is wired, set this to false (or remove the mock branch).
 // ---------------------------------------------------------------------------
 
-export const AI_PHOTO_DEMO_MODE = true;
+export const AI_PHOTO_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -228,7 +230,7 @@ function delay(ms: number): Promise<void> {
 }
 
 function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  return makeStableId(prefix);
 }
 
 // ---------------------------------------------------------------------------

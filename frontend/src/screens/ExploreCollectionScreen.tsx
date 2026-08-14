@@ -24,7 +24,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useToast } from '../context/ToastContext';
 import { fetchFilteredListings } from '../services/listingsApi';
-import { Listing } from '../data/mockData';
+import type { Listing } from '../data/mockData';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 
 const { width: SCREEN_W } = Dimensions.get('window');

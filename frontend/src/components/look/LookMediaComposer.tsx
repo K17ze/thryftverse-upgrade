@@ -15,6 +15,7 @@ import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
+import { makeStableId } from '../../utils/createStableId';
 import { useToast } from '../../context/ToastContext';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -104,7 +105,7 @@ export function LookMediaComposer({
       const { width, height } = layoutRef.current;
       const x = Math.min(Math.max(locationX / width, 0.05), 0.95);
       const y = Math.min(Math.max(locationY / height, 0.05), 0.95);
-      const tagId = `tag_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const tagId = makeStableId('tag', 6);
       onTagsChange([...tags, { id: tagId, label: '', x, y }]);
       setActiveTagId(tagId);
       haptic.light();

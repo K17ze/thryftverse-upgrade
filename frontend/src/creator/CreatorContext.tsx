@@ -13,7 +13,7 @@ import { HistoryStack } from './history';
 import { CreatorDraftService } from './drafts';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { getTemplateById } from './templates';
-import { createStableId } from '../utils/createStableId';
+import { createStableId, makeStableId } from '../utils/createStableId';
 import { haptics } from '../utils/haptics';
 import type { CreatorInitialMedia } from '../navigation/types';
 
@@ -184,7 +184,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
               },
             };
             return {
-              id: `page_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+              id: makeStableId(`page_${i}`),
               layers: [mediaLayer],
             };
           });
@@ -495,10 +495,10 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       if (!sourcePage) return prev;
       const clonedLayers = sourcePage.layers.map((l) => ({
         ...l,
-        id: `${l.id}_clone_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: `${l.id}_clone_${createStableId()}`,
       }));
       const newPage: CreatorPage = {
-        id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId('page'),
         layers: clonedLayers,
         durationMs: sourcePage.durationMs,
       };
@@ -710,7 +710,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         },
       } : null;
       const newPage: CreatorPage = {
-        id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId('page'),
         layers: mediaLayer ? [mediaLayer] : [],
       };
       const doc = {
@@ -764,7 +764,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
           },
         };
         return {
-          id: `page_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+          id: makeStableId(`page_${i}`),
           layers: [mediaLayer],
         };
       });

@@ -384,6 +384,8 @@ export type RootStackParamList = {
   NotificationPreferences: undefined;
   // AI provider API integration — bring-your-own-key for OpenAI / Anthropic / Gemini / custom
   AIAgentIntegration: undefined;
+  // Agent activity ledger — transparent record of agent actions and approvals
+  AgentActivity: undefined;
 };
 
 export type TabParamList = {

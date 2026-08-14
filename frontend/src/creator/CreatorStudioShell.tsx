@@ -25,6 +25,7 @@ import { Space, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useAppTheme } from '../theme/ThemeContext';
+import { makeStableId } from '../utils/createStableId';
 import { CreatorProvider, useCreator } from './CreatorContext';
 import type { CreatorInitialMedia } from '../navigation/types';
 import type { CreatorLayer } from './composition';
@@ -314,7 +315,7 @@ export function CreatorStudioInner() {
       // addLayer, and ensures the canvas is immediately useful with
       // proper layout (hero, pair, dominant, or collage) per doc 05.
       const mediaLayers: CreatorLayer[] = media.map((asset, i) => ({
-        id: `media_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+        id: makeStableId(`media_${i}`),
         type: 'media' as const,
         x: 0.5,
         y: 0.5,

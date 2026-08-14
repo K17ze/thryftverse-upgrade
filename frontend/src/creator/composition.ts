@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { OutfitTag } from '../components/look/LookMediaComposer';
 import type { PosterStickerType } from '../services/postersApi';
+import { makeStableId } from '../utils/createStableId';
 
 // ── Legacy poster frame type (migrated from PosterFrameStrip.tsx) ──
 export interface ComposerFrame {
@@ -657,7 +658,7 @@ export const LEGACY_POSTER_LANDSCAPE_RATIO = 16 / 9; // 1.777…
 
 export function createEmptyDocument(type: 'look' | 'poster'): CreatorDocument {
   return {
-    id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: makeStableId('doc'),
     type,
     version: 1,
     canvas: {
@@ -762,7 +763,7 @@ export function duplicateLayerInPage(doc: CreatorDocument, pageIndex: number, la
   const maxZ = page.layers.reduce((max, l) => Math.max(max, l.zIndex), 0);
   const newLayer: CreatorLayer = {
     ...layer,
-    id: `layer_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    id: makeStableId('layer', 6),
     x: Math.min(layer.x + 0.05, 0.95),
     y: Math.min(layer.y + 0.05, 0.95),
     zIndex: maxZ + 1,
