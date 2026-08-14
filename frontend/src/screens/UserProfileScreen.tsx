@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+﻿import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -247,6 +247,19 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const stickyShared = useSharedValue(false);
   const stickyThreshold = useSharedValue(9999);
 
+  // ── Per-destination scroll offset preservation ──
+  // Declared before the scroll handler so saveScrollOffset is accessible
+  // in the animatedScrollHandler closure (temporal dead zone safety).
+  const scrollOffsets = useRef<Record<string, number>>({});
+  const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
+  const listRef = useRef<any>(null);
+  const pendingRestore = useRef<string | null>(null);
+  const isListReady = useRef(false);
+
+  const saveScrollOffset = useCallback((offset: number) => {
+    scrollOffsets.current[currentDestination] = offset;
+  }, [currentDestination]);
+
   // Scroll handler — animated on native (UI-thread), plain JS on web.
   // The web fallback is required because useAnimatedScrollHandler does not
   // receive scroll events from FlashList in Reanimated 4.x (issue #9266).
@@ -361,18 +374,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const handleLoadMore = useCallback(() => { if (hasNextPage && !isFetchingNextPage) activeQuery.fetchNextPage(); }, [hasNextPage, isFetchingNextPage, activeQuery]);
   const handleRefresh = useCallback(() => { activeQuery.refetch(); if (!isSelfProfile) publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery, isSelfProfile]);
   const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_BAR_HEIGHT); }, [insets.top]);
-
-  // â”€â”€ Per-destination scroll offset preservation â”€â”€
-  // No overlay reset on tab switch â€” overlay state is derived from the real scroll offset.
-  const scrollOffsets = useRef<Record<string, number>>({});
-  const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
-  const listRef = useRef<any>(null);
-  const pendingRestore = useRef<string | null>(null);
-  const isListReady = useRef(false);
-
-  const saveScrollOffset = useCallback((offset: number) => {
-    scrollOffsets.current[currentDestination] = offset;
-  }, [currentDestination]);
 
   // When destination changes, queue a restore â€” no setTimeout during render
   const prevDestination = useRef<string>(currentDestination);
