@@ -12,6 +12,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { Radius, Space, Type, TypeStyles } from '../theme/designTokens';
 
@@ -39,6 +40,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const blockedUsers = useStore((state) => state.blockedUsers);
   const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
+  const currentUser = useStore((state) => state.currentUser);
   const participantNameLookup = useStore(
     (state) => (state as typeof state & { participantNameLookup?: Map<string, string> }).participantNameLookup
   );
@@ -81,7 +83,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     : undefined;
 
   const viewProfile = () => {
-    if (counterpartyId) navigation.navigate('UserProfile', { userId: counterpartyId });
+    if (counterpartyId) openProfile(navigation, counterpartyId, currentUser?.id);
   };
 
   const toggleMute = () => {

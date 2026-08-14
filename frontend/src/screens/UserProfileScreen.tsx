@@ -29,12 +29,13 @@ import Reanimated, {
 // Reanimated 4.x not backporting the FlashList scroll-event fix from 3.12.
 // On web we use a plain JS scroll handler + non-animated FlashList.
 // See: https://github.com/software-mansion/react-native-reanimated/issues/9266
-import { useStore } from '../store/useStore';
+
 import { useAppTheme } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Space, FontFamily, DockConstants, Elevation, Control, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
+import { useStore } from '../store/useStore';
 import {
   type PublicProfileStats,
   type PublicProfileViewer,
@@ -53,6 +54,7 @@ import { useSellerTrust } from '../platform/product';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import type { ListingApiItem } from '../services/listingsApi';
 import type { LookApiItem } from '../services/looksApi';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
@@ -65,8 +67,6 @@ import { TabRail, SegmentedControl, type TabKey, type SegmentKey } from '../comp
 import { ProfileShopTile } from '../components/profile/ProfileShopTile';
 import { ProfileLookTile } from '../components/profile/ProfileLookTile';
 import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
-import { SellerResponseComposer } from '../components/profile/SellerResponseComposer';
-import { respondToReview } from '../services/reviewApi';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { SellerReputationCard } from '../components/seller/SellerReputationCard';
@@ -144,10 +144,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     listStateSub: { color: MUTED },
   };
 
-  const currentUser = useStore(s => s.currentUser);
-  const userAvatar = useStore(s => s.userAvatar);
-  const userCover = useStore(s => s.userCover);
-  const profileMediaOverrides = useStore(s => s.profileMediaOverrides);
 
   const [activeTab, setActiveTab] = useState<Tab>('Shop');
   const [shopSegment, setShopSegment] = useState<ShopSegment>('forsale');
@@ -157,23 +153,25 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
   const [collapsedVisible, setCollapsedVisible] = useState(false);
   const [stickyRailVisible, setStickyRailVisible] = useState(false);
-  const [responseComposerState, setResponseComposerState] = useState<{
-    visible: boolean;
-    reviewId: string;
-    reviewerName?: string;
-    rating?: number;
-  }>({ visible: false, reviewId: '' });
 
-  const isMe = route.params?.isMe ?? false;
+  // UserProfile is a public-only projection. Self-navigation is normalised
+  // to the MyProfile tab by the openProfile() resolver before this screen
+  // mounts. If a self-ID somehow reaches this screen (e.g. stale deep
+  // link), redirect to the owner tab instead of rendering owner data.
   const userId = route.params?.userId;
-  const isSelfProfile = isMe || userId === currentUser?.id;
-  const targetUserId = isSelfProfile ? currentUser?.id : userId;
+  const targetUserId = userId;
+  const currentUserId = useStore(s => s.currentUser?.id);
+  useEffect(() => {
+    if (userId && currentUserId && userId === currentUserId) {
+      navigation.replace('MainTabs', { screen: 'Profile' });
+    }
+  }, [userId, currentUserId, navigation]);
 
-  const publicProfileQuery = usePublicProfileQuery(isSelfProfile ? null : userId);
-  const activeListingsQuery = useUserListingsInfinite(isSelfProfile ? null : targetUserId, 'active');
-  const soldListingsQuery = useUserListingsInfinite(isSelfProfile ? null : targetUserId, 'sold');
-  const looksQuery = useUserLooksInfinite(isSelfProfile ? null : targetUserId);
-  const reviewsQuery = useSellerReviewsInfinite(isSelfProfile ? null : targetUserId);
+  const publicProfileQuery = usePublicProfileQuery(userId);
+  const activeListingsQuery = useUserListingsInfinite(targetUserId, 'active');
+  const soldListingsQuery = useUserListingsInfinite(targetUserId, 'sold');
+  const looksQuery = useUserLooksInfinite(targetUserId);
+  const reviewsQuery = useSellerReviewsInfinite(targetUserId);
 
   // Seller trust summary — verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
@@ -198,12 +196,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const stats: PublicProfileStats | null = profileAggregate?.stats ?? null;
   const viewer: PublicProfileViewer | null = profileAggregate?.viewer ?? null;
 
-  const mediaOverride = (userId ? profileMediaOverrides[userId] : undefined) ?? (currentUser ? profileMediaOverrides[currentUser.id] : undefined) ?? null;
-  const targetProfile = isSelfProfile ? currentUser : publicProfile;
+  const targetProfile = publicProfile;
   const displayUsername = targetProfile?.username ?? 'Thryft user';
   const displayHandle = targetProfile ? `@${targetProfile.username}` : '';
-  const displayAvatar = isSelfProfile ? targetProfile?.avatar || userAvatar || mediaOverride?.avatar || undefined : targetProfile?.avatar || undefined;
-  const displayCover = isSelfProfile ? targetProfile?.coverPhoto || userCover || mediaOverride?.cover || '' : targetProfile?.coverPhoto || '';
+  const displayAvatar = targetProfile?.avatar || undefined;
+  const displayCover = targetProfile?.coverPhoto || '';
   const memberSince = targetProfile?.createdAt ? new Date(targetProfile.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }) : undefined;
 
   const profileDeepLink = useMemo(() => targetUserId ? `${PROFILE_WEB_BASE}/u/${encodeURIComponent(targetUserId)}` : PROFILE_WEB_BASE, [targetUserId]);
@@ -357,7 +354,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     navigation.navigate('NewMessage', { preselectedUserId: targetUserId, preselectedDisplayName: displayUsername });
   }, [displayUsername, navigation, targetUserId, viewer]);
 
-  const handleEditProfile = useCallback(() => navigation.navigate('EditProfile', {}), [navigation]);
   const handleFollowToggle = useCallback(() => { if (targetUserId && viewer) followMutation.mutate(!viewer.isFollowing); }, [targetUserId, viewer, followMutation]);
   const handleMore = useCallback(() => setMoreSheetVisible(true), []);
   const handleReport = useCallback(() => { setMoreSheetVisible(false); setReportSheetVisible(true); }, []);
@@ -372,7 +368,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   }, [blockMutation, showToast]);
   const openConnections = useCallback((segment: 'followers' | 'following') => setConnectionsSheet({ visible: true, segment }), []);
   const handleLoadMore = useCallback(() => { if (hasNextPage && !isFetchingNextPage) activeQuery.fetchNextPage(); }, [hasNextPage, isFetchingNextPage, activeQuery]);
-  const handleRefresh = useCallback(() => { activeQuery.refetch(); if (!isSelfProfile) publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery, isSelfProfile]);
+  const handleRefresh = useCallback(() => { activeQuery.refetch(); publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery]);
   const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_BAR_HEIGHT); }, [insets.top]);
 
   // When destination changes, queue a restore â€” no setTimeout during render
@@ -431,14 +427,12 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return (
       <ProfileReviewRow
         item={reviewItem}
-        onOpenReviewer={(uid) => navigation.push('UserProfile', { userId: uid })}
+        onOpenReviewer={(uid) => openProfile(navigation, uid, currentUserId)}
         onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
-        onRespond={isSelfProfile && !reviewItem.sellerResponse ? (reviewId, reviewerName, rating) => {
-          setResponseComposerState({ visible: true, reviewId, reviewerName, rating });
-        } : undefined}
+        onRespond={undefined}
       />
     );
-  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight, isSelfProfile]);
+  }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
 
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // DERIVED RENDER STATE â€” after all hooks
@@ -461,7 +455,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   if (profileError && !targetProfile) {
     return <ProfileErrorState onRetry={() => publicProfileQuery.refetch()} onBack={() => navigation.goBack()} coverHeight={COVER_HEIGHT} />;
   }
-  if (!targetProfile && !isSelfProfile) {
+  if (!targetProfile) {
     // Renders "Profile unavailable" state
     return <ProfileUnavailableState onBack={() => navigation.goBack()} coverHeight={COVER_HEIGHT} />;
   }
@@ -482,7 +476,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         displayUsername={displayUsername}
         displayAvatar={displayAvatar}
         displayCover={displayCover}
-        isSelfProfile={isSelfProfile}
+        isSelfProfile={false}
         viewer={viewer}
         stats={stats}
         activeCount={activeCount}
@@ -498,7 +492,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onFollowToggle={handleFollowToggle}
         onMessage={handleMessageProfile}
         onMore={handleMore}
-        onEditProfile={handleEditProfile}
         onShare={handleShare}
         onOpenConnections={openConnections}
         onTabSelect={(t) => setActiveTab(t)}
@@ -511,7 +504,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           <Ionicons name="pause-circle" size={18} color={MUTED} />
           <View style={styles.awayBannerTextWrap}>
             <Text style={[styles.awayBannerTitle, t.awayBannerTitle]}>
-              {isSelfProfile ? 'Your shop is on holiday' : 'This shop is on holiday'}
+              This shop is on holiday
             </Text>
             <Text style={[styles.awayBannerSub, t.awayBannerSub]}>
               {sellerTrust.awayMessage?.trim()
@@ -694,18 +687,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             >
               <Ionicons name="share-outline" size={18} color={TEXT_INVERSE} />
             </AnimatedPressable>
-            {!isSelfProfile && (
-              <AnimatedPressable
-                style={styles.topUtilityIconBtn}
-                activeOpacity={0.9}
-                onPress={handleMore}
-                accessibilityLabel="More options"
-                accessibilityRole="button"
-                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-              >
-                <Ionicons name="ellipsis-horizontal" size={18} color={TEXT_INVERSE} />
-              </AnimatedPressable>
-            )}
+            <AnimatedPressable
+              style={styles.topUtilityIconBtn}
+              activeOpacity={0.9}
+              onPress={handleMore}
+              accessibilityLabel="More options"
+              accessibilityRole="button"
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={TEXT_INVERSE} />
+            </AnimatedPressable>
           </View>
         </Reanimated.View>
       </View>
@@ -744,7 +735,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           </Text>
         </View>
         <View style={styles.collapsedRight}>
-          {!isSelfProfile && viewer ? (
+          {viewer ? (
             <AnimatedPressable
               style={[styles.collapsedFollowBtn, viewer.isFollowing ? [styles.collapsedFollowingBtn, t.collapsedFollowingBtn] : [styles.collapsedFollowActiveBtn, t.collapsedFollowActiveBtn], (followMutation.isPending || isBlocked) && styles.btnDisabled]}
               onPress={handleFollowToggle}
@@ -861,7 +852,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       <ProfileMoreSheet
         visible={moreSheetVisible}
         onDismiss={() => setMoreSheetVisible(false)}
-        isSelfProfile={isSelfProfile}
+        isSelfProfile={false}
         isBlocked={isBlocked}
         onShare={handleShare}
         onCopyLink={handleCopyLink}
@@ -897,21 +888,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         initialSegment={connectionsSheet.segment}
         followerCount={stats?.followerCount ?? 0}
         followingCount={stats?.followingCount ?? 0}
-        onOpenProfile={(id) => navigation.push('UserProfile', { userId: id })}
-      />
-
-      {/* Seller response composer — for own profile reviews */}
-      <SellerResponseComposer
-        visible={responseComposerState.visible}
-        reviewId={responseComposerState.reviewId}
-        reviewerName={responseComposerState.reviewerName}
-        rating={responseComposerState.rating}
-        onClose={() => setResponseComposerState(s => ({ ...s, visible: false }))}
-        onSubmit={async (reviewId, text) => {
-          await respondToReview(reviewId, text);
-          // Refresh reviews to show the new response
-          reviewsQuery.refetch();
-        }}
+        onOpenProfile={(id) => openProfile(navigation, id, currentUserId)}
       />
     </View>
   );

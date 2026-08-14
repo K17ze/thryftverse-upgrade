@@ -6,12 +6,11 @@
  * Codex / Claude Code let users supply their own AI credentials.
  *
  * Per AGENTS.md §11 (Truthful UI):
- *  - "Test connection" validates the key FORMAT only (prefix + length). It
- *    does not make a real network call. The result is labelled "Valid format.
- *    Key saved locally — no live request was sent." — never "Connected to
- *    provider".
- *  - Status badges are truthful: "Connected" (a key is stored), "Not
- *    connected" (no key), "Invalid format" (failed validation).
+ *  - "Verify connection" performs a real provider round-trip (GET /models
+ *    or equivalent). The result is labelled "Connected" only after the
+ *    provider confirms the key is authorised.
+ *  - Status badges are truthful: "Connected" (key verified by provider),
+ *    "Not connected" (no key), "Invalid" (failed verification).
  *  - A security note makes clear keys are stored locally on-device only.
  *
  * Design (per AGENTS.md §4):
@@ -59,14 +58,16 @@ import {
   removeApiKey,
   getApiKey,
   getConnectedProviders,
+  testApiKey,
   type ConnectedProvider,
   type TestResult,
 } from '../services/aiProviderApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIAgentIntegration'>;
 
-// Demo mode flag — key validation is format-only; no live API calls.
-const AI_PROVIDER_DEMO_MODE = true;
+// Demo mode is no longer needed — testApiKey now performs a real provider
+// round-trip. This flag is kept for backward-compatible UI gating only.
+const AI_PROVIDER_DEMO_MODE = false;
 
 type ConnectionStatus = 'connected' | 'not_connected' | 'invalid';
 
@@ -161,40 +162,24 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 
     setProviders((prev) => ({ ...prev, [provider]: { ...prev[provider], testing: true, testResult: null } }));
 
-    // Simulate a brief async check (format validation only — AGENTS.md §11).
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    // Perform a real provider round-trip to verify the key is authorised.
+    const result = await testApiKey(provider, state.keyInput, state.baseUrlInput.trim() || undefined, true);
 
-    if (config.supportsBaseUrl && state.baseUrlInput.trim() && !validateBaseUrl(state.baseUrlInput)) {
-      const result: TestResult = { status: 'invalid', message: 'Base URL must be a valid http(s) URL.' };
+    if (result.status === 'invalid') {
       setProviders((prev) => ({
         ...prev,
         [provider]: { ...prev[provider], testing: false, testResult: result },
       }));
+      haptic.medium();
       return;
     }
 
-    if (!validateKeyFormat(provider, state.keyInput)) {
-      const result: TestResult = config.keyPrefixes.length > 0 && provider !== 'gemini'
-        ? { status: 'invalid', message: `Key must start with "${config.keyPrefixes[0]}" and be at least ${config.minKeyLength} characters.` }
-        : { status: 'invalid', message: `Key must be at least ${config.minKeyLength} characters.` };
-      setProviders((prev) => ({
-        ...prev,
-        [provider]: { ...prev[provider], testing: false, testResult: result },
-      }));
-      return;
-    }
-
-    // Valid format — persist locally (no live request sent).
-    const stored = await saveApiKey(provider, state.keyInput, state.baseUrlInput.trim() || undefined);
+    // Key verified by provider — refresh stored state.
     const refreshed = await getApiKey(provider);
     const connected: ConnectedProvider | null = refreshed
       ? { ...refreshed, config }
-      : { ...stored, config };
+      : null;
 
-    const result: TestResult = {
-      status: 'valid',
-      message: 'Valid format. Key saved locally — no live request was sent.',
-    };
     setProviders((prev) => ({
       ...prev,
       [provider]: {

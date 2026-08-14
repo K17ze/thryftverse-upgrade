@@ -9,6 +9,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
@@ -129,7 +130,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
             {filteredMembers.map((member, index) => (
               <View key={member.id}>
                 <AnimatedPressable
-                  onPress={() => navigation.navigate('UserProfile', { userId: member.id })}
+                  onPress={() => openProfile(navigation, member.id, currentUser?.id)}
                   activeOpacity={0.85}
                   scaleValue={0.98}
                   hapticFeedback="light"

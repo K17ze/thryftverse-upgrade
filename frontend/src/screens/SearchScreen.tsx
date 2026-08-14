@@ -18,6 +18,8 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
+import { useStore } from '../store/useStore';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
@@ -45,6 +47,7 @@ const EXPLORE_TABS = [
 export default function SearchScreen() {
   const navigation = useNavigation<NavT>();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
+  const currentUser = useStore((state) => state.currentUser);
 
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);
@@ -302,7 +305,7 @@ export default function SearchScreen() {
           <PinterestMasonryGrid
             items={listings}
             onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
-            onPressSeller={(item) => navigation.navigate('UserProfile', { userId: item.sellerId })}
+            onPressSeller={(item) => openProfile(navigation, item.sellerId, currentUser?.id)}
             onMessageSeller={(item) => navigation.navigate('Chat', {
               conversationId: `${item.sellerId}_${item.id}`,
               focusQuery: '',

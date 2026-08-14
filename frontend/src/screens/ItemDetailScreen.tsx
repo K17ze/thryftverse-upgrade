@@ -25,6 +25,7 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -1087,7 +1088,7 @@ export default function ItemDetailScreen() {
               }}
               onViewShop={() => {
                 if (item) ProductAnalytics.sellerProfileOpen(item.id, seller.id);
-                navigation.navigate('UserProfile', { userId: seller.id });
+                openProfile(navigation, seller.id, currentUser?.id);
               }}
             />
             <View style={styles.sellerVerificationRow}>

@@ -34,6 +34,7 @@ import type { PosterStory } from '../services/postersApi';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useTabScroll } from '../context/TabScrollContext';
 // Phase 3: Removed AnimatedBadge (badge clutter reduced)
@@ -363,6 +364,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
+  const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
@@ -920,8 +922,8 @@ export default function HomeScreen() {
 
   const handleSellerProfilePress = React.useCallback((sellerId: string) => {
     haptic.light(); // ELEVATED: Light haptic on seller interaction
-    navigation.navigate('UserProfile', { userId: sellerId });
-  }, [navigation, haptic]);
+    openProfile(navigation, sellerId, currentUser?.id);
+  }, [navigation, haptic, currentUser?.id]);
 
   // FlashList v2 performance: getItemType for heterogeneous row recycling.
   // ExploreTile has type 'listing' | 'clip' — FlashList recycles cells of the

@@ -14,6 +14,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -608,7 +609,7 @@ export default function NotificationsScreen() {
             <View style={styles.notifActionRow}>
               <AnimatedPressable
                 style={styles.notifActorChip}
-                onPress={() => navigation.navigate('UserProfile', { userId: actorUserId })}
+                onPress={() => openProfile(navigation, actorUserId, currentUser?.id)}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={`Open @${actorHandle} profile`}

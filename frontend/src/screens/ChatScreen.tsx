@@ -28,6 +28,7 @@ import {
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { RootStackParamList } from "../navigation/types";
+import { openProfile } from "../navigation/openProfile";
 
 import { useAppTheme } from "../theme/ThemeContext";
 
@@ -2283,7 +2284,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 conversationId: conversation.id,
               });
             } else if (resolvedPartnerId) {
-              navigation.navigate("UserProfile", { userId: resolvedPartnerId });
+              openProfile(navigation, resolvedPartnerId, currentUser?.id);
             } else {
               navigation.navigate("ConversationInfo", {
                 conversationId: conversation.id,

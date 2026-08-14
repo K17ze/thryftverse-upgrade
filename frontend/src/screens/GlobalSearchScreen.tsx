@@ -20,6 +20,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Motion } from '../constants/motion';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { SyncStatusPill } from '../components/SyncStatusPill';
@@ -171,6 +172,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const [query, setQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const inputRef = useRef<any>(null);
+  const currentUser = useStore((state) => state.currentUser);
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const resetBrowseFilters = useStore((state) => state.resetBrowseFilters);
@@ -636,7 +638,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   };
 
   const handleOpenRecommendationSeller = (sellerId: string) => {
-    navigation.navigate('UserProfile', { userId: sellerId });
+    openProfile(navigation, sellerId, currentUser?.id);
   };
 
   const handleMessageRecommendationSeller = (sellerId: string, listingId: string) => {
@@ -1146,7 +1148,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                           <AnimatedPressable
                             key={user.id}
                             style={[styles.peopleResultRow, { borderColor: colors.border }]}
-                            onPress={() => navigation.navigate('UserProfile', { userId: user.id })}
+                            onPress={() => openProfile(navigation, user.id, currentUser?.id)}
                             accessibilityLabel={`View profile: ${user.displayName || user.username}`}
                             accessibilityRole="button"
                           >

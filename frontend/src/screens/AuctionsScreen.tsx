@@ -7,6 +7,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
+import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -156,6 +158,7 @@ export default function AuctionsScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const reducedMotionEnabled = useReducedMotion();
+  const currentUser = useStore((state) => state.currentUser);
 
   const [nowTs, setNowTs] = React.useState(Date.now());
   const [refreshing, setRefreshing] = React.useState(false);
@@ -751,7 +754,7 @@ export default function AuctionsScreen() {
           onBid={() => openBidComposer(item)}
           onBuyNow={() => void handleBuyNow(item)}
           onToggleWatch={() => void handleToggleWatch(item)}
-          onPressSeller={() => navigation.navigate('UserProfile', { userId: item.sellerId })}
+          onPressSeller={() => openProfile(navigation, item.sellerId, currentUser?.id)}
           onMessageSeller={() =>
             navigation.navigate('Chat', {
               conversationId: `${item.sellerId}_${item.listingId}`,

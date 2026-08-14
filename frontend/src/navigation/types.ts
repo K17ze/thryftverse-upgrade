@@ -149,7 +149,7 @@ export type RootStackParamList = {
   CustomBots: undefined;
   BotBuilder: { botId?: string };
   EditGroup: { conversationId: string };
-  UserProfile: { userId: string; isMe?: boolean };
+  UserProfile: { userId: string };
   // Profile sub-screens
   Wallet: undefined;
   MyOrders: undefined;

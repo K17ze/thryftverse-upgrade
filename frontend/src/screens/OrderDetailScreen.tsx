@@ -16,6 +16,7 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import * as Clipboard from 'expo-clipboard';
 import { useAppTheme, ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
@@ -1260,7 +1261,7 @@ export default function OrderDetailScreen() {
             <View style={styles.counterpartyRow}>
               <Pressable
                 style={styles.counterpartyIdentity}
-                onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: counterparty.id }); }}
+                onPress={() => { haptics.tap(); openProfile(navigation, counterparty.id, currentUser?.id); }}
                 accessibilityRole="button"
                 accessibilityLabel={`View ${counterparty.role} profile: ${counterparty.username}`}
               >
@@ -1292,7 +1293,7 @@ export default function OrderDetailScreen() {
                 </Pressable>
                 <Pressable
                   style={({ pressed }) => [styles.counterpartyBtn, t.counterpartyBtn, pressed && styles.counterpartyBtnPressed]}
-                  onPress={() => { haptics.tap(); navigation.navigate('UserProfile', { userId: counterparty.id }); }}
+                  onPress={() => { haptics.tap(); openProfile(navigation, counterparty.id, currentUser?.id); }}
                   accessibilityRole="button"
                   accessibilityLabel={`View ${counterparty.role.toLowerCase()} profile`}
                 >

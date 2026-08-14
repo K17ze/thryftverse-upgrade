@@ -6,16 +6,15 @@
  * locally on-device only:
  *  - When `expo-secure-store` (hardware-backed Keychain / Keystore) is
  *    available, keys are stored there encrypted at rest.
- *  - Otherwise keys fall back to AsyncStorage (still on-device, but not
- *    hardware-backed). The caller is told which store was used so the UI can
- *    be truthful about the storage class (AGENTS.md §11).
+ *  - Otherwise keys are held in process-memory only for the current
+ *    session. They are NEVER written to AsyncStorage or any other
+ *    plaintext app-storage. The caller is told which store was used
+ *    ('secure' | 'session') so the UI can be truthful (AGENTS.md §11).
  *
  * Per AGENTS.md §11 (Truthful UI):
- *  - `testApiKey` validates the key FORMAT only (prefix + length). It does NOT
- *    make a real network call. The result is labelled "Key saved locally" /
- *    "Valid format" — never "Connected to provider" — because no live request
- *    was sent. A real implementation would call the provider's /models
- *    endpoint; that is intentionally out of scope for this demo build.
+ *  - `testApiKey` performs a real provider round-trip (GET /models or
+ *    equivalent minimal endpoint) to verify the key is authorised. The
+ *    result is labelled "Connected" only after a successful live response.
  *  - We never fabricate a successful provider round-trip.
  *
  * Supported providers: 'openai' | 'anthropic' | 'gemini' | 'custom'.
@@ -58,7 +57,7 @@ export interface StoredProviderKey {
   /** Optional custom base URL (custom provider only). */
   baseUrl?: string;
   /** Where the key was actually persisted. */
-  storageClass: 'secure' | 'async';
+  storageClass: 'secure' | 'session';
   /** ISO timestamp of when the key was saved. */
   savedAt: string;
 }
@@ -128,6 +127,13 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
 export const PROVIDER_ORDER: AIProvider[] = ['openai', 'anthropic', 'gemini', 'custom'];
 
 // ---------------------------------------------------------------------------
+// Session-memory fallback (used only when secure storage is unavailable)
+// ---------------------------------------------------------------------------
+
+const sessionKeyStore = new Map<AIProvider, string>();
+const sessionBaseUrlStore = new Map<AIProvider, string>();
+
+// ---------------------------------------------------------------------------
 // Storage keys
 // ---------------------------------------------------------------------------
 
@@ -147,7 +153,7 @@ function metaStorageKey(provider: AIProvider): string {
 }
 
 interface ProviderMeta {
-  storageClass: 'secure' | 'async';
+  storageClass: 'secure' | 'session';
   savedAt: string;
 }
 
@@ -197,8 +203,9 @@ export function validateBaseUrl(url: string): boolean {
 
 /**
  * Save an API key for a provider. Uses hardware-backed SecureStore when
- * available, otherwise falls back to AsyncStorage. The storage class used is
- * recorded so the UI can truthfully report where the key lives.
+ * available. When secure storage is unavailable, the key is held in
+ * process-memory only for the current session — NEVER written to
+ * AsyncStorage or any plaintext app-storage (Phase 3 P0 security invariant).
  */
 export async function saveApiKey(
   provider: AIProvider,
@@ -209,7 +216,7 @@ export async function saveApiKey(
   const trimmedBaseUrl = baseUrl?.trim() || undefined;
 
   const secureAvailable = await isSecureStorageAvailable();
-  const storageClass: 'secure' | 'async' = secureAvailable ? 'secure' : 'async';
+  const storageClass: 'secure' | 'session' = secureAvailable ? 'secure' : 'session';
   const savedAt = new Date().toISOString();
 
   if (secureAvailable) {
@@ -220,14 +227,16 @@ export async function saveApiKey(
       await secureStorage.deleteItem(baseUrlStorageKey(provider)).catch(() => {});
     }
   } else {
-    await AsyncStorage.setItem(storageKey(provider), trimmedKey);
+    // Session-memory fallback: key lives only for the app process lifetime.
+    sessionKeyStore.set(provider, trimmedKey);
     if (trimmedBaseUrl) {
-      await AsyncStorage.setItem(baseUrlStorageKey(provider), trimmedBaseUrl);
+      sessionBaseUrlStore.set(provider, trimmedBaseUrl);
     } else {
-      await AsyncStorage.removeItem(baseUrlStorageKey(provider)).catch(() => {});
+      sessionBaseUrlStore.delete(provider);
     }
   }
 
+  // Metadata (storage class + timestamp) is not secret — safe in AsyncStorage.
   const meta: ProviderMeta = { storageClass, savedAt };
   await AsyncStorage.setItem(metaStorageKey(provider), JSON.stringify(meta));
 
@@ -253,8 +262,8 @@ export async function getApiKey(provider: AIProvider): Promise<StoredProviderKey
     apiKey = await secureStorage.getItem(storageKey(provider));
     baseUrl = await secureStorage.getItem(baseUrlStorageKey(provider));
   } else {
-    apiKey = await AsyncStorage.getItem(storageKey(provider));
-    baseUrl = await AsyncStorage.getItem(baseUrlStorageKey(provider));
+    apiKey = sessionKeyStore.get(provider) ?? null;
+    baseUrl = sessionBaseUrlStore.get(provider) ?? null;
   }
 
   if (!apiKey && !baseUrl) return null;
@@ -271,7 +280,7 @@ export async function getApiKey(provider: AIProvider): Promise<StoredProviderKey
     provider,
     apiKey: apiKey ?? '',
     baseUrl: baseUrl ?? undefined,
-    storageClass: meta?.storageClass ?? (secureAvailable ? 'secure' : 'async'),
+    storageClass: meta?.storageClass ?? (secureAvailable ? 'secure' : 'session'),
     savedAt: meta?.savedAt ?? new Date(0).toISOString(),
   };
 }
@@ -285,18 +294,94 @@ export async function removeApiKey(provider: AIProvider): Promise<void> {
     await secureStorage.deleteItem(storageKey(provider)).catch(() => {});
     await secureStorage.deleteItem(baseUrlStorageKey(provider)).catch(() => {});
   } else {
-    await AsyncStorage.removeItem(storageKey(provider)).catch(() => {});
-    await AsyncStorage.removeItem(baseUrlStorageKey(provider)).catch(() => {});
+    sessionKeyStore.delete(provider);
+    sessionBaseUrlStore.delete(provider);
   }
   await AsyncStorage.removeItem(metaStorageKey(provider)).catch(() => {});
 }
 
 /**
- * Test an API key. Per AGENTS.md §11 this validates the key FORMAT only — it
- * does not make a real network call to the provider. The result message is
- * truthful about what was checked.
+ * Probe a provider endpoint to verify the API key is authorised.
+ * Makes a minimal real HTTP request (GET /models or equivalent).
+ * Returns a structured result so the UI can show truthful status.
+ */
+async function probeProviderConnection(
+  provider: AIProvider,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<{ ok: boolean; message: string }> {
+  const trimmedKey = apiKey.trim();
+  const trimmedBase = baseUrl?.trim() || undefined;
+  const timeoutMs = 10000;
+
+  try {
+    let url: string;
+    let headers: Record<string, string>;
+
+    switch (provider) {
+      case 'openai':
+        url = trimmedBase ?? 'https://api.openai.com/v1/models';
+        headers = { Authorization: `Bearer ${trimmedKey}` };
+        break;
+      case 'anthropic':
+        url = trimmedBase ?? 'https://api.anthropic.com/v1/models';
+        headers = {
+          'x-api-key': trimmedKey,
+          'anthropic-version': '2023-06-01',
+        };
+        break;
+      case 'gemini':
+        url = trimmedBase
+          ? `${trimmedBase.replace(/\/$/, '')}/models`
+          : `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmedKey)}`;
+        headers = {};
+        break;
+      case 'custom':
+        if (!trimmedBase) {
+          return { ok: false, message: 'Custom endpoint requires a base URL.' };
+        }
+        url = `${trimmedBase.replace(/\/$/, '')}/models`;
+        headers = trimmedKey ? { Authorization: `Bearer ${trimmedKey}` } : {};
+        break;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (response.status === 401 || response.status === 403) {
+      return { ok: false, message: 'Authentication failed — key rejected by provider.' };
+    }
+    if (response.status === 429) {
+      return { ok: false, message: 'Rate limited — try again in a moment.' };
+    }
+    if (response.status >= 500) {
+      return { ok: false, message: 'Provider unavailable — try again later.' };
+    }
+    if (!response.ok) {
+      return { ok: false, message: `Provider returned HTTP ${response.status}.` };
+    }
+
+    return { ok: true, message: 'Connected — key verified by provider.' };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return { ok: false, message: 'Request timed out — check your connection.' };
+    }
+    return { ok: false, message: 'Endpoint unreachable — check the URL or your network.' };
+  }
+}
+
+/**
+ * Test an API key by performing a real provider round-trip.
+ * The key is only saved if the provider confirms it is authorised.
  *
- * If `persistOnValid` is true (default), a valid key is saved before returning.
+ * If `persistOnValid` is true (default), a verified key is saved before returning.
  */
 export async function testApiKey(
   provider: AIProvider,
@@ -324,13 +409,18 @@ export async function testApiKey(
     };
   }
 
+  const probe = await probeProviderConnection(provider, trimmedKey, baseUrl);
+  if (!probe.ok) {
+    return { status: 'invalid', message: probe.message };
+  }
+
   if (persistOnValid) {
     await saveApiKey(provider, trimmedKey, baseUrl?.trim() || undefined);
   }
 
   return {
     status: 'valid',
-    message: 'Valid format. Key saved locally — no live request was sent.',
+    message: probe.message,
   };
 }
 

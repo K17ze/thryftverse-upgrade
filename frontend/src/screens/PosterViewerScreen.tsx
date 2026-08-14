@@ -20,6 +20,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import {
   fetchPosterStories,
   fetchPosterStoryById,
@@ -607,9 +608,9 @@ export default function PosterViewerScreen() {
   const handleSwipeUpProfile = React.useCallback(() => {
     if (activeStory) {
       haptic.light();
-      navigation.navigate('UserProfile', { userId: activeStory.creatorId });
+      openProfile(navigation, activeStory.creatorId, currentUser?.id);
     }
-  }, [activeStory, haptic, navigation]);
+  }, [activeStory, haptic, navigation, currentUser?.id]);
 
   const handleSwipeDismiss = React.useCallback(() => {
     haptic.heavy();
@@ -1102,7 +1103,7 @@ export default function PosterViewerScreen() {
         <View style={styles.topMetaRow}>
           <AnimatedPressable
             style={styles.authorBtn}
-            onPress={() => navigation.navigate('UserProfile', { userId: activeStory.creatorId })}
+            onPress={() => openProfile(navigation, activeStory.creatorId, currentUser?.id)}
             activeOpacity={0.85}
             scaleValue={0.97}
             hapticFeedback="light"
@@ -1202,7 +1203,7 @@ export default function PosterViewerScreen() {
                     onPress={() => {
                       if (sticker.payload.userId) {
                         haptic.light();
-                        navigation.navigate('UserProfile', { userId: sticker.payload.userId });
+                        openProfile(navigation, sticker.payload.userId, currentUser?.id);
                       }
                     }}
                   />

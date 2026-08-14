@@ -52,7 +52,7 @@ interface ProfileHeroProps {
   onFollowToggle: () => void;
   onMessage: () => void;
   onMore: () => void;
-  onEditProfile: () => void;
+  onEditProfile?: () => void;
   onShare: () => void;
   onOpenConnections: (segment: 'followers' | 'following') => void;
   onTabSelect: (tab: 'Shop' | 'Reviews') => void;

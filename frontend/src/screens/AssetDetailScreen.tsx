@@ -15,6 +15,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Space, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numeric } from '../theme/designTokens';
@@ -715,7 +716,7 @@ export default function AssetDetailScreen() {
                     : undefined
             }
             locationLine={issuerTrust?.location ?? asset.issuer?.location ?? undefined}
-            onPress={() => navigation.navigate('UserProfile', { userId: asset.issuerId })}
+            onPress={() => openProfile(navigation, asset.issuerId, currentUser?.id)}
             primaryAction={
               canMessageIssuer
                 ? {

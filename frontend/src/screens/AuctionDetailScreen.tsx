@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -1048,7 +1049,7 @@ export default function AuctionDetailScreen() {
                 ? `${sellerTrustData.rating.toFixed(1)}${sellerTrustData?.reviewCount != null ? ` · ${sellerTrustData.reviewCount} reviews` : ''}`
                 : undefined
             }
-            onPress={() => navigation.navigate('UserProfile', { userId: auction.seller.id })}
+            onPress={() => openProfile(navigation, auction.seller.id, currentUser?.id)}
             primaryAction={
               !isSeller
                 ? {

@@ -33,6 +33,7 @@ import {
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { EmptyState } from '../components/EmptyState';
 import { RootStackParamList } from '../navigation/types';
+import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -1349,7 +1350,7 @@ export default function CheckoutScreen() {
           priceLabel={formatFromFiat(item.price, 'GBP')}
           onPressSeller={
             resolvedSeller.id
-              ? () => { haptics.tap(); navigation.navigate('UserProfile', { userId: resolvedSeller.id }); }
+              ? () => { haptics.tap(); openProfile(navigation, resolvedSeller.id, currentUser?.id); }
               : undefined
           }
           onPressMessage={resolvedSeller.id ? () => { haptics.tap(); handleMessageSeller(); } : undefined}

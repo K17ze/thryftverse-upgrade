@@ -1,11 +1,10 @@
 /**
  * Chat Agents API — AI agents that can be deployed into conversations.
  *
- * This service powers the "AI agents in chat" surface (Mercari ChatGPT,
- * Depop AI replies, Poshmark Smart Sell class of features). It is a
- * self-contained demo-mode service: every response is mock data clearly
- * labelled with `isDemo: true` so the UI never fabricates real AI output
- * (AGENTS.md §11 — Truthful UI).
+ * This service powers the "AI agents in chat" surface. In development
+ * (`__DEV__`), it returns mock data clearly labelled with `isDemo: true`.
+ * In production, demo mode is disabled and agent functions return honest
+ * "unavailable" states instead of fabricated AI output (AGENTS.md §11).
  *
  * Agent types:
  *  - shopping_assistant: helps buyers find items, suggests search terms
@@ -23,9 +22,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ---------------------------------------------------------------------------
-// Demo mode flag — every mock response is labelled with isDemo: true.
+// Demo mode flag — when true, mock responses are generated for development.
+// In production, demo mode is disabled and agent functions return honest
+// "unavailable" states instead of fabricated AI output (AGENTS.md §11).
 // ---------------------------------------------------------------------------
-export const CHAT_AGENTS_DEMO_MODE = true;
+export const CHAT_AGENTS_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
 // Types
