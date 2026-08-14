@@ -188,7 +188,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         </ChatInfoSection>
 
         {bot.agentConfig ? (
-          <ChatInfoSection title="Intelligence">
+          <ChatInfoSection title="Voice & quality">
             <ChatInfoRow icon="server-outline" label="Model" detail={bot.agentConfig.model} />
             <ChatInfoRow icon="chatbox-outline" label="Voice" detail={bot.agentConfig.tone} />
             <ChatInfoRow

@@ -83,6 +83,8 @@ export const linking: LinkingOptions<RootStackParamList> = {
       MyOrders: 'orders',
       BalanceHistory: 'wallet/balance',
       Withdraw: 'wallet/withdraw',
+      SellerEarnings: 'wallet/earnings',
+      WalletActivity: 'wallet/activity',
 
       // Discovery
       GlobalSearch: 'search',

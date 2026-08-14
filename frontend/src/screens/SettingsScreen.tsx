@@ -97,11 +97,12 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'HelpSupport', label: 'Help', searchTerms: 'support faq contact', section: 'Help & about', showSection: true },
   { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Help & about' },
   { key: 'About', label: 'About Thryftverse', searchTerms: 'version', section: 'Help & about' },
-  // ── Advanced & developer (agent/API settings isolated from ordinary settings) ──
-  { key: 'AIAgentIntegration', label: 'Provider credentials', searchTerms: 'openai anthropic claude gemini endpoint byok provider credentials api', section: 'Advanced & developer', showSection: true },
-  { key: 'BotDirectory', label: 'Automation & agents', searchTerms: 'bot assistant browse catalogue deploy', section: 'Advanced & developer' },
-  { key: 'CustomBots', label: 'My agents', searchTerms: 'custom bots created deployed manage draft published', section: 'Advanced & developer' },
-  { key: 'BotBuilder', label: 'Create agent', searchTerms: 'bot builder automation instructions model trigger', section: 'Advanced & developer' },
+  // ── Agents & connections (normal product destination) ──
+  { key: 'BotDirectory', label: 'Agents', searchTerms: 'agent assistant browse catalogue deploy permissions', section: 'Agents & connections', showSection: true },
+  { key: 'AIAgentIntegration', label: 'Connections', searchTerms: 'openai anthropic claude gemini endpoint byok provider credentials api connections', section: 'Agents & connections' },
+  { key: 'CustomBots', label: 'Your agents', searchTerms: 'custom agents created deployed manage draft published', section: 'Agents & connections' },
+  // ── Advanced & developer (developer-only tools, not consumer features) ──
+  { key: 'RuntimeSmokeTest', label: 'Runtime smoke test', searchTerms: 'diagnostic developer debug', section: 'Advanced & developer', showSection: true },
 ];
 
 export default function SettingsScreen({ navigation }: Props) {
@@ -280,11 +281,11 @@ export default function SettingsScreen({ navigation }: Props) {
   const q = searchQuery.toLowerCase().trim();
 
   // ── Developer eligibility gate ──
-  // The "Advanced & developer" section (agent/API settings) is hidden from
-  // ordinary consumers. It is revealed only when the user has enabled
-  // developer mode (Settings → About → tap version 7 times). A backend
-  // `accountCapabilities.agentBuilder` flag could also gate this; until that
-  // contract exists, developer mode is the sole eligibility signal.
+  // The "Advanced & developer" section is hidden from ordinary consumers.
+  // It is revealed only when the user has enabled developer mode
+  // (Settings → About → tap version 7 times). Per spec 18, developer mode
+  // keeps only raw debugging tools — not consumer agent features, which now
+  // live in the normal "Agents & connections" section above.
   const showAdvancedDeveloper = developerMode;
 
   const searchResults = React.useMemo(() => {
@@ -720,8 +721,36 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       </SettingsSection>
 
+      {/* ── AGENTS & CONNECTIONS ── */}
+      {/* Per spec 18: Agents are a normal product destination, not hidden
+          behind developer mode. Create Agent is intentionally excluded from
+          Settings — it lives in the Agents home and profile menu. */}
+      <SettingsSection title="Agents & connections" icon="hardware-chip-outline" noCard>
+        <SettingsRow
+          icon="people-outline"
+          title="Agents"
+          subtitle="Browse and manage agent permissions"
+          onPress={() => navigation.navigate('BotDirectory')}
+          isFirst
+        />
+        <SettingsRow
+          icon="key-outline"
+          title="Connections"
+          subtitle="Provider keys and endpoints"
+          onPress={() => navigation.navigate('AIAgentIntegration')}
+        />
+        <SettingsRow
+          icon="person-circle-outline"
+          title="Your agents"
+          subtitle="Agents you have created"
+          onPress={() => navigation.navigate('CustomBots')}
+          isLast
+        />
+      </SettingsSection>
+
       {/* ── HELP & ABOUT ── */}
       <SettingsSection title="Help & about" icon="help-circle-outline" noCard>
+
         <SettingsRow
           icon="help-circle-outline"
           title="Help Centre"
@@ -753,39 +782,18 @@ export default function SettingsScreen({ navigation }: Props) {
       </SettingsSection>
 
       {/* ── ADVANCED & DEVELOPER ── */}
-      {/* Agent/API settings isolated from ordinary settings (audit: Global P0 —
-          move Agent/API settings out of ordinary Settings). These are
-          developer-facing capabilities (BYOK keys, agent builder, bot
-          management) and are visually separated from the consumer settings
-          above so they do not read as ordinary user preferences.
-          Gated behind developer mode (Settings → About → tap version 7 times)
-          so ordinary consumers never see implementation technology. */}
+      {/* Per spec 18: Developer mode keeps only raw debugging tools — not
+          consumer agent features, which now live in "Agents & connections"
+          above. Gated behind developer mode (Settings → About → tap version
+          7 times) so ordinary consumers never see implementation technology. */}
       {showAdvancedDeveloper ? (
         <SettingsSection title="Advanced & developer" icon="code-working-outline" noCard>
           <SettingsRow
-            icon="key-outline"
-            title="Provider credentials"
-            subtitle="Bring your own API key"
-            onPress={() => navigation.navigate('AIAgentIntegration')}
+            icon="terminal-outline"
+            title="Runtime smoke test"
+            subtitle="Diagnostic checks for local runtime"
+            onPress={() => navigation.navigate('RuntimeSmokeTest')}
             isFirst
-          />
-          <SettingsRow
-            icon="people-outline"
-            title="Automation & agents"
-            subtitle="Browse and deploy assistants"
-            onPress={() => navigation.navigate('BotDirectory')}
-          />
-          <SettingsRow
-            icon="person-circle-outline"
-            title="My agents"
-            subtitle="Your custom agents"
-            onPress={() => navigation.navigate('CustomBots')}
-          />
-          <SettingsRow
-            icon="create-outline"
-            title="Create agent"
-            subtitle="Build a custom assistant"
-            onPress={() => navigation.navigate('BotBuilder', {})}
             isLast
           />
         </SettingsSection>

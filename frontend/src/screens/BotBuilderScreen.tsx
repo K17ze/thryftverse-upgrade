@@ -268,7 +268,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           ) : null}
         </Section>
 
-        <Section title="Intelligence" detail="Choose the quality, voice, and answer density.">
+        <Section title="Voice & quality" detail="Choose the quality, voice, and answer density.">
           <ChoiceList options={MODELS} selected={model} onSelect={(value) => setModel(value as ChatAgentConfig['model'])} />
           <Text style={styles.fieldLabel}>Voice</Text>
           <OptionGrid

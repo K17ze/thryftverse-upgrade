@@ -208,7 +208,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Provider credentials"
+          title="Connections"
           subtitle="Connect your own provider keys"
           onBack={() => navigation.goBack()}
         />

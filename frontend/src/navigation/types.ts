@@ -152,6 +152,9 @@ export type RootStackParamList = {
   UserProfile: { userId: string };
   // Profile sub-screens
   Wallet: undefined;
+  // Wallet V3 — focused money-movement destinations (spec 17)
+  SellerEarnings: undefined;
+  WalletActivity: undefined;
   MyOrders: undefined;
   Personalisation: undefined;
   Settings: undefined;

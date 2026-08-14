@@ -1364,7 +1364,7 @@ export const useStore = create<StoreState>()(
         const bot = allBots.find((item) => item.id === botId);
         const deployedText = bot
           ? `${bot.name} deployed. Try ${bot.commandHint}`
-          : 'A bot was deployed to this group.';
+          : 'An agent was connected to this group.';
 
         const deployedMessage: ConversationMessage = {
           id: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -1402,7 +1402,7 @@ export const useStore = create<StoreState>()(
         const bot = allBots.find((item) => item.id === botId);
         const removedText = bot
           ? `${bot.name} removed from the group.`
-          : 'A bot was removed from this group.';
+          : 'An agent was removed from this group.';
 
         const removedMessage: ConversationMessage = {
           id: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,

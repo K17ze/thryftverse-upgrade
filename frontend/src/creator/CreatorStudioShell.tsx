@@ -905,7 +905,31 @@ export function CreatorStudioScreen() {
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
   const initialMediaUri = route.params?.initialMediaUri as string | undefined;
   const initialMedia = route.params?.initialMedia as CreatorInitialMedia[] | undefined;
+  const startBlank = route.params?.startBlank as boolean | undefined;
+  const openTemplates = route.params?.openTemplates as boolean | undefined;
 
+  // ── Look V3: dedicated collage-native workspace ──────────────────
+  // Per spec 10 (Look Architecture V3), Look gets its own screen that
+  // expresses the spatial collage mental model — not a shared editor
+  // with isLook branching. The LookComposerScreen wraps itself in
+  // CreatorProvider, so we return it directly for Look documents.
+  if (initialType === 'look') {
+    const { LookComposerScreen } = require('./look/LookComposerScreen');
+    return (
+      <LookComposerScreen
+        draftId={draftId}
+        templateId={templateId}
+        sourceDocumentId={sourceDocumentId}
+        initialMediaUri={initialMediaUri}
+        initialMedia={initialMedia}
+        startBlank={startBlank}
+        openTemplates={openTemplates}
+      />
+    );
+  }
+
+  // Poster: existing CreatorStudioInner (a parallel subagent is creating
+  // a dedicated PosterComposerScreen for Poster).
   return (
     <CreatorProvider
       initialType={initialType}

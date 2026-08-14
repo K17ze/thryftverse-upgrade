@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, useWindowDimensions, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, useWindowDimensions, Modal, TextInput, Image } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,12 +41,10 @@ import {
 } from '../components/commerce';
 import {
   CommerceDetailHeader,
-  CommerceDetailIdentity,
   CommerceDetailTransactionSurface,
   CommerceDetailMetricRow,
   CommerceDetailDisclosureRow,
   CommerceDetailSection,
-  CommerceDetailSellerRow,
   CommerceDetailUnavailableInline,
   CommerceDetailStateDock,
   CommerceDetailMediaRail,
@@ -54,7 +52,7 @@ import {
   CommerceDetailFreshnessBanner,
   COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
-import { ProductFamilyBadge, RecommendationRail, FullscreenMediaViewer } from '../components/product';
+import { RecommendationRail, FullscreenMediaViewer } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
 import { BottomSheet } from '../components/BottomSheet';
@@ -78,7 +76,6 @@ import {
   CoOwnCandleChart,
   CoOwnSupplySheet,
   CoOwnOverflowSheet,
-  CoOwnMarketOverview,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnCandleRange,
@@ -376,18 +373,6 @@ export default function AssetDetailScreen() {
     : null;
   const feePct = Math.round(CO_OWN_FEE_RATE * 100);
 
-  const avgEntryPriceGbp = yourHolding?.avgEntryPriceGbp ?? null;
-  const positionValueGbp = yourUnits != null ? asset.unitPriceGbp * yourUnits : null;
-  const positionCostGbp = avgEntryPriceGbp != null && yourUnits != null
-    ? avgEntryPriceGbp * yourUnits
-    : null;
-  const unrealizedPnlGbp = positionValueGbp != null && positionCostGbp != null
-    ? positionValueGbp - positionCostGbp
-    : null;
-  const unrealizedPnlPct = positionCostGbp != null && positionCostGbp > 0 && unrealizedPnlGbp != null
-    ? (unrealizedPnlGbp / positionCostGbp) * 100
-    : null;
-
   const bestBid = orderBook && orderBook.bids.length > 0 ? orderBook.bids[0] : null;
   const bestAsk = orderBook && orderBook.asks.length > 0 ? orderBook.asks[0] : null;
   const spreadGbp = bestBid?.unitPriceGbp != null && bestAsk?.unitPriceGbp != null
@@ -432,12 +417,6 @@ export default function AssetDetailScreen() {
   const handlePressLook = (lookItem: RecommendationLook) => {
     navigation.navigate('LookDetail', { lookId: lookItem.id });
   };
-
-  const familyStateAccent = asset.listingTier === 'preview'
-    ? 'Preview'
-    : asset.listingTier === 'delisted'
-      ? 'Delisted'
-      : !asset.isOpen ? 'Closed' : availableUnits <= 0 ? 'Unavailable' : 'Open';
 
   // Compute scroll bottom padding from dock geometry + safe area.
   const isDualActionDock =
@@ -570,11 +549,11 @@ export default function AssetDetailScreen() {
           onRetry={handleRefresh}
         />
 
-        {/* ── Zone A — Media stage ──
-            CommerceMediaStage handles paging/zoom/fullscreen only.
-            CommerceDetailMediaRail overlays the max-3-visible-controls
-            (Back, Share, Saved) + overflow (Fav, Watch, Report).
-            Spec 02 §A: "Maximum visible utility controls over media: three." */}
+        {/* ── Zone A — Media stage (unobstructed) ──
+            Spec 14 V3: media breathes first. No identity, no family
+            badge, no taxonomy overlaid on photography. Back/share/save
+            controls float via CommerceDetailMediaRail. State appears
+            only when actionability requires it (below, on clean canvas). */}
         <CommerceMediaStage
           images={images}
           objectId={asset.id}
@@ -591,22 +570,6 @@ export default function AssetDetailScreen() {
           initialIndex={fullscreenIndex}
           onActiveIndexChange={setFullscreenIndex}
           onOpenFullscreen={handleOpenFullscreen}
-          overlayTopContent={
-            <View style={styles.familyBadgeOverlay}>
-              <ProductFamilyBadge family="co_own" stateAccent={familyStateAccent} compact />
-            </View>
-          }
-          overlayBottomContent={
-            <CommerceDetailIdentity
-              family="co_own"
-              tone="media"
-              density={isVeryCompact ? 'compact' : 'standard'}
-              eyebrow={asset.legalVehicleName ?? 'Fractional asset'}
-              title={asset.title}
-              secondaryLine={`${availableUnits} of ${totalUnits} units available`}
-              interestSignal={asset.holders != null ? `${asset.holders} holders` : undefined}
-            />
-          }
         />
         <CommerceDetailMediaRail
           onBack={() => navigation.goBack()}
@@ -629,63 +592,159 @@ export default function AssetDetailScreen() {
           showOverflow
         />
 
-        {/* Issuer confidence remains on the page canvas. It is visually
-            connected to the asset story without forcing identity into a
-            finance-themed colour block. */}
-        <View style={[styles.identityExtension, { borderBottomColor: colors.borderSubtle }]}>
-          <CommerceDetailSellerRow
-            roleLabel="Issuer"
-            institutional
-            avatarUri={asset.issuer?.avatar ?? undefined}
-            name={issuerUsername}
-            verified={asset.issuerVerification?.tier === 'id' || asset.issuerVerification?.tier === 'seller'}
-            ratingLine={
-              asset.issuerVerification?.tier === 'seller'
-                ? 'Trusted Seller'
-                : asset.issuerVerification?.tier === 'id'
-                  ? 'ID Verified'
-                  : asset.issuerVerification?.tier === 'email'
-                    ? 'Email verified'
-                    : undefined
-            }
-            locationLine={issuerTrust?.location ?? asset.issuer?.location ?? undefined}
-            onPress={() => openProfile(navigation, asset.issuerId, currentUser?.id)}
-            primaryAction={
-              canMessageIssuer
-                ? {
-                    label: 'Message',
-                    onPress: async () => {
-                      if (!currentUser?.id) {
-                        show('Sign in to message the issuer.', 'error');
-                        return;
-                      }
-                      if (isResolvingConversation) return;
-                      setIsResolvingConversation(true);
-                      try {
-                        const conversation = await resolveCoOwnConversation(
-                          currentUser.id,
-                          asset.issuerId,
-                          issuerUsername,
-                          asset.listingId,
-                        );
-                        upsertConversation(conversation);
-                        navigation.navigate('Chat', {
-                          conversationId: conversation.id,
-                          focusQuery: issuerUsername,
-                          partnerUserId: asset.issuerId,
-                        });
-                      } catch {
-                        show('Unable to open conversation. Try again.', 'error');
-                      } finally {
-                        setIsResolvingConversation(false);
-                      }
-                    },
+        {/* ════════════════════════════════════════════════════════════
+            Viewport 1 — Collectible-first identity on clean canvas
+            Spec 14 V3: title, one context line, issuer, one-unit
+            price, availability, and market state live BELOW media on
+            clean canvas — not overlaid on photography. No Co-Own
+            family badge (redundant inside Co-Own). No card surface.
+            ════════════════════════════════════════════════════════════ */}
+        <View style={[styles.collectibleIdentity, { borderBottomColor: colors.borderSubtle }]}>
+          {/* One context line — legal vehicle / category eyebrow */}
+          {asset.legalVehicleName ? (
+            <Text
+              style={[styles.collectibleEyebrow, { color: colors.textSecondary }]}
+              numberOfLines={1}
+            >
+              {asset.legalVehicleName}
+            </Text>
+          ) : null}
+
+          {/* Asset title — the dominant text object under media */}
+          <Text
+            style={[styles.collectibleTitle, { color: colors.textPrimary }]}
+            numberOfLines={2}
+            accessibilityRole="header"
+          >
+            {asset.title}
+          </Text>
+
+          {/* Issuer — compact row with avatar, name, verification,
+              and message action. Taps into issuer profile. */}
+          <View style={styles.collectibleIssuerRow}>
+            <Pressable
+              onPress={() => openProfile(navigation, asset.issuerId, currentUser?.id)}
+              style={({ pressed }) => [styles.collectibleIssuerTarget, pressed && { opacity: 0.5 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Issuer ${issuerUsername}`}
+            >
+              <View style={[styles.collectibleIssuerAvatar, { backgroundColor: colors.surfaceAlt }]}>
+                {asset.issuer?.avatar ? (
+                  <Image
+                    source={{ uri: asset.issuer.avatar }}
+                    style={styles.collectibleIssuerAvatarImg}
+                  />
+                ) : (
+                  <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
+                )}
+              </View>
+              <View style={styles.collectibleIssuerCopy}>
+                <Text
+                  style={[styles.collectibleIssuerName, { color: colors.textPrimary }]}
+                  numberOfLines={1}
+                >
+                  {issuerUsername}
+                </Text>
+                {(asset.issuerVerification?.tier === 'id' || asset.issuerVerification?.tier === 'seller') ? (
+                  <View style={styles.collectibleIssuerVerified}>
+                    <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                    <Text style={[styles.collectibleIssuerVerifiedText, { color: colors.textSecondary }]}>
+                      {asset.issuerVerification?.tier === 'seller' ? 'Trusted Seller' : 'ID Verified'}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+            {canMessageIssuer ? (
+              <Pressable
+                onPress={async () => {
+                  if (!currentUser?.id) {
+                    show('Sign in to message the issuer.', 'error');
+                    return;
                   }
-                : undefined
-            }
-          />
+                  if (isResolvingConversation) return;
+                  setIsResolvingConversation(true);
+                  try {
+                    const conversation = await resolveCoOwnConversation(
+                      currentUser.id,
+                      asset.issuerId,
+                      issuerUsername,
+                      asset.listingId,
+                    );
+                    upsertConversation(conversation);
+                    navigation.navigate('Chat', {
+                      conversationId: conversation.id,
+                      focusQuery: issuerUsername,
+                      partnerUserId: asset.issuerId,
+                    });
+                  } catch {
+                    show('Unable to open conversation. Try again.', 'error');
+                  } finally {
+                    setIsResolvingConversation(false);
+                  }
+                }}
+                hitSlop={8}
+                style={({ pressed }) => [styles.collectibleMessageTarget, pressed && { opacity: 0.5 }]}
+                accessibilityRole="button"
+                accessibilityLabel={`Message ${issuerUsername}`}
+              >
+                <Ionicons name="chatbubble-outline" size={20} color={colors.brand} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* One-unit price — the dominant numeric value.
+              Spec 14: `1 unit · 1ZE 1.24` */}
+          <View style={styles.collectiblePriceRow}>
+            <Text
+              style={[styles.collectiblePriceValue, { color: colors.textPrimary }]}
+              accessibilityRole="text"
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              numberOfLines={1}
+            >
+              {formatCoOwnIze(marketSnapshot?.lastExecutionPriceGbp ?? asset.unitPriceGbp)}
+            </Text>
+            <Text style={[styles.collectiblePriceUnit, { color: colors.textSecondary }]}>
+              per unit
+            </Text>
+          </View>
+
+          {/* Availability + market state — flat factual line.
+              Spec 14: `220 available`, `Market open`.
+              Avoid "Continuous · Open" — use simple "Market open".
+              State escalates only when actionability requires it. */}
+          <View style={styles.collectibleAvailabilityRow}>
+            <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]}>
+              {availableUnits} available
+            </Text>
+            <View style={[styles.collectibleAvailabilityDot, {
+              backgroundColor: reconciliationActive
+                ? colors.warning
+                : asset.isOpen
+                  ? colors.success
+                  : colors.textMuted,
+            }]} />
+            <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]}>
+              {reconciliationActive
+                ? 'Orders paused'
+                : asset.isOpen
+                  ? 'Market open'
+                  : 'Market closed'}
+            </Text>
+            {dataStale && dataStaleAgeLabel ? (
+              <Text style={[styles.collectibleStaleText, { color: colors.warning }]}>
+                · stale {dataStaleAgeLabel}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
+        {/* ════════════════════════════════════════════════════════════
+            Viewport 2 — Story, trust, holder position, market details
+            ════════════════════════════════════════════════════════════ */}
+
+        {/* Short asset story — quiet editorial paragraph */}
         {asset.provenance ? (
           <View style={styles.assetStoryWrap}>
             <Text
@@ -709,16 +768,60 @@ export default function AssetDetailScreen() {
           </View>
         ) : null}
 
-        {/* ── Layer 1 — Compact market overview ──
-            The one non-media surface near the top: reference price,
-            trading state, and a thin allocation indicator. Order book
-            and valuation depth have moved to Layer 2 (Market & position)
-            so the first viewport communicates the asset proposition, not
-            the full trading terminal.
-            Spec 02 §C + spec 03 §2/§3: do not label reference price as
-            "Last trade" without settled-execution proof. Use "Reference
-            unit price" unless the backend provides lastExecutionPriceGbp. */}
-        <CoOwnMarketOverview>
+        {/* Trust — flat factual line tapping into Due Diligence.
+            Spec 14 V3: `Authenticated · Insured custody · Rights v2`.
+            No trust score, no chip icons. One line, one tap target. */}
+        {(() => {
+          const trustFacts: string[] = [];
+          if (asset.authenticityStatus === 'verified') {
+            trustFacts.push('Authenticated');
+          }
+          if (asset.custodyInsured) {
+            trustFacts.push('Insured custody');
+          }
+          if (asset.rights?.version) {
+            trustFacts.push(`Rights v${asset.rights.version}`);
+          }
+          if (trustFacts.length === 0) return null;
+          return (
+            <Pressable
+              onPress={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
+              hitSlop={4}
+              style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.5 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Trust facts: ${trustFacts.join(', ')}. View due diligence.`}
+            >
+              <Text style={[styles.trustFactualText, { color: colors.textSecondary }]}>
+                {trustFacts.join(' · ')}
+              </Text>
+              <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
+            </Pressable>
+          );
+        })()}
+
+        {/* Holder position — quiet summary.
+            Spec 14 V3: `You own 12 units · 3.4%`.
+            More detail lives in Portfolio, not here. */}
+        {isHolder && yourUnits != null && viewerPct != null ? (
+          <View style={styles.holderPositionSummary}>
+            <Text style={[styles.holderPositionText, { color: colors.textSecondary }]}>
+              You own {yourUnits} units · {viewerPct.toFixed(1)}%
+            </Text>
+          </View>
+        ) : null}
+
+        {/* ════════════════════════════════════════════════════════════
+            Market details — deferred microstructure
+            Spec 14 V3: last settled price, bid/ask, spread, depth,
+            chart, volume, NAV comparison, price alert. This is NOT
+            in the first viewport.
+            ════════════════════════════════════════════════════════════ */}
+        <CommerceDetailSection
+          label="Market details"
+          divider
+          variant="editorial"
+        >
+          {/* Last settled / reference price */}
           <CommerceDetailTransactionSurface
             family="co_own"
             flush
@@ -741,7 +844,7 @@ export default function AssetDetailScreen() {
                     ]}
                   />
                   <Text style={[styles.marketStatusText, { color: colors.textPrimary }]}>
-                    {reconciliationActive ? 'Orders paused · settling' : asset.isOpen ? 'Continuous · Open' : 'Closed'}
+                    {reconciliationActive ? 'Orders paused · settling' : asset.isOpen ? 'Market open' : 'Closed'}
                   </Text>
                   {dataStale && dataStaleAgeLabel && (
                     <Text style={[styles.marketStatusStale, { color: colors.warning }]}>Stale {dataStaleAgeLabel}</Text>
@@ -782,100 +885,13 @@ export default function AssetDetailScreen() {
             <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
           </Pressable>
           </CommerceDetailTransactionSurface>
-        </CoOwnMarketOverview>
 
-        {(() => {
-          const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
-          if (asset.authenticityStatus === 'verified') {
-            trustChips.push({ icon: 'ribbon-outline', label: 'Authenticated' });
-          }
-          if (asset.custodyInsured && asset.custodyInsurer) {
-            trustChips.push({ icon: 'shield-checkmark-outline', label: 'Insured custody' });
-          }
-          if (asset.buyerProtection) {
-            trustChips.push({ icon: 'checkmark-circle-outline', label: 'Buyer protection' });
-          }
-          if (asset.legalVehicleType && asset.legalVehicleType !== 'none' && trustChips.length < 3) {
-            const vehicleLabel = asset.legalVehicleType === 'spv' ? 'SPV'
-              : asset.legalVehicleType === 'series_llc' ? 'Series LLC'
-              : asset.legalVehicleType === 'llc' ? 'LLC'
-              : asset.legalVehicleType === 'trust' ? 'Trust'
-              : asset.legalVehicleType;
-            trustChips.push({ icon: 'business-outline', label: vehicleLabel as string });
-          }
-          if (asset.rights?.version && trustChips.length < 3) {
-            trustChips.push({ icon: 'document-text-outline', label: `Rights v${asset.rights.version}` });
-          }
-          if (trustChips.length === 0) return null;
-          const elevated = trustChips.slice(0, 3);
-          return (
-            <View style={styles.coOwnTrustStrip}>
-              {elevated.map((chip, i) => (
-                <View key={i} style={styles.coOwnTrustChip}>
-                  <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
-                  <Text style={[styles.coOwnTrustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {chip.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          );
-        })()}
-
-        {/* ════════════════════════════════════════════════════════════
-            Layer 2 — Market & your position
-            One section: holder position (high priority), price chart,
-            valuation (NAV), market summary (bid/ask/spread), and
-            "Bids & asks" disclosure (order book). Order book is one
-            disclosure inside Market, not a large default feature.
-            ════════════════════════════════════════════════════════════ */}
-        <CommerceDetailSection
-          label={isHolder ? 'Your position & market' : 'Market'}
-          divider
-          variant="editorial"
-        >
           {holdingsError ? (
             <CommerceDetailUnavailableInline
               title="Position unavailable"
               body="We could not verify your settled units. Trading is disabled until this refreshes."
               onRetry={retryHoldings}
             />
-          ) : isHolder && yourUnits != null && viewerPct != null ? (
-            <View style={styles.viewerPositionHeader}>
-              <View style={styles.viewerPositionCopy}>
-                <Text style={[styles.viewerPositionValue, { color: colors.textPrimary }]}>
-                  {yourUnits} units · {viewerPct.toFixed(1)}%
-                </Text>
-                <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary }]}>
-                  Your settled position
-                </Text>
-                {avgEntryPriceGbp != null && (
-                  <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary }]}>
-                    Avg. entry {formatCoOwnIze(avgEntryPriceGbp)}
-                  </Text>
-                )}
-              </View>
-              <View style={styles.viewerPositionCopy}>
-                <Text style={[styles.viewerPositionMarketValue, { color: colors.textPrimary }]}>
-                  {formatCoOwnIze(asset.unitPriceGbp * yourUnits)}
-                </Text>
-                <Text style={[styles.viewerPositionMeta, { color: colors.textSecondary, textAlign: 'right' }]}>
-                  Reference value
-                </Text>
-                {unrealizedPnlGbp != null && unrealizedPnlPct != null ? (
-                  <Text style={[
-                    styles.viewerPositionMeta,
-                    {
-                      color: unrealizedPnlGbp >= 0 ? colors.coownUp : colors.coownDown,
-                      textAlign: 'right',
-                      fontFamily: FontFamily.semibold,
-                    },
-                  ]}>
-                    {unrealizedPnlGbp >= 0 ? '+' : ''}{formatCoOwnIze(unrealizedPnlGbp)} ({unrealizedPnlPct >= 0 ? '+' : ''}{unrealizedPnlPct.toFixed(1)}%)
-                  </Text>
-                ) : null}
-              </View>
-            </View>
           ) : null}
 
           <CoOwnPriceChart
@@ -899,9 +915,7 @@ export default function AssetDetailScreen() {
             }
           />
 
-          {/* ── Valuation — NAV comparison ──
-              Reference vs NAV, NAV per unit, next report. Compact
-              disclosure, not a large default feature. */}
+          {/* Valuation — NAV comparison */}
           <CommerceDetailDisclosureRow
             label={fundamentalsExpanded ? 'Hide valuation' : 'Valuation'}
             summary={
@@ -945,7 +959,7 @@ export default function AssetDetailScreen() {
             </View>
           ) : null}
 
-          {/* ── Market summary — best bid/ask/spread ── */}
+          {/* Market summary — best bid/ask/spread */}
           {orderBookError ? (
             <CommerceDetailUnavailableInline
               title="Live market unavailable"
@@ -970,9 +984,7 @@ export default function AssetDetailScreen() {
             </View>
           )}
 
-          {/* ── Bids & asks — order book disclosure ──
-              One disclosure inside Market, not a large default feature.
-              Copy cleanup: "Explore market depth" → "Bids & asks". */}
+          {/* Bids & asks — order book depth disclosure */}
           {!orderBookError && orderBook ? (
             <>
               <CommerceDetailDisclosureRow
@@ -1003,6 +1015,15 @@ export default function AssetDetailScreen() {
               ) : null}
             </>
           ) : null}
+
+          {/* Price alert — direct access from Market details */}
+          <CommerceDetailDisclosureRow
+            label="Price alert"
+            summary="Get notified at a target price"
+            onPress={() => setPriceAlertVisible(true)}
+            leadingIcon="notifications-outline"
+            accessibilityLabel="Create price alert"
+          />
         </CommerceDetailSection>
 
         <CommerceDetailSection label="Due diligence" divider variant="editorial">
@@ -1415,6 +1436,145 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
     paddingBottom: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  // ── Collectible-first identity (Viewport 1, spec 14 V3) ──
+  collectibleIdentity: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Space.sm,
+  },
+  collectibleEyebrow: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  collectibleTitle: {
+    fontSize: TypographyV2.itemTitle.size,
+    lineHeight: TypographyV2.itemTitle.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.itemTitle.letterSpacing,
+  },
+  collectibleIssuerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+  },
+  collectibleIssuerTarget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    minHeight: Control.hit,
+    flexShrink: 1,
+  },
+  collectibleIssuerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collectibleIssuerAvatarImg: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  collectibleIssuerCopy: {
+    flexShrink: 1,
+    gap: 1,
+  },
+  collectibleIssuerName: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  collectibleIssuerVerified: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  collectibleIssuerVerifiedText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  collectibleMessageTarget: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collectiblePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.xs,
+  },
+  collectiblePriceValue: {
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.priceHero.letterSpacing,
+  },
+  collectiblePriceUnit: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  collectibleAvailabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    flexWrap: 'wrap',
+  },
+  collectibleAvailabilityText: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  collectibleAvailabilityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  collectibleStaleText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  // ── Trust factual line (spec 14 V3: flat, one tap target) ──
+  trustFactualLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    gap: Space.xs,
+  },
+  trustFactualText: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  // ── Holder position summary (spec 14 V3: quiet) ──
+  holderPositionSummary: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.md,
+  },
+  holderPositionText: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   // ── Asset story — quiet editorial paragraph before market data ──
   assetStoryWrap: {

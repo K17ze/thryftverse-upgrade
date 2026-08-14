@@ -492,7 +492,7 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
   {
     id: 'bot_guard',
     slug: 'guard',
-    name: 'Guard Bot',
+    name: 'Guard',
     description: 'Moderation helper for rules, join messages, and spam guardrails.',
     commandHint: '/guard status',
     category: 'moderation',
@@ -502,7 +502,7 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
   {
     id: 'bot_trade',
     slug: 'tradeops',
-    name: 'TradeOps Bot',
+    name: 'TradeOps',
     description: 'Posts auction and co-own market alerts into your group.',
     commandHint: '/tradeops alerts on',
     category: 'commerce',
@@ -512,7 +512,7 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
   {
     id: 'bot_brief',
     slug: 'brief',
-    name: 'Daily Brief Bot',
+    name: 'Daily Brief',
     description: 'Sends timed digest updates and pinned reminders.',
     commandHint: '/brief now',
     category: 'automation',
@@ -582,7 +582,7 @@ export const MOCK_CHAT_BOTS: ChatBot[] = [
   {
     id: 'bot_ordersupport',
     slug: 'ordersupport',
-    name: 'Order Support Bot',
+    name: 'Order Support',
     description: 'Answers common order and delivery questions automatically.',
     commandHint: '/order status',
     category: 'assistant',
@@ -669,7 +669,7 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
       { id: 'u3', username: 'dankdunksuk', displayName: null, avatar: null, emailVerified: true },
     ],
     botIds: ['bot_trade'],
-    lastMessage: 'TradeOps Bot: New auction watchlist for tonight is live.',
+    lastMessage: 'TradeOps: New auction watchlist for tonight is live.',
     lastMessageTime: '20m ago',
     unread: true,
     messages: [
@@ -690,7 +690,7 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
       {
         id: 'g1m3',
         senderId: 'bot_trade',
-        text: 'TradeOps Bot: New auction watchlist for tonight is live.',
+        text: 'TradeOps: New auction watchlist for tonight is live.',
         timestamp: '20m ago',
       },
     ],

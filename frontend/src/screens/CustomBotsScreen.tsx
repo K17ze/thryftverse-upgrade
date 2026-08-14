@@ -55,8 +55,9 @@ export default function CustomBotsScreen({ navigation }: Props) {
 
   const handleDelete = (bot: { id: string; name: string }) => {
     Alert.alert(
-      'Delete bot?',
+      'Delete agent?',
       `${bot.name} will be permanently deleted and removed from all groups.`,
+
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -69,7 +70,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
               await deleteCustomBot(bot.id);
               show(`${bot.name} deleted`, 'info');
             } catch {
-              show('Failed to delete bot', 'error');
+              show('Failed to delete agent', 'error');
             } finally {
               setDeletingId(null);
             }
@@ -83,7 +84,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenHeader
-        title="My agents"
+        title="Your agents"
         onBack={() => navigation.goBack()}
         rightAction={
           <AnimatedPressable
@@ -92,7 +93,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
             scaleValue={0.92}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="Create bot"
+            accessibilityLabel="Create agent"
           >
             <View style={styles.createBtn}>
               <Ionicons name="add" size={22} color={colors.textPrimary} />
@@ -266,7 +267,7 @@ function BotRow({
             scaleValue={0.92}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="Edit bot"
+            accessibilityLabel="Edit agent"
           >
             <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
           </AnimatedPressable>
@@ -278,7 +279,7 @@ function BotRow({
             scaleValue={0.92}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="Delete bot"
+            accessibilityLabel="Delete agent"
           >
             <Ionicons name="trash-outline" size={20} color={colors.danger} />
           </AnimatedPressable>

@@ -1,0 +1,41 @@
+feat(P1): Co-Own V3 collectible-first, Chat controller hooks, Agent nomenclature, Wallet flows, Look composer
+
+Co-Own Asset Detail V3 (spec 14):
+- Collectible-first viewport: media unobstructed, identity on clean
+  canvas below media (title, one context line, issuer, one-unit price,
+  availability, market state). No Co-Own family badge (redundant).
+- Trust: flat factual line "Authenticated · Insured custody · Rights v2"
+  tapping into Due Diligence. No trust score.
+- Holder position: quiet "You own N units · X.X%". More in Portfolio.
+- Market microstructure deferred to Market details section.
+- Missing styles added with correct TypographyV2 roles (itemTitle,
+  priceHero, meta).
+
+Chat V3 controller decomposition (spec 16):
+- Extracted 7 controller hooks into frontend/src/hooks/chat/:
+  useConversationMessages, useConversationComposer,
+  useConversationCommerce, useConversationAgents,
+  useConversationSafety, useMessageSelection, types.ts, index.ts
+- Hooks own message list, composer, commerce, agents, safety,
+  selection state. ChatScreen becomes orchestration.
+- Fixed counterRound undefined and ConversationMessage type import.
+
+Agent Platform nomenclature (spec 02/18):
+- Renamed user-facing "Bot" strings to "Agent" across BotBuilder,
+  BotDetail, CustomBots, GroupBotManagement, store system messages.
+- Settings IA restructured with Agents & connections section.
+- AIAgentIntegrationScreen title aligned to "Provider credentials".
+
+Wallet V3 (spec 17):
+- AddMoneySheet extracted as focused flow.
+- SellerEarningsScreen with per-order release schedule.
+- WalletActivityScreen as canonical Activity destination.
+
+Look Composer V3 (spec 10):
+- LookComposerScreen.tsx created in creator/look/ with collage-native
+  workspace. 4:5 canvas, direct object manipulation, Add item/photo/
+  cutout/text/layout actions. Uses shared CreatorContext.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

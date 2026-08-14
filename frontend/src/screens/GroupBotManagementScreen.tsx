@@ -134,7 +134,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
               scaleValue={0.92}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel="My agents"
+              accessibilityLabel="Your agents"
             >
               <View style={styles.headerAction}>
                 <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
@@ -165,7 +165,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
         {deployedBots.length === 0 && availableToDeploy.length === 0 && (
           <EmptyState
             icon="hardware-chip-outline"
-            title="No bots configured"
+            title="No agents configured"
             subtitle="No agents are ready to connect."
           />
         )}
