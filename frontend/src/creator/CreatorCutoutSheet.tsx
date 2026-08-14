@@ -1,8 +1,8 @@
-// TODO: Background removal is not implemented. This currently only traces
-// paths manually — it crops to the bounding box of the finger-traced path
-// and exports that region as a PNG. No actual pixel-level background removal
-// (subject segmentation / matting) happens on-device or via a backend service.
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+// Manual trace-and-crop tool. The user traces around a subject with
+// their finger and the tool crops to the bounding box of the traced
+// region. This is NOT background removal/subject segmentation — it
+// produces a rectangular crop, not a transparent cutout.
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -51,13 +51,14 @@ interface CreatorCutoutSheetProps {
 }
 
 /**
- * Manual trace-and-crop tool (marketed internally as "Cutout").
+ * Manual trace-and-crop tool.
  *
- * NOTE: This does NOT perform real background removal. It only traces
- * finger-drawn paths and crops to the bounding box of the traced region,
- * exporting the crop as a PNG. For true subject cutout (background
- * transparency), an on-device ML segmentation model or backend service
- * would be required — see TODO at the top of this file.
+ * The user traces around a subject with their finger and the tool crops
+ * to the bounding box of the traced region, exporting the crop as a PNG.
+ * This is NOT background removal / subject segmentation — it produces a
+ * rectangular crop, not a transparent cutout. For true subject cutout
+ * (background transparency), an on-device ML segmentation model or
+ * backend service would be required.
  *
  * - Scissors mode: trace around the subject with your finger
  * - Eraser mode: erase regions by painting over them
@@ -83,13 +84,12 @@ export function CreatorCutoutSheet({
   const [paths, setPaths] = useState<Point[][]>([]);
   const [currentPath, setCurrentPath] = useState<Point[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [bgRemoved, setBgRemoved] = useState(false);
+  const [previewCrop, setPreviewCrop] = useState(false);
   const mountedRef = useRef(false);
 
   // ── Spring-driven shared values ──────────────────────────────────
   const sheetYSV = useSharedValue(SCREEN_W * 1.2);
   const backdropOpacitySV = useSharedValue(0);
-  const bgRemoveOpacitySV = useSharedValue(0);
   const toolHighlightSV = useSharedValue(0); // 0 = scissors, 1 = eraser
   const cutoutScaleSV = useSharedValue(1);
   const cutoutXSV = useSharedValue(0);
@@ -133,19 +133,6 @@ export function CreatorCutoutSheet({
       }
     }
   }, [visible, reduceMotion, sheetYSV, backdropOpacitySV, spring]);
-
-  // ── Background removal preview fade ──────────────────────────────
-  useEffect(() => {
-    if (bgRemoved) {
-      if (reduceMotion) {
-        bgRemoveOpacitySV.value = 0.6;
-      } else {
-        bgRemoveOpacitySV.value = withTiming(0.6, { duration: 400, easing: Easing.out(Easing.ease) });
-      }
-    } else {
-      bgRemoveOpacitySV.value = withTiming(0, { duration: 200 });
-    }
-  }, [bgRemoved, reduceMotion, bgRemoveOpacitySV]);
 
   // ── Tool switch with spring highlight ────────────────────────────
   const handleToolSwitch = useCallback((nextTool: Tool) => {
@@ -247,28 +234,26 @@ export function CreatorCutoutSheet({
   const handleUndo = useCallback(() => {
     haptic.selection();
     setPaths((prev) => prev.slice(0, -1));
-    if (paths.length <= 1) setBgRemoved(false);
+    if (paths.length <= 1) setPreviewCrop(false);
   }, [haptic, paths]);
 
   // ── Clear all paths ──────────────────────────────────────────────
   const handleClear = useCallback(() => {
     haptic.medium();
     setPaths([]);
-    setBgRemoved(false);
+    setPreviewCrop(false);
   }, [haptic]);
 
-  // ── Preview background removal ───────────────────────────────────
-  const handlePreviewBgRemove = useCallback(() => {
+  // ── Preview crop bounding box ─────────────────────────────────────
+  const handlePreviewCrop = useCallback(() => {
     haptic.medium();
-    setBgRemoved((prev) => !prev);
+    setPreviewCrop((prev) => !prev);
     triggerSubjectHighlight();
   }, [haptic, triggerSubjectHighlight]);
 
-  // ── Apply cutout ─────────────────────────────────────────────────
-  // Since we can't do true AI background removal on-device without ML,
-  // we use the traced path to create a crop bounding box and export as PNG.
-  // The user traces around the subject, and we crop to that bounding box.
-  // For a true pixel-level cutout, a backend ML service would be needed.
+  // ── Apply crop ────────────────────────────────────────────────────
+  // The traced path defines a bounding box. We crop to that bounding box
+  // and export as PNG. This is a rectangular crop, not background removal.
   const handleApply = useCallback(async () => {
     if (paths.length === 0) {
       show('Trace around your subject first', 'error');
@@ -330,10 +315,6 @@ export function CreatorCutoutSheet({
     opacity: backdropOpacitySV.value,
   }));
 
-  const bgRemoveStyle = useAnimatedStyle(() => ({
-    opacity: bgRemoveOpacitySV.value,
-  }));
-
   const cutoutTransformStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: cutoutXSV.value },
@@ -357,13 +338,25 @@ export function CreatorCutoutSheet({
     transform: [{ translateX: interpolate(toolHighlightSV.value, [0, 1], [0, 88], Extrapolation.CLAMP) }],
   }));
 
+  // ── Bounding box of all traced paths (for preview crop overlay) ───
+  const cropBBox = useMemo(() => {
+    if (paths.length === 0) return null;
+    const allPoints = paths.flat();
+    if (allPoints.length === 0) return null;
+    const minX = Math.min(...allPoints.map(p => p.x));
+    const maxX = Math.max(...allPoints.map(p => p.x));
+    const minY = Math.min(...allPoints.map(p => p.y));
+    const maxY = Math.max(...allPoints.map(p => p.y));
+    return { minX, maxX, minY, maxY };
+  }, [paths]);
+
   if (!visible && !mountedRef.current) return null;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
       {/* Backdrop */}
       <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay, zIndex: 300 }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close cutout" accessibilityRole="button" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close manual crop" accessibilityRole="button" />
       </Reanimated.View>
 
       <Reanimated.View
@@ -380,14 +373,14 @@ export function CreatorCutoutSheet({
 
         {/* Title row */}
         <View style={styles.titleRow}>
-          <PressScale onPress={onClose} accessibilityLabel="Cancel cutout" hitSlop={12}>
+          <PressScale onPress={onClose} accessibilityLabel="Cancel manual crop" hitSlop={12}>
             <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
           </PressScale>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Trace Cutout (Manual)</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Manual Crop</Text>
           <PressScale
             onPress={handleApply}
             disabled={isProcessing || paths.length === 0}
-            accessibilityLabel="Apply cutout"
+            accessibilityLabel="Apply crop"
             hitSlop={12}
           >
             <Text style={[
@@ -404,7 +397,10 @@ export function CreatorCutoutSheet({
 
         {/* Instructions */}
         <Text style={[styles.instructions, { color: colors.textMuted }]}>
-          {bgRemoved ? 'Preview shown — tap Crop to save the traced region' : 'Trace around your subject, then crop to that region'}
+          {previewCrop && cropBBox ? 'Crop region shown — tap Crop to save' : 'Trace around your subject, then crop to that region'}
+        </Text>
+        <Text style={[styles.note, { color: colors.textMuted }]}>
+          For automatic background removal, use a subject with a clean background.
         </Text>
 
         {/* Drawing canvas with drag/pinch for cutout positioning */}
@@ -426,8 +422,22 @@ export function CreatorCutoutSheet({
                 style={{ width: '100%', height: '100%' }}
                 contentFit="cover"
               />
-              {/* Background removal preview overlay (fade) */}
-              <Reanimated.View style={[StyleSheet.absoluteFill, bgRemoveStyle, { backgroundColor: '#000' }]} pointerEvents="none" />
+              {/* Crop bounding box preview overlay */}
+              {previewCrop && cropBBox && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: Math.max(0, cropBBox.minX - 16),
+                    top: Math.max(0, cropBBox.minY),
+                    width: Math.min(displaySize.width, cropBBox.maxX - cropBBox.minX),
+                    height: Math.min(displaySize.height, cropBBox.maxY - cropBBox.minY),
+                    borderWidth: 2,
+                    borderColor: colors.brand,
+                    backgroundColor: 'transparent',
+                  }}
+                  pointerEvents="none"
+                />
+              )}
               {/* Subject selection highlight pulse */}
               <Reanimated.View style={[StyleSheet.absoluteFill, subjectHighlightStyle, { backgroundColor: colors.brand }]} pointerEvents="none" />
 
@@ -488,17 +498,17 @@ export function CreatorCutoutSheet({
         {/* Tool controls */}
         <View style={styles.toolRow}>
           <PressScale
-            onPress={handlePreviewBgRemove}
-            style={[styles.toolBtn, { borderColor: bgRemoved ? colors.brand : colors.border, backgroundColor: bgRemoved ? `${colors.brand}15` : 'transparent' }]}
+            onPress={handlePreviewCrop}
+            style={[styles.toolBtn, { borderColor: previewCrop ? colors.brand : colors.border, backgroundColor: previewCrop ? `${colors.brand}15` : 'transparent' }]}
             disabled={paths.length === 0}
-            accessibilityLabel="Preview traced region"
+            accessibilityLabel="Preview crop"
           >
             <Ionicons
               name="eye-outline"
               size={22}
-              color={paths.length === 0 ? colors.textMuted : (bgRemoved ? colors.brand : colors.textPrimary)}
+              color={paths.length === 0 ? colors.textMuted : (previewCrop ? colors.brand : colors.textPrimary)}
             />
-            <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : (bgRemoved ? colors.brand : colors.textSecondary) }]}>
+            <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : (previewCrop ? colors.brand : colors.textSecondary) }]}>
               Preview
             </Text>
           </PressScale>
@@ -614,7 +624,14 @@ const styles = StyleSheet.create({
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
+    paddingBottom: 4,
+  },
+  note: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    textAlign: 'center',
     paddingBottom: 12,
+    fontStyle: 'italic',
   },
   canvasArea: {
     alignItems: 'center',

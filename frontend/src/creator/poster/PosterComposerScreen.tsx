@@ -135,6 +135,7 @@ function PosterComposerInner() {
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
   const [pageMenuIndex, setPageMenuIndex] = useState<number | null>(null);
   const [showFrameTray, setShowFrameTray] = useState(false);
+  const [videoInfoFrameIndex, setVideoInfoFrameIndex] = useState<number | null>(null);
 
   const page = document.pages[activePageIndex];
   const pageCount = document.pages.length;
@@ -164,6 +165,7 @@ function PosterComposerInner() {
   useEffect(() => {
     if (!hasMultipleFrames) return;
     setShowFrameTray(true);
+    setVideoInfoFrameIndex(null);
     const timer = setTimeout(() => setShowFrameTray(false), 3500);
     return () => clearTimeout(timer);
   }, [hasMultipleFrames, activePageIndex, pageCount]);
@@ -599,7 +601,7 @@ function PosterComposerInner() {
             ))}
             {/* Frame tray toggle */}
             <PressScale
-              onPress={() => { haptic.light(); setShowFrameTray((p) => !p); }}
+              onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
               style={styles.pageSegmentToggle}
               accessibilityLabel="Toggle frame tray"
               accessibilityHint="Shows or hides the bottom frame thumbnail tray"
@@ -722,7 +724,7 @@ function PosterComposerInner() {
               {hasMultipleFrames && (
                 <>
                   <PressScale
-                    onPress={() => { haptic.light(); setShowFrameTray((p) => !p); }}
+                    onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
                     style={styles.frameCountBtn}
                     accessibilityLabel={`Frame ${activePageIndex + 1} of ${pageCount}`}
                     accessibilityHint="Opens the frame tray to reorder, delete, or add frames"
@@ -774,8 +776,12 @@ function PosterComposerInner() {
           onSelectPage={(i) => { selectLayer(null); setActivePageIndex(i); }}
           onLongPressPage={(i) => setPageMenuIndex(i)}
           onAddPage={handleAddFrame}
-          onCollapse={() => setShowFrameTray(false)}
+          onCollapse={() => { setShowFrameTray(false); setVideoInfoFrameIndex(null); }}
           bottomOffset={insets.bottom + 120}
+          onVideoBadgePress={(i) => {
+            setVideoInfoFrameIndex((prev) => (prev === i ? null : i));
+          }}
+          videoInfoFrameIndex={videoInfoFrameIndex}
         />
       )}
 

@@ -32,6 +32,8 @@ export interface FrameTrayProps {
   onAddPage: () => void;
   onCollapse: () => void;
   bottomOffset: number;
+  onVideoBadgePress?: (index: number) => void;
+  videoInfoFrameIndex?: number | null;
 }
 
 export function FrameTray({
@@ -42,6 +44,8 @@ export function FrameTray({
   onAddPage,
   onCollapse,
   bottomOffset,
+  onVideoBadgePress,
+  videoInfoFrameIndex,
 }: FrameTrayProps) {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
@@ -104,12 +108,31 @@ export function FrameTray({
                     <Ionicons name="image-outline" size={16} color="rgba(255,255,255,0.4)" />
                   </View>
                 )}
-                {/* Video duration marker */}
+                {/* Video duration marker — tappable to show trim info */}
                 {isVideo && durationMs != null && (
-                  <View style={styles.durationBadge}>
+                  <Pressable
+                    style={styles.durationBadge}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      haptic.light();
+                      onVideoBadgePress?.(i);
+                    }}
+                    accessibilityLabel={`Video frame ${i + 1}, ${Math.ceil(durationMs / 1000)} seconds`}
+                    accessibilityHint="Video trim and mute will be available in a future update"
+                    accessibilityRole="button"
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                  >
                     <Ionicons name="play" size={8} color="#fff" />
                     <Text style={styles.durationText}>
                       {Math.ceil(durationMs / 1000)}s
+                    </Text>
+                  </Pressable>
+                )}
+                {/* Video trim info — inline text label on the frame */}
+                {isVideo && videoInfoFrameIndex === i && (
+                  <View style={styles.videoInfoLabel} pointerEvents="none">
+                    <Text style={styles.videoInfoText}>
+                      Video trim and mute will be available in a future update. The full clip will be used.
                     </Text>
                   </View>
                 )}
@@ -197,6 +220,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 8,
     fontFamily: FontFamily.medium,
+  },
+  videoInfoLabel: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    borderRadius: RadiusRoleValue.compactControl,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+  },
+  videoInfoText: {
+    color: '#fff',
+    fontSize: 7,
+    fontFamily: FontFamily.regular,
+    lineHeight: 9,
+    textAlign: 'center',
   },
   thumbLabel: {
     color: 'rgba(255,255,255,0.5)',

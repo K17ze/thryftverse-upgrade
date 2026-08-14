@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,28 +7,38 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Radius, Space, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Radius, Space, Type, Typography, Stroke, Control } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import type { ChatAgentConfig } from '../data/mockData';
+import type { ChatAgentConfig, ChatBot } from '../data/mockData';
+import {
+  CAPABILITIES_BY_RISK,
+  CAPABILITY_RISK_LABELS,
+  buildInitialCapabilityGrants,
+  type AgentCapability,
+  type AgentCategory,
+  type AgentDefinition,
+  type CapabilityGrantConfig,
+  type ResponseLength,
+  type Tone,
+  type TriggerMode,
+} from '../platform/agents/agentDefinition';
+import {
+  PROVIDER_CONFIGS,
+  type AIProvider,
+  type ConnectedProvider,
+  type DiscoveredModel,
+  discoverModels,
+  getConnectedProviders,
+} from '../services/aiProviderApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BotBuilder'>;
-type BotCategory = 'assistant' | 'moderation' | 'commerce' | 'safety' | 'automation' | 'styling';
 
-const DEFAULT_CONFIG: ChatAgentConfig = {
-  instructions: '',
-  model: 'gpt-5.6-terra',
-  triggerMode: 'mention',
-  responseLength: 'balanced',
-  tone: 'focused',
-  reasoningEffort: 'medium',
-  historyLimit: 16,
-  starterPrompts: [],
-};
+type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
-const CATEGORIES: Array<{ value: BotCategory; label: string }> = [
+const CATEGORIES: Array<{ value: AgentCategory; label: string }> = [
   { value: 'assistant', label: 'Assistant' },
   { value: 'styling', label: 'Styling' },
   { value: 'commerce', label: 'Commerce' },
@@ -38,7 +48,7 @@ const CATEGORIES: Array<{ value: BotCategory; label: string }> = [
 ];
 
 const TRIGGERS: Array<{
-  value: ChatAgentConfig['triggerMode'];
+  value: TriggerMode;
   label: string;
   detail: string;
 }> = [
@@ -47,28 +57,23 @@ const TRIGGERS: Array<{
   { value: 'always', label: 'Every message', detail: 'Participates throughout the chat' },
 ];
 
-const MODELS: Array<{
-  value: ChatAgentConfig['model'];
-  label: string;
-  detail: string;
+const RISK_GROUPS: Array<{
+  risk: RiskLevel;
+  title: string;
+  hint: string;
 }> = [
-  { value: 'gpt-5.6-terra', label: 'Balanced', detail: 'Best default for everyday chat' },
-  { value: 'gpt-5.6-sol', label: 'Advanced', detail: 'Deeper reasoning for complex work' },
-  { value: 'gpt-5.6-luna', label: 'Fast', detail: 'Lower latency for simple tasks' },
+  { risk: 'low', title: 'Read access', hint: 'Auto-approved after you grant once.' },
+  { risk: 'medium', title: 'Drafts & edits', hint: 'Reversible — nothing is committed externally.' },
+  { risk: 'high', title: 'Publish & send', hint: 'Asks before every publication or message.' },
+  { risk: 'critical', title: 'Money & security', hint: 'Always requires explicit approval — never auto-allowed.' },
 ];
 
-const PERMISSIONS = [
-  {
-    key: 'read_messages',
-    label: 'Conversation context',
-    detail: 'Read the recent messages allowed by the context limit.',
-  },
-  {
-    key: 'reply_in_chat',
-    label: 'Reply in chat',
-    detail: 'Send responses under the agent identity.',
-  },
-] as const;
+const RISK_DOT: Record<RiskLevel, string> = {
+  low: 'checkmark-circle',
+  medium: 'create-outline',
+  high: 'megaphone-outline',
+  critical: 'warning-outline',
+};
 
 export default function BotBuilderScreen({ navigation, route }: Props) {
   const { botId } = route.params ?? {};
@@ -81,75 +86,221 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
   const createCustomBot = useStore((state) => state.createCustomBot);
   const updateCustomBot = useStore((state) => state.updateCustomBot);
 
-  const initialConfig = existingBot?.agentConfig ?? DEFAULT_CONFIG;
+  // --- Existing-bot hydration (map legacy ChatBot → AgentDefinition fields) ---
+  const legacyConfig = existingBot?.agentConfig;
+  const initialCategory = (existingBot?.category as AgentCategory | undefined) ?? 'assistant';
   const [name, setName] = useState(existingBot?.name ?? '');
   const [description, setDescription] = useState(existingBot?.description ?? '');
   const [commandHint, setCommandHint] = useState(existingBot?.commandHint ?? '/ask');
-  const [category, setCategory] = useState<BotCategory>(
-    (existingBot?.category as BotCategory | undefined) ?? 'assistant'
+  const [category, setCategory] = useState<AgentCategory>(initialCategory);
+  const [instructions, setInstructions] = useState(legacyConfig?.instructions ?? '');
+  const [triggerMode, setTriggerMode] = useState<TriggerMode>(legacyConfig?.triggerMode ?? 'mention');
+  const [tone, setTone] = useState<Tone>(legacyConfig?.tone ?? 'focused');
+  const [responseLength, setResponseLength] = useState<ResponseLength>(
+    legacyConfig?.responseLength ?? 'balanced'
   );
-  const [instructions, setInstructions] = useState(initialConfig.instructions);
-  const [model, setModel] = useState<ChatAgentConfig['model']>(initialConfig.model);
-  const [triggerMode, setTriggerMode] = useState<ChatAgentConfig['triggerMode']>(
-    initialConfig.triggerMode
-  );
-  const [tone, setTone] = useState<ChatAgentConfig['tone']>(initialConfig.tone);
-  const [responseLength, setResponseLength] = useState<ChatAgentConfig['responseLength']>(
-    initialConfig.responseLength
-  );
-  const [historyLimit, setHistoryLimit] = useState(initialConfig.historyLimit);
-  const [starterOne, setStarterOne] = useState(initialConfig.starterPrompts[0] ?? '');
-  const [starterTwo, setStarterTwo] = useState(initialConfig.starterPrompts[1] ?? '');
-  const [permissions, setPermissions] = useState<Record<string, boolean>>({
-    read_messages: existingBot ? existingBot.permissions.includes('read_messages') : true,
-    reply_in_chat: existingBot ? existingBot.permissions.includes('reply_in_chat') : true,
+  const [starterOne, setStarterOne] = useState(legacyConfig?.starterPrompts[0] ?? '');
+  const [starterTwo, setStarterTwo] = useState(legacyConfig?.starterPrompts[1] ?? '');
+
+  // --- Capabilities (typed, from Capability Broker) ---
+  // Rebuild the grant list when the category changes so defaults track the
+  // selected category. When editing an existing bot, hydrate from its stored
+  // permissions on first render only.
+  const [capabilityGrants, setCapabilityGrants] = useState<CapabilityGrantConfig[]>(() => {
+    const grants = buildInitialCapabilityGrants(initialCategory);
+    if (existingBot) {
+      const enabled = new Set(existingBot.permissions);
+      return grants.map((g) => ({ ...g, enabled: enabled.has(g.capability) }));
+    }
+    return grants;
   });
+  const [categoryTouched, setCategoryTouched] = useState(Boolean(existingBot));
+
+  const handleCategoryChange = (next: AgentCategory) => {
+    setCategory(next);
+    setCategoryTouched(true);
+    // Re-seed defaults for the new category, preserving any explicit toggles
+    // the user already made for capabilities that exist in both categories.
+    setCapabilityGrants((current) => {
+      const nextDefaults = new Set(buildInitialCapabilityGrants(next).filter((g) => g.enabled).map((g) => g.capability));
+      return current.map((g) => ({
+        ...g,
+        enabled: categoryTouched ? g.enabled : nextDefaults.has(g.capability),
+      }));
+    });
+  };
+
+  // --- Memory policy ---
+  const [conversationContext, setConversationContext] = useState(
+    legacyConfig ? legacyConfig.historyLimit > 0 : true
+  );
+  const [maxTurns, setMaxTurns] = useState(legacyConfig?.historyLimit ?? 16);
+
+  // --- Provider connection (dynamic model discovery) ---
+  const [connectedProviders, setConnectedProviders] = useState<ConnectedProvider[]>([]);
+  const [providersLoading, setProvidersLoading] = useState(true);
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [providerId, setProviderId] = useState<string>('');
+  const [modelId, setModelId] = useState<string>(legacyConfig?.model ?? '');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const connected = await getConnectedProviders();
+        if (cancelled) return;
+        setConnectedProviders(connected);
+        // Prefer the provider that matches the stored model when editing.
+        const initialProvider =
+          (connected.find((p) => p.provider === (existingBot?.runtimeMode as AIProvider | undefined))?.provider ??
+            connected[0]?.provider) ??
+          '';
+        setProviderId(initialProvider);
+      } catch {
+        // Non-fatal — treated as no connected providers.
+      } finally {
+        if (!cancelled) setProvidersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [existingBot?.runtimeMode]);
+
+  // Discover models for the selected provider.
+  useEffect(() => {
+    if (!providerId) {
+      setDiscoveredModels([]);
+      return;
+    }
+    let cancelled = false;
+    setModelsLoading(true);
+    (async () => {
+      try {
+        const models = await discoverModels(providerId as AIProvider);
+        if (cancelled) return;
+        setDiscoveredModels(models);
+        // If the current model id isn't in the discovered list, keep it as a
+        // manual entry rather than silently clearing it (truthful UI).
+      } catch {
+        if (!cancelled) setDiscoveredModels([]);
+      } finally {
+        if (!cancelled) setModelsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [providerId]);
+
   const [isSaving, setIsSaving] = useState(false);
 
   const slug = useMemo(
     () => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
     [name]
   );
-  const selectedPermissions = PERMISSIONS
-    .filter((permission) => permissions[permission.key])
-    .map((permission) => permission.key);
+
+  const enabledCapabilities = useMemo(
+    () => capabilityGrants.filter((g) => g.enabled).map((g) => g.capability),
+    [capabilityGrants]
+  );
+
   const nameError = name.length > 0 && name.trim().length < 2 ? 'Use at least 2 characters.' : undefined;
   const instructionError =
     instructions.length > 0 && instructions.trim().length < 20
       ? 'Add enough direction for consistent answers (20 characters minimum).'
       : undefined;
-  const canSaveDraft = name.trim().length >= 2 && description.trim().length >= 2 && !isSaving;
+  const canSaveDraft =
+    name.trim().length >= 2 &&
+    description.trim().length >= 2 &&
+    !isSaving;
+  // Publishing requires instructions, a connected model, and at least the
+  // draft-reply capability so the agent can actually respond.
   const canPublish =
     canSaveDraft &&
     instructions.trim().length >= 20 &&
-    permissions.reply_in_chat;
+    modelId.trim().length > 0 &&
+    enabledCapabilities.includes('chat.draft_reply');
 
-  const buildAgentConfig = (): ChatAgentConfig => ({
+  const setGrantEnabled = (capability: AgentCapability, enabled: boolean) => {
+    setCapabilityGrants((current) =>
+      current.map((g) => (g.capability === capability ? { ...g, enabled } : g))
+    );
+  };
+
+  const setGrantApprovalMode = (
+    capability: AgentCapability,
+    approvalMode: CapabilityGrantConfig['approvalMode']
+  ) => {
+    setCapabilityGrants((current) =>
+      current.map((g) => (g.capability === capability ? { ...g, approvalMode } : g))
+    );
+  };
+
+  // --- Build the AgentDefinition, then map to the legacy ChatBot store shape ---
+  const buildAgentDefinition = (): AgentDefinition => ({
+    id: (existingBot?.id ?? slug) || 'agent',
+    name: name.trim(),
+    description: description.trim(),
+    category,
     instructions: instructions.trim(),
-    model,
-    triggerMode,
-    responseLength,
     tone,
-    reasoningEffort: model === 'gpt-5.6-luna' ? 'low' : model === 'gpt-5.6-sol' ? 'high' : 'medium',
-    historyLimit: permissions.read_messages ? historyLimit : 0,
+    responseLength,
+    triggerMode,
+    commandHint: commandHint.trim() || '/ask',
     starterPrompts: [starterOne, starterTwo].map((item) => item.trim()).filter(Boolean),
+    providerConnection: {
+      providerId,
+      modelId: modelId.trim(),
+    },
+    capabilityGrants,
+    memoryPolicy: {
+      conversationContext,
+      maxTurns: conversationContext ? maxTurns : 0,
+      longTermMemory: false,
+    },
+    isDraft: false,
+    createdAt: existingBot ? new Date(0).toISOString() : new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
+
+  const mapDefinitionToBotData = (
+    def: AgentDefinition
+  ): Omit<ChatBot, 'id' | 'type' | 'creatorId'> => {
+    const agentConfig: ChatAgentConfig = {
+      instructions: def.instructions,
+      // The legacy contract types model as a fixed union; the provider is now
+      // the source-of-truth so we cast the discovered id through the string
+      // type. The store persists the real id; the union is a legacy artefact.
+      model: def.providerConnection.modelId as ChatAgentConfig['model'],
+      triggerMode: def.triggerMode,
+      responseLength: def.responseLength,
+      tone: def.tone,
+      reasoningEffort: 'medium',
+      historyLimit: def.memoryPolicy.conversationContext ? def.memoryPolicy.maxTurns : 0,
+      starterPrompts: def.starterPrompts,
+    };
+    return {
+      slug: slug || existingBot?.slug || 'agent',
+      name: def.name,
+      description: def.description,
+      commandHint: def.commandHint ?? '/ask',
+      category: def.category,
+      status: 'available' as const,
+      runtimeMode: def.providerConnection.providerId || 'ai',
+      permissions: def.capabilityGrants.filter((g) => g.enabled).map((g) => g.capability),
+      isDraft: def.isDraft,
+      agentConfig,
+    };
+  };
 
   const handleSave = async (isDraft: boolean) => {
     if (isDraft ? !canSaveDraft : !canPublish) return;
     setIsSaving(true);
-    const botData = {
-      slug: slug || existingBot?.slug || 'agent',
-      name: name.trim(),
-      description: description.trim(),
-      commandHint: commandHint.trim() || '/ask',
-      category,
-      status: 'available' as const,
-      runtimeMode: 'ai',
-      permissions: selectedPermissions,
-      isDraft,
-      agentConfig: buildAgentConfig(),
-    };
+    const def = buildAgentDefinition();
+    def.isDraft = isDraft;
+    const botData = mapDefinitionToBotData(def);
 
     try {
       if (existingBot) {
@@ -215,7 +366,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           <OptionGrid
             options={CATEGORIES}
             selected={category}
-            onSelect={(value) => setCategory(value as BotCategory)}
+            onSelect={(value) => handleCategoryChange(value as AgentCategory)}
           />
         </Section>
 
@@ -238,7 +389,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           <ChoiceList
             options={TRIGGERS}
             selected={triggerMode}
-            onSelect={(value) => setTriggerMode(value as ChatAgentConfig['triggerMode'])}
+            onSelect={(value) => setTriggerMode(value as TriggerMode)}
           />
           {triggerMode === 'command' ? (
             <AppInput
@@ -268,8 +419,10 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           ) : null}
         </Section>
 
-        <Section title="Voice & quality" detail="Choose the quality, voice, and answer density.">
-          <ChoiceList options={MODELS} selected={model} onSelect={(value) => setModel(value as ChatAgentConfig['model'])} />
+        <Section
+          title="Voice & model"
+          detail="Choose the voice, answer density, and the provider model that powers this agent."
+        >
           <Text style={styles.fieldLabel}>Voice</Text>
           <OptionGrid
             options={[
@@ -278,7 +431,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
               { value: 'expert', label: 'Expert' },
             ]}
             selected={tone}
-            onSelect={(value) => setTone(value as ChatAgentConfig['tone'])}
+            onSelect={(value) => setTone(value as Tone)}
           />
           <Text style={styles.fieldLabel}>Response length</Text>
           <OptionGrid
@@ -288,56 +441,156 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
               { value: 'detailed', label: 'Detailed' },
             ]}
             selected={responseLength}
-            onSelect={(value) => setResponseLength(value as ChatAgentConfig['responseLength'])}
+            onSelect={(value) => setResponseLength(value as ResponseLength)}
+          />
+
+          <Text style={styles.fieldLabel}>Provider</Text>
+          {providersLoading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+              <Text style={styles.loadingText}>Checking connected providers…</Text>
+            </View>
+          ) : connectedProviders.length === 0 ? (
+            <View style={styles.caution}>
+              <Ionicons name="cloud-offline-outline" size={17} color={colors.textSecondary} />
+              <Text style={styles.cautionText}>
+                No AI provider is connected yet. Connect one in Settings to discover available models, or enter a model id manually below.
+              </Text>
+            </View>
+          ) : (
+            <ChoiceList
+              options={connectedProviders.map((p) => ({
+                value: p.provider,
+                label: p.config.name,
+                detail: p.config.description,
+              }))}
+              selected={providerId}
+              onSelect={(value) => {
+                setProviderId(value);
+                // Reset the model id when switching providers — the discovered
+                // list will refresh via the effect above.
+                setModelId('');
+              }}
+            />
+          )}
+
+          <Text style={styles.fieldLabel}>Model</Text>
+          {providerId && discoveredModels.length > 0 ? (
+            <ChoiceList
+              options={discoveredModels.map((m) => ({
+                value: m.providerModelId,
+                label: m.displayName,
+                detail: m.deprecated ? 'Deprecated by provider' : m.providerModelId,
+              }))}
+              selected={modelId}
+              onSelect={(value) => setModelId(value)}
+            />
+          ) : providerId && modelsLoading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+              <Text style={styles.loadingText}>Discovering models from {PROVIDER_CONFIGS[providerId as AIProvider]?.name ?? 'provider'}…</Text>
+            </View>
+          ) : providerId ? (
+            <View style={styles.caution}>
+              <Ionicons name="search-outline" size={17} color={colors.textSecondary} />
+              <Text style={styles.cautionText}>
+                No models were discovered from this provider. You can still enter a model id manually.
+              </Text>
+            </View>
+          ) : null}
+          <AppInput
+            label="Model id"
+            value={modelId}
+            onChangeText={setModelId}
+            placeholder="e.g. gpt-4o"
+            maxLength={80}
+            autoCapitalize="none"
+            autoCorrect={false}
+            helperText={
+              providerId
+                ? 'Discovered from your connected provider.'
+                : 'Connect a provider in Settings to discover models.'
+            }
+            accessibilityLabel="Provider model id"
           />
         </Section>
 
-        <Section title="Context & access" detail="Permissions are captured when the agent connects to a chat.">
-          <View style={styles.permissionList}>
-            {PERMISSIONS.map((permission, index) => {
-              const enabled = permissions[permission.key];
-              return (
-                <View key={permission.key}>
-                  <AnimatedPressable
-                    onPress={() =>
-                      setPermissions((current) => ({
-                        ...current,
-                        [permission.key]: !current[permission.key],
-                      }))
-                    }
-                    style={styles.permissionRow}
-                    scaleValue={0.985}
-                    hapticFeedback="selection"
-                    accessibilityRole="switch"
-                    accessibilityLabel={permission.label}
-                    accessibilityState={{ checked: enabled }}
-                  >
-                    <View style={styles.permissionCopy}>
-                      <Text style={styles.permissionTitle}>{permission.label}</Text>
-                      <Text style={styles.permissionDetail}>{permission.detail}</Text>
-                    </View>
+        <Section
+          title="Capabilities"
+          detail="Typed grants from the Capability Broker. Critical actions always require explicit approval."
+        >
+          {RISK_GROUPS.map((group) => {
+            const groupGrants = capabilityGrants.filter(
+              (g) => CAPABILITY_RISK_LABELS[g.capability].risk === group.risk
+            );
+            if (groupGrants.length === 0) return null;
+            return (
+              <View key={group.risk} style={styles.riskGroup}>
+                <View style={styles.riskGroupHeader}>
+                  <View style={styles.riskGroupTitleRow}>
                     <Ionicons
-                      name={enabled ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={24}
-                      color={enabled ? colors.textPrimary : colors.textMuted}
+                      name={RISK_DOT[group.risk] as any}
+                      size={16}
+                      color={group.risk === 'critical' ? colors.danger : colors.textSecondary}
                     />
-                  </AnimatedPressable>
-                  {index < PERMISSIONS.length - 1 ? <View style={styles.divider} /> : null}
+                    <Text style={styles.riskGroupTitle}>{group.title}</Text>
+                  </View>
+                  <Text style={styles.riskGroupHint}>{group.hint}</Text>
                 </View>
-              );
-            })}
-          </View>
-          {permissions.read_messages ? (
+                <View style={styles.permissionList}>
+                  {groupGrants.map((grant, index) => {
+                    const meta = CAPABILITY_RISK_LABELS[grant.capability];
+                    return (
+                      <View key={grant.capability}>
+                        <CapabilityRow
+                          label={meta.label}
+                          risk={group.risk}
+                          enabled={grant.enabled}
+                          approvalMode={grant.approvalMode}
+                          onToggle={() => setGrantEnabled(grant.capability, !grant.enabled)}
+                          onApprovalModeChange={(mode) => setGrantApprovalMode(grant.capability, mode)}
+                        />
+                        {index < groupGrants.length - 1 ? <View style={styles.divider} /> : null}
+                      </View>
+                    );
+                  })}
+                </View>
+                {group.risk === 'critical' ? (
+                  <View style={styles.criticalWarning}>
+                    <Ionicons name="shield-checkmark-outline" size={16} color={colors.danger} />
+                    <Text style={styles.criticalWarningText}>
+                      Money and security actions can never be auto-allowed. The agent must route every request through the canonical transaction screens.
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </Section>
+
+        <Section
+          title="Memory"
+          detail="How much conversation context the agent can read."
+        >
+          <CapabilityRow
+            label="Conversation context"
+            risk="low"
+            enabled={conversationContext}
+            approvalMode="never_ask"
+            onToggle={() => setConversationContext((v) => !v)}
+            hideApprovalMode
+          />
+          {conversationContext ? (
             <>
-              <Text style={styles.fieldLabel}>Recent messages available</Text>
+              <Text style={styles.fieldLabel}>Recent turns available</Text>
               <OptionGrid
                 options={[
                   { value: '8', label: '8' },
                   { value: '16', label: '16' },
                   { value: '32', label: '32' },
                 ]}
-                selected={String(historyLimit)}
-                onSelect={(value) => setHistoryLimit(Number(value))}
+                selected={String(maxTurns)}
+                onSelect={(value) => setMaxTurns(Number(value))}
               />
             </>
           ) : null}
@@ -375,7 +628,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
             <Text style={styles.readinessDetail}>
               {canPublish
                 ? 'After publishing, connect this agent from a group chat.'
-                : 'Name, description, instructions, and reply access are required.'}
+                : 'Name, description, instructions, a model, and reply access are required.'}
             </Text>
           </View>
         </View>
@@ -404,6 +657,92 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
     </SafeAreaView>
   );
 }
+
+// ---------------------------------------------------------------------------
+// CapabilityRow — a single typed capability grant with approval-mode control
+// ---------------------------------------------------------------------------
+
+function CapabilityRow({
+  label,
+  risk,
+  enabled,
+  approvalMode,
+  onToggle,
+  onApprovalModeChange,
+  hideApprovalMode,
+}: {
+  label: string;
+  risk: RiskLevel;
+  enabled: boolean;
+  approvalMode: CapabilityGrantConfig['approvalMode'];
+  onToggle: () => void;
+  onApprovalModeChange?: (mode: CapabilityGrantConfig['approvalMode']) => void;
+  hideApprovalMode?: boolean;
+}) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const isCritical = risk === 'critical';
+  const approvalOptions: Array<{
+    value: CapabilityGrantConfig['approvalMode'];
+    label: string;
+  }> = isCritical
+    ? [{ value: 'always_ask', label: 'Always ask' }]
+    : [
+        { value: 'always_ask', label: 'Always ask' },
+        { value: 'ask_once', label: 'Ask once' },
+        { value: 'never_ask', label: 'Never ask' },
+      ];
+
+  return (
+    <View style={styles.permissionRow}>
+      <AnimatedPressable
+        onPress={onToggle}
+        style={styles.permissionCopy}
+        scaleValue={0.985}
+        hapticFeedback="selection"
+        accessibilityRole="switch"
+        accessibilityLabel={label}
+        accessibilityState={{ checked: enabled }}
+      >
+        <View style={styles.permissionLabelRow}>
+          <Ionicons
+            name={enabled ? 'checkmark-circle' : 'ellipse-outline'}
+            size={22}
+            color={enabled ? (isCritical ? colors.danger : colors.textPrimary) : colors.textMuted}
+          />
+          <Text style={styles.permissionTitle}>{label}</Text>
+        </View>
+      </AnimatedPressable>
+      {enabled && !hideApprovalMode && onApprovalModeChange ? (
+        <View style={styles.approvalChips}>
+          {approvalOptions.map((opt) => {
+            const active = approvalMode === opt.value;
+            return (
+              <AnimatedPressable
+                key={opt.value}
+                onPress={() => onApprovalModeChange(opt.value)}
+                style={[styles.approvalChip, active && styles.approvalChipActive]}
+                scaleValue={0.96}
+                hapticFeedback="selection"
+                accessibilityRole="radio"
+                accessibilityLabel={`${opt.label} for ${label}`}
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.approvalChipText, active && styles.approvalChipTextActive]}>
+                  {opt.label}
+                </Text>
+              </AnimatedPressable>
+            );
+          })}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared layout primitives (preserved from the previous screen)
+// ---------------------------------------------------------------------------
 
 function Section({
   title,
@@ -621,17 +960,64 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     lineHeight: Type.captionElevated.lineHeight - 1,
   },
-  permissionList: {},
-  permissionRow: { minHeight: Space.xxl + Space.lg, flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  permissionCopy: { flex: 1, gap: Space.xs - 1 },
-  permissionTitle: {
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
+  loadingText: {
+    color: colors.textSecondary,
+    fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+  },
+  riskGroup: { gap: Space.sm },
+  riskGroupHeader: { gap: Space.xs - 2 },
+  riskGroupTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  riskGroupTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
   },
-  permissionDetail: {
+  riskGroupHint: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
+    fontSize: Type.caption.size,
+    lineHeight: Type.captionElevated.lineHeight - 1,
+  },
+  permissionList: {},
+  permissionRow: { paddingVertical: Space.sm, gap: Space.xs },
+  permissionCopy: { minHeight: Control.hit, justifyContent: 'center' },
+  permissionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  permissionTitle: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+  },
+  approvalChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs, paddingLeft: Space.sm + Space.xs + Space.sm },
+  approvalChip: {
+    minHeight: Control.hit - Space.md,
+    justifyContent: 'center',
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs - 2,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  approvalChipActive: { borderColor: colors.textPrimary, backgroundColor: colors.textPrimary },
+  approvalChipText: {
+    color: colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+  },
+  approvalChipTextActive: { color: colors.textInverse, fontFamily: Typography.family.semibold },
+  criticalWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingTop: Space.xs,
+  },
+  criticalWarningText: {
+    flex: 1,
+    color: colors.danger,
+    fontFamily: Typography.family.medium,
     fontSize: Type.caption.size,
     lineHeight: Type.captionElevated.lineHeight - 1,
   },

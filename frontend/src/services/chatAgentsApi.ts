@@ -22,6 +22,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { recordAgentActivity } from './agentActivityLedger';
 import { makeStableId } from '../utils/createStableId';
+import {
+  executeToolCall,
+  isFinancialCapability,
+  type ToolCallRequest,
+} from '../platform/agents/agentRuntime';
 
 // ---------------------------------------------------------------------------
 // Demo mode flag — when true, mock responses are generated for development.
@@ -634,4 +639,40 @@ function customAgentResponse(agent: ChatAgent, userMessage: string): string {
     return 'Thanks for your message — I\'ve reviewed the context and I\'m ready to help with the next step.';
   }
   return 'I\'m here to help with that. Give me a bit more detail and I\'ll suggest the best next step.';
+}
+
+// ---------------------------------------------------------------------------
+// Agent action runtime — capability-broker-gated tool execution (spec 05).
+// ---------------------------------------------------------------------------
+
+/**
+ * When an agent wants to perform an action (not just generate text), it
+ * calls this function. The runtime checks the capability broker and either
+ * auto-approves (Tier A with grant / autoApproveTierA), asks the user
+ * (Tier B/C/D without grant), or denies (financial capabilities can never
+ * bypass the canonical transaction UI).
+ *
+ * Financial / high-risk capabilities are rejected here before reaching the
+ * broker — agents must always route the user through the real transaction
+ * screens (offer sheet, bid sheet, checkout, withdrawal flow, etc.).
+ */
+export async function agentRequestAction(
+  conversationId: string,
+  request: ToolCallRequest,
+): Promise<{ approved: boolean; executed: boolean; error?: string }> {
+  // Financial capabilities can NEVER bypass canonical UI.
+  if (isFinancialCapability(request.capability)) {
+    return {
+      approved: false,
+      executed: false,
+      error: 'Financial actions require canonical transaction UI',
+    };
+  }
+
+  const result = await executeToolCall(request, { autoApproveTierA: true });
+  return {
+    approved: result.approved,
+    executed: result.executed,
+    error: result.error,
+  };
 }
