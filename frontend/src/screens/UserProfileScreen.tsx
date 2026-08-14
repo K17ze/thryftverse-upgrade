@@ -134,12 +134,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     awayBanner: { backgroundColor: SURFACE_ALT, borderColor: BORDER },
     awayBannerTitle: { color: TEXT },
     awayBannerSub: { color: MUTED },
-    shopPoliciesTitle: { color: MUTED },
-    shopPolicyItem: { backgroundColor: SURFACE_ALT },
-    shopPolicyText: { color: TEXT },
-    featuredTitle: { color: BRAND },
-    featuredImage: { backgroundColor: SURFACE_ALT },
-    featuredPrice: { color: TEXT },
     listStateTitle: { color: TEXT },
     listStateSub: { color: MUTED },
   };
@@ -547,61 +541,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         <ReviewSummaryBlock summary={reviewSummary} />
       ) : null}
 
-      {/* Shop policies — policy statements only. Dispatch/response metrics
-          are shown in SellerReputationCard above; duplicating them here
-          violated the surface-budget rule. */}
-      {activeTab === 'Shop' ? (
-        <View style={styles.shopPoliciesSection}>
-          <Text style={[styles.shopPoliciesTitle, t.shopPoliciesTitle]}>Shop policies</Text>
-          <View style={styles.shopPoliciesGrid}>
-            <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-              <Ionicons name="shield-checkmark-outline" size={15} color={colors.textSecondary} />
-              <Text style={[styles.shopPolicyText, t.shopPolicyText]}>Buyer protection</Text>
-            </View>
-            <View style={[styles.shopPolicyItem, t.shopPolicyItem]}>
-              <Ionicons name="return-down-back-outline" size={15} color={colors.textSecondary} />
-              <Text style={[styles.shopPolicyText, t.shopPolicyText]}>Returns accepted</Text>
-            </View>
-          </View>
-        </View>
-      ) : null}
 
-      {/* Featured listings — pinned top items from the seller's active inventory */}
-      {activeTab === 'Shop' && shopSegment === 'forsale' && listData.length > 0 && (
-        <View style={styles.featuredSection}>
-          <View style={styles.featuredHeader}>
-            <Ionicons name="star-outline" size={14} color={BRAND} />
-            <Text style={[styles.featuredTitle, t.featuredTitle]}>Featured</Text>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.featuredScroll}
-          >
-            {listData.slice(0, 5).map((item) => {
-              const listing = item as ListingApiItem;
-              return (
-                <Pressable
-                  key={listing.id}
-                  style={styles.featuredCard}
-                  onPress={() => navigation.push('ItemDetail', { itemId: listing.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View ${listing.title}`}
-                >
-                  {listing.images?.[0] ? (
-                    <CachedImage uri={listing.images[0]} style={[styles.featuredImage, t.featuredImage]} contentFit="cover" />
-                  ) : (
-                    <View style={[styles.featuredImage, t.featuredImage, styles.featuredImagePlaceholder]}>
-                      <Ionicons name="shirt-outline" size={20} color={MUTED} />
-                    </View>
-                  )}
-                  <Text style={[styles.featuredPrice, t.featuredPrice]}>{formatFromFiat(listing.priceGbp, 'GBP', { displayMode: 'fiat' })}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
     </View>
   );
 
@@ -955,75 +895,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     lineHeight: TypographyV2.meta.lineHeight + 1,
-  },
-  shopPoliciesSection: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
-  shopPoliciesTitle: {
-    fontSize: TypographyV2.label.size,
-    fontFamily: FontFamily.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: TypographyV2.label.letterSpacing,
-    marginBottom: Space.sm,
-  },
-  shopPoliciesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-  },
-  shopPolicyItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md - 2,
-    paddingVertical: Space.sm,
-    borderRadius: RadiusRoleValue.sheetDialog,
-  },
-  shopPolicyText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    lineHeight: TypographyV2.meta.lineHeight,
-  },
-  featuredSection: {
-    paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
-  featuredHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
-  featuredTitle: {
-    fontSize: TypographyV2.label.size,
-    fontFamily: FontFamily.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: TypographyV2.label.letterSpacing,
-  },
-  featuredScroll: {
-    paddingHorizontal: Space.md,
-    gap: Space.md,
-  },
-  featuredCard: {
-    width: 120,
-    gap: Space.xs + 1,
-  },
-  featuredImage: {
-    width: 120,
-    height: 160,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-  },
-  featuredImagePlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featuredPrice: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
   listStateTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.semibold },

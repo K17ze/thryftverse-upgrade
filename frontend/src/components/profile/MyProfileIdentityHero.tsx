@@ -151,43 +151,43 @@ export function MyProfileIdentityHero({
         hideSoldChip
       />
 
-      {/* ── SOCIAL ROW — followers / following ──
-          Dedicated bordered row between trust signals and actions.
-          Canonical position: identity → shop stats → trust → social → actions.
-          Uses compact count notation (1.2K, 3.4M) for scannability;
-          accessibility labels carry the full count for screen readers. */}
-      <View style={styles.socialRow}>
+      {/* ── SOCIAL INLINE — followers / following ──
+          Flat inline row, no bordered container. Matches the public profile's
+          restrained trust-line pattern: spacing and a dot separator, not a
+          boxed surface. Compact count notation for scannability; accessibility
+          labels carry the full count for screen readers. */}
+      <View style={styles.socialInline}>
         {onPressFollowers ? (
           <Pressable
-            style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.55 }]}
+            style={({ pressed }) => [styles.socialInlineItem, pressed && { opacity: 0.55 }]}
             onPress={onPressFollowers}
             accessibilityRole="button"
             accessibilityLabel={`${formatFullCount(followerCount)} followers`}
           >
-            <Text style={styles.socialValue}>{formatCompactCount(followerCount)}</Text>
-            <Text style={styles.socialLabel}>Followers</Text>
+            <Text style={styles.socialInlineValue}>{formatCompactCount(followerCount)}</Text>
+            <Text style={styles.socialInlineLabel}> followers</Text>
           </Pressable>
         ) : (
-          <View style={styles.socialCell} accessible accessibilityLabel={`${formatFullCount(followerCount)} followers`}>
-            <Text style={styles.socialValue}>{formatCompactCount(followerCount)}</Text>
-            <Text style={styles.socialLabel}>Followers</Text>
+          <View style={styles.socialInlineItem} accessible accessibilityLabel={`${formatFullCount(followerCount)} followers`}>
+            <Text style={styles.socialInlineValue}>{formatCompactCount(followerCount)}</Text>
+            <Text style={styles.socialInlineLabel}> followers</Text>
           </View>
         )}
-        <View style={styles.socialDivider} />
+        <Text style={styles.socialInlineDot}>·</Text>
         {onPressFollowing ? (
           <Pressable
-            style={({ pressed }) => [styles.socialCell, pressed && { opacity: 0.55 }]}
+            style={({ pressed }) => [styles.socialInlineItem, pressed && { opacity: 0.55 }]}
             onPress={onPressFollowing}
             accessibilityRole="button"
             accessibilityLabel={`${formatFullCount(followingCount)} following`}
           >
-            <Text style={styles.socialValue}>{formatCompactCount(followingCount)}</Text>
-            <Text style={styles.socialLabel}>Following</Text>
+            <Text style={styles.socialInlineValue}>{formatCompactCount(followingCount)}</Text>
+            <Text style={styles.socialInlineLabel}> following</Text>
           </Pressable>
         ) : (
-          <View style={styles.socialCell} accessible accessibilityLabel={`${formatFullCount(followingCount)} following`}>
-            <Text style={styles.socialValue}>{formatCompactCount(followingCount)}</Text>
-            <Text style={styles.socialLabel}>Following</Text>
+          <View style={styles.socialInlineItem} accessible accessibilityLabel={`${formatFullCount(followingCount)} following`}>
+            <Text style={styles.socialInlineValue}>{formatCompactCount(followingCount)}</Text>
+            <Text style={styles.socialInlineLabel}> following</Text>
           </View>
         )}
       </View>
@@ -354,41 +354,34 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     marginTop: 5,
   },
-  // Social row — dedicated followers/following row between trust signals and actions.
-  // Matches the bordered stats row pattern: hairline top/bottom, centered cells, vertical divider.
-  socialRow: {
+  // Social inline — flat followers/following row, no bordered container.
+  // Matches the public profile's restrained pattern: spacing + dot separator,
+  // not a boxed surface. Removes a non-media panel from the surface budget.
+  socialInline: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Space.xs,
     marginTop: Space.sm + 2,
-    paddingVertical: Space.sm + 2,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
   },
-  socialCell: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xs,
-    gap: Space.xs / 4,
+  socialInlineItem: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
   },
-  socialValue: {
-    fontSize: Type.subtitle.size,
+  socialInlineValue: {
+    fontSize: Type.bodyEmphasis.size,
     fontFamily: Typography.family.semibold,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  socialLabel: {
+  socialInlineLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
-  socialDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: Space.xl - Space.xs,
-    backgroundColor: colors.borderSubtle,
+  socialInlineDot: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
   },
   actions: {
     flexDirection: 'row',

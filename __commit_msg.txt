@@ -1,0 +1,47 @@
+polish(P1): flagship visual grammar for PDP, Profile, Creator, Discovery
+
+ItemDetailScreen (TPP PDP):
+- Icon grammar: condition chip info icon 13pt → 14pt (metadata band
+  floor).
+- Stroke grammar: condition chip outline hairline → 1pt (explicit
+  outline, not separator).
+- Hit area separation: condition chip visible shape 44pt → compact
+  ~24pt with hitSlop for 44pt target.
+- Toggle geometry: price alert switch track/thumb radius → pillAvatar
+  (proper iOS switch shape, removes non-avatar radius from budget).
+- Removed random marginBottom on trust strip (seller section hairline
+  provides deliberate separation).
+
+UserProfileScreen (public profile):
+- Removed decorative Shop Policies section (generic static labels with
+  no real data, duplicating SellerReputationCard trust metrics).
+- Removed Featured horizontal scroll (duplicated grid content, pushed
+  primary grid further down). Grid is now the dominant media story
+  immediately after tabs — matching 2026 Poshmark/Depop/Vinted
+  grid-first profile patterns.
+
+MyProfileIdentityHero (owner profile):
+- Flattened bordered followers/following row to inline text
+  ("1.2K followers · 340 following") — removes competing surfaced
+  container, matches public profile's restrained trust-line pattern.
+- onPress handlers preserved (Pressable when provided, View when not).
+
+CreatorEntryScreen:
+- Removed decorative glow shadow from addBtn (brand fill already
+  communicates primary action).
+- Removed decorative shadow from selectionBadge (fill + checkmark
+  already signal selection).
+- Consolidated radius budget: selectedThumbRemove Radius.lg →
+  Radius.full (circle on 18×18 remove control, reduces non-avatar
+  radius count from 3 to 2).
+
+HomeScreen (discovery):
+- Removed decorative glow shadow from posterTileRing (2pt brand
+  border already communicates unseen/unwatched selection state).
+- Demoted competing "Posters" heading from sectionTitle to quiet
+  meta eyebrow — was creating 3 same-size headings competing in
+  first viewport. "Explore" is now the single dominant heading.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

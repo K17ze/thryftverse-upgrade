@@ -878,7 +878,7 @@ export default function ItemDetailScreen() {
                 {item.condition ? (
                   <Pressable
                     onPress={() => { haptic.light(); setConditionInfoVisible(true); }}
-                    hitSlop={4}
+                    hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
                     style={[
                       styles.conditionChip,
                       {
@@ -893,7 +893,7 @@ export default function ItemDetailScreen() {
                     <Text style={[styles.conditionChipText, { color: colors.textPrimary }]}>
                       {item.condition}
                     </Text>
-                    <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
+                    <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
                   </Pressable>
                 ) : null}
                 {(() => {
@@ -1735,10 +1735,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 1,
     borderRadius: RadiusRoleValue.mediaThumbnail,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: Stroke.standard,
     borderColor: 'transparent', // overridden inline with theme color
     flexShrink: 0,
-    minHeight: Control.hit,
   },
   conditionDot: {
     width: Space.xs + 2,
@@ -1780,7 +1779,6 @@ const styles = StyleSheet.create({
     gap: Space.sm + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    marginBottom: Space.xs,
   },
   // ── Seller row ──
   // Per Design.md between-group spacing: the seller row is a distinct
@@ -1934,7 +1932,7 @@ const styles = StyleSheet.create({
   toggleTrack: {
     width: Control.chrome,
     height: Space.md + Space.xs,
-    borderRadius: RadiusRoleValue.sheetDialog,
+    borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: Stroke.standard,
     justifyContent: 'center',
     paddingHorizontal: Space.xs / 2,
@@ -1942,7 +1940,7 @@ const styles = StyleSheet.create({
   toggleThumb: {
     width: Space.md - 2,
     height: Space.md - 2,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   // ── Sync retry ──
   syncRetryWrap: {

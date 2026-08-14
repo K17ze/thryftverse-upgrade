@@ -595,23 +595,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#C9A46A',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  // Gallery add button — premium pill
+  // Gallery add button — primary action pill. Brand fill is the dominant
+  // signal; no decorative glow shadow (AGENTS.md §4: composition over
+  // decoration).
   addBtn: {
     backgroundColor: '#C9A46A',
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.full,
-    shadowColor: '#C9A46A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
   addBtnText: {
     color: '#1a1a1a',
@@ -658,7 +650,7 @@ const styles = StyleSheet.create({
     right: -4,
     width: 18,
     height: 18,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',

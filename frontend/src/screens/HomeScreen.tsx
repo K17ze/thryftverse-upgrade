@@ -1631,15 +1631,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   posterSectionHeading: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: Space.xs + 2,
   },
-  // Poster heading: subtitle token with semibold — quieter than bold, clear hierarchy.
+  // Poster rail label: quiet eyebrow (meta/uppercase/muted) so "Explore"
+  // remains the single dominant heading and the poster rail reads as a
+  // supporting module. Avoids competing same-size headings in the first
+  // viewport (AGENTS.md §4 text budget: max 3 type sizes + 1 eyebrow).
   posterSectionTitle: {
-    color: colors.textPrimary,
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    color: colors.textMuted,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   postersScroll: {
     paddingHorizontal: Space.md,
@@ -1666,12 +1670,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.brand,
   },
+  // No decorative glow shadow — the 2pt brand border is the selection
+  // signal (AGENTS.md §4: 2pt reserved for focus/selection; composition
+  // over decoration).
   posterTileRing: {
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 4,
   },
   posterTileSeen: {
     borderWidth: StyleSheet.hairlineWidth,
