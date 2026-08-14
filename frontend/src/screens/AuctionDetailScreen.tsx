@@ -1610,13 +1610,13 @@ export default function AuctionDetailScreen() {
 
         {!bidActivityError && bidActivity.length > 0 && (
           <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
-            <View style={[styles.bidList, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+            <View style={styles.bidList}>
               {bidActivity.map((bid, index) => {
                 const row = formatBidActivityRow(bid, index, formatFromFiat, serverNowRef.current);
                 return (
                   <View
                     key={bid.id}
-                    style={[styles.bidRow, { borderBottomColor: colors.border }, row.isTopBid && { backgroundColor: colors.surfaceAlt }]}
+                    style={[styles.bidRow, { borderBottomColor: colors.border }, row.isTopBid && { backgroundColor: `${colors.success}08` }]}
                   >
                     <View style={styles.bidRowLeft}>
                       {row.isViewer && (
@@ -1831,6 +1831,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
   },
   bidActivityAmount: {
     fontSize: TypographyV2.priceList.size,
@@ -1988,6 +1989,7 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.label.lineHeight,
     fontFamily: FontFamily.regular,
     flexShrink: 1,
+    fontVariant: ['tabular-nums'],
   },
   // Progressive reserve guidance — 2026 Catawiki benchmark pattern.
   // Flat text, no card. Warning color signals "close but not there yet."
@@ -1996,6 +1998,7 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
     flexShrink: 1,
+    fontVariant: ['tabular-nums'],
   },
   transactionStatusRow: {
     gap: Space.xs,
@@ -2038,6 +2041,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'],
   },
   ruleContent: {
     flex: 1,
@@ -2109,6 +2113,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: LetterSpacing.normal,
+    fontVariant: ['tabular-nums'],
   },
   overflowRow: {
     flexDirection: 'row',
@@ -2137,8 +2142,11 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.body.lineHeight,
   },
   // ── Bid history sheet rows ──
+  // Per 2026 Apple HIG: compact flat rows, not cards. No outer
+  // container border or background — just hairline-separated rows
+  // on the sheet's own surface. The top bid gets a subtle tint.
   bidList: {
-    overflow: 'hidden',
+    // No card container — flat rows on the sheet surface.
   },
   bidRow: {
     flexDirection: 'row',

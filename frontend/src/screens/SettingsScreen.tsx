@@ -356,6 +356,7 @@ export default function SettingsScreen({ navigation }: Props) {
           {/* ── IDENTITY — compact flat row, no card ── */}
           <FlatRow
             label={displayName}
+            labelStyle={{ color: colors.textPrimary }}
             secondary={username ? `@${username}${currentUser?.email ? ` · ${currentUser.email}` : ''}` : (currentUser?.email ?? 'Not signed in')}
             imageUri={avatarUri ?? undefined}
             imageSize={48}
@@ -386,6 +387,7 @@ export default function SettingsScreen({ navigation }: Props) {
         <SettingsRow
           icon="shield-checkmark-outline"
           iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
+          titleStyle={currentUser?.emailVerified ? { color: colors.success } : undefined}
           title="Verification"
           subtitle={currentUser?.emailVerified ? 'Verified' : 'Get the verified badge'}
           onPress={() => navigation.navigate('Verification')}
@@ -763,14 +765,5 @@ const styles = StyleSheet.create({
   emptySearchText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
-    // Theme-migrated colour roles preserved for visual integrity
-    color: colors.textPrimary,
-  },
-  // ── Inline status colours (theme migration visual integrity) ──
-  statusSuccess: {
-    color: colors.success,
-  },
-  statusMuted: {
-    color: colors.textMuted,
   },
 });

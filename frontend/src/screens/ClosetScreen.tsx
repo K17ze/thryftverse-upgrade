@@ -504,10 +504,6 @@ export default function ClosetScreen() {
     }
     return (
       <>
-        {renderSortBar()}
-        {renderSortMenu()}
-        {/* Brand filter chips */}
-        {availableBrands.length > 1 ? renderFilterPanel() : null}
         {/* 3-column media mosaic — 3:4 portrait thumbnails, media-first */}
         <ClosetMediaMosaic
           items={filteredSaved}
@@ -533,31 +529,6 @@ export default function ClosetScreen() {
     }
     return (
       <>
-        {renderSortBar()}
-        {renderSortMenu()}
-        {/* Brand filter chips */}
-        {availableBrands.length > 1 ? renderFilterPanel() : null}
-        {/* Price drop filter chip — only on wishlist */}
-        {priceDropCount > 0 ? (
-          <View style={styles.filterChipRow}>
-            <AnimatedPressable
-              style={[styles.filterChip, t.filterChip, showPriceDropsOnly && styles.filterChipActive, showPriceDropsOnly && t.filterChipActive]}
-              onPress={() => {
-                haptic.light();
-                setShowPriceDropsOnly((v) => !v);
-              }}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityState={{ selected: showPriceDropsOnly }}
-              accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
-            >
-              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
-              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
-                Price drops ({priceDropCount})
-              </Text>
-            </AnimatedPressable>
-          </View>
-        ) : null}
         <ClosetMediaMosaic
           items={filteredWishlist}
           onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
@@ -598,7 +569,6 @@ export default function ClosetScreen() {
 
     return (
       <>
-        {renderSortBar()}
         <MoodboardCollectionGrid
           boards={boardData}
           onPressBoard={(id) => navigation.navigate('CollectionDetail', { collectionId: id })}
@@ -738,24 +708,6 @@ export default function ClosetScreen() {
           />
         }
       >
-        {/* Search Bar */}
-        <View style={styles.searchWrap}>
-          <AppInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={searchPlaceholder}
-            prefix={<Ionicons name="search" size={18} color={colors.textMuted} />}
-            suffix={
-              searchQuery.length > 0 ? (
-                <AnimatedPressable onPress={() => setSearchQuery('')} accessibilityLabel="Clear search">
-                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-                </AnimatedPressable>
-              ) : null
-            }
-            containerStyle={{ marginBottom: 0 }}
-          />
-        </View>
-
         {/* Error banner */}
         {(lastError || collectionsSyncError) && (
           <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
@@ -768,37 +720,7 @@ export default function ClosetScreen() {
           </View>
         )}
 
-        {/* Closet stats summary — total items, value, savings */}
-        {closetStats.totalItems > 0 ? (
-          <View style={[styles.statsCard, t.statsCard]}>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{closetStats.totalItems}</Text>
-                <Text style={[styles.statLabel, t.statLabel]}>Items</Text>
-              </View>
-              <View style={[styles.statDivider, t.statDivider]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
-                <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
-              </View>
-              <View style={[styles.statDivider, t.statDivider]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{closetStats.collectionsCount}</Text>
-                <Text style={[styles.statLabel, t.statLabel]}>Collections</Text>
-              </View>
-            </View>
-            {closetStats.totalSavings > 0 ? (
-              <View style={[styles.savingsRow, t.savingsRow]}>
-                <Ionicons name="trending-down" size={12} color={colors.success} />
-                <Text style={[styles.savingsText, t.savingsText]}>
-                  {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {/* Tabs */}
+        {/* Tabs — immediately after header, before any stats/filters */}
         <View style={styles.tabsWrap}>
           <View style={[styles.tabBar, t.tabBar]}>
             {(['SAVED', 'WISHLIST', 'COLLECTIONS', 'OUTFITS'] as TabKey[]).map((tab) => {
@@ -830,11 +752,164 @@ export default function ClosetScreen() {
           </View>
         </View>
 
-        {/* Content */}
+        {/* Compact search + sort/filter toolbar — single icons, not chip walls */}
+        <View style={styles.closetToolbar}>
+          <AppInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={searchPlaceholder}
+            prefix={<Ionicons name="search" size={18} color={colors.textMuted} />}
+            suffix={
+              searchQuery.length > 0 ? (
+                <AnimatedPressable onPress={() => setSearchQuery('')} accessibilityLabel="Clear search">
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </AnimatedPressable>
+              ) : null
+            }
+            containerStyle={{ flex: 1, marginBottom: 0 }}
+          />
+          {activeTab === 'SAVED' || activeTab === 'WISHLIST' ? (
+            <>
+              <AnimatedPressable
+                style={styles.closetToolbarBtn}
+                onPress={() => setShowSortMenu((v) => !v)}
+                accessibilityLabel={`Sort by ${sortBy}`}
+                accessibilityRole="button"
+              >
+                <Ionicons name="swap-vertical" size={20} color={colors.textPrimary} />
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.closetToolbarBtn}
+                onPress={() => { haptic.light(); setShowFilters((v) => !v); }}
+                accessibilityLabel={showFilters ? 'Close filters' : 'Open filters'}
+                accessibilityRole="button"
+              >
+                <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
+                {activeBrand ? (
+                  <View style={styles.closetToolbarBadge}>
+                    <Text style={styles.closetToolbarBadgeText}>1</Text>
+                  </View>
+                ) : null}
+              </AnimatedPressable>
+            </>
+          ) : null}
+        </View>
+
+        {/* Sort menu — compact dropdown */}
+        {showSortMenu && (activeTab === 'SAVED' || activeTab === 'WISHLIST') ? (
+          <View style={[styles.sortMenu, t.sortMenu]}>
+            {SORT_OPTIONS.map((opt) => (
+              <AnimatedPressable
+                key={opt}
+                style={[styles.sortOption, t.sortOption, sortBy === opt && styles.sortOptionActive, sortBy === opt && t.sortOptionActive]}
+                onPress={() => {
+                  haptic.light();
+                  setSortBy(opt);
+                  setShowSortMenu(false);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.sortOptionText, t.sortOptionText, sortBy === opt && styles.sortOptionTextActive, sortBy === opt && t.sortOptionTextActive]}>{opt}</Text>
+                {sortBy === opt && <Ionicons name="checkmark" size={16} color={colors.brand} />}
+              </AnimatedPressable>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Brand filter panel — only visible when filter icon is tapped */}
+        {showFilters && (activeTab === 'SAVED' || activeTab === 'WISHLIST') && availableBrands.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.brandChipScroll}
+            contentContainerStyle={styles.brandChipContent}
+          >
+            <AnimatedPressable
+              style={[styles.brandChip, t.brandChip, !activeBrand && styles.brandChipActive, !activeBrand && t.brandChipActive]}
+              onPress={() => { haptic.light(); setActiveBrand(null); }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !activeBrand }}
+              accessibilityLabel="All brands"
+            >
+              <Text style={[styles.brandChipText, t.brandChipText, !activeBrand && styles.brandChipTextActive, !activeBrand && t.brandChipTextActive]}>All</Text>
+            </AnimatedPressable>
+            {availableBrands.map((brand) => (
+              <AnimatedPressable
+                key={brand}
+                style={[styles.brandChip, t.brandChip, activeBrand === brand && styles.brandChipActive, activeBrand === brand && t.brandChipActive]}
+                onPress={() => {
+                  haptic.light();
+                  setActiveBrand((prev) => (prev === brand ? null : brand));
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeBrand === brand }}
+                accessibilityLabel={`Filter by brand ${brand}`}
+              >
+                <Text style={[styles.brandChipText, t.brandChipText, activeBrand === brand && styles.brandChipTextActive, activeBrand === brand && t.brandChipTextActive]}>{brand}</Text>
+              </AnimatedPressable>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {/* Price drop filter — only on wishlist, compact chip */}
+        {activeTab === 'WISHLIST' && priceDropCount > 0 ? (
+          <View style={styles.filterChipRow}>
+            <AnimatedPressable
+              style={[styles.filterChip, t.filterChip, showPriceDropsOnly && styles.filterChipActive, showPriceDropsOnly && t.filterChipActive]}
+              onPress={() => {
+                haptic.light();
+                setShowPriceDropsOnly((v) => !v);
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityState={{ selected: showPriceDropsOnly }}
+              accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
+            >
+              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
+              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
+                Price drops ({priceDropCount})
+              </Text>
+            </AnimatedPressable>
+          </View>
+        ) : null}
+
+        {/* Content — grid is the FIRST visible content after tabs+toolbar */}
         {activeTab === 'SAVED' && renderSavedContent()}
         {activeTab === 'WISHLIST' && renderWishlistContent()}
         {activeTab === 'COLLECTIONS' && renderCollectionsContent()}
         {activeTab === 'OUTFITS' && renderOutfitsContent()}
+
+        {/* Closet stats — below the fold, after content */}
+        {closetStats.totalItems > 0 ? (
+          <View style={[styles.statsCard, t.statsCard, styles.statsCardBelowFold]}>
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, t.statValue]}>{closetStats.totalItems}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Items</Text>
+              </View>
+              <View style={[styles.statDivider, t.statDivider]} />
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
+              </View>
+              <View style={[styles.statDivider, t.statDivider]} />
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, t.statValue]}>{closetStats.collectionsCount}</Text>
+                <Text style={[styles.statLabel, t.statLabel]}>Collections</Text>
+              </View>
+            </View>
+            {closetStats.totalSavings > 0 ? (
+              <View style={[styles.savingsRow, t.savingsRow]}>
+                <Ionicons name="trending-down" size={12} color={colors.success} />
+                <Text style={[styles.savingsText, t.savingsText]}>
+                  {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
@@ -926,12 +1001,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     marginBottom: Space.md,
   },
+  closetToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    gap: Space.sm,
+    marginBottom: Space.sm,
+  },
+  closetToolbarBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  closetToolbarBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  closetToolbarBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
+    lineHeight: 12,
+  },
+  statsCardBelowFold: {
+    marginTop: Space.xl,
+  },
   tabsWrap: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.lg,
+    marginBottom: Space.sm,
   },
   scrollContent: {
-    paddingTop: Space.sm,
+    paddingTop: Space.xs,
   },
   sortBar: {
     flexDirection: 'row',

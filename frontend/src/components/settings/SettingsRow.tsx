@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Type, Typography, Control, Radius } from '../../theme/designTokens';
@@ -24,6 +24,8 @@ export interface SettingsRowProps {
   accessibilityLabel?: string;
   /** Accessibility hint describing the action. */
   accessibilityHint?: string;
+  /** Optional style override for the title text. */
+  titleStyle?: TextStyle;
 }
 
 export function SettingsRow({
@@ -42,6 +44,7 @@ export function SettingsRow({
   children,
   accessibilityLabel,
   accessibilityHint,
+  titleStyle,
 }: SettingsRowProps) {
   const { colors } = useAppTheme();
   const hasAction = !!onPress || !!onToggle;
@@ -87,6 +90,7 @@ export function SettingsRow({
             style={[
               styles.title,
               { color: disabled ? colors.textMuted : danger ? colors.danger : colors.textPrimary },
+              titleStyle,
             ]}
             numberOfLines={1}
           >

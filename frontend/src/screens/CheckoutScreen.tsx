@@ -226,13 +226,13 @@ function buildOrderSignature(params: {
 
 const STAGE_LABELS: Record<CheckoutStage, string> = {
   idle: '',
-  creating_order: 'Reviewing order…',
-  opening_payment: 'Processing payment…',
-  authenticating: 'Processing payment…',
-  awaiting_payment: 'Processing payment…',
-  payment_succeeded: 'Confirmed',
-  payment_pending: 'Payment is still pending.',
-  payment_failed: 'Payment failed. Try again.',
+  creating_order: 'Reviewing your order',
+  opening_payment: 'Processing payment',
+  authenticating: 'Processing payment',
+  awaiting_payment: 'Processing payment',
+  payment_succeeded: 'Order confirmed',
+  payment_pending: 'Payment is still pending',
+  payment_failed: 'Payment didn’t go through',
 };
 
 export default function CheckoutScreen() {
@@ -1245,6 +1245,19 @@ export default function CheckoutScreen() {
     );
   }
 
+  // ── Loading skeleton ──
+  // Show a skeleton that matches the final layout geometry when hydrating
+  // with no cached data (first load). Per AGENTS.md §14: "Skeletons should
+  // resemble the final layout. Do not use a generic centred spinner."
+  if (isHydrating && !savedAddress?.id && !savedPaymentMethod?.id && backendAddresses.length === 0) {
+    return (
+      <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <CheckoutSkeleton colors={colors} />
+      </SafeAreaView>
+    );
+  }
+
   const resolvedSeller = item.seller ?? {
     id: item.sellerId ?? '',
     username: null,
@@ -1266,11 +1279,11 @@ export default function CheckoutScreen() {
     : 'Required for delivery';
 
   const payLabel = isSubmitting
-    ? STAGE_LABELS[stage] || 'Processing…'
+    ? STAGE_LABELS[stage] || 'Processing'
     : stage === 'payment_failed'
       ? 'Retry payment'
       : stage === 'payment_pending'
-        ? 'Waiting for confirmation…'
+        ? 'Waiting for confirmation'
         : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
 
   // Whether the row-level errorText should be suppressed because the partial-
@@ -1476,7 +1489,19 @@ export default function CheckoutScreen() {
         ) : null}
 
         {orderError ? (
-          <Text style={[styles.orderErrorText, t.orderErrorText]} accessibilityLiveRegion="polite">{orderError}</Text>
+          <View style={styles.orderErrorContainer}>
+            <Text style={[styles.orderErrorText, t.orderErrorText]} accessibilityLiveRegion="polite">{orderError}</Text>
+            {stage === 'payment_failed' && (
+              <Pressable
+                style={({ pressed }) => [styles.retryBtn, t.capabilityRetryBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => { haptics.tap(); handlePay(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Retry payment"
+              >
+                <Text style={[styles.retryBtnText, t.capabilityRetryText]}>Retry payment</Text>
+              </Pressable>
+            )}
+          </View>
         ) : null}
 
         {capabilityError ? (
@@ -1992,6 +2017,167 @@ const progressOverlayStyles = StyleSheet.create({
   },
 });
 
+// ===========================================================================
+// CheckoutSkeleton — matches the final checkout layout geometry so the
+// loading-to-populated transition has no layout shift. Per AGENTS.md §14:
+// "Skeletons should resemble the final layout."
+// ===========================================================================
+function CheckoutSkeleton({ colors }: { colors: ThemeColors }) {
+  const insets = useSafeAreaInsets();
+  const skeletonStyles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.sm,
+      paddingTop: insets.top,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    headerTitle: {
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+    },
+    headerSpacer: {
+      width: Control.hit,
+    },
+    scrollContent: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      gap: Space.md,
+    },
+    itemSummaryBlock: {
+      flexDirection: 'row',
+      gap: Space.md,
+      paddingVertical: Space.sm,
+    },
+    skeletonImage: {
+      width: 72,
+      height: 72,
+      borderRadius: RadiusRoleValue.mediaThumbnail,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skeletonTextCol: {
+      flex: 1,
+      gap: Space.xs + 2,
+      paddingVertical: Space.xs,
+    },
+    skeletonLine: {
+      height: 14,
+      borderRadius: RadiusRoleValue.compactControl,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skeletonLineShort: {
+      width: '60%',
+    },
+    skeletonLineMedium: {
+      width: '80%',
+    },
+    skeletonRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+      paddingVertical: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    skeletonIcon: {
+      width: 22,
+      height: 22,
+      borderRadius: RadiusRoleValue.pillAvatar,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skeletonRowText: {
+      flex: 1,
+      gap: Space.xs,
+    },
+    skeletonFooter: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm + 2,
+      paddingBottom: Math.max(insets.bottom, Space.md),
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      backgroundColor: colors.background,
+      gap: Space.sm,
+    },
+    skeletonPayBtn: {
+      height: 52,
+      borderRadius: RadiusRoleValue.pillAvatar,
+      backgroundColor: colors.surfaceAlt,
+    },
+    skeletonTotalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: Space.xs,
+    },
+  }), [colors, insets.top, insets.bottom]);
+
+  return (
+    <View style={skeletonStyles.container}>
+      <View style={skeletonStyles.header}>
+        <View style={{ width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="close" size={24} color={colors.textPrimary} />
+        </View>
+        <Text style={skeletonStyles.headerTitle}>Checkout</Text>
+        <View style={skeletonStyles.headerSpacer} />
+      </View>
+      <View style={skeletonStyles.scrollContent}>
+        {/* Item summary skeleton */}
+        <View style={skeletonStyles.itemSummaryBlock}>
+          <View style={skeletonStyles.skeletonImage} />
+          <View style={skeletonStyles.skeletonTextCol}>
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineMedium]} />
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineShort]} />
+          </View>
+        </View>
+        {/* Delivery address row skeleton */}
+        <View style={skeletonStyles.skeletonRow}>
+          <View style={skeletonStyles.skeletonIcon} />
+          <View style={skeletonStyles.skeletonRowText}>
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineShort]} />
+            <View style={[skeletonStyles.skeletonLine, { width: '90%' }]} />
+          </View>
+        </View>
+        {/* Delivery method row skeleton */}
+        <View style={skeletonStyles.skeletonRow}>
+          <View style={skeletonStyles.skeletonIcon} />
+          <View style={skeletonStyles.skeletonRowText}>
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineShort]} />
+            <View style={[skeletonStyles.skeletonLine, { width: '70%' }]} />
+          </View>
+        </View>
+        {/* Payment method row skeleton */}
+        <View style={skeletonStyles.skeletonRow}>
+          <View style={skeletonStyles.skeletonIcon} />
+          <View style={skeletonStyles.skeletonRowText}>
+            <View style={[skeletonStyles.skeletonLine, skeletonStyles.skeletonLineShort]} />
+            <View style={[skeletonStyles.skeletonLine, { width: '80%' }]} />
+          </View>
+        </View>
+      </View>
+      {/* Footer skeleton */}
+      <View style={skeletonStyles.skeletonFooter}>
+        <View style={skeletonStyles.skeletonTotalRow}>
+          <View style={[skeletonStyles.skeletonLine, { width: 50 }]} />
+          <View style={[skeletonStyles.skeletonLine, { width: 90 }]} />
+        </View>
+        <View style={skeletonStyles.skeletonPayBtn} />
+      </View>
+    </View>
+  );
+}
+
 function PriceRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   const { colors } = useAppTheme();
   const priceStyles = useMemo(() => StyleSheet.create({
@@ -2081,6 +2267,7 @@ const styles = StyleSheet.create({
   savingsText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   protectionStripWrap: {
     marginTop: Space.sm,
@@ -2140,6 +2327,7 @@ const styles = StyleSheet.create({
   balanceAmount: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
   },
   feedbackRow: {
     flexDirection: 'row',
@@ -2155,6 +2343,27 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium,
     paddingVertical: Space.sm,
+    flex: 1,
+    fontVariant: ['tabular-nums'],
+  },
+  orderErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  retryBtn: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 1,
+    borderRadius: RadiusRoleValue.compactControl,
+    borderWidth: Stroke.standard,
+    minHeight: Control.chromeCompact,
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  retryBtnText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   hintText: {
     fontSize: TypographyV2.meta.size,
@@ -2177,6 +2386,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
+    fontVariant: ['tabular-nums'],
   },
   partialDataAction: {
     paddingHorizontal: Space.sm + 2,
@@ -2238,6 +2448,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
   },
   compactSummaryVal: {
     fontSize: TypographyV2.meta.size,
@@ -2264,6 +2475,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.bodyStrong.size,
     lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   compactSummaryTotalValue: {
     fontSize: TypographyV2.priceHero.size,
@@ -2332,6 +2544,7 @@ const styles = StyleSheet.create({
   breakdownSheetTotalLabel: {
     fontSize: TypographyV2.priceList.size,
     fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   breakdownSheetTotalValue: {
     fontSize: TypographyV2.screenTitle.size,
@@ -2375,6 +2588,7 @@ const styles = StyleSheet.create({
   applePayBtnText: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   payBtnDisabled: {
     opacity: 0.5,
@@ -2386,6 +2600,7 @@ const styles = StyleSheet.create({
   payBtnText: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   signedOutContainer: {
     flex: 1,

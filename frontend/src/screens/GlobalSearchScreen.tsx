@@ -16,7 +16,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Motion } from '../constants/motion';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -40,14 +40,15 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { searchListingsFromApi } from '../services/feedApi';
 import { friendlyBackendError } from '../services/listingMapper';
 import type { ListingCondition } from '../services/listingsApi';
-import { searchUsers, type UserSearchResult } from '../services/profileApi';
+import { searchUsers, type UserSearchResult, followUser, unfollowUser } from '../services/profileApi';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useHaptic } from '../hooks/useHaptic';
 
 /* ΓöÇΓöÇ New Discover Components ΓöÇΓöÇ */
 import { EditorialSection } from '../components/discover/EditorialSection';
-import { FontFamily } from '../theme/designTokens';
+import { FontFamily, Space, Control, Radius } from '../theme/designTokens';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { CATEGORIES } from '../constants/categories';
 import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
@@ -167,6 +168,149 @@ function getBroadenedSuggestions(rawQuery: string): string[] {
   // Single token ΓÇö surface a couple of trending categories as alternatives
   return ['women', 'men'];
 }
+
+/**
+ * Compact people result row with follow button.
+ * Manages follow state locally since UserSearchResult doesn't carry
+ * isFollowing — the button starts as "Follow" and toggles optimistically.
+ */
+const PeopleResultRow = React.memo(function PeopleResultRow({
+  user,
+  onPress,
+  colors,
+}: {
+  user: UserSearchResult;
+  onPress: () => void;
+  colors: ThemeColors;
+}) {
+  const [isFollowing, setIsFollowing] = React.useState(false);
+  const [isToggling, setIsToggling] = React.useState(false);
+  const haptic = useHaptic();
+
+  const handleFollow = React.useCallback(async () => {
+    if (isToggling) return;
+    setIsToggling(true);
+    const nextState = !isFollowing;
+    setIsFollowing(nextState); // optimistic
+    haptic.light();
+    try {
+      if (nextState) {
+        await followUser(user.id);
+      } else {
+        await unfollowUser(user.id);
+      }
+    } catch {
+      setIsFollowing(!nextState); // revert on error
+    } finally {
+      setIsToggling(false);
+    }
+  }, [isFollowing, isToggling, user.id, haptic]);
+
+  return (
+    <View style={peopleRowStyles.row}>
+      <AnimatedPressable
+        style={peopleRowStyles.main}
+        onPress={onPress}
+        accessibilityLabel={`View profile: ${user.displayName || user.username}`}
+        accessibilityRole="button"
+      >
+        {user.avatar ? (
+          <CachedImage
+            uri={user.avatar}
+            style={peopleRowStyles.avatar}
+            contentFit="cover"
+            downscaleWidth={96}
+          />
+        ) : (
+          <View style={[peopleRowStyles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name="person" size={18} color={colors.textMuted} />
+          </View>
+        )}
+        <View style={peopleRowStyles.info}>
+          <Text style={[peopleRowStyles.name, { color: colors.textPrimary }]} numberOfLines={1}>
+            {user.displayName || `@${user.username}`}
+          </Text>
+          {user.displayName && (
+            <Text style={[peopleRowStyles.username, { color: colors.textMuted }]} numberOfLines={1}>
+              @{user.username}
+            </Text>
+          )}
+        </View>
+      </AnimatedPressable>
+      <AnimatedPressable
+        style={[
+          peopleRowStyles.followBtn,
+          { backgroundColor: isFollowing ? colors.surfaceAlt : colors.textPrimary },
+        ]}
+        onPress={handleFollow}
+        disabled={isToggling}
+        accessibilityLabel={isFollowing ? `Unfollow ${user.username}` : `Follow ${user.username}`}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isFollowing }}
+      >
+        <Text style={[
+          peopleRowStyles.followText,
+          { color: isFollowing ? colors.textSecondary : colors.textInverse },
+        ]}>
+          {isFollowing ? 'Following' : 'Follow'}
+        </Text>
+      </AnimatedPressable>
+    </View>
+  );
+});
+
+const peopleRowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  main: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  avatarFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  info: {
+    flex: 1,
+    gap: 2,
+  },
+  name: {
+    fontSize: 15,
+    fontFamily: FontFamily.semibold,
+  },
+  username: {
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
+  },
+  followBtn: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.lg,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  followText: {
+    fontSize: 13,
+    fontFamily: FontFamily.semibold,
+  },
+});
 
 export default function GlobalSearchScreen({ navigation }: Props) {
   const [query, setQuery] = useState('');
@@ -467,12 +611,17 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   }, [focusProgress, isSearchFocused]);
 
   const animatedSearchShellStyle = useAnimatedStyle(() => {
-    const borderColor = interpolateColor(focusProgress.value, [0, 1], [colors.border, colors.brand]);
-    const backgroundColor = interpolateColor(focusProgress.value, [0, 1], [colors.surface, colors.background]);
+    // Subtle background shift on focus — matches Explore's clean field.
+    // No border animation (Explore has no border); geometry stays constant
+    // for a smooth transition from Explore to GlobalSearch.
+    const backgroundColor = interpolateColor(
+      focusProgress.value,
+      [0, 1],
+      [colors.surfaceAlt, colors.surfaceAlt],
+    );
     return {
-      borderColor,
       backgroundColor,
-      transform: [{ scale: 1 + focusProgress.value * 0.012 }],
+      transform: [{ scale: 1 + focusProgress.value * 0.008 }],
     };
   });
 
@@ -701,27 +850,16 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
   const t = StyleSheet.create({
     container: { backgroundColor: colors.background },
+    inputContainer: { backgroundColor: colors.surfaceAlt },
+    filterBarCount: { color: colors.textSecondary },
+    filterIconBadge: { backgroundColor: colors.brand },
+    filterIconBadgeText: { color: colors.textInverse },
     suggestionsWrap: { backgroundColor: colors.surface, borderColor: colors.border },
     suggestionsHeader: { color: colors.textMuted },
     suggestionRow: { borderTopColor: colors.border },
     suggestionText: { color: colors.textPrimary },
-    recentPill: { backgroundColor: colors.surface },
-    clearRecentPill: { borderColor: colors.border },
-    recentPillText: { color: colors.textPrimary },
     trendingFocusPill: { backgroundColor: colors.surface, borderColor: colors.border },
     trendingFocusText: { color: colors.textPrimary },
-    sortChip: { backgroundColor: colors.surface, borderColor: colors.border },
-    sortChipText: { color: colors.textPrimary },
-    filterChip: { backgroundColor: colors.surface, borderColor: colors.border },
-    filterChipText: { color: colors.textPrimary },
-    filterBadge: { backgroundColor: colors.brand },
-    filterBadgeText: { color: colors.textInverse },
-    clearChip: { backgroundColor: colors.surface, borderColor: colors.danger },
-    clearChipText: { color: colors.danger },
-    saveSearchBtn: { borderColor: colors.border, backgroundColor: colors.surface },
-    saveSearchBtnActive: { borderColor: colors.brand, backgroundColor: colors.surfaceAlt },
-    saveSearchText: { color: colors.textSecondary },
-    saveSearchTextActive: { color: colors.brand },
     savedSearchRow: { backgroundColor: colors.surface, borderColor: colors.border },
     savedSearchQuery: { color: colors.textPrimary },
     savedSearchMeta: { color: colors.textMuted },
@@ -739,7 +877,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           <Ionicons name="arrow-back" size={26} color={colors.textPrimary} />
         </AnimatedPressable>
 
-        <Reanimated.View style={[styles.inputContainer, animatedSearchShellStyle]}>
+        <Reanimated.View style={[styles.inputContainer, t.inputContainer, animatedSearchShellStyle]}>
           <AppSearchBar
             ref={inputRef}
             placeholder="Search Thryftverse"
@@ -826,23 +964,30 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 {/* ΓöÇΓöÇ FOCUS STATE: Clean recent + trending when search is focused ΓöÇΓöÇ */}
                 {isSearchFocused ? (
                   <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(220)}>
-                    {/* Recent searches */}
+                    {/* Recent searches — compact rows */}
                     {recentSearches.length > 0 && (
                       <EditorialSection title="Recent searches">
-                        <View style={styles.recentPillsWrap}>
+                        <View style={styles.recentRowsWrap}>
                           {recentSearches.map((term, idx) => (
                             <AnimatedPressable
                               key={idx}
-                              style={[styles.recentPill, t.recentPill]}
+                              style={styles.recentRow}
                               onPress={() => handlePillPress(term)}
+                              accessibilityLabel={`Search for ${term}`}
+                              accessibilityRole="button"
                             >
-                              <Ionicons name="time-outline" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
-                              <Text style={[styles.recentPillText, t.recentPillText]}>{term}</Text>
+                              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+                              <Text style={styles.recentRowText} numberOfLines={1}>{term}</Text>
+                              <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
                             </AnimatedPressable>
                           ))}
-                          <AnimatedPressable style={[styles.recentPill, t.recentPill, styles.clearRecentPill, t.clearRecentPill]} onPress={clearRecentSearches}>
-                            <Ionicons name="close-circle" size={14} color={colors.textMuted} />
-                            <Text style={[styles.recentPillText, t.recentPillText, { color: colors.textMuted }]}>Clear</Text>
+                          <AnimatedPressable
+                            style={[styles.recentRow, { justifyContent: 'center' }]}
+                            onPress={clearRecentSearches}
+                            accessibilityLabel="Clear recent searches"
+                            accessibilityRole="button"
+                          >
+                            <Text style={[styles.recentRowText, { color: colors.textMuted, fontFamily: FontFamily.medium }]}>Clear all</Text>
                           </AnimatedPressable>
                         </View>
                       </EditorialSection>
@@ -905,22 +1050,30 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </Reanimated.View>
                 ) : (
                 <>
-                {/* Recent searches */}
+                {/* Recent searches — compact rows */}
                 {recentSearches.length > 0 && (
                   <EditorialSection title="Recent searches">
-                    <View style={styles.recentPillsWrap}>
+                    <View style={styles.recentRowsWrap}>
                       {recentSearches.map((term, idx) => (
                         <AnimatedPressable
                           key={idx}
-                          style={[styles.recentPill, t.recentPill]}
+                          style={styles.recentRow}
                           onPress={() => handlePillPress(term)}
+                          accessibilityLabel={`Search for ${term}`}
+                          accessibilityRole="button"
                         >
-                          <Text style={[styles.recentPillText, t.recentPillText]}>{term}</Text>
+                          <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+                          <Text style={styles.recentRowText} numberOfLines={1}>{term}</Text>
+                          <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
                         </AnimatedPressable>
                       ))}
-                      <AnimatedPressable style={[styles.recentPill, t.recentPill, styles.clearRecentPill, t.clearRecentPill]} onPress={clearRecentSearches}>
-                        <Ionicons name="close-circle" size={14} color={colors.textMuted} />
-                        <Text style={[styles.recentPillText, t.recentPillText, { color: colors.textMuted }]}>Clear</Text>
+                      <AnimatedPressable
+                        style={[styles.recentRow, { justifyContent: 'center' }]}
+                        onPress={clearRecentSearches}
+                        accessibilityLabel="Clear recent searches"
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.recentRowText, { color: colors.textMuted, fontFamily: FontFamily.medium }]}>Clear all</Text>
                       </AnimatedPressable>
                     </View>
                   </EditorialSection>
@@ -1136,7 +1289,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     {isSearchingPeople ? (
                       <View style={styles.peopleResultsList}>
                         {[0, 1, 2].map((i) => (
-                          <View key={`people-skel-${i}`} style={[styles.peopleResultRow, { borderColor: colors.border }]}>
+                          <View key={`people-skel-${i}`} style={[peopleRowStyles.row, { borderBottomColor: colors.border }]}>
                             <SkeletonLoader width={44} height={44} borderRadius={22} />
                             <View style={{ flex: 1, gap: 4 }}>
                               <SkeletonLoader width="50%" height={14} borderRadius={7} />
@@ -1148,37 +1301,12 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                     ) : peopleResults.length > 0 ? (
                       <View style={styles.peopleResultsList}>
                         {peopleResults.map((user) => (
-                          <AnimatedPressable
+                          <PeopleResultRow
                             key={user.id}
-                            style={[styles.peopleResultRow, { borderColor: colors.border }]}
+                            user={user}
                             onPress={() => openProfile(navigation, user.id, currentUser?.id)}
-                            accessibilityLabel={`View profile: ${user.displayName || user.username}`}
-                            accessibilityRole="button"
-                          >
-                            {user.avatar ? (
-                              <CachedImage
-                                uri={user.avatar}
-                                style={styles.peopleResultAvatar}
-                                contentFit="cover"
-                                downscaleWidth={96}
-                              />
-                            ) : (
-                              <View style={[styles.peopleResultAvatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-                                <Ionicons name="person" size={18} color={colors.textMuted} />
-                              </View>
-                            )}
-                            <View style={styles.peopleResultInfo}>
-                              <Text style={[styles.peopleResultName, { color: colors.textPrimary }]} numberOfLines={1}>
-                                {user.displayName || `@${user.username}`}
-                              </Text>
-                              {user.displayName && (
-                                <Text style={[styles.peopleResultUsername, { color: colors.textMuted }]} numberOfLines={1}>
-                                  @{user.username}
-                                </Text>
-                              )}
-                            </View>
-                            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-                          </AnimatedPressable>
+                            colors={colors}
+                          />
                         ))}
                       </View>
                     ) : (
@@ -1198,59 +1326,51 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 {/* Sort + Filter bar — only for Items scope */}
                 {searchScope === 'items' && (
                 <>
+                {/* Sort + Filter — single icons, not a wall of chips */}
                 <View style={styles.filterBar}>
-                  <AnimatedPressable style={[styles.sortChip, t.sortChip]} onPress={handleCycleSort} accessibilityLabel={`Sort by ${browseFilters.sort}`} accessibilityRole="button">
-                    <Ionicons name="swap-vertical" size={16} color={colors.textSecondary} />
-                    <Text style={[styles.sortChipText, t.sortChipText]}>{browseFilters.sort}</Text>
-                  </AnimatedPressable>
-
-                  <AnimatedPressable style={[styles.filterChip, t.filterChip]} onPress={handleOpenFilter} accessibilityLabel={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : 'Open filters'} accessibilityRole="button">
-                    <Ionicons name="options-outline" size={16} color={colors.textSecondary} />
-                    <Text style={[styles.filterChipText, t.filterChipText]}>Filter</Text>
-                    {activeFilterCount > 0 && (
-                      <View style={[styles.filterBadge, t.filterBadge]}>
-                        <Text style={[styles.filterBadgeText, t.filterBadgeText]}>{activeFilterCount}</Text>
-                      </View>
-                    )}
-                  </AnimatedPressable>
-
-                  {hasActiveDiscoverFilters && (
-                    <AnimatedPressable style={[styles.clearChip, t.clearChip]} onPress={handleClearDiscoverFilters} accessibilityLabel="Clear all filters" accessibilityRole="button">
-                      <Ionicons name="close-circle" size={16} color={colors.danger} />
-                      <Text style={[styles.clearChipText, t.clearChipText]}>Clear</Text>
-                    </AnimatedPressable>
-                  )}
-
-                  {normalizedQuery && (
+                  <Text style={[styles.filterBarCount, t.filterBarCount]} numberOfLines={1}>
+                    {discoverListings.length} {discoverListings.length === 1 ? 'result' : 'results'}
+                  </Text>
+                  <View style={styles.filterBarActions}>
                     <AnimatedPressable
-                      style={[
-                        styles.saveSearchBtn,
-                        t.saveSearchBtn,
-                        isCurrentQuerySaved && styles.saveSearchBtnActive,
-                        isCurrentQuerySaved && t.saveSearchBtnActive,
-                        { marginLeft: 'auto' },
-                      ]}
-                      onPress={isCurrentQuerySaved ? undefined : handleSaveSearch}
-                      accessibilityLabel={isCurrentQuerySaved ? 'Search saved with alerts' : 'Save this search with alerts'}
+                      style={styles.filterIconBtn}
+                      onPress={handleCycleSort}
+                      accessibilityLabel={`Sort by ${browseFilters.sort}`}
                       accessibilityRole="button"
                     >
-                      <Ionicons
-                        name={isCurrentQuerySaved ? 'notifications' : 'notifications-outline'}
-                        size={16}
-                        color={isCurrentQuerySaved ? colors.brand : colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.saveSearchText,
-                          t.saveSearchText,
-                          isCurrentQuerySaved && styles.saveSearchTextActive,
-                          isCurrentQuerySaved && t.saveSearchTextActive,
-                        ]}
-                      >
-                        {isCurrentQuerySaved ? 'Saved' : 'Save'}
-                      </Text>
+                      <Ionicons name="swap-vertical" size={20} color={colors.textPrimary} />
                     </AnimatedPressable>
-                  )}
+                    <AnimatedPressable
+                      style={styles.filterIconBtn}
+                      onPress={handleOpenFilter}
+                      accessibilityLabel={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : 'Open filters'}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
+                      {activeFilterCount > 0 && (
+                        <View style={[styles.filterIconBadge, t.filterIconBadge]}>
+                          <Text style={[styles.filterIconBadgeText, t.filterIconBadgeText]}>{activeFilterCount}</Text>
+                        </View>
+                      )}
+                    </AnimatedPressable>
+                    {normalizedQuery && (
+                      <AnimatedPressable
+                        style={[
+                          styles.filterIconBtn,
+                          isCurrentQuerySaved && { backgroundColor: colors.surfaceAlt },
+                        ]}
+                        onPress={isCurrentQuerySaved ? undefined : handleSaveSearch}
+                        accessibilityLabel={isCurrentQuerySaved ? 'Search saved with alerts' : 'Save this search with alerts'}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons
+                          name={isCurrentQuerySaved ? 'notifications' : 'notifications-outline'}
+                          size={20}
+                          color={isCurrentQuerySaved ? colors.brand : colors.textPrimary}
+                        />
+                      </AnimatedPressable>
+                    )}
+                  </View>
                 </View>
 
                 {/* Masonry grid */}
@@ -1377,19 +1497,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Header
+  // Header — geometry matches Explore's search field for smooth transition.
+  // Explore uses: surfaceAlt background, Radius.lg, Control.hit minHeight,
+  // search icon inside, no border. GlobalSearch mirrors this and adds the
+  // back button + visual search icon inside the field.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    gap: 10,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.smMd,
+    gap: Space.smMd,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: RadiusRoleValue.pillAvatar,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1397,10 +1519,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
+    borderRadius: Radius.lg,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingHorizontal: Space.md,
+    paddingVertical: 0,
+    minHeight: Control.hit,
   },
   statusPillWrap: {
     paddingHorizontal: 20,
@@ -1468,27 +1592,22 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
 
-  // Recent searches pills
-  recentPillsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    gap: 10,
+  // Recent searches — compact rows
+  recentRowsWrap: {
+    paddingHorizontal: Space.md,
+    gap: 0,
   },
-  recentPill: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
-  clearRecentPill: {
+  recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  recentPillText: {
-    fontSize: 14,
-    fontFamily: FontFamily.medium,
+  recentRowText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: FontFamily.regular,
   },
 
   // Focus state — trending pills (horizontal scroll with category icons)
@@ -1513,87 +1632,48 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
   },
 
-  // Filter bar
+  // Filter bar — single icons, not a wall of chips
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.smMd,
   },
-  sortChip: {
+  filterBarCount: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: FontFamily.medium,
+  },
+  filterBarActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
+    gap: Space.xs,
   },
-  sortChipText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 13,
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    position: 'relative',
-  },
-  filterChipText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 13,
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: RadiusRoleValue.pillAvatar,
+  filterIconBtn: {
+    width: Control.hit,
+    height: Control.hit,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
-  filterBadgeText: {
-    fontFamily: FontFamily.bold,
+  filterIconBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  filterIconBadgeText: {
     fontSize: 10,
-  },
-  clearChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-  },
-  clearChipText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 13,
-  },
-
-  // Save search button (in filter bar)
-  saveSearchBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    height: 34,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    borderWidth: 1,
-  },
-  saveSearchBtnActive: {
-  },
-  saveSearchText: {
-    fontSize: 12,
-    fontFamily: FontFamily.semibold,
-  },
-  saveSearchTextActive: {
+    fontFamily: FontFamily.bold,
+    lineHeight: 12,
   },
   savedSearchListWrap: {
     paddingHorizontal: 20,
@@ -1788,37 +1868,5 @@ const styles = StyleSheet.create({
   // People results
   peopleResultsList: {
     gap: 0,
-  },
-  peopleResultRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  peopleResultAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  peopleResultAvatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  peopleResultInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  peopleResultName: {
-    fontSize: 15,
-    fontFamily: FontFamily.semibold,
-  },
-  peopleResultUsername: {
-    fontSize: 13,
-    fontFamily: FontFamily.regular,
   },
 });

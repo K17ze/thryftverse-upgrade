@@ -1,6 +1,10 @@
 export { AppInput } from './AppInput';
 export { FlatRow } from './FlatRow';
 export type { FlatRowProps } from './FlatRow';
+export { MediaStage } from './MediaStage';
+export type { MediaStageProps, MediaStageItem, MediaStageAspectRatio, MediaStageOverlayControl } from './MediaStage';
+export { ActionDock } from './ActionDock';
+export type { ActionDockProps, ActionDockPrimaryAction, ActionDockSecondaryAction } from './ActionDock';
 export { PremiumTextField } from './PremiumTextField';
 export { PremiumSelectRow } from './PremiumSelectRow';
 export { PremiumFormCard } from './PremiumFormCard';

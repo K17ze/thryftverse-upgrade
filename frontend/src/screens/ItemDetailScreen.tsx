@@ -935,12 +935,15 @@ export default function ItemDetailScreen() {
             Cognitive layer: condition, seller rating, dispatch time.
             These are the three facts a buyer needs to decide whether
             to keep reading. Full commerce details (protection, returns,
-            authenticity) live in the Shipping & returns section below. */}
+            authenticity) live in the Shipping & returns section below.
+            Per 2026 Apple HIG cognitive order: flat rows with hairline
+            separators — no chips, no cards. Each row is one fact with
+            an icon + label, separated by hairlines for clear scanning. */}
         {(() => {
-          const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string; dotColor?: string }[] = [];
+          const trustRows: { icon: keyof typeof Ionicons.glyphMap; label: string; dotColor?: string }[] = [];
           // 1. Condition — the most important attribute for second-hand buyers
           if (item.condition) {
-            trustChips.push({
+            trustRows.push({
               icon: 'checkmark-circle-outline',
               label: item.condition,
               dotColor: conditionMeta?.color,
@@ -951,38 +954,44 @@ export default function ItemDetailScreen() {
             const ratingText = seller.reviewCount != null && seller.reviewCount > 0
               ? `★ ${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
               : `★ ${seller.rating.toFixed(1)}`;
-            trustChips.push({
+            trustRows.push({
               icon: 'star-outline',
               label: ratingText,
             });
           }
           // 3. Dispatch time — when will it arrive?
           if (seller?.dispatchTimeLabel) {
-            trustChips.push({
+            trustRows.push({
               icon: 'cube-outline',
               label: seller.dispatchTimeLabel,
             });
           } else if (commerce.shippingMethod) {
-            trustChips.push({
+            trustRows.push({
               icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'cube-outline',
               label: commerce.shippingPayer === 'seller'
                 ? `Free ${commerce.shippingMethod}`
                 : commerce.shippingMethod,
             });
           }
-          if (trustChips.length === 0) return null;
-          const elevated = trustChips.slice(0, 3);
+          if (trustRows.length === 0) return null;
+          const elevated = trustRows.slice(0, 3);
           return (
-            <View style={styles.elevatedTrustStrip}>
-              {elevated.map((chip, i) => (
-                <View key={i} style={styles.trustChip}>
-                  {chip.dotColor ? (
-                    <View style={[styles.trustChipDot, { backgroundColor: chip.dotColor }]} />
+            <View style={styles.trustFactsSection}>
+              {elevated.map((row, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.trustFactRow,
+                    i < elevated.length - 1 && { borderBottomColor: colors.borderSubtle },
+                  ]}
+                >
+                  {row.dotColor ? (
+                    <View style={[styles.trustFactDot, { backgroundColor: row.dotColor }]} />
                   ) : (
-                    <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
+                    <Ionicons name={row.icon} size={16} color={colors.textSecondary} />
                   )}
-                  <Text style={[styles.trustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {chip.label}
+                  <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {row.label}
                   </Text>
                 </View>
               ))}
@@ -1013,7 +1022,7 @@ export default function ItemDetailScreen() {
               >
                 <Text
                   style={[styles.descriptionText, { color: colors.textPrimary }]}
-                  numberOfLines={descriptionExpanded ? undefined : 4}
+                  numberOfLines={descriptionExpanded ? undefined : 3}
                 >
                   {item.description}
                 </Text>
@@ -1773,11 +1782,13 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
   attributeText: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     flexShrink: 1,
+    fontVariant: ['tabular-nums'],
   },
   sizeGuideLink: {
     fontSize: TypographyV2.meta.size,
@@ -1794,15 +1805,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
-  // ── Elevated trust strip ──
-  elevatedTrustStrip: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: Space.sm + 2,
+  // ── Trust facts (flat rows with hairline separators) ──
+  // Per 2026 Apple HIG cognitive order: flat rows, no chips, no cards.
+  // Each row is one fact with icon + label, separated by hairlines.
+  // This is the "content layer" — utility structure per AGENTS.md
+  // surface budget: flat canvas + hairlines are the default.
+  trustFactsSection: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
+  },
+  trustFactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    minHeight: Control.hit,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'transparent', // overridden inline with theme color
+  },
+  trustFactDot: {
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: (Space.xs + 2) / 2,
+    flexShrink: 0,
+  },
+  trustFactText: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
+    fontVariant: ['tabular-nums'],
+    flexShrink: 1,
   },
   // ── Seller row ──
   // Per Design.md between-group spacing: the seller row is a distinct
@@ -1873,6 +1907,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
+    fontVariant: ['tabular-nums'],
   },
   purchaseSummary: {
     fontSize: TypographyV2.body.size,
@@ -1940,6 +1975,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     paddingTop: Space.xs,
+    fontVariant: ['tabular-nums'],
   },
   // ── Price insight alert row ──
   alertRow: {
@@ -2015,6 +2051,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
   },
   // ── Discovery ──
   railLoading: {

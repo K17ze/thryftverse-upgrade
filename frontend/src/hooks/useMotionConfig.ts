@@ -57,12 +57,18 @@ export function useMotionConfig() {
       duration: reducedMotion
         ? { ...Motion.duration, touch: 0, fast: 0, normal: 0, slow: 0, slower: 0, crawl: 0 }
         : Motion.duration,
+      // Tiers collapse to instant (0ms) under reduced motion so every
+      // surface that references a tier settles instantly without travel.
+      tier: reducedMotion
+        ? { instant: 0, micro: 0, deliberate: 0 }
+        : Motion.tier,
       spring,
       transitions,
       stagger: reducedMotion
         ? { fast: 0, normal: 0, slow: 0, maxItems: 0 }
         : Motion.stagger,
       gestures: Motion.gestures,
+      mapping: Motion.mapping,
       // Timing config for withTiming calls — instant when reduced motion is on.
       timing: REDUCED_TIMING,
       // Convenience: true when full motion is allowed. Use to gate decorative

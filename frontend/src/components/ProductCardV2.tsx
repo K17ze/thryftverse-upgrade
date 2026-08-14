@@ -429,6 +429,17 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
 
   // Image - Pinterest/Depop tight editorial feel. No shadow, minimal radius.
+  // Art direction (AGENTS.md §15 — media storytelling):
+  //  - Media is the primary visual anchor; chrome recedes.
+  //  - No decorative border or shadow on the media itself.
+  //  - borderRadius 12pt (Radius.lg) — within the media/field radius budget.
+  //  - backgroundColor is a placeholder tone only (surfaceAlt), never chrome.
+  //  - No gradient overlay on the card — price sits BELOW the media in the
+  //    info section, not over it. Gradients are used ONLY when text
+  //    readability over media requires it (see CommerceMediaStage scrims).
+  //  - Focal points preserved via contentFit="cover" + getCategoryFocalPoint.
+  //  - Aspect ratios vary per-listing (resolveListingMediaAspectRatio) so
+  //    the masonry feed has honest editorial rhythm, not uniform tiles.
   imageWrap: {
     position: 'relative',
     overflow: 'hidden',

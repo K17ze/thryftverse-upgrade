@@ -129,7 +129,7 @@ const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
 
 type ExploreTile = {
   id: string;
-  type: 'listing' | 'clip';
+  type: 'listing' | 'clip' | 'posters';
   mediaType: 'image' | 'video';
   mediaUri: string;
   posterUri?: string;
@@ -251,6 +251,8 @@ interface ExploreGridItemProps {
   sellerAvatar?: string | null;
   /** Viewability-driven playback: only the most-visible video plays. */
   shouldPlay?: boolean;
+  /** When true, show seller name overlay instead of likes count (Following mode). */
+  showSellerName?: boolean;
 }
 
 const ExploreGridItem = React.memo(function ExploreGridItem({
@@ -263,6 +265,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
   sellerUsername,
   sellerAvatar,
   shouldPlay = false,
+  showSellerName = false,
 }: ExploreGridItemProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -282,13 +285,15 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
   }, [item.routeId, toggleWishlist, haptic]);
 
   // Deterministic feed display role: media is primary, price is overlaid,
-  // and ONE interaction signal (likes) is shown as a compact overlay.
-  // Seller avatar, seller name, title text, and condition badges are
-  // removed from the tile so media dominates at thumbnail size.
+  // and ONE interaction signal is shown as a compact overlay.
+  // Following mode → seller name (context: you know this seller).
+  // For You mode → likes count (context: social proof for discovery).
+  // Seller avatar, condition badges, title text are removed from the tile
+  // so media dominates at thumbnail size.
   // Seller profile navigation is preserved via the peek modal + ItemDetail.
-  const showLikes = item.likes > 0;
+  const showLikes = !showSellerName && item.likes > 0;
+  const sellerName = showSellerName && sellerUsername ? `@${sellerUsername}` : null;
   void onPressSellerProfile; // preserved in API, not rendered on tile
-  void sellerUsername;
   void sellerAvatar;
 
   return (
@@ -297,7 +302,7 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
         style={[styles.exploreMediaWrap, { height: mediaHeight }]}
         onPress={() => onPress(item.routeId)}
         onLongPress={() => onLongPress(item)}
-        accessibilityLabel={`${item.caption}, ${formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}${showLikes ? `, ${item.likes} likes` : ''}`}
+        accessibilityLabel={`${item.caption}, ${formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}${sellerName ? `, by ${sellerName}` : showLikes ? `, ${item.likes} likes` : ''}`}
         accessibilityRole="button"
         accessibilityHint="Opens item details. Long press to preview this listing"
       >
@@ -339,8 +344,14 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
           </Text>
         </View>
 
-        {/* ONE interaction signal: likes count (heart + number), top-right */}
-        {showLikes ? (
+        {/* ONE interaction signal: likes count (For You) or seller name (Following), top-right */}
+        {sellerName ? (
+          <View style={styles.exploreSellerBadge} pointerEvents="none">
+            <Text style={styles.exploreSellerBadgeText} numberOfLines={1}>
+              {sellerName}
+            </Text>
+          </View>
+        ) : showLikes ? (
           <View style={styles.exploreLikesBadge} pointerEvents="none">
             <Ionicons name="heart" size={10} color="#fff" style={styles.exploreLikesGlyph} />
             <Text style={styles.exploreLikesText} numberOfLines={1}>
@@ -705,7 +716,31 @@ export default function HomeScreen() {
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
   const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
-  const feedGridData = (showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading) ? [] : activeFeedData;
+
+  // Posters rail injected into the feed after 4 items (2 rows in 2-column
+  // grid) so the first viewport shows header + tabs + media — nothing else.
+  // The posters rail appears as a full-span item as the user scrolls down,
+  // preserving the feature while keeping the first viewport media-first
+  // (spec: "First viewport: compact header, For You/Following tabs, first
+  // media row — nothing else").
+  const POSTERS_INJECT_INDEX = 4;
+  const hasPosters = !postersLoading && realPosters.length > 0;
+  const feedGridData = React.useMemo<ExploreTile[]>(() => {
+    if (showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading) return [];
+    if (activeFeedData.length === 0) return [];
+    if (!hasPosters || activeFeedData.length <= POSTERS_INJECT_INDEX) return activeFeedData;
+    const result = [...activeFeedData];
+    result.splice(POSTERS_INJECT_INDEX, 0, {
+      id: 'posters_rail',
+      type: 'posters',
+      mediaType: 'image',
+      mediaUri: '',
+      likes: 0,
+      caption: '',
+      aspectRatio: 1,
+    });
+    return result;
+  }, [activeFeedData, hasPosters, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
 
   // EAS Observe: record TTI once the home feed has real content rendered for
   // the first time. Only the first markInteractive() call across the whole app
@@ -745,7 +780,7 @@ export default function HomeScreen() {
     setPeekItem(null);
   }, []);
 
-  const renderPosters = () => {
+  const renderPosters = React.useCallback(() => {
     if (postersLoading) {
       return (
         <View style={styles.postersSection}>
@@ -832,7 +867,7 @@ export default function HomeScreen() {
 
       </View>
     );
-  };
+  }, [postersLoading, realPosters, colors, haptic, navigation]);
 
   const renderNewListingsBanner = () => {
     if (newListingIds.size === 0) {
@@ -920,6 +955,14 @@ export default function HomeScreen() {
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
   const renderFeedItem = React.useCallback(
     ({ item, index }: { item: ExploreTile; index: number }) => {
+      // Posters rail — full-span item injected after the first 2 rows
+      if (item.type === 'posters') {
+        return (
+          <View style={styles.flashListItem}>
+            {renderPosters()}
+          </View>
+        );
+      }
       const listing = activeListings.find((l) => l.id === item.routeId);
       // Featured tiles span both columns — pass the full row width so the
       // media and overlay scale up for the editorial rhythm break.
@@ -938,6 +981,7 @@ export default function HomeScreen() {
             sellerUsername={listing?.seller?.username}
             sellerAvatar={listing?.seller?.avatar}
             shouldPlay={activePlaybackIndex === index}
+            showSellerName={feedMode === 'following'}
           />
         </View>
       );
@@ -951,6 +995,8 @@ export default function HomeScreen() {
       handleTileLongPress,
       handleSellerProfilePress,
       activePlaybackIndex,
+      feedMode,
+      renderPosters,
     ],
   );
 
@@ -1024,8 +1070,8 @@ export default function HomeScreen() {
         getItemType={getItemType}
         renderItem={renderFeedItem}
         overrideItemLayout={(layout: { span?: number }, item: ExploreTile) => {
-          // Featured tiles span both columns for asymmetric editorial rhythm
-          layout.span = item.featured ? 2 : 1;
+          // Featured tiles and posters rail span both columns
+          layout.span = item.featured || item.type === 'posters' ? 2 : 1;
         }}
         ListHeaderComponent={
           <View>
@@ -1062,8 +1108,6 @@ export default function HomeScreen() {
                 );
               })}
             </View>
-
-            {renderPosters()}
 
             {renderNewListingsBanner()}
 
@@ -1901,7 +1945,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   explorePriceOverlayText: {
     fontSize: TypographyV2.priceList.size,
     lineHeight: TypographyV2.priceList.lineHeight,
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'],
     letterSpacing: TypographyV2.priceList.letterSpacing,
     color: '#fff',
@@ -1928,6 +1972,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     textShadowRadius: 2,
   },
   exploreLikesText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    color: '#fff',
+    letterSpacing: 0.1,
+  },
+  // Seller name badge — compact overlay for Following mode (replaces likes)
+  exploreSellerBadge: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
+    paddingHorizontal: Space.xs + 1,
+    paddingVertical: 2,
+    borderRadius: RadiusRoleValue.compactControl,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  exploreSellerBadgeText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,

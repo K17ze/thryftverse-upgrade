@@ -11,12 +11,33 @@
  *   300–500ms complex transition (layout rearrangement, shared element)
  *   500ms+    elaborate animation (onboarding, celebratory moments)
  *
- * Principles (AGENTS.md §17):
- * - Motion as feedback, not decoration
- * - Spring-based, not ease-in-out
- * - 120-180ms for state changes (fast enough to feel responsive, slow enough to perceive)
- * - Nothing snaps, everything settles
- * - Reduced motion collapses to instant / simple fade (see useMotionConfig)
+ * ── Three motion tiers (2026 Apple HIG + AGENTS.md §27.2) ──────────────
+ *
+ *   instant   (0ms)     — no visible motion; reduced-motion fallback.
+ *   micro     (100–200) — interactive state feedback: button presses,
+ *                         toggles, icon swaps, list item reveals.
+ *   deliberate(250–400) — structural transitions: sheet presentations,
+ *                         tab switches, screen pushes, modal entrances.
+ *
+ * Nothing above 400ms except rare celebratory/onboarding moments (crawl).
+ *
+ * ── Easing curves ──────────────────────────────────────────────────────
+ *
+ *   ease-out  → entries (decelerate into rest) — elements arriving.
+ *   ease-in   → exits (accelerate away) — elements leaving.
+ *   ease-in-out → state changes (symmetric) — toggles, morphs, crossfades.
+ *
+ * ── Motion discipline (AGENTS.md §17) ──────────────────────────────────
+ *
+ *   - Motion as feedback, not decoration.
+ *   - No motion on static content — only on interactive state changes.
+ *   - Spring-based for interactive feedback; timing for entrances/exits.
+ *   - 120-180ms for state changes (fast enough to feel responsive, slow
+ *     enough to perceive).
+ *   - Nothing snaps, everything settles.
+ *   - Reduced motion collapses to instant / simple fade (see useMotionConfig
+ *     and useReducedMotion). Every animated surface must branch on
+ *     useReducedMotion() or consume useMotionConfig().
  *
  * No local "magic" values unless interaction physics require them and are
  * documented. Standardized transitions (audit §Motion architecture):
@@ -42,6 +63,19 @@ export const Motion = {
     /** 600ms — Hero/page transitions, elaborate onboarding moments. */
     crawl: 600,
   },
+
+  // ── Motion tiers (2026 Apple HIG) ─────────────────────────────────────
+  // Semantic grouping of durations into the three canonical tiers so
+  // callers can reference a tier instead of a magic number. Each tier
+  // maps to a duration band; reduced-motion collapses all to `instant`.
+  tier: {
+    /** 0ms — no visible motion. Reduced-motion fallback for all tiers. */
+    instant: 0,
+    /** 120ms — micro feedback: button presses, toggles, icon swaps. */
+    micro: 120,
+    /** 280ms — deliberate transition: sheet, tab switch, screen push. */
+    deliberate: 280,
+  } as const,
 
   // Spring configs (Reanimated 4 compatible).
   // Flagship range per AGENTS §27.3: damping 12–18, stiffness 120–280, mass 0.8–1.0.
@@ -76,18 +110,45 @@ export const Motion = {
   },
 
   // Easing curves (for non-spring animations). Reanimated Easing functions.
+  // 2026 Apple HIG: ease-out for entries, ease-in for exits, ease-in-out
+  // for state changes. Never apply motion to static content — only to
+  // interactive state changes (AGENTS.md §17).
   easing: {
     // Standard ease — for opacity fades
     smooth: Easing.inOut(Easing.ease),
-    // Entrance — decelerate into rest
+    // Entrance — decelerate into rest (ease-out)
     entrance: Easing.out(Easing.cubic),
-    // Exit — accelerate away
+    // Exit — accelerate away (ease-in)
     exit: Easing.in(Easing.cubic),
     // Gentle ease-out for content reveals (slightly softer than entrance)
     easeOut: Easing.out(Easing.quad),
     // Sharp ease-in-out for icon swaps / state morphs
     crisp: Easing.inOut(Easing.cubic),
   },
+
+  // ── Interaction → tier + easing mapping ─────────────────────────────────
+  // The canonical assignment of motion tier and easing curve to each
+  // interaction type. Callers should reference these instead of inventing
+  // per-screen values. Every entry is an interactive state change —
+  // static content never animates (AGENTS.md §17).
+  mapping: {
+    /** Button press — micro tier, spring (interactive feedback). */
+    buttonPress: { tier: 'micro' as const, easing: 'spring' as const },
+    /** Sheet presentation — deliberate tier, ease-out (entry). */
+    sheetPresentation: { tier: 'deliberate' as const, easing: 'entrance' as const },
+    /** Sheet dismissal — deliberate tier, ease-in (exit). */
+    sheetDismissal: { tier: 'deliberate' as const, easing: 'exit' as const },
+    /** Tab switch — deliberate tier, ease-in-out (state change). */
+    tabSwitch: { tier: 'deliberate' as const, easing: 'crisp' as const },
+    /** List item reveal — micro tier, ease-out (entry). */
+    listItemReveal: { tier: 'micro' as const, easing: 'entrance' as const },
+    /** Toggle / icon swap — micro tier, ease-in-out (state change). */
+    toggle: { tier: 'micro' as const, easing: 'crisp' as const },
+    /** Modal entrance — deliberate tier, ease-out (entry). */
+    modalEntrance: { tier: 'deliberate' as const, easing: 'entrance' as const },
+    /** Screen push — deliberate tier, ease-out (entry). */
+    screenPush: { tier: 'deliberate' as const, easing: 'entrance' as const },
+  } as const,
 
   // Stagger delays for list entrance (AGENTS §17: do not animate every
   // historical item on initial load — cap cascades to the first viewport).
