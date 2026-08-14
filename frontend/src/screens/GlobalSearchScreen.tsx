@@ -921,7 +921,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
         </Reanimated.View>
       </View>
 
-      {query.length > 0 && (
+      {query.length > 0 && (lastError || searchError) && (
         <View style={styles.statusPillWrap}>
           <SyncStatusPill {...searchStatus} />
         </View>
@@ -1772,6 +1772,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 14,
     color: '#fff',
+    fontVariant: ['tabular-nums'],
   },
   recoEmptyState: {
     borderWidth: StyleSheet.hairlineWidth,

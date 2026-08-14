@@ -34,6 +34,7 @@ import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile'
 import type { Listing } from '../data/mockData';
 import { visualSearch } from '../services/listingsApi';
 import VisualSearchCamera from '../components/VisualSearchCamera';
+import { Motion } from '../theme/motionTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VisualSearch'>;
 
@@ -102,7 +103,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     } else {
       const fadeOut = RNAnimated.timing(scanOpacityAnim, {
         toValue: 0,
-        duration: 300,
+        duration: Motion.duration.slow,
         useNativeDriver: false,
       });
       fadeOut.start();

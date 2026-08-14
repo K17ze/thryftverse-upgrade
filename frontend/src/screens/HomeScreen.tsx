@@ -1330,6 +1330,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Inter_700Bold',
     lineHeight: 12,
+    fontVariant: ['tabular-nums'],
   },
   feedContent: {
     paddingBottom: 120,
@@ -1376,6 +1377,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
     color: colors.textSecondary,
     backgroundColor: colors.surfaceAlt,
+    fontVariant: ['tabular-nums'],
   },
   feedTabCountActive: {
     color: colors.textInverse,
@@ -1983,6 +1985,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
     color: '#fff',
     letterSpacing: 0.1,
+    fontVariant: ['tabular-nums'],
   },
   // Seller name badge — compact overlay for Following mode (replaces likes)
   exploreSellerBadge: {

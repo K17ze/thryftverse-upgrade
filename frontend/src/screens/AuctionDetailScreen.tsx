@@ -27,7 +27,7 @@ import { parseApiError } from '../lib/apiClient';
 import { requestPushPermissionOnce } from '../lib/pushPermission';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Space, FontFamily, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
@@ -50,12 +50,11 @@ import { FullscreenMediaViewer } from '../components/product/FullscreenMediaView
 import { RecommendationRail, ProductDetailSkeleton } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
-import { CommerceStickyDock, CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
+import { CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
 import {
   CommerceDetailHeader,
   CommerceDetailIdentity,
   CommerceDetailTransactionSurface,
-  CommerceDetailMetricRow,
   CommerceDetailDisclosureRow,
   CommerceDetailSection,
   CommerceDetailSellerRow,
@@ -91,7 +90,6 @@ import {
   resolveDetailCountdown,
   resolveViewerContextMessage,
   isBuyNowAvailable,
-  areBidControlsRemoved,
   buildDetailAccessibilityLabel,
   formatBidActivityRow,
   detectLifecycleTransition,
@@ -529,7 +527,6 @@ export default function AuctionDetailScreen() {
   const buyNowAvailable = detailInput ? isBuyNowAvailable(detailInput, effectiveState ?? 'upcoming') : false;
   const reserveStatus = detailInput ? resolveReserveStatus(detailInput) : 'none';
   const showBidControls = !isTerminal && !isSeller;
-  const treatmentStyle = stateAction?.viewerTreatment ?? 'none';
 
   // ── PRODUCT-01: unified view model + shared social state + seller trust + recommendations ──
   const viewModel = React.useMemo(() => {
@@ -576,10 +573,6 @@ export default function AuctionDetailScreen() {
   const handlePressRelatedAuction = React.useCallback((id: string) => {
     navigation.push('AuctionDetail', { auctionId: id });
   }, [navigation]);
-
-  // Family badge state accent
-  const familyStateAccent = isLive ? 'Live' : isUpcoming ? 'Upcoming' : isCancelled ? 'Cancelled'
-    : isSettled ? 'Settled' : isEnded ? 'Ended' : null;
 
   // ── Canonical media array ──
   // Per spec 02_AUCTION §7: render the canonical media array through
@@ -1793,19 +1786,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Space.xl,
-  },
-  backBtn: {
-    marginTop: Space.md,
-    minWidth: 120,
-  },
   recommendationSection: {
     marginTop: Space.md,
   },
@@ -1839,12 +1819,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
-  },
-  bidActivityEmpty: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.regular,
-    paddingVertical: Space.sm,
   },
   bidActivityViewAll: {
     flexDirection: 'row',

@@ -172,5 +172,6 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     textAlign: 'right',
     letterSpacing: Type.captionElevated.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
 });

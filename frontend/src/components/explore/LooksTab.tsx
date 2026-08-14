@@ -396,6 +396,7 @@ function createStyles(colors: ThemeColors) {
     color: 'rgba(255,255,255,0.9)',
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
   },
   tagWrap: {
     position: 'absolute',
@@ -443,6 +444,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   });
 }

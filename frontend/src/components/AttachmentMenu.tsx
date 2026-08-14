@@ -12,6 +12,7 @@ import { AnimatedPressable } from './AnimatedPressable';
 import { Caption, Headline } from './ui/Text';
 
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 interface AttachmentOption {
   id: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -54,13 +55,14 @@ export function AttachmentMenu({
       Animated.spring(slideAnim, {
         toValue: 1,
         useNativeDriver: true,
-        friction: 8,
-        tension: 40,
+        damping: Motion.spring.sheet.damping,
+        stiffness: Motion.spring.sheet.stiffness,
+        mass: Motion.spring.sheet.mass,
       }).start();
     } else {
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 200,
+        duration: Motion.duration.slow,
         useNativeDriver: true,
       }).start();
     }

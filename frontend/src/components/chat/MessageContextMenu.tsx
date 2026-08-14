@@ -13,6 +13,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities';
 import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
+import { Motion } from '../../theme/motionTokens';
 
 export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report' | 'translate';
 
@@ -56,26 +57,27 @@ export function MessageContextMenu({
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 150,
+          duration: Motion.duration.fast,
           useNativeDriver: true,
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
           useNativeDriver: true,
-          friction: 8,
-          tension: 40,
+          damping: Motion.spring.sheet.damping,
+          stiffness: Motion.spring.sheet.stiffness,
+          mass: Motion.spring.sheet.mass,
         }),
       ]).start();
     } else {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: Motion.duration.fast,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: SCREEN_HEIGHT,
-          duration: 200,
+          duration: Motion.duration.slow,
           useNativeDriver: true,
         }),
       ]).start();

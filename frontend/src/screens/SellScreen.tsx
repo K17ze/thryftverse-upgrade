@@ -91,9 +91,6 @@ export default function SellScreen() {
     navHeader: { borderBottomColor: colors.border, backgroundColor: colors.background },
     navTitle: { color: colors.textPrimary },
     navDraftText: { color: colors.textMuted },
-    autofillBar: { backgroundColor: colors.surface },
-    autofillBarBorder: { borderColor: colors.border },
-    autofillLabel: { color: colors.textSecondary },
     autofillDesc: { color: colors.textMuted },
     autofillApplyText: { color: colors.brand },
     sectionHeading: { color: colors.textSecondary },
@@ -1790,9 +1787,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  keyboardView: {
-    flex: 1,
-  },
 
   /* -- nav header -- */
   navHeader: {
@@ -1862,12 +1856,6 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    marginBottom: Space.sm,
-  },
-  autofillChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs + 2,
     marginBottom: Space.sm,
   },
   autofillRow: {
@@ -2043,6 +2031,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     flex: 1,
+    fontVariant: ['tabular-nums'],
   },
   soldCompsAction: {
     fontSize: TypographyV2.meta.size,

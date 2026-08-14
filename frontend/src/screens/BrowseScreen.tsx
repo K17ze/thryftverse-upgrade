@@ -62,8 +62,20 @@ const SORT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'Price: Low to High', label: 'Price: Low to High' },
   { value: 'Price: High to Low', label: 'Price: High to Low' },
   { value: 'Most liked', label: 'Most liked' },
-  { value: 'Ending soon', label: 'Ending soon' },
 ];
+
+// Auction-only sort option — only surfaced when the browse context is
+// auction-related (spec §08: "Do not show: Ending soon for fixed-price-only
+// results"). Prevents an irrelevant sort from appearing in normal listing
+// browse where no items have end times.
+const AUCTION_SORT_OPTION = { value: 'Ending soon', label: 'Ending soon' };
+
+function getSortOptions(categoryId: string, searchQuery?: string): Array<{ value: string; label: string }> {
+  const isAuctionContext =
+    categoryId.toLowerCase().includes('auction') ||
+    (searchQuery?.toLowerCase().includes('auction') ?? false);
+  return isAuctionContext ? [...SORT_OPTIONS, AUCTION_SORT_OPTION] : SORT_OPTIONS;
+}
 
 type BrowseRoute = RouteProp<RootStackParamList, 'Browse'>;
 
@@ -131,6 +143,7 @@ export default function BrowseScreen() {
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
       marginTop: Space.xs + 2,
+      fontVariant: ['tabular-nums'],
     },
 
     filterBar: { paddingBottom: Space.md },
@@ -306,7 +319,7 @@ export default function BrowseScreen() {
       justifyContent: 'space-between',
       marginBottom: Space.xs,
     },
-    priceText: { color: colors.textPrimary, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold },
+    priceText: { color: colors.textPrimary, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
     brandText: { color: colors.textSecondary, fontSize: Type.caption.size, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
     sizeText: { color: colors.textMuted, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium },
     sellerActionRow: {
@@ -404,11 +417,11 @@ export default function BrowseScreen() {
 
   useEffect(() => {
     AsyncStorage.getItem(BROWSE_SORT_PREF_KEY).then((stored) => {
-      if (stored && SORT_OPTIONS.some((opt) => opt.value === stored)) {
+      if (stored && getSortOptions(categoryId, searchQuery).some((opt) => opt.value === stored)) {
         updateBrowseFilters({ sort: stored as any });
       }
     }).catch(() => {});
-  }, [updateBrowseFilters]);
+  }, [updateBrowseFilters, categoryId, searchQuery]);
 
   useScrollToTop(scrollRef);
 
@@ -819,13 +832,14 @@ export default function BrowseScreen() {
 
       {sortMenuOpen ? (
         <View style={styles.sortMenu}>
-          {SORT_OPTIONS.map((opt, idx) => {
+          {getSortOptions(categoryId, searchQuery).map((opt, idx) => {
+            const sortOpts = getSortOptions(categoryId, searchQuery);
             const isActive = browseFilters.sort === opt.value;
             return (
               <Pressable
                 key={opt.value}
                 onPress={() => handleSortSelect(opt.value)}
-                style={[styles.sortMenuItem, idx === SORT_OPTIONS.length - 1 && { borderBottomWidth: 0 }]}
+                style={[styles.sortMenuItem, idx === sortOpts.length - 1 && { borderBottomWidth: 0 }]}
                 accessibilityRole="button"
                 accessibilityLabel={`Sort by ${opt.label}`}
                 accessibilityState={{ selected: isActive }}

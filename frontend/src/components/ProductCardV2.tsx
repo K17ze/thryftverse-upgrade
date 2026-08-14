@@ -547,6 +547,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: Type.bodyLarge.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   sellerRow: {
     flexDirection: 'row',
@@ -620,6 +621,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     color: '#FFFFFF',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
+    fontVariant: ['tabular-nums'],
   },
 
   // Grid — breathable gaps for flagship feel (12pt vs 8pt)

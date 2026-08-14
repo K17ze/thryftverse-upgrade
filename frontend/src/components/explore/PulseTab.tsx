@@ -20,6 +20,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useToast } from '../../context/ToastContext';
 import { EmptyState } from '../EmptyState';
 import { formatCountdown } from '../../data/tradeHub';
@@ -55,21 +56,21 @@ interface LiveAuctionItem {
 }
 
 /* ── Trending rail item (merged from EditTab) ── */
-function TrendingRailItem({ item, index, onPress, styles, reducedMotion }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
+function TrendingRailItem({ item, index, onPress, styles, reducedMotion, formatPrice }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean; formatPrice: (n: number) => string }) {
   return (
     <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
       <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
         <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
         <Text style={styles.trendingTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.trendingPrice}>£{item.price}</Text>
+        <Text style={styles.trendingPrice}>{formatPrice(item.price)}</Text>
       </AnimatedPressable>
     </Reanimated.View>
   );
 }
 
 /* ── Sub-components ── */
-function LiveNowCard({ auction, index, onPress, styles, reducedMotion }: { auction: LiveAuctionItem; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
+function LiveNowCard({ auction, index, onPress, styles, reducedMotion, formatPrice }: { auction: LiveAuctionItem; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean; formatPrice: (n: number) => string }) {
   const countdown = formatCountdown(Math.max(0, auction.endsAtMs - Date.now()));
   return (
     <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
@@ -77,7 +78,7 @@ function LiveNowCard({ auction, index, onPress, styles, reducedMotion }: { aucti
         <CachedImage uri={auction.image} style={styles.liveImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
         <View style={styles.liveContent}>
           <Text style={styles.liveTitle} numberOfLines={1}>{auction.title}</Text>
-          <Text style={styles.liveBid}>Current bid · £{auction.currentBid}</Text>
+          <Text style={styles.liveBid}>Current bid · {formatPrice(auction.currentBid)}</Text>
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
             <Text style={styles.liveText}>{countdown}</Text>
@@ -88,7 +89,7 @@ function LiveNowCard({ auction, index, onPress, styles, reducedMotion }: { aucti
   );
 }
 
-function ActivityCard({ item, onPress, index, colors, styles, reducedMotion }: { item: ActivityItem; onPress: () => void; index: number; colors: ThemeColors; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
+function ActivityCard({ item, onPress, index, colors, styles, reducedMotion, formatPrice }: { item: ActivityItem; onPress: () => void; index: number; colors: ThemeColors; styles: ReturnType<typeof createStyles>; reducedMotion: boolean; formatPrice: (n: number) => string }) {
   const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
     fresh_drop: 'cube-outline',
@@ -115,7 +116,7 @@ function ActivityCard({ item, onPress, index, colors, styles, reducedMotion }: {
           </View>
           <Text style={styles.activityTitle} numberOfLines={2}>{item.title}</Text>
           <Text style={styles.activitySubtitle} numberOfLines={1}>{item.subtitle}</Text>
-          <Text style={[styles.activityMeta, item.metaAccent && styles.activityMetaAccent]}>{item.meta}</Text>
+          <Text style={[styles.activityMeta, item.metaAccent && styles.activityMetaAccent]} numberOfLines={1}>{item.meta}</Text>
         </View>
         {item.actionLabel && (
           <View style={styles.activityAction}>
@@ -136,6 +137,8 @@ export default function PulseTab() {
   const haptic = useHaptic();
   const { show } = useToast();
   const { listings } = useBackendData();
+  const { formatFromFiat } = useFormattedPrice();
+  const formatPrice = React.useCallback((n: number) => formatFromFiat(n, 'GBP', { displayMode: 'fiat' }), [formatFromFiat]);
   const customAuctions = useStore((state) => state.customAuctions);
   const auctionRuntime = useStore((state) => state.auctionRuntime);
   const reducedMotion = useReducedMotion();
@@ -207,7 +210,7 @@ export default function PulseTab() {
       if (isLive) {
         items.push({
           id: `auction_${a.id}`, type: 'auction_live',
-          title: a.title, subtitle: `Current bid · £${a.currentBid}`,
+          title: a.title, subtitle: `Current bid · ${formatPrice(a.currentBid)}`,
           image: a.image, meta: formatCountdown(Math.max(0, endsAtMs - now)),
           metaAccent: true, actionLabel: 'Bid', routeId: a.listingId,
         });
@@ -218,16 +221,16 @@ export default function PulseTab() {
       .sort((a, b) => { const da = a.createdAt ? Date.parse(a.createdAt) : 0; const db = b.createdAt ? Date.parse(b.createdAt) : 0; return db - da; })
       .slice(0, 6);
     recent.forEach((l) => {
-      items.push({ id: `drop_${l.id}`, type: 'fresh_drop', title: l.title ?? 'New Listing', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: `£${l.price}`, routeId: l.id });
+      items.push({ id: `drop_${l.id}`, type: 'fresh_drop', title: l.title ?? 'New Listing', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: formatPrice(l.price), routeId: l.id });
     });
 
     listings.filter((l) => l.originalPrice && l.originalPrice > l.price).slice(0, 6).forEach((l) => {
       const dropPct = Math.round(((l.originalPrice! - l.price) / l.originalPrice!) * 100);
-      items.push({ id: `drop_${l.id}_price`, type: 'price_drop', title: l.title ?? 'Item', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: `Down ${dropPct}% · Now £${l.price}`, metaAccent: true, actionLabel: 'View', routeId: l.id });
+      items.push({ id: `drop_${l.id}_price`, type: 'price_drop', title: l.title ?? 'Item', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: `Down ${dropPct}% · Now ${formatPrice(l.price)}`, metaAccent: true, actionLabel: 'View', routeId: l.id });
     });
 
     return items.slice(0, 14);
-  }, [customAuctions, auctionRuntime, listings, now]);
+  }, [customAuctions, auctionRuntime, listings, now, formatPrice]);
 
   const handleActivityPress = (item: ActivityItem) => {
     haptic.light();
@@ -288,6 +291,7 @@ export default function PulseTab() {
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
                 styles={styles}
                 reducedMotion={reducedMotion}
+                formatPrice={formatPrice}
               />
             ))}
           </HorizontalRail>
@@ -312,6 +316,7 @@ export default function PulseTab() {
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: auction.listingId }); }}
                 styles={styles}
                 reducedMotion={reducedMotion}
+                formatPrice={formatPrice}
               />
             ))}
           </HorizontalRail>
@@ -342,7 +347,7 @@ export default function PulseTab() {
           onAction={handleViewAll}
         />
         {activities.map((item, i) => (
-          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} colors={colors} styles={styles} reducedMotion={reducedMotion} />
+          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} colors={colors} styles={styles} reducedMotion={reducedMotion} formatPrice={formatPrice} />
         ))}
       </Reanimated.View>
 
@@ -418,6 +423,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     letterSpacing: Type.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   liveBadge: {
     flexDirection: 'row',
@@ -440,6 +446,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
+    fontVariant: ['tabular-nums'],
   },
 
   /* Pulse Banner */
@@ -485,6 +492,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     letterSpacing: Type.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
 
   /* Trending */
@@ -620,6 +628,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
     letterSpacing: Type.meta.letterSpacing,
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   activityMetaAccent: {
     color: colors.danger,
@@ -670,6 +679,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.bold,
     color: colors.brand,
     letterSpacing: Type.caption.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   windowTabs: {
     flexDirection: 'row',

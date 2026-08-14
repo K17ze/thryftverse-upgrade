@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   useWindowDimensions,
@@ -40,6 +39,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { enablePriceAlert, disablePriceAlert, getPriceAlertStatus } from '../services/priceAlertsApi';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
@@ -55,8 +55,6 @@ import { ProductCardV2 } from '../components/ProductCardV2';
 import type { Listing as CatalogListing } from '../data/mockData';
 
 import {
-  ProductDescription,
-  RecommendationRail,
   ProductDetailSkeleton,
   FullscreenMediaViewer,
   ProductFamilyBadge,
@@ -162,7 +160,7 @@ function PaginationDots({
 }: {
   count: number;
   activeIndex: SharedValue<number>;
-  counterText: string;
+  counterText?: string;
   color: string;
 }) {
   return (
@@ -177,9 +175,11 @@ function PaginationDots({
           />
         ))}
       </View>
-      <Text style={[paginationStyles.counter, { color }]} numberOfLines={1}>
-        {counterText}
-      </Text>
+      {counterText ? (
+        <Text style={[paginationStyles.counter, { color }]} numberOfLines={1}>
+          {counterText}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -418,9 +418,9 @@ export default function ItemDetailScreen() {
           const fastDismiss = e.velocityY > 800;
           if (dragY.value > threshold || fastDismiss) {
             isDismissing.value = 1;
-            dragY.value = withTiming(screenHeight, { duration: 220 });
-            dismissScale.value = withTiming(0.85, { duration: 220 });
-            chromeOpacity.value = withTiming(0, { duration: 160 });
+            dragY.value = withTiming(screenHeight, { duration: Motion.duration.slow });
+            dismissScale.value = withTiming(0.85, { duration: Motion.duration.slow });
+            chromeOpacity.value = withTiming(0, { duration: Motion.duration.normal });
             runOnJS(goBack)();
           } else {
             dragY.value = withSpring(0, spring.tap);
@@ -467,9 +467,9 @@ export default function ItemDetailScreen() {
     }
     bigHeartOpacity.value = 1;
     bigHeartScale.value = withSequence(
-      withTiming(1.4, { duration: 180 }),
-      withTiming(1.4, { duration: 400 }),
-      withTiming(0, { duration: 200 })
+      withTiming(1.4, { duration: Motion.duration.normal }),
+      withTiming(1.4, { duration: Motion.duration.slower }),
+      withTiming(0, { duration: Motion.duration.normal })
     );
   };
 
@@ -803,13 +803,15 @@ export default function ItemDetailScreen() {
           showDefaultControls={false}
           showPageIndicator={false}
           overlayTopContent={
-            <View style={styles.familyBadgeOverlay}>
-              <ProductFamilyBadge
-                family="direct"
-                stateAccent={familyStateAccent}
-                compact
-              />
-            </View>
+            familyStateAccent ? (
+              <View style={styles.familyBadgeOverlay}>
+                <ProductFamilyBadge
+                  family="direct"
+                  stateAccent={familyStateAccent}
+                  compact
+                />
+              </View>
+            ) : null
           }
         />
         <CommerceDetailMediaRail
@@ -838,13 +840,25 @@ export default function ItemDetailScreen() {
             into a pill (6pt → 20pt) driven by a single spring. A "1 of N"
             counter sits beside the dots for precise orientation. Only
             rendered when there is more than one image. */}
+        {/* ── Image pagination ──
+            iOS Photos pattern. For short galleries (≤5): dots only.
+            For long galleries (>5): `n / total` counter only.
+            Per spec 10 §2: "don't show dots + counter + thumbnails
+            simultaneously on phone." */}
         {item.images && item.images.length > 1 && (
-          <PaginationDots
-            count={item.images.length}
-            activeIndex={paginationIndex}
-            counterText={`${fullscreenIndex + 1} of ${item.images.length}`}
-            color={colors.textSecondary}
-          />
+          item.images.length <= 5 ? (
+            <PaginationDots
+              count={item.images.length}
+              activeIndex={paginationIndex}
+              color={colors.textSecondary}
+            />
+          ) : (
+            <View style={paginationStyles.wrap}>
+              <Text style={[paginationStyles.counter, { color: colors.textSecondary }]} numberOfLines={1}>
+                {`${fullscreenIndex + 1} of ${item.images.length}`}
+              </Text>
+            </View>
+          )
         )}
 
         <CommerceDetailOfflineBanner isOffline={isOffline} />
@@ -1882,38 +1896,6 @@ const styles = StyleSheet.create({
     width: 160,
   },
   // ── Purchase details ──
-  // Trust chips — flat inline icon+text pairs. No card, no surface fill,
-  // no border. Just icon + label + gap. Per AGENTS.md surface budget.
-  // Per Design.md trust/commerce card micro spec: captionElevated (13px)
-  // for trust copy. Icons at 16px (standard metadata glyph band 14-18px).
-  trustChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm + 2,
-    paddingBottom: Space.sm + 2,
-  },
-  trustChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1,
-  },
-  trustChipDot: {
-    width: Space.xs + 2,
-    height: Space.xs + 2,
-    borderRadius: (Space.xs + 2) / 2,
-    flexShrink: 0,
-  },
-  trustChipText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    fontVariant: ['tabular-nums'],
-  },
-  purchaseSummary: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight + Space.xs,
-    paddingBottom: Space.sm,
-  },
   purchaseSheetHeader: {
     minHeight: Space.md * 4,
     paddingLeft: Space.md,
@@ -2054,17 +2036,6 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   // ── Discovery ──
-  railLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.lg,
-  },
-  railLoadingText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-  },
   recErrorRow: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,

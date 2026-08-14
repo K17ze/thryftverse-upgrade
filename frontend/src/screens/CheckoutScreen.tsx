@@ -66,7 +66,7 @@ import { BuyerProtectionStrip } from '../components/product';
 import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
-import { Space, FontFamily, Stroke, Control, LetterSpacing, Numeric, Elevation } from '../theme/designTokens';
+import { Space, FontFamily, Stroke, Control, LetterSpacing, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { createStableId } from '../utils/createStableId';
@@ -228,10 +228,10 @@ const STAGE_LABELS: Record<CheckoutStage, string> = {
   idle: '',
   creating_order: 'Reviewing your order',
   opening_payment: 'Processing payment',
-  authenticating: 'Processing payment',
+  authenticating: 'Confirm with your bank',
   awaiting_payment: 'Processing payment',
   payment_succeeded: 'Order confirmed',
-  payment_pending: 'Payment is still pending',
+  payment_pending: 'Payment is pending. We’ll update this order when your bank confirms it.',
   payment_failed: 'Payment didn’t go through',
 };
 
@@ -252,7 +252,6 @@ export default function CheckoutScreen() {
     container: { backgroundColor: colors.background },
     header: { borderBottomColor: colors.border },
     headerTitle: { color: colors.textPrimary },
-    sectionDivider: { backgroundColor: colors.border },
     savingsBadge: { backgroundColor: `${colors.success}12` },
     savingsText: { color: colors.success },
     protectionIncludedText: { color: colors.success },
@@ -263,8 +262,6 @@ export default function CheckoutScreen() {
     balanceKnobOn: { backgroundColor: colors.textInverse },
     balanceLabel: { color: colors.textPrimary },
     balanceAmount: { color: colors.textMuted },
-    feedbackText: { color: colors.textSecondary },
-    feedbackTextError: { color: colors.danger },
     orderErrorText: { color: colors.danger },
     hintText: { color: colors.textMuted },
     termsText: { color: colors.textMuted },
@@ -289,8 +286,6 @@ export default function CheckoutScreen() {
     compactSummaryTotalValue: { color: colors.textPrimary },
     compactSummaryDivider: { backgroundColor: colors.border },
     breakdownChevronText: { color: colors.textMuted },
-    trustBadgeText: { color: colors.textSecondary },
-    trustBadgeDot: { backgroundColor: colors.border },
     breakdownSheetTitle: { color: colors.textPrimary },
     breakdownSheetLabel: { color: colors.textSecondary },
     breakdownSheetDivider: { backgroundColor: colors.border },
@@ -1574,23 +1569,6 @@ export default function CheckoutScreen() {
           </View>
         </Pressable>
 
-        {/* Trust badges — compact reassurance signals at the payment CTA
-            moment. Upgraded: icon-in-circle badges with clear visual weight,
-            separated by a hairline divider. Complements the BuyerProtectionStrip
-            above (which carries the detailed escrow narrative); these are
-            quick-scan trust signals right where anxiety peaks. */}
-        <View style={styles.trustBadges}>
-          <View style={styles.trustBadgeItem}>
-            <Ionicons name="lock-closed" size={14} color={colors.success} />
-            <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Secure payment</Text>
-          </View>
-          <View style={[styles.trustBadgeDivider, t.trustBadgeDot]} />
-          <View style={styles.trustBadgeItem}>
-            <Ionicons name="shield-checkmark-outline" size={14} color={colors.success} />
-            <Text style={[styles.trustBadgeText, t.trustBadgeText]}>Buyer protection</Text>
-          </View>
-        </View>
-
         {/* Pay button row */}
         <View style={styles.footerPayRow}>
           {/* Apple Pay as primary CTA on iOS when enabled */}
@@ -2250,10 +2228,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
   },
-  sectionDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
   savingsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2328,16 +2302,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
     fontVariant: ['tabular-nums'],
-  },
-  feedbackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.md,
-  },
-  feedbackText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.medium,
   },
   orderErrorText: {
     fontSize: TypographyV2.body.size,
@@ -2492,28 +2456,6 @@ const styles = StyleSheet.create({
   breakdownChevronText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
-  },
-  trustBadges: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.xs,
-  },
-  trustBadgeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  trustBadgeText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  trustBadgeDivider: {
-    width: 1,
-    height: 12,
   },
   footerPayRow: {
     flexDirection: 'row',
