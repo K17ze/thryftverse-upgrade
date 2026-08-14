@@ -124,6 +124,7 @@ export type RootStackParamList = {
     actionId?: string;
   };
   DistributionHistory: { assetId?: string } | undefined;
+  Inbox: undefined;
   Chat: {
     conversationId: string;
     focusQuery?: string;

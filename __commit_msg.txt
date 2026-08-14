@@ -1,0 +1,10 @@
+fix(nav): register Inbox route in RootStackParamList + AppNavigator
+
+SellerHubScreen navigates to 'Inbox' but the route was only declared
+in TabParamList, not RootStackParamList. Added Inbox to the root stack
+type and registered InboxScreen in AppNavigator so the navigation
+call type-checks and resolves at runtime.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

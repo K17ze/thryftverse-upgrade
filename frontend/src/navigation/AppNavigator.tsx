@@ -179,6 +179,7 @@ export default function AppNavigator() {
       <Stack.Screen name="DistributionHistory" getComponent={() => require('../screens/DistributionHistoryScreen').default} />
       <Stack.Screen name="CoOwnOnboarding" getComponent={() => require('../screens/SyndicateOnboardingScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="Chat" getComponent={() => require('../screens/ChatScreen').default} />
+      <Stack.Screen name="Inbox" getComponent={() => require('../screens/InboxScreen').default} />
       <Stack.Screen name="CreateGroupChat" getComponent={() => require('../screens/CreateGroupChatScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="GroupChat" getComponent={() => require('../screens/GroupChatScreen').default} />
       <Stack.Screen name="GroupChatInfo" getComponent={() => require('../screens/GroupChatInfoScreen').default} />
