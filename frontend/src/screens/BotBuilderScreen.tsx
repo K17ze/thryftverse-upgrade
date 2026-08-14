@@ -12,7 +12,7 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
-import type { ChatAgentConfig, ChatBot } from '../data/mockData';
+import type { ChatAgentConfig, ChatBot } from '../domain';
 import {
   CAPABILITIES_BY_RISK,
   CAPABILITY_RISK_LABELS,

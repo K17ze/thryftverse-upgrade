@@ -151,6 +151,9 @@ export type RootStackParamList = {
   BotBuilder: { botId?: string };
   EditGroup: { conversationId: string };
   UserProfile: { userId: string };
+  // Followers / following — full-screen people lists (spec 50)
+  Followers: { userId: string };
+  Following: { userId: string };
   // Profile sub-screens
   Wallet: undefined;
   // Wallet V3 — focused money-movement destinations (spec 17)

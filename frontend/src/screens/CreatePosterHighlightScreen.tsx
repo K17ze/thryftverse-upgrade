@@ -54,6 +54,9 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
   // Cover frame ID — defaults to the first selected frame, can be changed independently
   const [coverFrameId, setCoverFrameId] = React.useState<string | null>(null);
   const [isTitleFocused, setIsTitleFocused] = React.useState(false);
+  // Stable highlight id generated once per session so a create retry reuses
+  // the same id (idempotency) instead of creating a duplicate highlight.
+  const highlightIdRef = React.useRef<string>(makeStableId('hl'));
 
   // Load all archived stories to pick frames from
   React.useEffect(() => {
@@ -156,7 +159,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
 
     setIsSaving(true);
     try {
-      const highlightId = makeStableId('hl');
+      const highlightId = highlightIdRef.current;
       const frameIds = Array.from(selectedFrames.values());
       // Use the user-selected cover frame (falls back to first selected frame)
       const resolvedCoverFrameId = coverFrameId ?? frameIds[0];

@@ -15,7 +15,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -24,6 +24,7 @@ import { EmptyState } from '../components/EmptyState';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { useBackendData } from '../context/BackendDataContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditCollection'>;
 
@@ -40,10 +41,16 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
   const deleteCollection = useStore((state) => state.deleteCollection);
   const updateCollectionOnApi = useStore((state) => state.updateCollectionOnApi);
   const deleteCollectionOnApi = useStore((state) => state.deleteCollectionOnApi);
+  const { listings } = useBackendData();
 
   const collection = useMemo(
     () => collections.find((c) => c.id === collectionId),
     [collections, collectionId]
+  );
+
+  const itemCount = useMemo(
+    () => collection?.itemIds?.length ?? 0,
+    [collection]
   );
 
   const [name, setName] = useState(collection?.name ?? '');
@@ -208,6 +215,27 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             </View>
           </Reanimated.View>
 
+          {/* Manage items link — navigates to ManageCollectionItemsScreen */}
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(140)}>
+            <AnimatedPressable
+              style={styles.manageItemsRow}
+              onPress={() => { haptic.light(); navigation.navigate('ManageCollectionItems', { collectionId }); }}
+              activeOpacity={0.85}
+              hapticFeedback="light"
+              accessibilityLabel={`Manage items, ${itemCount} item${itemCount !== 1 ? 's' : ''} in collection`}
+              accessibilityRole="button"
+            >
+              <Ionicons name="list-outline" size={18} color={colors.textSecondary} />
+              <View style={styles.manageItemsText}>
+                <Text style={styles.manageItemsLabel}>Manage items</Text>
+                <Text style={styles.manageItemsSub}>
+                  {itemCount} {itemCount === 1 ? 'item' : 'items'} in this collection
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </AnimatedPressable>
+          </Reanimated.View>
+
           <Reanimated.View entering={FadeInDown.duration(300).delay(160)} style={styles.dangerCard}>
             <Text style={styles.dangerLabel}>Danger Zone</Text>
             <AppButton
@@ -338,6 +366,35 @@ function createStyles(colors: ThemeColors) {
     padding: Space.md,
     ...Elevation.subtle,
     marginTop: Space.md,
+  },
+  manageItemsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    minHeight: Control.hit,
+    ...Elevation.subtle,
+  },
+  manageItemsText: {
+    flex: 1,
+  },
+  manageItemsLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  manageItemsSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    marginTop: Space.xs / 2,
+    letterSpacing: Type.caption.letterSpacing,
   },
   dangerLabel: {
     fontSize: Type.caption.size,

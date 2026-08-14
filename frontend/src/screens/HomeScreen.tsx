@@ -54,8 +54,10 @@ import { HorizontalRail } from '../components/HorizontalRail';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
+import { HomeDiscoveryCard } from '../components/discover/HomeDiscoveryCard';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { DoubleTapHeart } from '../components/DoubleTapHeart';
+import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation/homeDiscoveryViewModel';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
@@ -113,7 +115,7 @@ const SKELETON_HEIGHT_RATIOS = [1.25, 1.08, 1.32, 1.16] as const;
 const AnimatedFlashList: any = Platform.OS === 'web'
   ? FlashList
   : Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<
-      React.ComponentProps<typeof FlashList<ExploreTile>> & { ref?: React.Ref<any> }
+      React.ComponentProps<typeof FlashList<FeedDataItem>> & { ref?: React.Ref<any> }
     >;
 
 type StoryStatus = 'new-listing' | 'live-auction' | 'co-own-launching' | 'sold-recently';
@@ -146,6 +148,22 @@ type ExploreTile = {
    *  featured unit, continue feed. Breaks the uniform grid silhouette. */
   featured?: boolean;
 };
+
+/**
+ * Feed data union: Home discovery card VMs (listing tiles) or posters rail
+ * markers. The FlashList renders both through the same masonry path.
+ * The `type` field discriminates the two variants — VMs do not carry it.
+ */
+interface PosterRailMarker {
+  id: string;
+  type: 'posters';
+}
+
+type FeedDataItem = HomeDiscoveryItemVM | PosterRailMarker;
+
+function isPosterMarker(item: FeedDataItem): item is PosterRailMarker {
+  return (item as PosterRailMarker).type === 'posters';
+}
 
 type StoryBubble = {
   id: string;
@@ -381,7 +399,7 @@ export default function HomeScreen() {
   const forYouFeed = useForYouFeed();
 
   const [refreshing, setRefreshing] = React.useState(false);
-  const [peekItem, setPeekItem] = React.useState<ExploreTile | null>(null);
+  const [peekItem, setPeekItem] = React.useState<HomeDiscoveryItemVM | null>(null);
   const [newListingIds, setNewListingIds] = React.useState<Set<string>>(() => new Set());
   const [feedMode, setFeedMode] = React.useState<'foryou' | 'following'>('foryou');
 
@@ -623,96 +641,79 @@ export default function HomeScreen() {
 
   const wishlist = useStore((state) => state.wishlist);
 
-  const exploreData = React.useMemo<ExploreTile[]>(() => {
-    return listings.map((item, index): ExploreTile => {
-      const primaryMediaUri = item.images?.[0] ?? '';
-      const posterUri = item.images?.find((uri) => !isVideoUri(uri));
+  // Followed seller IDs for context derivation (followed_seller badge on cards)
+  const followedSellerIdsSet = React.useMemo(
+    () => new Set(followingFeed.followingUsers.map((u) => u.id)),
+    [followingFeed.followingUsers],
+  );
 
-      return {
-        id: `item_${item.id}`,
-        type: 'listing',
-        mediaType: isVideoUri(primaryMediaUri) ? 'video' : 'image',
-        mediaUri: primaryMediaUri,
-        posterUri: isVideoUri(primaryMediaUri) ? posterUri : undefined,
-        likes: item.likes,
-        price: item.price,
-        routeId: item.id,
-        sellerId: item.sellerId,
-        caption: item.title,
-        category: item.subcategory || item.category,
-        aspectRatio: primaryMediaUri
-          ? resolveListingMediaHeightRatio(item)
-          : MISSING_MEDIA_HEIGHT_RATIO,
-        isSaved: wishlist.includes(item.id),
-        // Asymmetric editorial rhythm: every 8th tile spans both columns
-        // as a wider featured card (spec 11: 6-12 normal tiles, one larger
-        // unit, continue feed).
-        featured: (index + 1) % 8 === 0,
-      };
-    });
-  }, [listings, wishlist]);
+  // Phase 5: Home discovery view models carry product identity (brand + title)
+  // and price below media so the feed reads as visual commerce, not
+  // "Pinterest with prices". Identity synthesis follows doc 46 precedence.
+  //
+  // Asymmetric editorial rhythm (spec 11): 6-12 normal tiles, one larger
+  // featured unit, continue feed. We use a deterministic-but-varied pattern
+  // so the rhythm doesn't read as mechanical every-8th. The sequence is
+  // [7, 9, 6, 10, 8] repeating — average 8, range 6-10, never identical
+  // twice in a row. This breaks the uniform grid silhouette without being
+  // random (randomness would cause layout jumps on data refresh).
+  const FEATURED_RHYTHM = [7, 9, 6, 10, 8];
+  const computeFeatured = React.useCallback((index: number) => {
+    let pos = 0;
+    let i = index;
+    while (i >= FEATURED_RHYTHM[pos % FEATURED_RHYTHM.length]) {
+      i -= FEATURED_RHYTHM[pos % FEATURED_RHYTHM.length];
+      pos++;
+    }
+    return i === FEATURED_RHYTHM[pos % FEATURED_RHYTHM.length] - 1;
+  }, []);
 
-  // Following feed: transform following listings into the same ExploreTile shape
-  const followingExploreData = React.useMemo<ExploreTile[]>(() => {
-    return followingFeed.listings.map((item, index): ExploreTile => {
-      const primaryMediaUri = item.images?.[0] ?? '';
-      const posterUri = item.images?.find((uri) => !isVideoUri(uri));
+  const exploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
+    return listings.map((listing, index) =>
+      toHomeDiscoveryItemVM(listing, {
+        isSaved: wishlist.includes(listing.id),
+        currency: 'GBP',
+        followedSellerIds: followedSellerIdsSet,
+      }),
+    ).map((vm, index) => ({
+      ...vm,
+      featured: computeFeatured(index),
+    }));
+  }, [listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
-      return {
-        id: `item_${item.id}`,
-        type: 'listing',
-        mediaType: isVideoUri(primaryMediaUri) ? 'video' : 'image',
-        mediaUri: primaryMediaUri,
-        posterUri: isVideoUri(primaryMediaUri) ? posterUri : undefined,
-        likes: item.likes,
-        price: item.price,
-        routeId: item.id,
-        sellerId: item.sellerId,
-        caption: item.title,
-        category: item.subcategory || item.category,
-        aspectRatio: primaryMediaUri
-          ? resolveListingMediaHeightRatio(item)
-          : MISSING_MEDIA_HEIGHT_RATIO,
-        isSaved: wishlist.includes(item.id),
-        featured: (index + 1) % 8 === 0,
-      };
-    });
-  }, [followingFeed.listings, wishlist]);
+  // Following feed: transform following listings into discovery VMs
+  const followingExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
+    return followingFeed.listings.map((listing) =>
+      toHomeDiscoveryItemVM(listing, {
+        isSaved: wishlist.includes(listing.id),
+        currency: 'GBP',
+        followedSellerIds: followedSellerIdsSet,
+      }),
+    ).map((vm, index) => ({
+      ...vm,
+      featured: computeFeatured(index),
+    }));
+  }, [followingFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
-  // For You feed: transform personalised recommendations into ExploreTile shape
-  const forYouExploreData = React.useMemo<ExploreTile[]>(() => {
-    return forYouFeed.listings.map((item, index): ExploreTile => {
-      const primaryMediaUri = item.images?.[0] ?? '';
-      const posterUri = item.images?.find((uri) => !isVideoUri(uri));
-
-      return {
-        id: `item_${item.id}`,
-        type: 'listing',
-        mediaType: isVideoUri(primaryMediaUri) ? 'video' : 'image',
-        mediaUri: primaryMediaUri,
-        posterUri: isVideoUri(primaryMediaUri) ? posterUri : undefined,
-        likes: item.likes,
-        price: item.price,
-        routeId: item.id,
-        sellerId: item.sellerId,
-        caption: item.title,
-        category: item.subcategory || item.category,
-        aspectRatio: primaryMediaUri
-          ? resolveListingMediaHeightRatio(item)
-          : MISSING_MEDIA_HEIGHT_RATIO,
-        isSaved: wishlist.includes(item.id),
-        featured: (index + 1) % 8 === 0,
-      };
-    });
-  }, [forYouFeed.listings, wishlist]);
+  // For You feed: transform personalised recommendations into discovery VMs
+  const forYouExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
+    return forYouFeed.listings.map((listing) =>
+      toHomeDiscoveryItemVM(listing, {
+        isSaved: wishlist.includes(listing.id),
+        currency: 'GBP',
+        followedSellerIds: followedSellerIdsSet,
+      }),
+    ).map((vm, index) => ({
+      ...vm,
+      featured: computeFeatured(index),
+    }));
+  }, [forYouFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
   // For You mode uses personalised recommendations; fall back to all listings
   // when the recommendation feed is empty or errored with no cached results.
   const effectiveForYouData = forYouFeed.listings.length > 0 ? forYouExploreData : exploreData;
-  const effectiveForYouListings = forYouFeed.listings.length > 0 ? forYouFeed.listings : listings;
 
   const activeFeedData = feedMode === 'following' ? followingExploreData : effectiveForYouData;
-  const activeListings = feedMode === 'following' ? followingFeed.listings : effectiveForYouListings;
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
   const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
@@ -725,19 +726,14 @@ export default function HomeScreen() {
   // media row — nothing else").
   const POSTERS_INJECT_INDEX = 4;
   const hasPosters = !postersLoading && realPosters.length > 0;
-  const feedGridData = React.useMemo<ExploreTile[]>(() => {
+  const feedGridData = React.useMemo<FeedDataItem[]>(() => {
     if (showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading) return [];
     if (activeFeedData.length === 0) return [];
     if (!hasPosters || activeFeedData.length <= POSTERS_INJECT_INDEX) return activeFeedData;
-    const result = [...activeFeedData];
+    const result: FeedDataItem[] = [...activeFeedData];
     result.splice(POSTERS_INJECT_INDEX, 0, {
       id: 'posters_rail',
       type: 'posters',
-      mediaType: 'image',
-      mediaUri: '',
-      likes: 0,
-      caption: '',
-      aspectRatio: 1,
     });
     return result;
   }, [activeFeedData, hasPosters, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
@@ -905,7 +901,11 @@ export default function HomeScreen() {
           const ratio = SKELETON_HEIGHT_RATIOS[index % SKELETON_HEIGHT_RATIOS.length];
           return (
             <View key={`feed_loading_left_${index}`} style={styles.skeletonTileWrap}>
-              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={RadiusRoleValue.sheetDialog} />
+              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={RadiusRoleValue.mediaThumbnail} />
+              {/* Identity line skeleton — matches the 14sp identity text height */}
+              <PremiumSkeletonTile width="80%" height={14} borderRadius={RadiusRoleValue.compactControl} />
+              {/* Price line skeleton — matches the 15sp semibold price height */}
+              <PremiumSkeletonTile width="45%" height={16} borderRadius={RadiusRoleValue.compactControl} />
             </View>
           );
         })}
@@ -915,7 +915,9 @@ export default function HomeScreen() {
           const ratio = SKELETON_HEIGHT_RATIOS[(index + 2) % SKELETON_HEIGHT_RATIOS.length];
           return (
             <View key={`feed_loading_right_${index}`} style={styles.skeletonTileWrap}>
-              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={RadiusRoleValue.sheetDialog} />
+              <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={RadiusRoleValue.mediaThumbnail} />
+              <PremiumSkeletonTile width="70%" height={14} borderRadius={RadiusRoleValue.compactControl} />
+              <PremiumSkeletonTile width="50%" height={16} borderRadius={RadiusRoleValue.compactControl} />
             </View>
           );
         })}
@@ -930,7 +932,7 @@ export default function HomeScreen() {
     navigation.push('ItemDetail', { itemId: routeId });
   }, [navigation, haptic]);
 
-  const handleTileLongPress = React.useCallback((item: ExploreTile) => {
+  const handleTileLongPress = React.useCallback((item: HomeDiscoveryItemVM) => {
     haptic.medium(); // ELEVATED: Medium haptic for long press
     setPeekItem(item);
   }, [haptic]);
@@ -941,11 +943,12 @@ export default function HomeScreen() {
   }, [navigation, haptic, currentUser?.id]);
 
   // FlashList v2 performance: getItemType for heterogeneous row recycling.
-  // ExploreTile has type 'listing' | 'clip' — FlashList recycles cells of the
-  // same type, avoiding layout thrash when switching between item geometries.
+  // FeedDataItem has two variants: 'listing' (discovery VM) and 'posters'
+  // (rail marker). FlashList recycles cells of the same type, avoiding
+  // layout thrash when switching between item geometries.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.2)
   const getItemType = React.useCallback(
-    (item: ExploreTile) => item.type,
+    (item: FeedDataItem) => (isPosterMarker(item) ? 'posters' : 'listing'),
     [],
   );
 
@@ -954,48 +957,41 @@ export default function HomeScreen() {
   // wishlist toggle). Inline arrow functions are recreated every render.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
   const renderFeedItem = React.useCallback(
-    ({ item, index }: { item: ExploreTile; index: number }) => {
+    ({ item, index }: { item: FeedDataItem; index: number }) => {
       // Posters rail — full-span item injected after the first 2 rows
-      if (item.type === 'posters') {
+      if (isPosterMarker(item)) {
         return (
           <View style={styles.flashListItem}>
             {renderPosters()}
           </View>
         );
       }
-      const listing = activeListings.find((l) => l.id === item.routeId);
+      // item is HomeDiscoveryItemVM here (posters rail handled above)
       // Featured tiles span both columns — pass the full row width so the
-      // media and overlay scale up for the editorial rhythm break.
+      // media and identity/price scale up for the editorial rhythm break.
       const tileWidth = item.featured
         ? Math.floor(windowWidth - Space.sm * 2)
         : gridTileWidth;
       return (
         <View style={styles.flashListItem}>
-          <ExploreGridItem
+          <HomeDiscoveryCard
             item={item}
             tileWidth={tileWidth}
             formatPrice={formatFromFiat}
             onPress={handleTilePress}
             onLongPress={handleTileLongPress}
-            onPressSellerProfile={handleSellerProfilePress}
-            sellerUsername={listing?.seller?.username}
-            sellerAvatar={listing?.seller?.avatar}
             shouldPlay={activePlaybackIndex === index}
-            showSellerName={feedMode === 'following'}
           />
         </View>
       );
     },
     [
-      activeListings,
       gridTileWidth,
       windowWidth,
       formatFromFiat,
       handleTilePress,
       handleTileLongPress,
-      handleSellerProfilePress,
       activePlaybackIndex,
-      feedMode,
       renderPosters,
     ],
   );
@@ -1066,12 +1062,16 @@ export default function HomeScreen() {
           if (hasMore && !isLoadingMore) void loadMoreListings();
         }}
         onEndReachedThreshold={0.5}
-        keyExtractor={(item: ExploreTile) => item.id}
+        keyExtractor={(item: FeedDataItem) => item.id}
         getItemType={getItemType}
         renderItem={renderFeedItem}
-        overrideItemLayout={(layout: { span?: number }, item: ExploreTile) => {
+        overrideItemLayout={(layout: { span?: number }, item: FeedDataItem) => {
           // Featured tiles and posters rail span both columns
-          layout.span = item.featured || item.type === 'posters' ? 2 : 1;
+          if (isPosterMarker(item)) {
+            layout.span = 2;
+          } else {
+            layout.span = item.featured ? 2 : 1;
+          }
         }}
         ListHeaderComponent={
           <View>
@@ -1202,8 +1202,8 @@ export default function HomeScreen() {
             >
               <View style={styles.peekMediaWrap}>
                 <CanonicalMediaPreview
-                  uri={peekItem.mediaUri}
-                  posterUri={peekItem.posterUri}
+                  uri={peekItem.media.uri}
+                  posterUri={peekItem.media.posterUri}
                   style={styles.peekMedia}
                   shouldPlay
                   contentFit="cover"
@@ -1212,7 +1212,7 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.peekMeta}>
-                <Text style={styles.peekTitle} numberOfLines={1}>{peekItem.caption}</Text>
+                <Text style={styles.peekTitle} numberOfLines={1}>{peekItem.identity.primary}</Text>
 
                 <View style={styles.peekActionsRow}>
                   <AppButton

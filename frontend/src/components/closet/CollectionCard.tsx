@@ -5,7 +5,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { Collection } from '../../store/useStore';
-import type { Listing } from '../../data/mockData';
+import type { Listing } from '../../domain';
 import { useBackendData } from '../../context/BackendDataContext';
 import { Type, Space, Radius, Typography } from '../../theme/designTokens';
 const { width: SCREEN_W } = Dimensions.get('window');

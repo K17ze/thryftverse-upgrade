@@ -67,7 +67,7 @@ export default function WalletConvertScreen() {
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, goldRates, rateUpdatedAt } = useCurrencyContext();
   const { formatFromFiat } = useFormattedPrice();
   const biometricGate = useBiometricGate();
 
@@ -123,6 +123,19 @@ export default function WalletConvertScreen() {
   const feeRateLabel = `${Math.round(CONVERT_FEE_RATE * 100)}%`;
   const exceedsBalance = izeValue > availableIze;
   const isWalletOperational = !isOffline;
+
+  // ── Rate timestamp (when the rate was captured) ──
+  const rateTimestampLabel = React.useMemo(() => {
+    if (!rateUpdatedAt) return null;
+    const date = new Date(rateUpdatedAt);
+    if (!Number.isFinite(date.getTime())) return null;
+    return date.toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }, [rateUpdatedAt]);
 
   const canReview =
     Number.isFinite(izeValue) &&
@@ -548,6 +561,14 @@ export default function WalletConvertScreen() {
                     { total: true }
                   )}
                 </View>
+                {rateTimestampLabel ? (
+                  <View style={styles.rateTimestampRow}>
+                    <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                    <Text style={[styles.rateTimestampText, { color: colors.textMuted }]}>
+                      Rate as of {rateTimestampLabel}
+                    </Text>
+                  </View>
+                ) : null}
               </Reanimated.View>
             )}
           </>
@@ -592,6 +613,14 @@ export default function WalletConvertScreen() {
                 The net amount will be credited to your {currencyCode} wallet balance. 1ZE is
                 burned at the prevailing reference rate at settlement time.
               </Text>
+              {rateTimestampLabel ? (
+                <View style={styles.rateTimestampRow}>
+                  <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                  <Text style={[styles.rateTimestampText, { color: colors.textMuted }]}>
+                    Reference rate as of {rateTimestampLabel}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </Reanimated.View>
         )}
@@ -1022,6 +1051,17 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       letterSpacing: Type.captionElevated.letterSpacing,
       marginTop: Space.sm + Space.xs,
+    },
+    rateTimestampRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginTop: Space.sm,
+    },
+    rateTimestampText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.regular,
+      letterSpacing: Type.meta.letterSpacing,
     },
 
     // ── Summary rows ──

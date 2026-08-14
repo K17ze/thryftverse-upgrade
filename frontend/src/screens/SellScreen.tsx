@@ -42,6 +42,11 @@ import { useSoldComps } from '../hooks/useSoldComps';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useBackendData } from '../context/BackendDataContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import {
+  evaluateListingCompleteness,
+  type ListingFieldValues,
+  type ListingFieldKey,
+} from '../contracts/listingCategoryPolicy';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -353,14 +358,58 @@ export default function SellScreen() {
     return 'in_range' as const;
   }, [soldComps, hasValidPrice, numericPrice]);
 
+  // ── Category-aware completeness (Phase 5 WP7) ──
+  // Truthful completeness indicators based on the category policy, not
+  // universal brand/size assumptions. Brandless vintage and sizeless home
+  // goods are valid when the policy says so.
+  const completeness = useMemo(() => {
+    const values: ListingFieldValues = {
+      title: title.trim() || null,
+      description: desc.trim() || null,
+      price: numericPrice > 0 ? numericPrice : null,
+      category: category || null,
+      brand: brand || null,
+      size: size || null,
+      condition: condition || null,
+      images: photos.length > 0 ? photos : null,
+      shippingMethod: shippingMethod || null,
+      shippingPayer: shippingPayer || null,
+    };
+    return evaluateListingCompleteness(values);
+  }, [title, desc, numericPrice, category, brand, size, condition, photos, shippingMethod, shippingPayer]);
+
   const publishReady = useMemo(() => {
-    if (!hasBasePhotos) return false;
-    if (!hasRequiredDetails) return false;
+    // Category-aware: use the policy's canActivate as the base floor,
+    // then add mode-specific financial requirements.
+    if (!completeness.canActivate) return false;
     if (!hasDescription) return false;
     if (listingMode === 'auction') return hasValidStartingBid;
     if (listingMode === 'co_own') return hasValidPrice && coOwnFinancialReady && coOwnAuthReady;
     return hasValidPrice;
-  }, [hasBasePhotos, hasRequiredDetails, hasDescription, listingMode, hasValidPrice, hasValidStartingBid, coOwnFinancialReady, coOwnAuthReady]);
+  }, [completeness, hasDescription, listingMode, hasValidPrice, hasValidStartingBid, coOwnFinancialReady, coOwnAuthReady]);
+
+  // Human-readable field labels for the completeness indicator
+  const fieldLabelMap: Record<ListingFieldKey, string> = {
+    title: 'title',
+    description: 'description',
+    price: 'price',
+    category: 'category',
+    subcategory: 'subcategory',
+    brand: 'brand',
+    size: 'size',
+    condition: 'condition',
+    images: 'photos',
+    shippingMethod: 'shipping method',
+    shippingPayer: 'shipping payer',
+  };
+
+  const completenessLabel = completeness.canActivate
+    ? 'Ready to publish'
+    : `Missing: ${completeness.missingRequired.map((f) => fieldLabelMap[f]).join(', ')}`;
+
+  const recommendedLabel = completeness.missingRecommended.length > 0
+    ? `Suggested: ${completeness.missingRecommended.map((f) => fieldLabelMap[f]).join(', ')}`
+    : null;
 
   useEffect(() => {
     if (publishReady && (errorMsg || Object.keys(errors).length > 0)) {
@@ -547,13 +596,28 @@ export default function SellScreen() {
     const numericPrice = Number(sanitizeDecimalInput(price));
     const nextErrors: Record<string, string> = {};
 
-    if (photos.length === 0) nextErrors.photos = 'Add at least one photo before publishing.';
-    if (!trimmedTitle) nextErrors.title = 'Add a title.';
-    if (!category) nextErrors.category = 'Select a category.';
-    if (!size) nextErrors.size = 'Choose a size.';
-    if (!condition) nextErrors.condition = 'Choose a condition.';
-    if (!trimmedDescription || trimmedDescription.length < 10) nextErrors.description = 'Add a description with at least 10 characters.';
-    if (!Number.isFinite(numericPrice) || numericPrice <= 0) nextErrors.price = 'Enter a valid price greater than 0.';
+    // Category-aware validation: use the completeness result's missing
+    // required fields instead of universal brand/size assumptions.
+    // Brandless vintage and sizeless home goods are valid when the policy
+    // says so.
+    for (const field of completeness.missingRequired) {
+      switch (field) {
+        case 'title': nextErrors.title = 'Add a title.'; break;
+        case 'category': nextErrors.category = 'Select a category.'; break;
+        case 'size': nextErrors.size = 'Choose a size.'; break;
+        case 'condition': nextErrors.condition = 'Choose a condition.'; break;
+        case 'images': nextErrors.photos = 'Add at least one photo before publishing.'; break;
+        case 'description':
+          if (!trimmedDescription || trimmedDescription.length < 10)
+            nextErrors.description = 'Add a description with at least 10 characters.';
+          break;
+        case 'price':
+          if (!Number.isFinite(numericPrice) || numericPrice <= 0)
+            nextErrors.price = 'Enter a valid price greater than 0.';
+          break;
+        default: break;
+      }
+    }
 
     if (listingMode === 'co_own') {
       const shareCount = Math.floor(Number(shareCountInput));
@@ -826,7 +890,7 @@ export default function SellScreen() {
       isPublishingRef.current = false;
       setIsPublishing(false);
     }
-  }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline]);
+  }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness]);
 
   /* -- picker helpers -- */
   const getPickerOptions = useCallback(() => {
@@ -1188,6 +1252,8 @@ export default function SellScreen() {
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
                   {brand ? (
                     <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : completeness.policy.brandlessValid ? (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -1199,7 +1265,11 @@ export default function SellScreen() {
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
             {!brand && (
-              <Text style={[styles.fieldHelper, t.fieldHelper]}>Add brand for better search discoverability</Text>
+              <Text style={[styles.fieldHelper, t.fieldHelper]}>
+                {completeness.policy.brandlessValid
+                  ? 'Add brand for better search discoverability'
+                  : 'Brand is required for this category'}
+              </Text>
             )}
             <View style={[styles.hairline, t.hairline]} />
 
@@ -1214,6 +1284,8 @@ export default function SellScreen() {
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
                   {size ? (
                     <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : completeness.policy.sizelessValid ? (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -1728,6 +1800,31 @@ export default function SellScreen() {
               <Text style={[styles.inlineErrorText, t.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
+
+          {/* ── Category-aware completeness indicator ──
+              Per Phase 5 WP7: truthful completeness based on the category
+              policy, not universal brand/size assumptions. Shows "Ready
+              to publish" when canActivate=true, or "Missing: size, condition"
+              when required fields are absent. Non-blocking recommended
+              suggestions appear below when present.
+              Flat inline — no card chrome (§4 surface budget). */}
+          <View style={styles.completenessRow}>
+            <Ionicons
+              name={completeness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
+              size={15}
+              color={completeness.canActivate ? colors.success : colors.warning}
+            />
+            <View style={styles.completenessTextWrap}>
+              <Text style={[styles.completenessLabel, { color: completeness.canActivate ? colors.success : colors.textSecondary }]}>
+                {completenessLabel}
+              </Text>
+              {recommendedLabel && !completeness.canActivate ? (
+                <Text style={[styles.completenessHint, { color: colors.textMuted }]}>
+                  {recommendedLabel}
+                </Text>
+              ) : null}
+            </View>
+          </View>
 
           {/* ── Compact review summary for high-value/auction/Co-Own ──
               Per audit 04 P1: "Compact review state before publish for
@@ -2300,6 +2397,31 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+
+  /* -- category-aware completeness indicator (flat inline) -- */
+  completenessRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs + 1,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  completenessTextWrap: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  completenessLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  completenessHint: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });

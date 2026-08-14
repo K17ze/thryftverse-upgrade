@@ -30,7 +30,7 @@ import { useToast } from '../../context/ToastContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import type { Listing } from '../../data/mockData';
+import type { Listing } from '../../domain';
 import { filterImageUris } from '../../utils/media';
 import {
   Space,

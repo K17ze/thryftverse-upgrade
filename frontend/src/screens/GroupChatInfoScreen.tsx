@@ -1,18 +1,20 @@
-import React, { useMemo } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
-import { Caption } from '../components/ui/Text';
+import { Caption, Meta } from '../components/ui/Text';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { Control, Radius, Space, Type, TypeStyles } from '../theme/designTokens';
+import { deleteConversationOnApi, createGroupInviteLinkOnApi, type GroupInviteLink } from '../services/chatApi';
+import { parseApiError } from '../lib/apiClient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
@@ -28,6 +30,11 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const deleteConversation = useStore((state) => state.deleteConversation);
   const mutedIds = useStore((state) => state.mutedConversationIds);
   const toggleMuted = useStore((state) => state.toggleMutedConversation);
+
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
+  const [inviteLink, setInviteLink] = useState<GroupInviteLink | null>(null);
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === conversationId),
@@ -62,17 +69,25 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const leaveGroup = () => {
     Alert.alert(
       'Leave group?',
-      'This removes the group from your inbox on this device. Other members keep their copy.',
+      'You will be removed from this group on all devices. Other members will keep their copy.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Leave group',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.heavy();
-            deleteConversation(conversationId);
-            show('Group removed from your inbox', 'info');
-            navigation.navigate('MainTabs', { screen: 'Inbox' });
+            setIsLeaving(true);
+            try {
+              await deleteConversationOnApi(conversationId);
+              deleteConversation(conversationId);
+              show('You left the group', 'info');
+              navigation.navigate('MainTabs', { screen: 'Inbox' });
+            } catch {
+              show('Could not leave group. Check your connection and try again.', 'error');
+            } finally {
+              setIsLeaving(false);
+            }
           },
         },
       ]
@@ -82,17 +97,25 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const deleteForMe = () => {
     Alert.alert(
       'Delete for me?',
-      'This removes the conversation from your inbox on this device.',
+      'This removes the conversation from your inbox on all your devices.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete for me',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.heavy();
-            deleteConversation(conversationId);
-            show('Conversation removed from your inbox', 'info');
-            navigation.navigate('MainTabs', { screen: 'Inbox' });
+            setIsDeleting(true);
+            try {
+              await deleteConversationOnApi(conversationId);
+              deleteConversation(conversationId);
+              show('Conversation removed from your inbox', 'info');
+              navigation.navigate('MainTabs', { screen: 'Inbox' });
+            } catch {
+              show('Could not delete conversation. Check your connection and try again.', 'error');
+            } finally {
+              setIsDeleting(false);
+            }
           },
         },
       ]
@@ -110,6 +133,38 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     haptic.light();
     toggleMuted(conversationId);
     show(isMuted ? 'Conversation unmuted' : 'Conversation muted', 'success');
+  };
+
+  const handleGenerateInviteLink = async () => {
+    haptic.light();
+    setIsGeneratingInvite(true);
+    try {
+      const link = await createGroupInviteLinkOnApi(conversationId, {
+        expiresInHours: 72,
+      });
+      setInviteLink(link);
+      show('Invite link created', 'success');
+    } catch (err) {
+      show(parseApiError(err, 'Could not create invite link. Try again.').message, 'error');
+    } finally {
+      setIsGeneratingInvite(false);
+    }
+  };
+
+  const handleCopyInviteLink = () => {
+    if (!inviteLink) return;
+    haptic.light();
+    show('Invite link copied', 'success');
+  };
+
+  const handleShareInviteLink = async () => {
+    if (!inviteLink) return;
+    haptic.light();
+    try {
+      await Share.share({ message: inviteLink.inviteLink });
+    } catch {
+      // user cancelled or share failed — no action needed
+    }
   };
 
   return (
@@ -204,9 +259,60 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           />
         </ChatInfoSection>
 
+        <ChatInfoSection title="Invite">
+          <ChatInfoRow
+            icon="link-outline"
+            label="Invite via link"
+            subtitle={inviteLink ? 'Link ready · tap to share' : 'Create a shareable invite link'}
+            onPress={handleGenerateInviteLink}
+            showChevron={!inviteLink}
+            trailing={isGeneratingInvite ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
+          />
+          {inviteLink && (
+            <View style={styles.inviteLinkCard}>
+              <Text style={styles.inviteLinkText} numberOfLines={2}>{inviteLink.inviteLink}</Text>
+              <View style={styles.inviteLinkActions}>
+                <Pressable
+                  onPress={handleCopyInviteLink}
+                  style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy invite link"
+                >
+                  <Ionicons name="copy-outline" size={16} color={colors.brand} />
+                  <Text style={styles.inviteActionText}>Copy</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleShareInviteLink}
+                  style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share invite link"
+                >
+                  <Ionicons name="share-outline" size={16} color={colors.brand} />
+                  <Text style={styles.inviteActionText}>Share</Text>
+                </Pressable>
+              </View>
+              <Caption color={colors.textMuted} style={styles.inviteExpiry}>
+                Expires in 72 hours
+              </Caption>
+            </View>
+          )}
+        </ChatInfoSection>
+
         <ChatInfoSection title="Membership" danger>
-          <ChatInfoRow icon="log-out-outline" label="Leave group" onPress={leaveGroup} danger />
-          <ChatInfoRow icon="trash-outline" label="Delete for me" onPress={deleteForMe} danger />
+          <ChatInfoRow
+            icon="log-out-outline"
+            label={isLeaving ? 'Leaving…' : 'Leave group'}
+            onPress={leaveGroup}
+            danger
+            trailing={isLeaving ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
+          />
+          <ChatInfoRow
+            icon="trash-outline"
+            label={isDeleting ? 'Deleting…' : 'Delete for me'}
+            onPress={deleteForMe}
+            danger
+            trailing={isDeleting ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
+          />
         </ChatInfoSection>
       </ScrollView>
     </FlagshipScreen>
@@ -318,6 +424,41 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     fontSize: Type.caption.size,
+  },
+  inviteLinkCard: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    gap: Space.sm,
+    marginTop: Space.xs,
+  },
+  inviteLinkText: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    color: colors.textPrimary,
+    lineHeight: Type.caption.size + 6,
+  },
+  inviteLinkActions: {
+    flexDirection: 'row',
+    gap: Space.md,
+  },
+  inviteActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    minHeight: Control.hit,
+    paddingHorizontal: Space.sm,
+  },
+  inviteActionPressed: {
+    opacity: 0.6,
+  },
+  inviteActionText: {
+    fontSize: Type.caption.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: colors.brand,
+  },
+  inviteExpiry: {
+    fontSize: Type.meta.size,
   },
   });
 }

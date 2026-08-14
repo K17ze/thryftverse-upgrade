@@ -23,28 +23,23 @@ const REPORT_REASONS: Array<{
 }> = [
   {
     key: 'spam',
-    label: 'Spam or misleading',
-    description: 'Unwanted promotion, scams or deceptive behaviour',
-  },
-  {
-    key: 'inappropriate',
-    label: 'Inappropriate content',
-    description: 'Sexual, violent or otherwise unsafe content',
-  },
-  {
-    key: 'counterfeit',
-    label: 'Counterfeit activity',
-    description: 'Fake goods or misleading authenticity claims',
-  },
-  {
-    key: 'unresponsive',
-    label: 'Seller is unresponsive',
-    description: 'A transaction concern that could not be resolved',
+    label: 'Spam',
+    description: 'Unwanted promotion, scams or repetitive messages',
   },
   {
     key: 'harassment',
     label: 'Harassment',
     description: 'Threatening, abusive or targeted unwanted contact',
+  },
+  {
+    key: 'counterfeit',
+    label: 'Fake item',
+    description: 'Counterfeit goods or misleading authenticity claims',
+  },
+  {
+    key: 'off_platform',
+    label: 'Off-platform request',
+    description: 'Asked to transact outside Thryftverse, against policy',
   },
   {
     key: 'other',
@@ -95,7 +90,7 @@ export default function ReportScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Report sent"
+            title="Report submitted"
             onBack={() => navigation.goBack()}
           />
         }
@@ -106,7 +101,7 @@ export default function ReportScreen({ navigation, route }: Props) {
             size={28}
             color={colors.textPrimary}
           />
-          <Text style={styles.completeTitle}>Thank you for reporting this</Text>
+          <Text style={styles.completeTitle}>Report submitted</Text>
           <Text style={styles.completeBody}>
             The moderation team received your report. Blocking is available
             separately if you no longer want contact from this account.

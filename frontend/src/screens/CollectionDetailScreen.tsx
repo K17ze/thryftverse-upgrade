@@ -96,11 +96,17 @@ export default function CollectionDetailScreen() {
     [listings, collection]
   );
 
-  const coverImage = useMemo(() => {
-    if (!collection?.itemIds?.length) return null;
-    const firstItem = listings.find((l) => l.id === collection.itemIds[0]);
-    return firstItem?.images?.[0] ?? null;
+  const coverImages = useMemo(() => {
+    if (!collection?.itemIds?.length) return [];
+    return collection.itemIds
+      .slice(0, 4)
+      .map((id) => listings.find((l) => l.id === id))
+      .filter((l): l is NonNullable<typeof l> => !!l)
+      .map((l) => l.images?.[0])
+      .filter((uri): uri is string => !!uri);
   }, [collection, listings]);
+
+  const coverImage = coverImages[0] ?? null;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -226,10 +232,27 @@ export default function CollectionDetailScreen() {
           />
         }
       >
-        {/* Cover Image Hero */}
-        {coverImage && (
+        {/* Cover Image Hero — 2x2 mosaic from first 2-4 items */}
+        {coverImages.length > 0 && (
           <View style={styles.coverWrap}>
-            <CachedImage uri={coverImage} style={styles.coverImage} contentFit="cover" />
+            {coverImages.length === 1 ? (
+              <CachedImage uri={coverImages[0]} style={styles.coverImage} contentFit="cover" />
+            ) : (
+              <View style={styles.coverMosaic}>
+                {coverImages.map((uri, i) => (
+                  <CachedImage
+                    key={uri + i}
+                    uri={uri}
+                    style={styles.coverMosaicTile}
+                    contentFit="cover"
+                  />
+                ))}
+                {/* Fill empty slots with dark tiles */}
+                {Array.from({ length: 4 - coverImages.length }).map((_, i) => (
+                  <View key={`empty-${i}`} style={[styles.coverMosaicTile, { backgroundColor: colors.surfaceAlt }]} />
+                ))}
+              </View>
+            )}
             <View style={styles.coverGradient} />
             <View style={styles.coverInfo}>
               <View style={styles.coverTitleRow}>
@@ -381,7 +404,7 @@ export default function CollectionDetailScreen() {
         {count === 0 && (
           <EmptyState
             graphic={<BoardEmptyGraphic title="No items yet" subtitle="Add items to this board" icon="folder-open-outline" size={140} />}
-            title="No items in this collection yet"
+            title="This collection is empty"
             subtitle="Browse items and save them to this collection to start curating your board."
             ctaLabel="Browse items"
             onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
@@ -522,6 +545,16 @@ function createStyles(colors: ThemeColors) {
   coverImage: {
     width: '100%',
     height: '100%',
+  },
+  coverMosaic: {
+    width: '100%',
+    height: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  coverMosaicTile: {
+    width: '50%',
+    height: '50%',
   },
   coverGradient: {
     ...StyleSheet.absoluteFill,

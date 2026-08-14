@@ -1743,10 +1743,9 @@ export default function ChatScreen({ navigation, route }: Props) {
                 ? linkedListing.sellerId === currentUser?.id
                   ? [
                       ...(sellerQuickReplies.length > 0
-                        ? sellerQuickReplies.slice(0, 4).map((text) => ({
-                            label:
-                              text.length > 30 ? text.slice(0, 28) + "…" : text,
-                            onPress: () => setInput(text),
+                        ? sellerQuickReplies.slice(0, 4).map((reply) => ({
+                            label: reply.title,
+                            onPress: () => setInput(reply.message),
                           }))
                         : DEFAULT_SELLER_QUICK_REPLIES.map((text) => ({
                             label: text,
@@ -1762,10 +1761,9 @@ export default function ChatScreen({ navigation, route }: Props) {
                     ]
                   : [
                       ...(buyerQuickReplies.length > 0
-                        ? buyerQuickReplies.slice(0, 4).map((text) => ({
-                            label:
-                              text.length > 30 ? text.slice(0, 28) + "…" : text,
-                            onPress: () => setInput(text),
+                        ? buyerQuickReplies.slice(0, 4).map((reply) => ({
+                            label: reply.title,
+                            onPress: () => setInput(reply.message),
                           }))
                         : DEFAULT_BUYER_QUICK_REPLIES.map((text) => ({
                             label: text,

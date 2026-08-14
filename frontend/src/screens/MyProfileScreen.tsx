@@ -653,6 +653,8 @@ export default function MyProfileScreen() {
             onPressListings={() => { haptic.light(); navigation.navigate('MyListings'); }}
             onPressLooks={() => { haptic.light(); }}
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
+            onPressFollowers={() => { haptic.light(); navigation.navigate('Followers', { userId: currentUser!.id }); }}
+            onPressFollowing={() => { haptic.light(); navigation.navigate('Following', { userId: currentUser!.id }); }}
           />
 
           {/* Away-mode indicator — shown when holiday mode is enabled */}

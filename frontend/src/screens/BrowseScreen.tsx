@@ -30,7 +30,7 @@ import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionH
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { RootStackParamList } from '../navigation/types';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';

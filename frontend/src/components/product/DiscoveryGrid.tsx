@@ -4,7 +4,7 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
-import type { Listing } from '../../data/mockData';
+import type { Listing } from '../../domain';
 import { ProductCardV2 } from '../ProductCardV2';
 import { ProductAnalytics } from '../../platform/product';
 

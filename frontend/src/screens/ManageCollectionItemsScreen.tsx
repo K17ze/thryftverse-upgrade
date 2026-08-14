@@ -4,8 +4,9 @@ import {
   Text,
   StyleSheet,
   Alert,
+  Pressable,
+  ScrollView,
 } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -15,7 +16,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, AspectRatio } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, AspectRatio, Stroke, Control } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -35,6 +36,8 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
   const removeFromCollectionOnApi = useStore((state) => state.removeFromCollectionOnApi);
   const removeFromCollection = useStore((state) => state.removeFromCollection);
   const addToCollection = useStore((state) => state.addToCollection);
+  const addToCollectionOnApi = useStore((state) => state.addToCollectionOnApi);
+  const savedProducts = useStore((state) => state.savedProducts);
   const { listings } = useBackendData();
 
   const collection = useMemo(
@@ -49,7 +52,16 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
       .filter((l): l is NonNullable<typeof l> => !!l);
   }, [collection, listings]);
 
+  // Saved items not yet in this collection — available to add
+  const availableToAdd = useMemo(
+    () => listings.filter(
+      (l) => savedProducts.includes(l.id) && !(collection?.itemIds?.includes(l.id) ?? false)
+    ),
+    [listings, savedProducts, collection]
+  );
+
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+  const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -86,6 +98,28 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
       ]
     );
   }, [collectionId, haptic, addToCollection, removeFromCollection, removeFromCollectionOnApi, show]);
+
+  const handleAdd = useCallback(async (itemId: string) => {
+    if (addingIds.has(itemId)) return;
+    haptic.light();
+    // Optimistic add
+    addToCollection(collectionId, itemId);
+    setAddingIds((prev) => new Set(prev).add(itemId));
+    try {
+      await addToCollectionOnApi(collectionId, itemId);
+      show('Item added to collection', 'success');
+    } catch {
+      // Rollback
+      removeFromCollection(collectionId, itemId);
+      show('Failed to add item. Try again.', 'error');
+    } finally {
+      setAddingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    }
+  }, [addingIds, haptic, collectionId, addToCollection, addToCollectionOnApi, removeFromCollection, show]);
 
   if (!collection) {
     return (
@@ -143,29 +177,103 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
     );
   };
 
+  const renderAvailableItem = ({ item }: { item: typeof availableToAdd[0] }) => {
+    const isAdding = addingIds.has(item.id);
+    return (
+      <View style={styles.row}>
+        <Pressable
+          style={styles.availableInfo}
+          onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
+        >
+          {item.images?.[0] ? (
+            <CachedImage uri={item.images[0]} style={styles.thumb} contentFit="cover" />
+          ) : (
+            <View style={styles.thumbEmpty}>
+              <Ionicons name="image-outline" size={18} color={colors.textMuted} />
+            </View>
+          )}
+          <View style={styles.rowBody}>
+            <BodyEmphasis numberOfLines={1}>{item.title}</BodyEmphasis>
+            <Caption color={colors.textMuted}>{item.brand}</Caption>
+          </View>
+        </Pressable>
+        <Text style={styles.rowPrice} numberOfLines={1}>
+          {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
+        </Text>
+        <AnimatedPressable
+          style={[styles.addBtn, isAdding && styles.addBtnLoading]}
+          onPress={() => void handleAdd(item.id)}
+          activeOpacity={0.7}
+          scaleValue={0.9}
+          hapticFeedback="light"
+          disabled={isAdding}
+          accessibilityLabel={`Add ${item.title} to collection`}
+          accessibilityRole="button"
+        >
+          <Ionicons name={isAdding ? 'hourglass-outline' : 'add-circle-outline'} size={20} color={colors.brand} />
+        </AnimatedPressable>
+      </View>
+    );
+  };
+
   return (
     <FlagshipScreen
       header={<FlagshipHeader title="Manage Items" onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
     >
-      {collectionItems.length === 0 ? (
-        <EmptyState
-          icon="folder-open-outline"
-          title="No items in this collection"
-          subtitle="Add saved products to this collection to manage them here."
-          ctaLabel="Browse"
-          onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
-        />
-      ) : (
-        <FlashList
-          data={collectionItems}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-        />
-      )}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Items in collection */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>In this collection</Text>
+          <Text style={styles.sectionCount}>
+            {collectionItems.length} {collectionItems.length === 1 ? 'item' : 'items'}
+          </Text>
+        </View>
+
+        {collectionItems.length === 0 ? (
+          <EmptyState
+            icon="folder-open-outline"
+            title="This collection is empty"
+            subtitle="Add saved products to this collection from the section below."
+          />
+        ) : (
+          <View style={styles.listContent}>
+            {collectionItems.map((item, idx) => (
+              <React.Fragment key={item.id}>
+                {renderItem({ item })}
+                {idx < collectionItems.length - 1 && <View style={styles.separator} />}
+              </React.Fragment>
+            ))}
+          </View>
+        )}
+
+        {/* Available to add from saved items */}
+        {availableToAdd.length > 0 && (
+          <View style={styles.availableSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Add from saved</Text>
+              <Text style={styles.sectionCount}>
+                {availableToAdd.length} available
+              </Text>
+            </View>
+            <View style={styles.listContent}>
+              {availableToAdd.map((item, idx) => (
+                <React.Fragment key={item.id}>
+                  {renderAvailableItem({ item })}
+                  {idx < availableToAdd.length - 1 && <View style={styles.separator} />}
+                </React.Fragment>
+              ))}
+            </View>
+          </View>
+        )}
+      </ScrollView>
     </FlagshipScreen>
   );
 }
@@ -177,18 +285,51 @@ function createStyles(colors: ThemeColors) {
   const THUMB_W = Space.xxl + Space.sm; // 56pt
   const THUMB_H = Math.round(THUMB_W / AspectRatio.portrait); // ~75pt
   return StyleSheet.create({
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: Space.xxl,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingTop: Space.md,
+      paddingBottom: Space.sm,
+    },
+    sectionTitle: {
+      fontSize: Type.metaElevated.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: Type.metaElevated.letterSpacing,
+    },
+    sectionCount: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+    },
     listContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xxl,
+      paddingBottom: Space.lg,
     },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
       paddingVertical: Space.smMd,
+      minHeight: Control.hit,
     },
     rowRemoving: {
       opacity: 0.5,
+    },
+    availableInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+      flex: 1,
     },
     thumb: {
       width: THUMB_W,
@@ -225,10 +366,25 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       alignItems: 'center',
     },
+    addBtn: {
+      width: Space.xl + Space.sm,
+      height: Space.xl + Space.sm,
+      borderRadius: Radius.md,
+      backgroundColor: 'transparent',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    addBtnLoading: {
+      opacity: 0.5,
+    },
     separator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
       marginLeft: THUMB_W + Space.md,
+    },
+    availableSection: {
+      paddingTop: Space.lg,
+      flex: 1,
     },
   });
 }

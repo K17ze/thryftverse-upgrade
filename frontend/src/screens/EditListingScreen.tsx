@@ -41,6 +41,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { useSoldComps } from '../hooks/useSoldComps';
 import { calculateListingQuality } from '../utils/listingQuality';
+import {
+  evaluateListingCompleteness,
+  type ListingFieldValues,
+  type ListingFieldKey,
+} from '../contracts/listingCategoryPolicy';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -344,21 +349,75 @@ export default function EditListingScreen() {
   }, [mediaItems]);
 
   /* ── validation ── */
+  // Category-aware validation: use the completeness result's missing
+  // required fields instead of universal brand/size assumptions.
+  // Brandless vintage and sizeless home goods are valid when the policy
+  // says so.
+  const editCompleteness = useMemo(() => {
+    const numericPrice = Number(sanitizeDecimalInput(price));
+    const values: ListingFieldValues = {
+      title: title.trim() || null,
+      description: description.trim() || null,
+      price: numericPrice > 0 ? numericPrice : null,
+      category: category || null,
+      brand: brand || null,
+      size: size || null,
+      condition: condition || null,
+      images: mediaItems.length > 0 ? mediaItems.map((m) => m.publicUrl || m.uri) : null,
+      shippingMethod: shippingMethod || null,
+      shippingPayer: shippingPayer || null,
+    };
+    return evaluateListingCompleteness(values);
+  }, [title, description, price, category, brand, size, condition, mediaItems, shippingMethod, shippingPayer]);
+
+  const editFieldLabelMap: Record<ListingFieldKey, string> = {
+    title: 'title',
+    description: 'description',
+    price: 'price',
+    category: 'category',
+    subcategory: 'subcategory',
+    brand: 'brand',
+    size: 'size',
+    condition: 'condition',
+    images: 'photos',
+    shippingMethod: 'shipping method',
+    shippingPayer: 'shipping payer',
+  };
+
+  const editCompletenessLabel = editCompleteness.canActivate
+    ? 'Ready to publish'
+    : `Missing: ${editCompleteness.missingRequired.map((f) => editFieldLabelMap[f]).join(', ')}`;
+
+  const editRecommendedLabel = editCompleteness.missingRecommended.length > 0
+    ? `Suggested: ${editCompleteness.missingRecommended.map((f) => editFieldLabelMap[f]).join(', ')}`
+    : null;
+
   const validate = useCallback(() => {
     const trimmedTitle = title.trim();
     const trimmedDesc = description.trim();
     const numericPrice = Number(sanitizeDecimalInput(price));
 
-    if (!trimmedTitle) return 'Add a title.';
-    if (!category) return 'Select a category.';
-    if (!brand) return 'Select a brand.';
-    if (!size) return 'Select a size.';
-    if (!condition) return 'Select a condition.';
-    if (!trimmedDesc || trimmedDesc.length < 10) return 'Add a description with at least 10 characters.';
-    if (!Number.isFinite(numericPrice) || numericPrice <= 0) return 'Enter a valid price greater than 0.';
-    if (mediaItems.length === 0) return 'Add at least one photo.';
+    // Category-aware: check missingRequired from the policy, not universal
+    // brand/size requirements.
+    for (const field of editCompleteness.missingRequired) {
+      switch (field) {
+        case 'title': if (!trimmedTitle) return 'Add a title.'; break;
+        case 'category': if (!category) return 'Select a category.'; break;
+        case 'brand': if (!brand) return 'Select a brand.'; break;
+        case 'size': if (!size) return 'Select a size.'; break;
+        case 'condition': if (!condition) return 'Select a condition.'; break;
+        case 'images': if (mediaItems.length === 0) return 'Add at least one photo.'; break;
+        case 'description':
+          if (!trimmedDesc || trimmedDesc.length < 10) return 'Add a description with at least 10 characters.';
+          break;
+        case 'price':
+          if (!Number.isFinite(numericPrice) || numericPrice <= 0) return 'Enter a valid price greater than 0.';
+          break;
+        default: break;
+      }
+    }
     return '';
-  }, [title, category, brand, size, condition, description, price, mediaItems]);
+  }, [title, category, brand, size, condition, description, price, mediaItems, editCompleteness]);
 
   /* ── save handler ── */
   const handleSave = useCallback(async () => {
@@ -837,6 +896,8 @@ export default function EditListingScreen() {
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Brand</Text>
                   {brand ? (
                     <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : editCompleteness.policy.brandlessValid ? (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -860,6 +921,8 @@ export default function EditListingScreen() {
                   <Text style={[styles.fieldLabel, t.fieldLabel]}>Size</Text>
                   {size ? (
                     <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                  ) : editCompleteness.policy.sizelessValid ? (
+                    <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Optional</Text>
                   ) : (
                     <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
                   )}
@@ -1065,6 +1128,27 @@ export default function EditListingScreen() {
               <Text style={[styles.inlineErrorText, t.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
+
+          {/* ── Category-aware completeness indicator ──
+              Per Phase 5 WP7: truthful completeness based on the category
+              policy. Flat inline — no card chrome (§4 surface budget). */}
+          <View style={styles.completenessRow}>
+            <Ionicons
+              name={editCompleteness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
+              size={15}
+              color={editCompleteness.canActivate ? colors.success : colors.warning}
+            />
+            <View style={styles.completenessTextWrap}>
+              <Text style={[styles.completenessLabel, { color: editCompleteness.canActivate ? colors.success : colors.textSecondary }]}>
+                {editCompletenessLabel}
+              </Text>
+              {editRecommendedLabel && !editCompleteness.canActivate ? (
+                <Text style={[styles.completenessHint, { color: colors.textMuted }]}>
+                  {editRecommendedLabel}
+                </Text>
+              ) : null}
+            </View>
+          </View>
 
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
@@ -1379,6 +1463,27 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   fieldRequiredHint: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+  },
+
+  /* -- category-aware completeness indicator (flat inline) -- */
+  completenessRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs + 1,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  completenessTextWrap: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  completenessLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+  },
+  completenessHint: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
   },

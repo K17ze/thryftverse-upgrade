@@ -18,7 +18,7 @@ import Reanimated, {
   withDelay,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import type { Listing } from '../../data/mockData';
+import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
 import { Typography, Radius, Type, Space } from '../../theme/designTokens';

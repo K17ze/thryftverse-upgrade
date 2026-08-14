@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Poster } from '../data/posters';
 import type { AuctionMarketItem, AuctionViewModel, CoOwnAsset } from '../data/tradeHub';
-import type { ChatBot, Conversation, Message as ConversationMessage } from '../data/mockData';
+import type { ChatBot, Conversation, Message as ConversationMessage } from '../domain';
 import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { makeStableId } from '../utils/createStableId';
@@ -58,6 +58,16 @@ export interface User {
   isVerified?: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/**
+ * Quick reply — a reusable message with a separate shortcut title.
+ * The title is shown as the chip label; the message is inserted into the composer.
+ */
+export interface QuickReply {
+  id: string;
+  title: string;
+  message: string;
 }
 
 interface ProfileMediaOverride {
@@ -490,13 +500,13 @@ interface StoreState {
   orderUpdatesInChatEnabled: boolean;
   setOrderUpdatesInChatEnabled: (v: boolean) => void;
   // Quick replies (seller-side, locally editable)
-  sellerQuickReplies: string[];
-  addSellerQuickReply: (text: string) => void;
-  updateSellerQuickReply: (index: number, text: string) => void;
+  sellerQuickReplies: QuickReply[];
+  addSellerQuickReply: (reply: QuickReply) => void;
+  updateSellerQuickReply: (index: number, reply: QuickReply) => void;
   removeSellerQuickReply: (index: number) => void;
-  buyerQuickReplies: string[];
-  addBuyerQuickReply: (text: string) => void;
-  updateBuyerQuickReply: (index: number, text: string) => void;
+  buyerQuickReplies: QuickReply[];
+  addBuyerQuickReply: (reply: QuickReply) => void;
+  updateBuyerQuickReply: (index: number, reply: QuickReply) => void;
   removeBuyerQuickReply: (index: number) => void;
   // Enabled bots (global)
   enabledBotIds: string[];
@@ -1545,31 +1555,31 @@ export const useStore = create<StoreState>()(
   orderUpdatesInChatEnabled: true,
   setOrderUpdatesInChatEnabled: (v) => set({ orderUpdatesInChatEnabled: v }),
   sellerQuickReplies: [
-    'Yes, still available!',
-    'I can ship this today if you want to go ahead.',
-    'Thanks for your interest! What would you like to know?',
-    'I can do a small discount for a quick sale.',
+    { id: 'qr-s-1', title: 'Still available', message: 'Yes, still available!' },
+    { id: 'qr-s-2', title: 'Ship today', message: 'I can ship this today if you want to go ahead.' },
+    { id: 'qr-s-3', title: 'Thanks', message: 'Thanks for your interest! What would you like to know?' },
+    { id: 'qr-s-4', title: 'Quick sale', message: 'I can do a small discount for a quick sale.' },
   ],
-  addSellerQuickReply: (text) => set((state) => ({
-    sellerQuickReplies: [...state.sellerQuickReplies, text],
+  addSellerQuickReply: (reply) => set((state) => ({
+    sellerQuickReplies: [...state.sellerQuickReplies, reply],
   })),
-  updateSellerQuickReply: (index, text) => set((state) => ({
-    sellerQuickReplies: state.sellerQuickReplies.map((r, i) => i === index ? text : r),
+  updateSellerQuickReply: (index, reply) => set((state) => ({
+    sellerQuickReplies: state.sellerQuickReplies.map((r, i) => i === index ? reply : r),
   })),
   removeSellerQuickReply: (index) => set((state) => ({
     sellerQuickReplies: state.sellerQuickReplies.filter((_, i) => i !== index),
   })),
   buyerQuickReplies: [
-    'Hi, is this still available?',
-    'Would you consider an offer on this?',
-    'Can I see more photos?',
-    'What\'s your best price?',
+    { id: 'qr-b-1', title: 'Still available?', message: 'Hi, is this still available?' },
+    { id: 'qr-b-2', title: 'Make offer', message: 'Would you consider an offer on this?' },
+    { id: 'qr-b-3', title: 'More photos', message: 'Can I see more photos?' },
+    { id: 'qr-b-4', title: 'Best price', message: 'What\'s your best price?' },
   ],
-  addBuyerQuickReply: (text) => set((state) => ({
-    buyerQuickReplies: [...state.buyerQuickReplies, text],
+  addBuyerQuickReply: (reply) => set((state) => ({
+    buyerQuickReplies: [...state.buyerQuickReplies, reply],
   })),
-  updateBuyerQuickReply: (index, text) => set((state) => ({
-    buyerQuickReplies: state.buyerQuickReplies.map((r, i) => i === index ? text : r),
+  updateBuyerQuickReply: (index, reply) => set((state) => ({
+    buyerQuickReplies: state.buyerQuickReplies.map((r, i) => i === index ? reply : r),
   })),
   removeBuyerQuickReply: (index) => set((state) => ({
     buyerQuickReplies: state.buyerQuickReplies.filter((_, i) => i !== index),
@@ -1893,7 +1903,7 @@ export const useStore = create<StoreState>()(
     {
       name: 'thryftverse-store',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       migrate: (persistedState, version) => {
         let state = { ...(persistedState as Partial<StoreState>) };
         if (version < 2 && ENABLE_RUNTIME_MOCKS && state.conversations) {
@@ -1910,6 +1920,23 @@ export const useStore = create<StoreState>()(
         }
         if (version < 3) {
           delete state.savedPaymentMethod;
+        }
+        // v4: migrate quick replies from string[] to QuickReply[]
+        if (version < 4) {
+          const migrateReplies = (replies: unknown): QuickReply[] => {
+            if (!Array.isArray(replies)) return [];
+            return replies.map((item, i) => {
+              if (typeof item === 'string') {
+                return { id: `qr-migrated-${i}-${Date.now()}`, title: item.slice(0, 30), message: item };
+              }
+              return item as QuickReply;
+            });
+          };
+          state = {
+            ...state,
+            sellerQuickReplies: migrateReplies(state.sellerQuickReplies),
+            buyerQuickReplies: migrateReplies(state.buyerQuickReplies),
+          };
         }
         return state;
       },

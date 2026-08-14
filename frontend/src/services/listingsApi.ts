@@ -364,6 +364,7 @@ export type ListingReportReason =
   | 'counterfeit'
   | 'unresponsive'
   | 'harassment'
+  | 'off_platform'
   | 'other';
 
 export interface ListingCommerceServerContext {

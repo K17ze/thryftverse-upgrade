@@ -27,9 +27,12 @@ import { useStore } from '../store/useStore';
 import {
   NotificationEvent,
   NotificationEventType,
+  NotificationEventV2,
+  NotificationObjectRef,
   listNotificationEvents,
   markNotificationRead,
   markAllNotificationsRead,
+  upgradeToV2,
 } from '../services/notificationsApi';
 import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { haptics } from '../utils/haptics';
@@ -63,6 +66,10 @@ type NotificationCard = {
   actorDisplayName: string | null;
   actorAvatar: string | null;
   route: { screen: string; params?: Record<string, unknown> } | null;
+  /** Whether this event requires user action (outbid, ship order, dispute). */
+  requiresAction: boolean;
+  /** Structured aggregation key from the V2 registry (e.g. "social.look_liked:look123"). */
+  aggregationKey: string | null;
   /** Aggregated notification count — when >1, this card represents N similar events. */
   aggregatedCount?: number;
   /** Actor names for aggregated notifications (first few). */
@@ -86,11 +93,6 @@ const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'auction', label: 'Auctions' },
 ];
 
-function parsePayloadEvent(payload: Record<string, unknown>): string {
-  const candidate = payload.event;
-  return typeof candidate === 'string' ? candidate.toLowerCase() : '';
-}
-
 function getPayloadString(payload: Record<string, unknown>, keys: string[]): string | null {
   for (const key of keys) {
     const candidate = payload[key];
@@ -102,25 +104,67 @@ function getPayloadString(payload: Record<string, unknown>, keys: string[]): str
   return null;
 }
 
-function deriveCardType(event: NotificationEvent): NotificationCardType {
-  const eventType = event.eventType;
-  if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'resolution';
-  if (eventType === 'review_received') return 'review';
-  if (eventType.startsWith('order_') || eventType === 'refund_completed' || eventType === 'payout_processed') return 'order';
-  if (eventType.startsWith('auction_')) return 'auction';
+/**
+ * Direct mapping from known NotificationEventType → NotificationCardType.
+ * This is the structured contract: category is NEVER derived from title/body text.
+ * All event types in the V2 registry are covered here.
+ */
+const EVENT_TYPE_CARD_MAP: Record<NotificationEventType, NotificationCardType> = {
+  order_created: 'order',
+  order_paid: 'order',
+  order_cancelled: 'order',
+  order_dispatched: 'order',
+  order_in_transit: 'order',
+  order_out_for_delivery: 'order',
+  order_delivered: 'order',
+  order_refunded: 'order',
+  resolution_opened: 'resolution',
+  resolution_status_changed: 'resolution',
+  review_received: 'review',
+  chat_message: 'generic',
+  payout_processed: 'order',
+  refund_completed: 'order',
+  auction_outbid: 'auction',
+  auction_won: 'auction',
+  auction_ending_soon: 'auction',
+  generic: 'generic', // resolved further by objectRef below
+};
 
-  const payloadEvent = parsePayloadEvent(event.payload);
-  const mergedText = `${event.title} ${event.body}`.toLowerCase();
-
-  if (payloadEvent.includes('shipment') || payloadEvent.includes('order') || payloadEvent.includes('deliver')) {
-    return 'order';
+/**
+ * For generic events (which don't have a specific event type in the registry),
+ * infer the card type from the structured object reference — never from text.
+ */
+function cardTypeFromObjectRef(objectRef: NotificationObjectRef | undefined): NotificationCardType {
+  if (!objectRef) return 'generic';
+  switch (objectRef.type) {
+    case 'listing':
+      return 'new_item';
+    case 'order':
+      return 'order';
+    case 'auction':
+      return 'auction';
+    case 'look':
+      return 'like';
+    case 'poster':
+      return 'new_item';
+    case 'conversation':
+      return 'generic';
+    case 'wallet':
+      return 'order';
+    default:
+      return 'generic';
   }
-  if (payloadEvent.includes('review') || mergedText.includes('review')) return 'review';
-  if (payloadEvent.includes('price') || mergedText.includes('price')) return 'price';
-  if (payloadEvent.includes('like') || mergedText.includes('like')) return 'like';
-  if (mergedText.includes('listing') || mergedText.includes('new item')) return 'new_item';
+}
 
-  return 'generic';
+/**
+ * Resolve the notification card type using the V2 registry — never from title/body text.
+ * Known event types use a direct mapping; generic events fall back to objectRef shape.
+ */
+function resolveCardType(v2Event: NotificationEventV2): NotificationCardType {
+  if (v2Event.eventType !== 'generic') {
+    return EVENT_TYPE_CARD_MAP[v2Event.eventType] ?? 'generic';
+  }
+  return cardTypeFromObjectRef(v2Event.objectRef);
 }
 
 function formatRelativeTime(value: string): string {
@@ -158,6 +202,7 @@ function formatRelativeTime(value: string): string {
 function mapEventToCard(event: NotificationEvent): NotificationCard {
   const title = event.title.trim();
   const body = event.body.trim();
+  const v2 = upgradeToV2(event);
   return {
     id: event.id,
     itemImage: event.imageUrl ?? '',
@@ -165,7 +210,7 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     body,
     text: `${title} ${body}`.trim(),
     time: formatRelativeTime(event.createdAt),
-    type: deriveCardType(event),
+    type: resolveCardType(v2),
     read: !!event.readAt,
     createdAt: event.createdAt,
     payload: event.payload,
@@ -175,6 +220,8 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     actorDisplayName: event.actorDisplayName,
     actorAvatar: event.actorAvatar,
     route: event.route,
+    requiresAction: v2.requiresAction,
+    aggregationKey: v2.aggregationKey,
   };
 }
 
@@ -201,8 +248,9 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
       continue;
     }
 
-    const listingId = typeof notif.payload.listingId === 'string' ? notif.payload.listingId : '';
-    const groupKey = `${notif.type}:${listingId}`;
+    // Use the V2 registry's structured aggregation key when available.
+    // Falls back to type+listingId for legacy events without a registry entry.
+    const groupKey = notif.aggregationKey ?? `${notif.type}:${typeof notif.payload.listingId === 'string' ? notif.payload.listingId : ''}`;
 
     const existing = groups.get(groupKey);
     if (existing) {
@@ -261,11 +309,12 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
   return result;
 }
 
-type NotificationGroupKey = 'today' | 'yesterday' | 'earlier';
+type NotificationGroupKey = 'attention' | 'today' | 'yesterday' | 'earlier';
 
-const NOTIFICATION_GROUP_ORDER: NotificationGroupKey[] = ['today', 'yesterday', 'earlier'];
+const NOTIFICATION_GROUP_ORDER: NotificationGroupKey[] = ['attention', 'today', 'yesterday', 'earlier'];
 
 const NOTIFICATION_GROUP_LABELS: Record<NotificationGroupKey, string> = {
+  attention: 'Needs attention',
   today: 'Today',
   yesterday: 'Yesterday',
   earlier: 'Earlier',
@@ -286,12 +335,19 @@ function getNotificationGroupKey(createdAt: string): NotificationGroupKey {
 
 function groupNotifications(notifications: NotificationCard[]) {
   const buckets: Record<NotificationGroupKey, NotificationCard[]> = {
+    attention: [],
     today: [],
     yesterday: [],
     earlier: [],
   };
 
   notifications.forEach((notification) => {
+    // Action-required events go into the "Needs attention" section,
+    // separated from the time-based sections so they are obvious.
+    if (notification.requiresAction) {
+      buckets.attention.push(notification);
+      return;
+    }
     const groupKey = getNotificationGroupKey(notification.createdAt);
     buckets[groupKey].push(notification);
   });
@@ -300,12 +356,12 @@ function groupNotifications(notifications: NotificationCard[]) {
     buckets[key].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  const sections: Array<{ title: string; data: NotificationCard[]; unreadCount: number }> = [];
+  const sections: Array<{ title: string; data: NotificationCard[]; unreadCount: number; isAttention?: boolean }> = [];
   for (const key of NOTIFICATION_GROUP_ORDER) {
     const data = buckets[key];
     if (data.length === 0) continue;
     const unreadCount = data.filter((n) => !n.read).length;
-    sections.push({ title: NOTIFICATION_GROUP_LABELS[key], data, unreadCount });
+    sections.push({ title: NOTIFICATION_GROUP_LABELS[key], data, unreadCount, isAttention: key === 'attention' });
   }
 
   return sections;
@@ -829,11 +885,14 @@ export default function NotificationsScreen() {
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
-        renderSectionHeader={({ section: { title, unreadCount } }) => (
+        renderSectionHeader={({ section: { title, unreadCount, isAttention } }) => (
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>{title}</Text>
+            {isAttention ? (
+              <Ionicons name="alert-circle" size={14} color={colors.danger} style={styles.sectionAttentionIcon} />
+            ) : null}
+            <Text style={[styles.sectionTitle, isAttention && styles.sectionTitleAttention]}>{title}</Text>
             {unreadCount > 0 ? (
-              <View style={styles.sectionCountBadge}>
+              <View style={[styles.sectionCountBadge, isAttention && styles.sectionCountBadgeAttention]}>
                 <Text style={styles.sectionCountText}>{unreadCount}</Text>
               </View>
             ) : null}
@@ -1131,11 +1190,17 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
     marginLeft: Space.xs,
   },
+  sectionAttentionIcon: {
+    marginRight: -Space.xs / 2,
+  },
   sectionTitle: {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     letterSpacing: Type.captionElevated.letterSpacing,
+  },
+  sectionTitleAttention: {
+    color: colors.danger,
   },
   sectionCountBadge: {
     minWidth: Space.md + 4,
@@ -1145,6 +1210,9 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sectionCountBadgeAttention: {
+    backgroundColor: colors.danger,
   },
   sectionCountText: {
     fontSize: Type.meta.size - 2,

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -18,6 +19,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
+import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
 import { createGroupConversationOnApi } from '../services/chatApi';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
@@ -52,6 +54,7 @@ interface SelectableUser extends UserSearchResult {
 
 export default function CreateGroupChatScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
+  const conversations = useStore((state) => state.conversations);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const isBlockedUser = useStore((state) => state.isBlockedUser);
   const { show } = useToast();
@@ -72,6 +75,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const [searchResults, setSearchResults] = useState<SelectableUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const idempotencyKeyRef = useRef<string>(createStableId('group'));
@@ -80,6 +84,105 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const filteredResults = useMemo(() => {
     return searchResults.filter((user) => !isBlockedUser(user.id));
   }, [searchResults, isBlockedUser]);
+
+  // ── Recents: users from existing conversations (DMs + groups), deduped,
+  //    excluding self and blocked users. Ordered by most recent conversation. ──
+  const recentUsers = useMemo(() => {
+    const seen = new Set<string>();
+    const result: SelectableUser[] = [];
+    for (const conv of conversations) {
+      const profiles = conv.participantProfiles ?? [];
+      for (const p of profiles) {
+        if (p.id === currentUser?.id) continue;
+        if (seen.has(p.id)) continue;
+        if (isBlockedUser(p.id)) continue;
+        seen.add(p.id);
+        result.push({
+          id: p.id,
+          username: p.username,
+          displayName: p.displayName ?? null,
+          avatar: p.avatar ?? null,
+        });
+      }
+      // Also include participantIds without profiles (less ideal but still useful)
+      for (const pid of conv.participantIds ?? []) {
+        if (pid === currentUser?.id) continue;
+        if (seen.has(pid)) continue;
+        if (isBlockedUser(pid)) continue;
+        seen.add(pid);
+        result.push({
+          id: pid,
+          username: pid,
+          displayName: null,
+          avatar: null,
+        });
+      }
+    }
+    return result.slice(0, 12);
+  }, [conversations, currentUser?.id, isBlockedUser]);
+
+  // ── Suggested: followed users or sellers with recent activity. Since the
+  //    store doesn't track follows, we derive from listing sellers in the
+  //    user's conversations and recent item activity. Falls back to recents. ──
+  const suggestedUsers = useMemo(() => {
+    const recentIds = new Set(recentUsers.map((u) => u.id));
+    const seen = new Set(recentIds);
+    const result: SelectableUser[] = [];
+    // Suggested = sellers from recent conversations (sellerId field)
+    for (const conv of conversations) {
+      const sellerId = conv.sellerId;
+      if (!sellerId || sellerId === currentUser?.id) continue;
+      if (seen.has(sellerId)) continue;
+      if (isBlockedUser(sellerId)) continue;
+      const profile = conv.participantProfiles?.find((p) => p.id === sellerId);
+      seen.add(sellerId);
+      result.push({
+        id: sellerId,
+        username: profile?.username ?? sellerId,
+        displayName: profile?.displayName ?? null,
+        avatar: profile?.avatar ?? null,
+      });
+    }
+    return result.slice(0, 8);
+  }, [conversations, currentUser?.id, isBlockedUser, recentUsers]);
+
+  const showRecents = !searchQuery.trim() && (recentUsers.length > 0 || suggestedUsers.length > 0);
+
+  // Mosaic members from selected users (for live preview in details stage).
+  const mosaicMembers = useMemo(() => {
+    return selectedIds
+      .map((id) => selectedUsers.get(id))
+      .filter((u): u is SelectableUser => !!u)
+      .slice(0, 4)
+      .map((u) => ({
+        id: u.id,
+        displayName: u.displayName ?? u.username,
+        avatar: u.avatar,
+      }));
+  }, [selectedIds, selectedUsers]);
+
+  const handlePickGroupPhoto = useCallback(async () => {
+    haptic.light();
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        show('Allow photo access to set a group photo.', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        quality: 0.85,
+        aspect: [1, 1],
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setGroupPhoto(result.assets[0].uri);
+        haptic.success();
+      }
+    } catch {
+      show('Could not open photo library.', 'error');
+    }
+  }, [haptic, show]);
 
   const toggleMember = (user: SelectableUser) => {
     haptic.light();
@@ -184,6 +287,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         memberIds: selectedIds,
         idempotencyKey: idempotencyKeyRef.current,
         description: description.trim() || undefined,
+        avatar: groupPhoto ?? undefined,
       });
 
       upsertConversation(conversation);
@@ -208,6 +312,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     setDescription('');
     setSelectedIds([]);
     setSelectedUsers(new Map());
+    setGroupPhoto(null);
     setStage('select');
   };
 
@@ -291,10 +396,29 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           }
         >
           <View style={styles.avatarSelectorWrap}>
-            <View style={styles.avatarSelector}>
-              <Ionicons name="camera-outline" size={28} color={colors.textMuted} />
-            </View>
-            <Caption color={colors.textMuted} style={styles.avatarHint}>Group photo</Caption>
+            <Pressable
+              onPress={handlePickGroupPhoto}
+              style={({ pressed }) => [
+                styles.avatarSelectorPressable,
+                pressed && styles.avatarSelectorPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Set group photo"
+              accessibilityHint="Opens your photo library to choose a group photo"
+            >
+              <GroupAvatarMosaic
+                members={mosaicMembers}
+                groupPhoto={groupPhoto}
+                fallbackInitials={title.trim() || 'G'}
+                size={Space.xxl + Space.xl}
+              />
+              <View style={styles.cameraBadge}>
+                <Ionicons name="camera" size={14} color={colors.textInverse} />
+              </View>
+            </Pressable>
+            <Caption color={colors.textMuted} style={styles.avatarHint}>
+              {groupPhoto ? 'Tap to change photo' : 'Tap to add photo · mosaic auto-generated'}
+            </Caption>
           </View>
 
           <View style={styles.fieldGroup}>
@@ -435,12 +559,34 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
       ) : null}
 
       {!searchQuery.trim() ? (
-        <View style={styles.emptyWrap}>
-          <Ionicons name="search-outline" size={32} color={colors.textMuted} />
-          <Caption color={colors.textMuted} style={styles.emptyText}>
-            Search by username to add members to your group.
-          </Caption>
-        </View>
+        showRecents ? (
+          <ScrollView
+            style={styles.recentsScroll}
+            contentContainerStyle={styles.recentsContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {recentUsers.length > 0 && (
+              <View style={styles.sectionBlock}>
+                <Text style={styles.sectionHeaderText}>Recent</Text>
+                {recentUsers.map((user) => renderMemberRow({ item: user }))}
+              </View>
+            )}
+            {suggestedUsers.length > 0 && (
+              <View style={styles.sectionBlock}>
+                <Text style={styles.sectionHeaderText}>Suggested</Text>
+                {suggestedUsers.map((user) => renderMemberRow({ item: user }))}
+              </View>
+            )}
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyWrap}>
+            <Ionicons name="search-outline" size={32} color={colors.textMuted} />
+            <Caption color={colors.textMuted} style={styles.emptyText}>
+              Search by username to add members to your group.
+            </Caption>
+          </View>
+        )
       ) : isSearching ? (
         <View style={styles.listWrap}>
           {[0, 1, 2, 3].map((i) => (
@@ -661,6 +807,25 @@ function createStyles(colors: ThemeColors) {
     textAlign: 'center',
     paddingHorizontal: Space.lg,
   },
+  recentsScroll: {
+    flex: 1,
+  },
+  recentsContent: {
+    paddingBottom: Space.xxl + 24,
+  },
+  sectionBlock: {
+    marginBottom: Space.lg,
+  },
+  sectionHeaderText: {
+    fontSize: Type.meta.size,
+    letterSpacing: Type.meta.letterSpacing,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: colors.textMuted,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+    textTransform: 'uppercase',
+  },
 
   /* ── Stage 2: Details ── */
   detailsRoot: {
@@ -678,15 +843,25 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
     marginBottom: Space.lg,
   },
-  avatarSelector: {
-    width: Space.xxl + Space.xl,
-    height: Space.xxl + Space.xl,
+  avatarSelectorPressable: {
+    position: 'relative',
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
+  },
+  avatarSelectorPressed: {
+    opacity: 0.7,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: Space.lg + 4,
+    height: Space.lg + 4,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderWidth: 2,
+    borderColor: colors.surface,
   },
   avatarHint: {
     fontSize: Type.caption.size,

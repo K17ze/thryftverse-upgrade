@@ -261,6 +261,7 @@ import {
   type IndexedListing,
 } from './lib/searchIndex.js';
 import { logger } from './lib/logger.js';
+import { validateListingActivation } from './lib/listingCategoryPolicy.js';
 
 const app = Fastify({
   logger: {
@@ -15300,6 +15301,57 @@ app.delete('/co-own/price-alerts/:id', async (request, reply) => {
   return { ok: true };
 });
 
+// PATCH /co-own/price-alerts/:id — toggle active state of a Co-Own price alert
+app.patch('/co-own/price-alerts/:id', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ id: z.string().min(1) });
+  const { id } = paramsSchema.parse(request.params);
+
+  const bodySchema = z.object({
+    active: z.boolean(),
+  });
+  const { active } = bodySchema.parse(request.body ?? {});
+
+  const result = await db.query<{
+    id: string;
+    asset_id: string;
+    condition: string;
+    target_price_gbp_minor: string | number;
+    active: boolean;
+    triggered_at: string | null;
+    created_at: string;
+  }>(
+    `UPDATE coown_price_alerts
+     SET active = $3, updated_at = NOW()
+     WHERE id = $1 AND user_id = $2
+     RETURNING id, asset_id, condition, target_price_gbp_minor, active, triggered_at, created_at`,
+    [id, request.authUser.userId, active]
+  );
+
+  if (result.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Alert not found' };
+  }
+
+  const row = result.rows[0];
+  return {
+    ok: true,
+    alert: {
+      id: row.id,
+      assetId: row.asset_id,
+      condition: row.condition,
+      targetPriceGbpMinor: Number(row.target_price_gbp_minor),
+      active: row.active,
+      triggeredAt: row.triggered_at,
+      createdAt: row.created_at,
+    },
+  };
+});
+
 /* ── Co-Own Price History (OHLCV) ── */
 
 // GET /co-own/assets/:assetId/price-history — aggregated OHLCV candles
@@ -20616,6 +20668,33 @@ app.post('/listings', {
     return { ok: false, error: 'A verified cover upload is required' };
   }
 
+  // Category-aware activation validation — only for active listings.
+  // Drafts bypass validation so sellers can save incomplete work.
+  const targetStatus = payload.status ?? 'active';
+  if (targetStatus === 'active') {
+    const validation = validateListingActivation({
+      title: payload.title,
+      description: payload.description,
+      price: payload.priceGbp,
+      category: payload.category,
+      subcategory: null,
+      brand: payload.brand,
+      size: payload.size,
+      condition: payload.condition,
+      images: payload.imageUrl ? [payload.imageUrl] : null,
+      shippingMethod: payload.shippingMethod,
+      shippingPayer: payload.shippingPayer,
+    });
+    if (!validation.valid) {
+      reply.code(422);
+      return {
+        ok: false,
+        error: 'Category validation failed',
+        missingRequired: validation.missingRequired,
+      };
+    }
+  }
+
   let resolvedCoverImageUrl = payload.imageUrl ?? null;
   let coverMediaAssetId: string | null = null;
   let upsertPriceEvent:
@@ -23933,6 +24012,175 @@ app.post('/chat/conversations/:conversationId/members', async (request) => {
   };
 });
 
+app.delete('/chat/conversations/:conversationId/members/:memberUserId', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    memberUserId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, memberUserId } = paramsSchema.parse(request.params);
+
+  const conversation = await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
+
+  // Prevent removing the group owner — they must transfer ownership first.
+  if (conversation.owner_id === memberUserId) {
+    throw createApiError('CHAT_CANNOT_REMOVE_OWNER', 'The group owner cannot be removed. Transfer ownership first.', {
+      conversationId,
+      memberUserId,
+    });
+  }
+
+  const client = await db.connect();
+  let removed = false;
+  let participantIds: string[] = [];
+  let updateMessage: { id: string; createdAt: string } | null = null;
+
+  try {
+    await client.query('BEGIN');
+
+    const deleteResult = await client.query<{ user_id: string }>(
+      `
+        DELETE FROM chat_members
+        WHERE conversation_id = $1 AND user_id = $2
+        RETURNING user_id
+      `,
+      [conversationId, memberUserId]
+    );
+
+    removed = (deleteResult.rowCount ?? 0) > 0;
+
+    if (removed) {
+      updateMessage = await appendSystemChatMessage(client, {
+        conversationId,
+        text: 'A member was removed from the group.',
+        metadata: {
+          event: 'group_member_removed',
+          actorUserId,
+          memberUserId,
+        },
+      });
+
+      await client.query(
+        `
+          UPDATE chat_conversations
+          SET updated_at = NOW()
+          WHERE id = $1
+        `,
+        [conversationId]
+      );
+    }
+
+    participantIds = await listChatParticipantIds(client, conversationId);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  if (updateMessage) {
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.member.removed',
+      payload: {
+        conversationId,
+        actorUserId,
+        memberUserId,
+        messageId: updateMessage.id,
+      },
+    });
+  }
+
+  return {
+    ok: true,
+    removed,
+    participantIds,
+  };
+});
+
+app.delete('/chat/conversations/:conversationId', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+
+  // Verify the user is a member of the conversation before leaving.
+  const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const client = await db.connect();
+  let participantIds: string[] = [];
+  let updateMessage: { id: string; createdAt: string } | null = null;
+
+  try {
+    await client.query('BEGIN');
+
+    const deleteResult = await client.query<{ user_id: string }>(
+      `
+        DELETE FROM chat_members
+        WHERE conversation_id = $1 AND user_id = $2
+        RETURNING user_id
+      `,
+      [conversationId, actorUserId]
+    );
+
+    if (deleteResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      throw createApiError('CHAT_CONVERSATION_NOT_FOUND', 'You are not a member of this conversation', {
+        conversationId,
+        actorUserId,
+      });
+    }
+
+    updateMessage = await appendSystemChatMessage(client, {
+      conversationId,
+      text: conversation.type === 'group' ? 'A member left the group.' : 'A participant left the conversation.',
+      metadata: {
+        event: conversation.type === 'group' ? 'group_member_left' : 'conversation_participant_left',
+        actorUserId,
+      },
+    });
+
+    await client.query(
+      `
+        UPDATE chat_conversations
+        SET updated_at = NOW()
+        WHERE id = $1
+      `,
+      [conversationId]
+    );
+
+    participantIds = await listChatParticipantIds(client, conversationId);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  if (updateMessage) {
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.member.left',
+      payload: {
+        conversationId,
+        actorUserId,
+        messageId: updateMessage.id,
+      },
+    });
+  }
+
+  return {
+    ok: true,
+    left: true,
+    participantIds,
+  };
+});
+
 app.post('/chat/conversations/:conversationId/invite-links', async (request, reply) => {
   const paramsSchema = z.object({
     conversationId: z.string().min(2).max(120),
@@ -25577,6 +25825,77 @@ app.get('/chat/conversations/:conversationId/members', async (request) => {
       role: row.role,
       joinedAt: row.joined_at,
     })),
+  };
+});
+
+// ── Conversation participant summary ────────────────────────────────────
+// Returns participant list with profile info and last-read timestamps.
+// Used by the chat info screen to show who is in a conversation.
+app.get('/chat/conversations/:conversationId/participants', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+
+  // Verify conversation exists and the requesting user is a participant
+  const convCheck = await db.query<{ id: string }>(
+    `SELECT id FROM chat_conversations WHERE id = $1 LIMIT 1`,
+    [conversationId]
+  );
+  if (!convCheck.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Conversation not found' };
+  }
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const result = await db.query<{
+    user_id: string;
+    role: string;
+    joined_at: string;
+    last_read_at: string | null;
+    username: string | null;
+    display_name: string | null;
+    avatar: string | null;
+    last_activity_at: string | null;
+  }>(
+    `
+      SELECT
+        cm.user_id,
+        cm.role,
+        cm.joined_at::text,
+        cm.last_read_at::text AS last_read_at,
+        u.username,
+        u.display_name,
+        u.avatar,
+        (
+          SELECT MAX(m.created_at)::text
+          FROM chat_messages m
+          WHERE m.conversation_id = cm.conversation_id
+        ) AS last_activity_at
+      FROM chat_members cm
+      LEFT JOIN users u ON u.id = cm.user_id
+      WHERE cm.conversation_id = $1
+      ORDER BY cm.joined_at ASC
+    `,
+    [conversationId]
+  );
+
+  return {
+    ok: true,
+    conversationId,
+    participantCount: result.rowCount,
+    participants: result.rows.map((row) => ({
+      userId: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      avatar: row.avatar,
+      role: row.role,
+      joinedAt: row.joined_at,
+      lastReadAt: row.last_read_at,
+    })),
+    lastActivityAt: result.rows[0]?.last_activity_at ?? null,
   };
 });
 

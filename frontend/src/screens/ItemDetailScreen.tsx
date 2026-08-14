@@ -52,7 +52,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { SellerTrustBadge } from '../components/seller/SellerTrustBadge';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { ProductCardV2 } from '../components/ProductCardV2';
-import type { Listing as CatalogListing } from '../data/mockData';
+import type { Listing as CatalogListing } from '../domain';
 
 import {
   ProductDetailSkeleton,
@@ -1088,32 +1088,13 @@ export default function ItemDetailScreen() {
           ) : null}
         </CommerceDetailSection>
 
-        {/* ── Zone E — Shipping & returns (collapsed by default) ──
-            Full commerce details: costs, delivery, protection, returns,
-            authenticity. Progressive disclosure — summary visible, details
-            expand on tap. Moved to cognitive layer 5. */}
-        {purchaseSummary ? (
-          <CommerceDetailSection label="Buying this item" variant="continuation">
-            <CommerceDetailDisclosureRow
-              label="Costs, delivery & protection"
-              summary="Full breakdown"
-              onPress={() => {
-                haptic.light();
-                setPurchaseDetailsVisible(true);
-              }}
-              leadingIcon="information-circle-outline"
-            />
-            <ShippingReturnsInfo
-              commerce={commerce}
-              carbonNeutral={commerce.shippingPayer === 'seller'}
-            />
-          </CommerceDetailSection>
-        ) : null}
-
-        {/* ── Zone F — Seller row (compact, links to profile) ──
-            Moved to cognitive layer 6: after the buyer has seen media,
-            identity, trust facts, description and shipping. The seller
-            section closes with a "More from this seller" rail. */}
+        {/* ── Zone E — Seller row (compact, links to profile) ──
+            Per Phase 5 WP8: seller identity restored to the second viewport
+            (after description, before shipping). The buyer sees media,
+            identity, trust facts, description, then the seller — before
+            shipping and similar items. This is the evidence role: source
+            credibility immediately after the item evidence.
+            The seller section closes with a "More from this seller" rail. */}
         {seller && (
           <View style={[styles.sellerTrustSection, { borderTopColor: colors.borderSubtle }]}>
             <SellerInfoCard
@@ -1199,6 +1180,28 @@ export default function ItemDetailScreen() {
               ))}
             </HorizontalRail>
           </View>
+        ) : null}
+
+        {/* ── Zone F — Shipping & returns (collapsed by default) ──
+            Full commerce details: costs, delivery, protection, returns,
+            authenticity. Progressive disclosure — summary visible, details
+            expand on tap. Moved to cognitive layer 6 (after seller). */}
+        {purchaseSummary ? (
+          <CommerceDetailSection label="Buying this item" variant="continuation">
+            <CommerceDetailDisclosureRow
+              label="Costs, delivery & protection"
+              summary="Full breakdown"
+              onPress={() => {
+                haptic.light();
+                setPurchaseDetailsVisible(true);
+              }}
+              leadingIcon="information-circle-outline"
+            />
+            <ShippingReturnsInfo
+              commerce={commerce}
+              carbonNeutral={commerce.shippingPayer === 'seller'}
+            />
+          </CommerceDetailSection>
         ) : null}
 
         {/* ── Pricing insights ──

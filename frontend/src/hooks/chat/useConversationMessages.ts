@@ -26,7 +26,7 @@ import { Alert } from "react-native";
 import { type FlashListRef } from "@shopify/flash-list";
 
 import { useStore } from "../../store/useStore";
-import type { Message as ConversationMessage } from "../../data/mockData";
+import type { Message as ConversationMessage } from '../../domain';
 import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,

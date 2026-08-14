@@ -2285,6 +2285,18 @@ export async function deleteCoOwnPriceAlert(id: string): Promise<void> {
   await fetchJson<{ ok: true }>(`/co-own/price-alerts/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+export async function toggleCoOwnPriceAlert(id: string, active: boolean): Promise<CoOwnPriceAlert> {
+  const payload = await fetchJson<{ ok: true; alert: CoOwnPriceAlert }>(
+    `/co-own/price-alerts/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active }),
+    }
+  );
+  return payload.alert;
+}
+
 /* ─── Co-Own Price History (OHLCV) ─── */
 
 export interface PriceCandle {

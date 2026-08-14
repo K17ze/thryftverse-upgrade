@@ -817,7 +817,7 @@ export default function AssetDueDiligenceScreen() {
                 value: asset.appraisalValueGbp,
                 currency: 'GBP',
                 valuedAt: asset.appraisalValuedAt ?? '',
-                method: '—',
+                method: 'To be confirmed',
                 valuer: asset.appraisalValuer ?? undefined,
               } : undefined}
             />

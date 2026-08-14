@@ -191,6 +191,8 @@ export default function AppNavigator() {
       <Stack.Screen name="BotBuilder" getComponent={() => require('../screens/BotBuilderScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="EditGroup" getComponent={() => require('../screens/EditGroupScreen').default} />
       <Stack.Screen name="UserProfile" getComponent={() => require('../screens/UserProfileScreen').default} />
+      <Stack.Screen name="Followers" getComponent={() => require('../screens/FollowersScreen').default} />
+      <Stack.Screen name="Following" getComponent={() => require('../screens/FollowingScreen').default} />
       <Stack.Screen name="Wallet" getComponent={() => require('../screens/WalletScreen').default} />
       {/* Wallet V3 — focused money-movement destinations (spec 17) */}
       <Stack.Screen name="SellerEarnings" getComponent={() => require('../screens/SellerEarningsScreen').default} />

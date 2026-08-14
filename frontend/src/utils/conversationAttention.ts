@@ -1,4 +1,4 @@
-import type { Conversation, Message } from '../data/mockData';
+import type { Conversation, Message } from '../domain';
 import { classifyConversation, ConversationRole } from './conversationClassification';
 
 export type AttentionType =

@@ -7,7 +7,7 @@ export interface SyncStatus {
 
 interface BackendSyncStatusInput {
   isSyncing: boolean;
-  source: 'api' | 'mock';
+  source: 'api' | 'mock' | 'fixture' | 'cache' | 'offline-cache';
   hasError: boolean;
   labels?: {
     syncing?: string;
@@ -49,13 +49,14 @@ export function getBackendSyncStatus({
     };
   }
 
-  if (hasError) {
+  if (source === 'offline-cache' || hasError) {
     return {
       tone: 'offline',
       label: resolvedLabels.error,
     };
   }
 
+  // 'mock' | 'fixture' | 'cache' — substituted/cached data, not live API.
   return {
     tone: 'offline',
     label: resolvedLabels.fallback,

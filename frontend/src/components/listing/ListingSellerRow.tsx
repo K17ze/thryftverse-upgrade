@@ -7,7 +7,7 @@ import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
-import type { ListingSeller } from '../../data/mockData';
+import type { ListingSeller } from '../../domain';
 
 interface ListingSellerRowProps {
   seller?: ListingSeller | null;

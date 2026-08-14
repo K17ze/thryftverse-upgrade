@@ -9,7 +9,7 @@ import {
   isTrustedSystemMessage,
   resolveSystemMessageProvenance,
 } from '../utils/systemMessageProvenance';
-import type { Conversation, Message } from '../data/mockData';
+import type { Conversation, Message } from '../domain';
 
 function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
   return {

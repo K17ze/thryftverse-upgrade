@@ -214,8 +214,12 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
     haptic.selection();
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        show('Photo library access required', 'error');
+      // `granted` covers full access; `accessPrivileges === 'limited'`
+      // (iOS 14+ / Android 34+ limited photo selection) still allows the
+      // picker to launch — the OS handles the limited selection UI
+      // transparently. Only block when truly denied/blocked.
+      if (!permission.granted && permission.accessPrivileges !== 'limited') {
+        show('Photo library access is required to pick media. Enable it in Settings.', 'error');
         return;
       }
       // Gallery supports photos AND videos with ordered multi-select (up to

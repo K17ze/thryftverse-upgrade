@@ -8,7 +8,7 @@ import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import NetInfo from '@react-native-community/netinfo';
 import { useAppTheme } from '../theme/ThemeContext';
-import type { Conversation } from '../data/mockData';
+import type { Conversation } from '../domain';
 import { RootStackParamList } from '../navigation/types';
 import { SwipeableRow } from '../components/SwipeableRow';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';

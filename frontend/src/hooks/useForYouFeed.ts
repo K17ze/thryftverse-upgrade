@@ -2,7 +2,7 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import { fetchJson } from '../lib/apiClient';
 import { mapBackendListingToListing, isDisplayReadyListing, type BackendListingRow } from '../services/listingMapper';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 
 interface ForYouFeedState {
   listings: Listing[];

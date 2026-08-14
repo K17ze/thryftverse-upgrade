@@ -30,6 +30,7 @@ import {
   cancelOrder,
   shipOrder,
   deliverOrder,
+  refundOrder,
 } from '../services/commerceApi';
 import { parseApiError } from '../lib/apiClient';
 import { getListingCoverUri } from '../utils/media';
@@ -46,7 +47,7 @@ import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
 
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
 
-type OrderMutation = 'cancel' | 'ship' | 'deliver' | null;
+type OrderMutation = 'cancel' | 'ship' | 'deliver' | 'refund' | null;
 
 // --- Status normalisation ---
 
@@ -788,12 +789,27 @@ export default function OrderDetailScreen() {
     }
   }, [orderMutation, orderId, show, refreshOrder]);
 
+  const handleRefund = useCallback(async (reason: string) => {
+    if (orderMutation) return;
+    setOrderMutation('refund');
+    try {
+      await refundOrder(orderId, reason);
+      show('Refund requested. Funds will be returned from escrow.', 'success');
+      await refreshOrder(false);
+    } catch (error) {
+      show(parseApiError(error).message, 'error');
+    } finally {
+      if (isMountedRef.current) setOrderMutation(null);
+    }
+  }, [orderMutation, orderId, show, refreshOrder]);
+
   // --- Action availability ---
 
   const canCancel = isBuyer && (normalisedStatus === 'created' || normalisedStatus === 'paid');
   const canShip = isSeller && (normalisedStatus === 'paid' || normalisedStatus === 'processing' || normalisedStatus === 'preparing');
   const canDeliver = isBuyer && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery');
   const canReportIssue = !isTerminal && normalisedStatus !== 'created' && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded';
+  const canRequestRefund = isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed');
 
   const mutationLocked = orderMutation !== null;
 
@@ -912,6 +928,39 @@ export default function OrderDetailScreen() {
       };
     }
 
+    if (isBuyer && canRequestRefund) {
+      return {
+        primary: {
+          label: 'Leave a review',
+          onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
+          variant: 'primary',
+          accessibilityLabel: 'Write a review for this order',
+        },
+        secondary: {
+          label: 'Request refund',
+          onPress: () => {
+            haptics.heavyPress();
+            Alert.alert(
+              'Request a refund?',
+              'This will request a refund from the escrow-held funds. The seller will be notified and our team will review the request.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Request refund',
+                  style: 'destructive',
+                  onPress: () => handleRefund('buyer_requested_refund'),
+                },
+              ]
+            );
+          },
+          variant: 'destructive',
+          loading: orderMutation === 'refund',
+          disabled: mutationLocked && orderMutation !== 'refund',
+          accessibilityLabel: 'Request a refund for this order',
+        },
+      };
+    }
+
     if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
       return {
         primary: {
@@ -924,7 +973,7 @@ export default function OrderDetailScreen() {
     }
 
     return {};
-  }, [backendOrder, isKnown, canShip, canCancel, canDeliver, canReportIssue, orderMutation, mutationLocked, handleShip, handleCancel, handleDeliver, navigation, orderId, isBuyer, normalisedStatus]);
+  }, [backendOrder, isKnown, canShip, canCancel, canDeliver, canReportIssue, canRequestRefund, orderMutation, mutationLocked, handleShip, handleCancel, handleDeliver, handleRefund, navigation, orderId, isBuyer, normalisedStatus]);
 
   // --- Copy tracking number ---
   const handleCopyTracking = useCallback(async (trackingNumber: string) => {
@@ -1040,6 +1089,30 @@ export default function OrderDetailScreen() {
       });
     }
 
+    if (canRequestRefund) {
+      actions.push({
+        key: 'refund',
+        label: 'Request refund',
+        icon: 'return-down-back-outline',
+        onPress: () => {
+          haptics.heavyPress();
+          Alert.alert(
+            'Request a refund?',
+            'This will request a refund from the escrow-held funds. The seller will be notified and our team will review the request.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Request refund',
+                style: 'destructive',
+                onPress: () => handleRefund('buyer_requested_refund'),
+              },
+            ]
+          );
+        },
+        variant: 'destructive',
+      });
+    }
+
     if (openTicket) {
       actions.push({
         key: 'view_resolution',
@@ -1061,7 +1134,7 @@ export default function OrderDetailScreen() {
     }
 
     return actions;
-  }, [navigation, orderId, canShip, counterparty, backendOrder, openTicket, isBuyer, normalisedStatus]);
+  }, [navigation, orderId, canShip, counterparty, backendOrder, openTicket, isBuyer, normalisedStatus, canRequestRefund, handleRefund]);
 
   // --- Render ---
 

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import type { Listing } from '../../data/mockData';
+import type { Listing } from '../../domain';
 import { ProductCardV2 } from '../ProductCardV2';
 import { Space } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';

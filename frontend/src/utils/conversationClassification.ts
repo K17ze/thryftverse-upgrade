@@ -1,4 +1,4 @@
-import type { Conversation } from '../data/mockData';
+import type { Conversation } from '../domain';
 
 export type ConversationRole = 'buying' | 'selling' | 'group' | 'general';
 

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Share,
   Clipboard,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -144,6 +145,15 @@ export default function OrderReceiptScreen() {
     }
   }, [order, show]);
 
+  // Print is only available on web platforms where window.print() exists.
+  // On native platforms this button is not rendered (no inert affordance).
+  const handlePrint = useCallback(() => {
+    haptics.tap();
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.print === 'function') {
+      window.print();
+    }
+  }, []);
+
   if (isLoading) {
     return (
       <View style={[styles.container, t.container]}>
@@ -246,6 +256,17 @@ export default function OrderReceiptScreen() {
         </Pressable>
         <Text style={[styles.headerTitle, t.headerTitle]}>Receipt</Text>
         <View style={styles.headerRight}>
+          {Platform.OS === 'web' && (
+            <Pressable
+              style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+              onPress={handlePrint}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Print receipt"
+            >
+              <Ionicons name="print-outline" size={22} color={colors.textPrimary} />
+            </Pressable>
+          )}
           <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Share receipt">
             <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
           </Pressable>

@@ -32,11 +32,13 @@ describe("neutral flagship production detail pass", () => {
   it("does not fabricate masonry shapes from listing IDs", () => {
     const masonry = readSource("components/discover/PinterestMasonryGrid.tsx");
     const home = readSource("screens/HomeScreen.tsx");
+    const vm = readSource("presentation/homeDiscoveryViewModel.ts");
     expect(masonry).toContain("resolveListingMediaAspectRatio(item)");
     expect(masonry).toContain("useWindowDimensions");
     expect(masonry).toContain("useReducedMotion");
     expect(masonry).not.toContain("charCodeAt");
-    expect(home).toContain("resolveListingMediaHeightRatio(item)");
+    // Phase 5: aspect ratio resolution moved to the presentation view model
+    expect(vm).toContain("resolveListingMediaHeightRatio(listing)");
     expect(home).not.toContain("resolveTileAspectRatio");
   });
 

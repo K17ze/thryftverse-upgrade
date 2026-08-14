@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { updateConversationOnApi } from '../services/chatApi';
+import { updateConversationOnApi, deleteConversationOnApi } from '../services/chatApi';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +44,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const [name, setName] = useState(conversation?.title ?? '');
   const [description, setDescription] = useState(conversation?.description ?? '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const hasChanges = name.trim() !== (conversation?.title ?? '').trim() || description.trim() !== (conversation?.description ?? '').trim();
 
@@ -98,17 +100,25 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const handleLeaveGroup = () => {
     Alert.alert(
       'Leave group?',
-      'This removes the group from your inbox on this device. Rejoin if you receive a new invite.',
+      'You will be removed from this group on all devices. Other members will keep their copy.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Leave group',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             haptic.heavy();
-            deleteConversation(conversationId);
-            show('You left the group', 'info');
-            navigation.navigate('MainTabs', { screen: 'Inbox' });
+            setIsLeaving(true);
+            try {
+              await deleteConversationOnApi(conversationId);
+              deleteConversation(conversationId);
+              show('You left the group', 'info');
+              navigation.navigate('MainTabs', { screen: 'Inbox' });
+            } catch {
+              show('Could not leave group. Check your connection and try again.', 'error');
+            } finally {
+              setIsLeaving(false);
+            }
           },
         },
       ]
@@ -178,14 +188,23 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         <View style={styles.dangerZone}>
           <Meta color={colors.danger} style={styles.dangerLabel}>DANGER ZONE</Meta>
           <AnimatedPressable
-            style={styles.dangerRow}
+            style={[styles.dangerRow, isLeaving && styles.dangerRowDisabled]}
             onPress={handleLeaveGroup}
             activeOpacity={0.7}
             scaleValue={0.98}
             hapticFeedback="medium"
+            disabled={isLeaving}
+            accessibilityRole="button"
+            accessibilityLabel={isLeaving ? 'Leaving group' : 'Leave group'}
+            accessibilityHint="Removes you from this group on all devices"
+            accessibilityState={isLeaving ? { disabled: true } : undefined}
           >
-            <Ionicons name="log-out-outline" size={20} color={colors.danger} />
-            <Text style={styles.dangerText}>Leave group</Text>
+            {isLeaving ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <Ionicons name="log-out-outline" size={20} color={colors.danger} />
+            )}
+            <Text style={styles.dangerText}>{isLeaving ? 'Leaving…' : 'Leave group'}</Text>
           </AnimatedPressable>
         </View>
       </ScrollView>
@@ -295,6 +314,9 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.danger,
+  },
+  dangerRowDisabled: {
+    opacity: 0.6,
   },
   limitationBanner: {
     flexDirection: 'row',

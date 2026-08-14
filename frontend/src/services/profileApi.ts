@@ -153,6 +153,7 @@ export type ReportReason =
   | 'counterfeit'
   | 'unresponsive'
   | 'harassment'
+  | 'off_platform'
   | 'other';
 
 export async function reportUser(

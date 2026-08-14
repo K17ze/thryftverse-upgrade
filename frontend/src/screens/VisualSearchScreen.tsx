@@ -31,7 +31,7 @@ import { useStore } from '../store/useStore';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 import { visualSearch } from '../services/listingsApi';
 import VisualSearchCamera from '../components/VisualSearchCamera';
 import { Motion } from '../theme/motionTokens';

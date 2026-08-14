@@ -1,4 +1,4 @@
-import type { Listing, ListingSeller } from '../data/mockData';
+import type { Listing, ListingSeller } from '../domain';
 import { fetchJson } from '../lib/apiClient';
 import { mapBackendListings, friendlyBackendError } from './listingMapper';
 

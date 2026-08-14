@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -7,7 +7,9 @@ import { View,
   Text,
   StyleSheet,
   TextInput,
-  StatusBar
+  StatusBar,
+  ScrollView,
+  Pressable,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -53,10 +55,20 @@ import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
 
+type WithdrawStep = 'form' | 'confirm' | 'success';
+
+interface WithdrawSuccessData {
+  reference: string;
+  amountGbp: number;
+  payoutCurrency: string;
+  createdAt: string;
+}
+
 export default function WithdrawScreen() {
   const navigation = useNavigation<any>();
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const [step, setStep] = useState<WithdrawStep>('form');
   const [amount, setAmount] = useState('');
   const [availableBalance, setAvailableBalance] = useState(0);
   const [isHydratingBalance, setIsHydratingBalance] = useState(true);
@@ -64,6 +76,7 @@ export default function WithdrawScreen() {
   const [isConnectingPayout, setIsConnectingPayout] = useState(false);
   const [payoutAccount, setPayoutAccount] = useState<PayoutAccountPayload | null>(null);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
+  const [successData, setSuccessData] = useState<WithdrawSuccessData | null>(null);
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
@@ -353,6 +366,19 @@ export default function WithdrawScreen() {
     }
   };
 
+  const handleReview = useCallback(() => {
+    if (!canWithdraw) {
+      return;
+    }
+    haptic.patterns.save();
+    setStep('confirm');
+  }, [canWithdraw, haptic]);
+
+  const handleBackToForm = useCallback(() => {
+    haptic.light();
+    setStep('form');
+  }, [haptic]);
+
   const handleWithdraw = async () => {
     if (!canWithdraw) {
       return;
@@ -428,21 +454,25 @@ export default function WithdrawScreen() {
               },
             };
 
-      await createPayoutRequest(currentUser.id, payoutRequestInput);
+      const payoutResponse = await createPayoutRequest(currentUser.id, payoutRequestInput);
 
       const nextBalance = Number(Math.max(0, availableBalance - amountGbp).toFixed(2));
       setAvailableBalance(nextBalance);
       setAmount(getDefaultWithdrawDisplayAmount(nextBalance, currencyCode, goldRates).toFixed(2));
 
-      show(
-        `Withdrawal requested: ${formatFromFiat(amountGbp, 'GBP', { displayMode: 'fiat' })} from your available sale proceeds.`,
-        'success'
-      );
-      navigation.goBack();
+      setSuccessData({
+        reference: payoutResponse.payoutRequest.providerPayoutRef ?? payoutResponse.payoutRequest.id,
+        amountGbp,
+        payoutCurrency,
+        createdAt: payoutResponse.payoutRequest.createdAt,
+      });
+      haptic.success();
+      setStep('success');
     } catch (error) {
       const isNetworkError = isOffline || (error instanceof Error && /network|fetch|timeout/i.test(error.message));
       const parsed = parseApiError(error, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Unable to submit withdrawal right now.');
       show(parsed.message, 'error');
+      setStep('form');
     } finally {
       setIsWithdrawing(false);
     }
@@ -506,6 +536,212 @@ export default function WithdrawScreen() {
           <SkeletonLoader width="100%" height={80} borderRadius={Radius.lg} style={{ marginBottom: Space.md }} />
           <SkeletonLoader width="100%" height={56} borderRadius={Radius.md} style={{ marginBottom: Space.sm }} />
           <SkeletonLoader width="100%" height={56} borderRadius={Radius.md} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Success step ──
+  if (step === 'success' && successData) {
+    const shortRef = successData.reference.slice(0, 12).toUpperCase();
+    const formattedDate = new Date(successData.createdAt).toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <View style={styles.header}>
+          <AnimatedPressable
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            accessibilityHint="Returns to the previous screen"
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <Text style={styles.headerTitle}>Withdraw Balance</Text>
+          <View style={{ width: 44 }} />
+        </View>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingHorizontal: Space.md + Space.xs, paddingTop: Space.xxl, paddingBottom: Space.xxl }}
+          showsVerticalScrollIndicator={false}
+        >
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ alignItems: 'center' }}>
+            <View style={[styles.successIconCircle, { backgroundColor: `${colors.success}22` }]}>
+              <Ionicons name="checkmark-circle" size={40} color={colors.success} />
+            </View>
+            <Text style={[styles.successTitle, { color: colors.textPrimary }]}>
+              Withdrawal requested
+            </Text>
+            <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
+              {formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} is on its way
+            </Text>
+          </Reanimated.View>
+
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+            <View style={[styles.confirmCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Reference</Text>
+                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>{shortRef}</Text>
+              </View>
+              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Amount</Text>
+                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>
+                  {formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })}
+                </Text>
+              </View>
+              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Currency</Text>
+                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>{successData.payoutCurrency}</Text>
+              </View>
+              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Requested</Text>
+                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>{formattedDate}</Text>
+              </View>
+              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Estimated arrival</Text>
+                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>3–5 working days</Text>
+              </View>
+            </View>
+          </Reanimated.View>
+
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+            <View style={[styles.successNote, { borderColor: colors.border }]}>
+              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+              <Text style={[styles.successNoteText, { color: colors.textMuted }]}>
+                We'll notify you when the payout is processed. You can track the status in your wallet activity.
+              </Text>
+            </View>
+          </Reanimated.View>
+        </ScrollView>
+        <View style={styles.footer}>
+          <AppButton
+            title="Done"
+            onPress={() => navigation.goBack()}
+            variant="primary"
+            style={[styles.primaryBtn]}
+            titleStyle={styles.primaryText}
+            accessibilityLabel="Close withdrawal confirmation"
+            accessibilityHint="Returns to the previous screen"
+            hapticFeedback="light"
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Confirmation step ──
+  if (step === 'confirm') {
+    const destinationLabel = payoutAccount
+      ? `${payoutAccount.gatewayId} · ${payoutAccount.currency}${payoutAccount.countryCode ? ` · ${payoutAccount.countryCode}` : ''}`
+      : bankCopy.details;
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <View style={styles.header}>
+          <AnimatedPressable
+            style={styles.backBtn}
+            onPress={handleBackToForm}
+            accessibilityRole="button"
+            accessibilityLabel="Go back to edit amount"
+            accessibilityHint="Returns to the withdrawal form"
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </AnimatedPressable>
+          <Text style={styles.headerTitle}>Confirm withdrawal</Text>
+          <View style={{ width: 44 }} />
+        </View>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingHorizontal: Space.md + Space.xs, paddingTop: Space.lg, paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+            <View style={[styles.confirmCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.confirmHeader}>
+                <Ionicons name="arrow-up-circle" size={20} color={colors.brand} />
+                <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>
+                  Withdrawal summary
+                </Text>
+              </View>
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Amount</Text>
+                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>
+                  {formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}
+                </Text>
+              </View>
+              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Fee</Text>
+                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>
+                  {formatFromFiat(0, 'GBP', { displayMode: 'fiat' })}
+                </Text>
+              </View>
+              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>You receive</Text>
+                <Text style={[styles.confirmValueBold, { color: colors.textPrimary }]}>
+                  {formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}
+                </Text>
+              </View>
+              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Destination</Text>
+                <Text style={[styles.confirmValue, { color: colors.textPrimary }]} numberOfLines={2}>
+                  {destinationLabel}
+                </Text>
+              </View>
+              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.confirmRow}>
+                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Estimated arrival</Text>
+                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>3–5 working days</Text>
+              </View>
+            </View>
+          </Reanimated.View>
+
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+            <View style={[styles.successNote, { borderColor: colors.border }]}>
+              <Ionicons name="lock-closed" size={16} color={colors.textMuted} />
+              <Text style={[styles.successNoteText, { color: colors.textMuted }]}>
+                Withdrawals are processed from completed sale proceeds. This action cannot be undone.
+              </Text>
+            </View>
+          </Reanimated.View>
+        </ScrollView>
+        <View style={styles.footer}>
+          <AppButton
+            title={isWithdrawing ? 'Processing...' : 'Confirm withdrawal'}
+            onPress={handleWithdraw}
+            disabled={isWithdrawing}
+            loading={isWithdrawing}
+            variant="primary"
+            style={[styles.primaryBtn, isWithdrawing && styles.primaryBtnDisabled]}
+            titleStyle={styles.primaryText}
+            accessibilityLabel={
+              isWithdrawing
+                ? 'Processing withdrawal'
+                : `Confirm withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
+            }
+            accessibilityHint="Submits your withdrawal request"
+          />
+          <AppButton
+            title="Back to edit"
+            onPress={handleBackToForm}
+            variant="secondary"
+            style={[styles.secondaryBtn, { marginTop: Space.sm }]}
+            accessibilityLabel="Back to edit amount"
+            accessibilityHint="Returns to the withdrawal form"
+            hapticFeedback="light"
+          />
         </View>
       </SafeAreaView>
     );
@@ -658,22 +894,16 @@ export default function WithdrawScreen() {
           </View>
           <Text style={styles.feeText}>Withdrawals are processed from completed sale proceeds.</Text>
           <AppButton
-            title={
-              isWithdrawing
-                ? 'Processing...'
-                : `Withdraw ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
-            }
-            onPress={handleWithdraw}
+            title={`Review withdrawal`}
+            onPress={handleReview}
             disabled={!canWithdraw}
             variant="primary"
             style={[styles.primaryBtn, !canWithdraw && styles.primaryBtnDisabled]}
             titleStyle={styles.primaryText}
             accessibilityLabel={
-              isWithdrawing
-                ? 'Processing withdrawal'
-                : `Withdraw ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
+              `Review withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
             }
-            accessibilityHint="Submits your withdrawal request"
+            accessibilityHint="Proceeds to the confirmation step"
           />
         </View>
       </KeyboardAwareScrollView>
@@ -863,5 +1093,108 @@ function createStyles(colors: ThemeColors) {
   primaryBtn: { backgroundColor: colors.textPrimary, height: Space.xl + Space.xl + 8, borderRadius: Space.lg + 4, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.background, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
+  secondaryBtn: {
+    height: Space.xl + 8,
+    borderRadius: Space.lg + 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ── Confirmation step ──
+  confirmCard: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.xs,
+    ...Elevation.subtle,
+  },
+  confirmHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginBottom: Space.sm,
+  },
+  confirmTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space.xs + 2,
+    gap: Space.md,
+  },
+  confirmLabel: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    flexShrink: 1,
+  },
+  confirmValue: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
+    letterSpacing: Type.body.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  confirmValueBold: {
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+  },
+  confirmDivider: {
+    height: StyleSheet.hairlineWidth,
+  },
+
+  // ── Success step ──
+  successIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space.md,
+  },
+  successTitle: {
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
+    fontFamily: Typography.family.bold,
+    letterSpacing: Type.title.letterSpacing,
+    textAlign: 'center',
+    marginBottom: Space.xs,
+  },
+  successSubtitle: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.body.letterSpacing,
+    textAlign: 'center',
+    marginBottom: Space.xl,
+  },
+  successNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    marginTop: Space.md,
+  },
+  successNoteText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.caption.letterSpacing,
+  },
   });
 }

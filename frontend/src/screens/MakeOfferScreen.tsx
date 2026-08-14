@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Space, Type, Typography, Radius, Stroke, Control } from '../theme/designTokens';
 import {
   AnimatedPressable,
@@ -12,6 +12,7 @@ import {
   StatusBar,
   Platform,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -59,6 +60,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expiryHours, setExpiryHours] = useState(48);
+  const [showReview, setShowReview] = useState(false);
   const isCounterOffer = route.params.counterOffer ?? false;
   const previousOffer = route.params.previousOffer;
   const counterRound = route.params.counterRound ?? 0;
@@ -107,23 +109,42 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     if (errorMsg) setErrorMsg('');
   };
 
-  const handleSendOffer = async () => {
+  // Validation only — used by the "Review offer" button to advance to
+  // the confirmation step without submitting.
+  const validateOffer = useCallback((): string | null => {
     if (!numericOffer || !Number.isFinite(numericOfferGbp) || numericOfferGbp <= 0) {
-      setErrorMsg('Enter a valid offer amount.');
-      return;
+      return 'Enter a valid offer amount.';
     }
     if (numericOfferGbp > price * 2) {
-      setErrorMsg('Offer seems too high. Review the amount.');
-      return;
+      return 'Offer seems too high. Review the amount.';
     }
-    // Check against seller's minimum offer floor (if set on the listing)
     const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
     if (sellerMinOffer > 0 && numericOfferGbp < sellerMinOffer) {
-      setErrorMsg(`Seller's minimum offer is ${formatFromFiat(sellerMinOffer, 'GBP')}.`);
-      return;
+      return `Seller's minimum offer is ${formatFromFiat(sellerMinOffer, 'GBP')}.`;
     }
     if (!listing?.sellerId) {
-      setErrorMsg('Could not load seller info. Try again.');
+      return 'Could not load seller info. Try again.';
+    }
+    return null;
+  }, [numericOffer, numericOfferGbp, price, listing, formatFromFiat]);
+
+  const handleReviewOffer = useCallback(() => {
+    const validationError = validateOffer();
+    if (validationError) {
+      setErrorMsg(validationError);
+      return;
+    }
+    haptics.tap();
+    setErrorMsg('');
+    setShowReview(true);
+  }, [validateOffer, haptics]);
+
+  const handleSendOffer = async () => {
+    // The review step already validated, but re-check defensively.
+    const validationError = validateOffer();
+    if (validationError) {
+      setErrorMsg(validationError);
+      setShowReview(false);
       return;
     }
 
@@ -178,7 +199,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         ? 'You appear to be offline. Check your connection and try again.'
         : err instanceof Error ? err.message : 'Could not submit offer.';
       setErrorMsg(message);
-      show('Could not submit offer. Try again.', 'error');
+      // Stay on review step so the user can retry without re-entering details.
     } finally {
       setIsSubmitting(false);
     }
@@ -341,13 +362,26 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             })}
           </View>
 
-          {/* Counter-offer context — previous offer reference */}
-          {isCounterOffer && previousOffer && (
-            <View style={styles.contextRow}>
-              <Ionicons name="arrow-undo-outline" size={14} color={colors.textMuted} />
-              <Text style={[styles.contextText, { color: colors.textMuted }]}>
-                Previous offer was {formatFromFiat(previousOffer, 'GBP')}
-              </Text>
+          {/* Counter-offer context — previous vs new side by side */}
+          {isCounterOffer && previousOffer != null && (
+            <View style={[styles.counterCompareBox, { backgroundColor: colors.surfaceAlt }]}>
+              <View style={styles.counterCompareCol}>
+                <Text style={[styles.counterCompareLabel, { color: colors.textMuted }]}>
+                  Previous offer
+                </Text>
+                <Text style={[styles.counterCompareValue, { color: colors.textSecondary }]}>
+                  {formatFromFiat(previousOffer, 'GBP')}
+                </Text>
+              </View>
+              <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
+              <View style={styles.counterCompareCol}>
+                <Text style={[styles.counterCompareLabel, { color: colors.brand }]}>
+                  Your counter
+                </Text>
+                <Text style={[styles.counterCompareValue, { color: colors.brand }]}>
+                  {numericOfferGbp > 0 ? formatFromFiat(numericOfferGbp, 'GBP') : '—'}
+                </Text>
+              </View>
             </View>
           )}
 
@@ -468,36 +502,216 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         </Text>
         </Reanimated.View>
 
-        {!!errorMsg && (
-          <Text style={[styles.errorText, { color: colors.danger }]}>
-            {errorMsg}
-          </Text>
+        {!!errorMsg && !showReview && (
+          <View style={styles.errorBlock}>
+            <Text style={[styles.errorText, { color: colors.danger }]}>
+              {errorMsg}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.retryBtn,
+                { borderColor: colors.danger },
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={() => {
+                setErrorMsg('');
+                if (showReview) {
+                  void handleSendOffer();
+                }
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Retry submitting offer"
+            >
+              <Ionicons name="refresh-outline" size={15} color={colors.danger} />
+              <Text style={[styles.retryBtnText, { color: colors.danger }]}>Retry</Text>
+            </Pressable>
+          </View>
         )}
       </ScrollView>
 
+      {/* ── Review overlay ──
+            Full-screen confirmation step shown before the offer is
+            submitted. Displays the offer amount, listing, and seller
+            so the user can verify before committing. One dominant
+            action (Confirm), one cancel (Back). */}
+      {showReview && (
+        <View style={styles.reviewOverlay}>
+          <Pressable
+            style={styles.reviewBackdrop}
+            onPress={() => { if (!isSubmitting) setShowReview(false); }}
+            accessibilityLabel="Cancel review"
+            accessibilityRole="button"
+          />
+          <Reanimated.View
+            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(250)}
+            style={[styles.reviewSheet, { backgroundColor: colors.background }]}
+          >
+            <View style={[styles.reviewHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>
+              {isCounterOffer ? 'Review counter-offer' : 'Review your offer'}
+            </Text>
+
+            {/* Listing context */}
+            <View style={styles.reviewItemRow}>
+              <View style={[styles.itemThumb, { backgroundColor: colors.surfaceAlt }]}>
+                {itemImageUri ? (
+                  <CachedImage
+                    uri={itemImageUri}
+                    style={styles.itemThumbImage}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
+                )}
+              </View>
+              <View style={styles.reviewItemInfo}>
+                <Text style={[styles.reviewItemTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                  {title}
+                </Text>
+                <Text style={[styles.reviewItemPrice, { color: colors.textSecondary }]}>
+                  Listed at {formatFromFiat(price, 'GBP')}
+                </Text>
+              </View>
+            </View>
+
+            {/* Offer amount — dominant */}
+            <View style={[styles.reviewAmountBox, { backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.reviewAmountLabel, { color: colors.textMuted }]}>
+                {isCounterOffer ? 'Counter-offer amount' : 'Offer amount'}
+              </Text>
+              <Text style={[styles.reviewAmountValue, { color: colors.brand }]}>
+                {formatFromFiat(numericOfferGbp, 'GBP')}
+              </Text>
+              {isCounterOffer && previousOffer != null && (
+                <View style={styles.reviewCompareRow}>
+                  <View style={styles.reviewCompareItem}>
+                    <Text style={[styles.reviewCompareLabel, { color: colors.textMuted }]}>
+                      Previous
+                    </Text>
+                    <Text style={[styles.reviewCompareValue, { color: colors.textSecondary }]}>
+                      {formatFromFiat(previousOffer, 'GBP')}
+                    </Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
+                  <View style={styles.reviewCompareItem}>
+                    <Text style={[styles.reviewCompareLabel, { color: colors.textMuted }]}>
+                      New offer
+                    </Text>
+                    <Text style={[styles.reviewCompareValue, { color: colors.brand }]}>
+                      {formatFromFiat(numericOfferGbp, 'GBP')}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              <Text style={[styles.reviewExpiry, { color: colors.textMuted }]}>
+                Valid for {expiryHours} hours · seller must respond before expiry
+              </Text>
+            </View>
+
+            {/* Summary rows */}
+            <View style={[styles.reviewSummaryRow, { borderBottomColor: colors.borderSubtle }]}>
+              <Text style={[styles.reviewSummaryLabel, { color: colors.textSecondary }]}>
+                Platform charge
+              </Text>
+              <Text style={[styles.reviewSummaryValue, { color: colors.textPrimary }]}>
+                {formatFromFiat(platformChargeGbp, 'GBP')}
+              </Text>
+            </View>
+            <View style={styles.reviewTotalRow}>
+              <Text style={[styles.reviewTotalLabel, { color: colors.textPrimary }]}>
+                Total
+              </Text>
+              <Text style={[styles.reviewTotalValue, { color: colors.brand }]}>
+                {formatFromFiat(total, 'GBP')}
+              </Text>
+            </View>
+
+            {/* Error within review */}
+            {!!errorMsg && (
+              <View style={styles.errorBlock}>
+                <Text style={[styles.errorText, { color: colors.danger }]}>
+                  {errorMsg}
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.retryBtn,
+                    { borderColor: colors.danger },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => { setErrorMsg(''); void handleSendOffer(); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry submitting offer"
+                >
+                  <Ionicons name="refresh-outline" size={15} color={colors.danger} />
+                  <Text style={[styles.retryBtnText, { color: colors.danger }]}>Retry</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* Actions */}
+            <View style={styles.reviewActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.reviewCancelBtn,
+                  { borderColor: colors.border },
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => { if (!isSubmitting) setShowReview(false); }}
+                disabled={isSubmitting}
+                accessibilityRole="button"
+                accessibilityLabel="Go back to edit offer"
+              >
+                <Text style={[styles.reviewCancelText, { color: colors.textSecondary }]}>
+                  Back
+                </Text>
+              </Pressable>
+              <AppButton
+                style={styles.reviewConfirmBtn}
+                title={isSubmitting ? 'Sending…' : 'Confirm & send'}
+                subtitle={formatFromFiat(total, 'GBP')}
+                icon={isSubmitting ? undefined : <Ionicons name="paper-plane-outline" size={16} color={colors.textInverse} />}
+                variant="primary"
+                size="lg"
+                onPress={handleSendOffer}
+                disabled={isSubmitting}
+                loading={isSubmitting}
+                accessibilityLabel={`Confirm ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, 'GBP')} on ${title}`}
+              />
+            </View>
+          </Reanimated.View>
+        </View>
+      )}
+
       {/* ── Sticky footer ──
-            Full-width CTA with total subtitle. Per Design.md dock-geometry:
-            single-action height, brand fill, full width. */}
-      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
-        <AppButton
-          style={styles.sendBtn}
-          title={
-            isSubmitting
-              ? 'Submitting…'
-              : isCounterOffer
-              ? 'Send counter-offer'
-              : 'Send offer via chat'
-          }
-          subtitle={formatFromFiat(total, 'GBP')}
-          icon={<Ionicons name="paper-plane-outline" size={16} color={colors.textInverse} />}
-          variant="primary"
-          size="lg"
-          onPress={handleSendOffer}
-          disabled={numericOffer <= 0 || isSubmitting}
-          loading={isSubmitting}
-          accessibilityLabel={`Send ${isCounterOffer ? 'counter-offer' : 'offer'} totaling ${formatFromFiat(total, 'GBP')} via chat`}
-        />
-      </View>
+            Full-width CTA. In the compose phase, the button advances to
+            the review step. In the review phase, the review sheet has its
+            own confirm button. Per Design.md dock-geometry: single-action
+            height, brand fill, full width. */}
+      {!showReview && (
+        <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+          {isLoading ? (
+            <View style={styles.footerLoading}>
+              <ActivityIndicator size="small" color={colors.brand} />
+              <Text style={[styles.footerLoadingText, { color: colors.textMuted }]}>
+                Loading listing…
+              </Text>
+            </View>
+          ) : (
+            <AppButton
+              style={styles.sendBtn}
+              title={isCounterOffer ? 'Review counter-offer' : 'Review offer'}
+              subtitle={formatFromFiat(total, 'GBP')}
+              icon={<Ionicons name="arrow-forward-outline" size={16} color={colors.textInverse} />}
+              variant="primary"
+              size="lg"
+              onPress={handleReviewOffer}
+              disabled={numericOffer <= 0 || isSubmitting}
+              loading={isSubmitting}
+              accessibilityLabel={`Review ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, 'GBP')} on ${title}`}
+            />
+          )}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -635,6 +849,32 @@ const styles = StyleSheet.create({
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
   },
+  // ── Counter-offer side-by-side compare ──
+  counterCompareBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginTop: Space.md,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
+  },
+  counterCompareCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Space.xs / 2,
+  },
+  counterCompareLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.meta.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  counterCompareValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
   // ── Expiry section ──
   expirySection: {
     paddingTop: Space.lg,
@@ -731,10 +971,30 @@ const styles = StyleSheet.create({
   },
   // ── Error ──
   errorText: {
+    flex: 1,
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
+  },
+  errorBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
     marginTop: Space.sm + 2,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    minHeight: Control.hit,
+  },
+  retryBtnText: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: Typography.family.semibold,
   },
   // ── Footer ──
   footer: {
@@ -745,5 +1005,171 @@ const styles = StyleSheet.create({
   },
   sendBtn: {
     width: '100%',
+  },
+  footerLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.md,
+  },
+  footerLoadingText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  // ── Review overlay ──
+  reviewOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 100,
+  },
+  reviewBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  reviewSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Platform.OS === 'ios' ? Space.xl : Space.lg,
+    maxHeight: '85%',
+  },
+  reviewHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: Radius.full,
+    alignSelf: 'center',
+    marginBottom: Space.md,
+  },
+  reviewTitle: {
+    fontSize: Type.title.size,
+    lineHeight: Type.title.lineHeight,
+    fontFamily: Typography.family.bold,
+    marginBottom: Space.md,
+  },
+  reviewItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    marginBottom: Space.md,
+  },
+  reviewItemInfo: {
+    flex: 1,
+    gap: Space.xs / 2,
+  },
+  reviewItemTitle: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  reviewItemPrice: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  reviewAmountBox: {
+    borderRadius: Radius.lg,
+    padding: Space.md,
+    alignItems: 'center',
+    marginBottom: Space.md,
+  },
+  reviewAmountLabel: {
+    fontSize: Type.metaElevated.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.metaElevated.letterSpacing,
+    textTransform: 'uppercase',
+    marginBottom: Space.xs,
+  },
+  reviewAmountValue: {
+    fontSize: Type.display.size,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  reviewCompareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    marginTop: Space.md,
+    paddingTop: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(128,128,128,0.2)',
+  },
+  reviewCompareItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  reviewCompareLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.regular,
+    marginBottom: Space.xs / 2,
+  },
+  reviewCompareValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  reviewExpiry: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    marginTop: Space.sm,
+    textAlign: 'center',
+  },
+  reviewSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: Control.hit,
+  },
+  reviewSummaryLabel: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  reviewSummaryValue: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  reviewTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Space.md,
+    minHeight: Control.hit,
+  },
+  reviewTotalLabel: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+  },
+  reviewTotalValue: {
+    fontSize: Type.priceList.size,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  reviewActions: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.lg,
+  },
+  reviewCancelBtn: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
+    minHeight: Control.hit,
+  },
+  reviewCancelText: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+  },
+  reviewConfirmBtn: {
+    flex: 1,
   },
 });

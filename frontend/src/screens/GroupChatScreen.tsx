@@ -54,7 +54,8 @@ import {
   type ChatAgent,
   type SuggestedReply,
 } from '../services/chatAgentsApi';
-import type { Message as ConversationMessage } from '../data/mockData';
+import { deleteConversationOnApi } from '../services/chatApi';
+import type { Message as ConversationMessage } from '../domain';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
 
@@ -79,6 +80,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
   const appendConversationMessage = useStore((state) => state.appendConversationMessage);
+  const deleteConversation = useStore((state) => state.deleteConversation);
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === groupId),
@@ -93,6 +95,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const [agentPickerVisible, setAgentPickerVisible] = useState(false);
   const [deployedAgents, setDeployedAgents] = useState<ChatAgent[]>([]);
   const [suggestions, setSuggestions] = useState<SuggestedReply[]>([]);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const listRef = useRef<FlashListRef<GroupMessage>>(null);
 

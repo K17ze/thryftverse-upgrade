@@ -43,6 +43,7 @@ export function ChatInfoRow({
   danger,
   showChevron,
   isLast,
+  trailing,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -52,6 +53,7 @@ export function ChatInfoRow({
   danger?: boolean;
   showChevron?: boolean;
   isLast?: boolean;
+  trailing?: React.ReactNode;
 }) {
   const { colors } = useAppTheme();
   const foreground = danger ? colors.danger : colors.textPrimary;
@@ -79,7 +81,9 @@ export function ChatInfoRow({
           {detail}
         </Text>
       ) : null}
-      {showChevron ? (
+      {trailing ? (
+        trailing
+      ) : showChevron ? (
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       ) : null}
     </View>

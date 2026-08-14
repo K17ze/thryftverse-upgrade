@@ -51,6 +51,9 @@ export default function CreateLookScreen() {
   const [tags, setTags] = useState<OutfitTag[]>([]);
   const [visibility, setVisibility] = useState<Visibility>('public');
   const [isPublishing, setIsPublishing] = useState(false);
+  // Stable look id generated once per editing session so a publish retry
+  // reuses the same id (idempotency) instead of creating a duplicate post.
+  const lookIdRef = useRef<string>(makeStableId('look'));
 
   const allowNavigationRef = useRef(false);
 
@@ -114,7 +117,7 @@ export default function CreateLookScreen() {
       try {
         const uploaded = await uploadMedia(imageUri, 'looks');
         const mediaUrl = uploaded.publicUrl;
-        const lookId = makeStableId('look');
+        const lookId = lookIdRef.current;
         const internalTitle =
           caption
             .trim()

@@ -15,7 +15,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import type { Listing } from '../data/mockData';
+import type { Listing } from '../domain';
 import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT } from '../utils/media';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -24,6 +24,7 @@ import { computeSustainabilityScore } from '../utils/sustainabilityScore';
 import { SustainabilityBadge } from './product/SustainabilityBadge';
 
 import { Space, Radius, Control, Type, Typography } from '../theme/designTokens';
+import { synthesizeListingIdentity } from '../services/listingMapper';
 // A URI is only usable when it is a non-blank string. Backend rows can surface
 // `''`, `null`, or whitespace-only strings; treat all of these as "no media"
 // so the premium placeholder renders instead of a broken image.
@@ -99,6 +100,15 @@ function ProductCardV2Base({
   const sellerAvatar = item.seller?.avatar ?? null;
   const sellerVerified = item.seller?.verified === true;
 
+  // Identity synthesis (Phase 5 WP7): brand + title, or clean title,
+  // or category-based fallback. Used for the accessibility label so
+  // screen readers announce a coherent identity. Never shows
+  // "Unknown brand/size" — brandless listings use the clean title.
+  const identityLine = React.useMemo(
+    () => synthesizeListingIdentity(item),
+    [item],
+  );
+
   // Sustainability — only surface A/B grades on the card to avoid visual
   // noise on lower-impact items. Computed client-side from listing data.
   const sustainabilityScore = React.useMemo(
@@ -162,7 +172,7 @@ function ProductCardV2Base({
         style={styles.imageWrap}
         hapticFeedback="light"
         accessibilityRole="none"
-        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
+        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
         testID={testID}
       >
@@ -278,9 +288,17 @@ function ProductCardV2Base({
             No stacking of price + old price + discount + likes + size + seller +
             badge + shipping + AI reason + availability. The -X% badge on the
             media is the single deal signal; the original price, likes count,
-            and size are available on the PDP, not on every discovery tile. */}
+            and size are available on the PDP, not on every discovery tile.
+            Identity synthesis (Phase 5 WP7): brand + title, or clean title,
+            or category-based fallback. Never shows "Unknown brand/size". */}
       {!visualOnly && (
         <View style={styles.info}>
+          {/* Brand eyebrow — only when brand is present. Brandless listings
+              (valid per category policy) show the clean title without a
+              misleading "Unknown brand" label. */}
+          {item.brand ? (
+            <Text style={styles.brandEyebrow} numberOfLines={1}>{item.brand}</Text>
+          ) : null}
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
             <Text style={styles.priceHero}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
@@ -527,6 +545,17 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingTop: Space.sm,
     paddingHorizontal: Space.xs,
     gap: Space.xs,
+  },
+  // Brand eyebrow — a restrained single-line brand label above the title.
+  // Only rendered when brand is present (Phase 5 WP7 identity synthesis).
+  // Brandless listings show the clean title without a misleading label.
+  brandEyebrow: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    color: colors.textSecondary,
+    letterSpacing: Type.meta.letterSpacing,
+    textTransform: 'uppercase',
   },
   title: {
     fontSize: Type.body.size,
