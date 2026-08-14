@@ -146,8 +146,9 @@ export function OfferToLikersSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={styles.sheet}>
           <View style={styles.handle} />
 
           {/* Header */}
@@ -339,8 +340,8 @@ export function OfferToLikersSheet({
               accessibilityLabel={`Send offer of ${formattedOfferPrice} to ${likerCount} likers`}
             />
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

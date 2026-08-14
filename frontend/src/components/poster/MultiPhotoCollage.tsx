@@ -83,8 +83,9 @@ function CellActionSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={actionSheetStyles.overlay} onPress={onClose}>
-        <Pressable style={actionSheetStyles.sheet} onPress={(e) => e.stopPropagation()}>
+      <View style={actionSheetStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={actionSheetStyles.sheet}>
           <View style={actionSheetStyles.handle} />
           <Text style={actionSheetStyles.title}>Photo options</Text>
           {CELL_ACTIONS.map((action) => (
@@ -102,8 +103,8 @@ function CellActionSheet({
               <Text style={actionSheetStyles.actionLabel}>{action.label}</Text>
             </Pressable>
           ))}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

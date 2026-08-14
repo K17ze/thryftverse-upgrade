@@ -48,10 +48,10 @@ export function ChatActionSheet({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
           style={[styles.sheet, { backgroundColor: colors.surface }]}
-          onPress={(e) => e.stopPropagation()}
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={styles.header}>
@@ -134,8 +134,8 @@ export function ChatActionSheet({
               Cancel
             </Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

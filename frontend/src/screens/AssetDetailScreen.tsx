@@ -1431,8 +1431,9 @@ export default function AssetDetailScreen() {
         animationType="slide"
         onRequestClose={() => setPriceAlertVisible(false)}
       >
-        <Pressable style={priceAlertStyles.overlay} onPress={() => setPriceAlertVisible(false)}>
-          <Pressable style={[priceAlertStyles.sheet, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+        <View style={priceAlertStyles.overlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPriceAlertVisible(false)} />
+          <View style={[priceAlertStyles.sheet, { backgroundColor: colors.surface }]}>
             {/* Header with icon */}
             <View style={priceAlertStyles.headerRow}>
               <View style={[priceAlertStyles.headerIcon, { backgroundColor: colors.brand }]}>
@@ -1510,8 +1511,8 @@ export default function AssetDetailScreen() {
                 style={{ flex: 1 }}
               />
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   );

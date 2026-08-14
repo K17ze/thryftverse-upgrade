@@ -48,10 +48,10 @@ export function ChatAgentPicker({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
           style={[styles.sheet, { backgroundColor: colors.surface }]}
-          onPress={(e) => e.stopPropagation()}
           accessibilityLabel="Add AI Agent sheet"
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
@@ -100,8 +100,8 @@ export function ChatAgentPicker({
               Cancel
             </Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

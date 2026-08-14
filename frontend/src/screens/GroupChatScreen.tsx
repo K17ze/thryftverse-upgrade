@@ -482,10 +482,10 @@ function GroupInfoModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
           style={[styles.sheet, { backgroundColor: colors.surface }]}
-          onPress={(e) => e.stopPropagation()}
           accessibilityLabel="Group info sheet"
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
@@ -574,8 +574,8 @@ function GroupInfoModal({
           >
             <Text style={[styles.cancelText, { color: colors.textPrimary }]}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

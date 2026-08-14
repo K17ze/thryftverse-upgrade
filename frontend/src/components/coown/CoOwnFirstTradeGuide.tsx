@@ -119,8 +119,9 @@ export function CoOwnFirstTradeGuide({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, { backgroundColor: colors.background }]} onPress={(e) => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           {/* Header */}
@@ -257,8 +258,8 @@ export function CoOwnFirstTradeGuide({
               />
             )}
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

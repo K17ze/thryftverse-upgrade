@@ -66,8 +66,9 @@ export function SellerResponseComposer({
       animationType="slide"
       onRequestClose={handleClose}
     >
-      <Pressable style={({ pressed }) => [styles.backdrop, pressed && { opacity: 0.6 }]} onPress={handleClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+        <View style={styles.sheet}>
           <View style={styles.handle} />
 
           {/* Header */}
@@ -133,8 +134,8 @@ export function SellerResponseComposer({
               icon={isSubmitting ? undefined : <Ionicons name="send-outline" size={16} color={colors.textInverse} />}
             />
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

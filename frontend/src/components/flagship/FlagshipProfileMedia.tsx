@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, ViewStyle, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ViewStyle, ActivityIndicator, Pressable, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -53,12 +53,17 @@ export function FlagshipProfileMedia({
   const effectiveCover = coverVideoUri || coverUri;
   const hasCover = Boolean(effectiveCover);
   const showCoverError = coverError != null && !isUploadingCover;
+  // expo-video has known stability issues on web (null references in VideoView,
+  // player initialization failures). Fall back to static image on web.
+  const showVideo = coverVideoUri != null && Platform.OS !== 'web';
+  // On web, prefer the static cover image over the video URI.
+  const staticCover = Platform.OS === 'web' ? (coverUri ?? coverVideoUri) : effectiveCover;
 
   return (
     <View style={[styles.root, style]}>
       {/* Cover */}
       <View style={[styles.coverWrap, { height: coverHeight }]}>
-        {coverVideoUri ? (
+        {showVideo ? (
           <Video
             source={{ uri: coverVideoUri }}
             style={[styles.coverImage, { height: coverHeight }]}
@@ -69,7 +74,7 @@ export function FlagshipProfileMedia({
           />
         ) : hasCover ? (
           <CachedImage
-            uri={effectiveCover!}
+            uri={staticCover!}
             style={[styles.coverImage, { height: coverHeight }]}
             contentFit="cover"
             transition={400}
