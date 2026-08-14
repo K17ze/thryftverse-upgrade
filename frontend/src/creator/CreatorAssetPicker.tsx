@@ -19,7 +19,14 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import { searchListingsFromApi, type ListingSearchResult } from '../services/listingsApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  searchListingsFromApi,
+  fetchUserListingsFromApi,
+  fetchListingByIdFromApi,
+  type ListingSearchResult,
+  type ListingApiItem,
+} from '../services/listingsApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { useStore } from '../store/useStore';
 import { fetchLooksFromApi } from '../services/looksApi';
@@ -980,48 +987,143 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 }
 
 // ── Product Picker ─────────────────────────────────────────────────
+// Per spec 10 (Look Architecture V3), the Add item drawer sources are:
+//   My closet/listings · Saved · Marketplace search · Recently viewed
+// Selecting an item adds a visual object, not a settings row.
+
+const RECENTLY_VIEWED_KEY = '@thryftverse_recently_viewed_listings';
+const MAX_RECENT = 30;
+
+// Recently-viewed cache entry — stores just enough to reconstruct the
+// listing card without a round-trip. The canonical listing ID is always
+// preserved so the published look can resolve to the live listing.
+interface RecentListingEntry {
+  id: string;
+  sellerId: string;
+  title: string;
+  priceGbp: number;
+  imageUrl: string | null;
+  createdAt: string;
+}
+
+async function getRecentListings(): Promise<RecentListingEntry[]> {
+  try {
+    const raw = await AsyncStorage.getItem(RECENTLY_VIEWED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function recordRecentListing(item: ListingSearchResult): Promise<void> {
+  try {
+    const existing = await getRecentListings();
+    const entry: RecentListingEntry = {
+      id: item.id,
+      sellerId: item.sellerId,
+      title: item.title,
+      priceGbp: item.priceGbp,
+      imageUrl: item.imageUrl,
+      createdAt: item.createdAt,
+    };
+    const filtered = existing.filter((e) => e.id !== entry.id);
+    const next = [entry, ...filtered].slice(0, MAX_RECENT);
+    await AsyncStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(next));
+  } catch {
+    // Best-effort — never block the picker.
+  }
+}
+
+// Map a full ListingApiItem (from user listings / fetch-by-id) to the
+// ListingSearchResult shape the picker renders.
+function listingApiItemToSearchResult(item: ListingApiItem): ListingSearchResult {
+  return {
+    id: item.id,
+    sellerId: item.sellerId,
+    title: item.title,
+    description: item.description,
+    priceGbp: item.priceGbp,
+    imageUrl: item.imageUrl,
+    rank: 0,
+    createdAt: item.createdAt,
+    seller: item.seller ?? null,
+    brand: item.brand,
+    size: item.size,
+    condition: item.condition,
+    category: item.category,
+  };
+}
+
+type ProductSourceTab = 'closet' | 'saved' | 'search' | 'recent';
 
 function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const currentUserId = useStore((state) => state.currentUser?.id);
+  const savedProductIds = useStore((state) => state.savedProducts);
+  const wishlistIds = useStore((state) => state.wishlist);
+
+  const [activeTab, setActiveTab] = useState<ProductSourceTab>('search');
+
+  // ── Search state (Marketplace search) ──────────────────────────────
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<ListingSearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<ListingSearchResult[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
-  const reqIdRef = useRef(0);
-  const mountedRef = useRef(true);
+  const searchReqIdRef = useRef(0);
+  const searchMountedRef = useRef(true);
+
+  // ── Closet state (My closet/listings) ──────────────────────────────
+  const [closetResults, setClosetResults] = useState<ListingSearchResult[]>([]);
+  const [isClosetLoading, setIsClosetLoading] = useState(false);
+  const [closetError, setClosetError] = useState<string | null>(null);
+  const closetLoadedRef = useRef(false);
+
+  // ── Saved state (Saved = savedProducts + wishlist) ─────────────────
+  const [savedResults, setSavedResults] = useState<ListingSearchResult[]>([]);
+  const [isSavedLoading, setIsSavedLoading] = useState(false);
+  const [savedError, setSavedError] = useState<string | null>(null);
+  const savedLoadedRef = useRef(false);
+
+  // ── Recent state (Recently viewed) ─────────────────────────────────
+  const [recentResults, setRecentResults] = useState<ListingSearchResult[]>([]);
+  const [isRecentLoading, setIsRecentLoading] = useState(false);
+  const recentLoadedRef = useRef(false);
 
   useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    searchMountedRef.current = true;
+    return () => { searchMountedRef.current = false; };
   }, []);
 
+  // ── Search effect (debounced) ──────────────────────────────────────
   const doSearch = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (trimmed.length < 2) {
-      setResults([]);
+      setSearchResults([]);
       setHasSearched(false);
-      setError(null);
-      setIsLoading(false);
+      setSearchError(null);
+      setIsSearchLoading(false);
       return;
     }
-    const reqId = ++reqIdRef.current;
-    setIsLoading(true);
-    setError(null);
+    const reqId = ++searchReqIdRef.current;
+    setIsSearchLoading(true);
+    setSearchError(null);
     try {
       const res = await searchListingsFromApi(trimmed, 50);
-      if (reqId !== reqIdRef.current || !mountedRef.current) return;
-      setResults(res.items);
+      if (reqId !== searchReqIdRef.current || !searchMountedRef.current) return;
+      setSearchResults(res.items);
       setHasSearched(true);
     } catch (err) {
-      if (reqId !== reqIdRef.current || !mountedRef.current) return;
-      setError((err as Error).message || 'Search failed');
-      setResults([]);
+      if (reqId !== searchReqIdRef.current || !searchMountedRef.current) return;
+      setSearchError((err as Error).message || 'Search failed');
+      setSearchResults([]);
       setHasSearched(true);
     } finally {
-      if (reqId === reqIdRef.current && mountedRef.current) setIsLoading(false);
+      if (reqId === searchReqIdRef.current && searchMountedRef.current) setIsSearchLoading(false);
     }
   }, []);
 
@@ -1030,10 +1132,103 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
     return () => clearTimeout(timer);
   }, [query, doSearch]);
 
-  const handleRetry = useCallback(() => doSearch(query), [doSearch, query]);
+  // ── Closet: load user's own listings when tab is first opened ──────
+  useEffect(() => {
+    if (activeTab !== 'closet' || closetLoadedRef.current || !currentUserId) return;
+    closetLoadedRef.current = true;
+    let cancelled = false;
+    setIsClosetLoading(true);
+    setClosetError(null);
+    fetchUserListingsFromApi(currentUserId, { status: 'active', limit: 50 })
+      .then((res) => {
+        if (cancelled) return;
+        setClosetResults(res.items.map(listingApiItemToSearchResult));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setClosetError((err as Error).message || 'Could not load your listings');
+        setClosetResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsClosetLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, currentUserId]);
+
+  // ── Saved: load saved + wishlisted listings by ID ──────────────────
+  useEffect(() => {
+    if (activeTab !== 'saved' || savedLoadedRef.current) return;
+    savedLoadedRef.current = true;
+    const ids = Array.from(new Set([...savedProductIds, ...wishlistIds]));
+    if (ids.length === 0) {
+      setSavedResults([]);
+      return;
+    }
+    let cancelled = false;
+    setIsSavedLoading(true);
+    setSavedError(null);
+    // Fetch each listing by ID. The store only retains IDs, so we
+    // resolve them individually. Failures for individual IDs are
+    // silently skipped — partial results are better than blocking.
+    Promise.all(
+      ids.slice(0, 50).map((id) =>
+        fetchListingByIdFromApi(id)
+          .then((res) => (res.ok && res.listing ? listingApiItemToSearchResult(res.listing) : null))
+          .catch(() => null)
+      )
+    )
+      .then((items) => {
+        if (cancelled) return;
+        setSavedResults(items.filter((x): x is ListingSearchResult => x !== null));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setSavedError((err as Error).message || 'Could not load saved items');
+        setSavedResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSavedLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, savedProductIds, wishlistIds]);
+
+  // ── Recent: load recently viewed listings from AsyncStorage ────────
+  useEffect(() => {
+    if (activeTab !== 'recent' || recentLoadedRef.current) return;
+    recentLoadedRef.current = true;
+    let cancelled = false;
+    setIsRecentLoading(true);
+    getRecentListings()
+      .then((entries) => {
+        if (cancelled) return;
+        // Map RecentListingEntry to ListingSearchResult shape
+        setRecentResults(
+          entries.map((e) => ({
+            id: e.id,
+            sellerId: e.sellerId,
+            title: e.title,
+            description: '',
+            priceGbp: e.priceGbp,
+            imageUrl: e.imageUrl,
+            rank: 0,
+            createdAt: e.createdAt,
+            seller: null,
+          }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setRecentResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsRecentLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab]);
 
   const handleSelect = useCallback((item: ListingSearchResult) => {
     haptic.selection();
+    // Record in recently viewed for future "Recent" tab population
+    recordRecentListing(item);
     onAddLayer({
       ...baseLayer(createStableId('product'), 10),
       type: 'product',
@@ -1048,35 +1243,111 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       },
     });
     onClose();
-  }, [onAddLayer, onClose]);
+  }, [onAddLayer, onClose, haptic]);
+
+  // ── Active tab data ────────────────────────────────────────────────
+  const activeResults = activeTab === 'search'
+    ? searchResults
+    : activeTab === 'closet'
+      ? closetResults
+      : activeTab === 'saved'
+        ? savedResults
+        : recentResults;
+  const activeLoading = activeTab === 'search'
+    ? isSearchLoading
+    : activeTab === 'closet'
+      ? isClosetLoading
+      : activeTab === 'saved'
+        ? isSavedLoading
+        : isRecentLoading;
+  const activeError = activeTab === 'search'
+    ? searchError
+    : activeTab === 'closet'
+      ? closetError
+      : activeTab === 'saved'
+        ? savedError
+        : null;
+
+  const handleRetry = useCallback(() => {
+    if (activeTab === 'search') {
+      doSearch(query);
+    } else if (activeTab === 'closet') {
+      closetLoadedRef.current = false;
+      // Re-trigger by toggling state — force re-load
+      setActiveTab('search');
+      setTimeout(() => setActiveTab('closet'), 0);
+    } else if (activeTab === 'saved') {
+      savedLoadedRef.current = false;
+      setActiveTab('search');
+      setTimeout(() => setActiveTab('saved'), 0);
+    }
+  }, [activeTab, doSearch, query]);
+
+  const tabs: Array<{ key: ProductSourceTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
+    { key: 'search', label: 'Search', icon: 'search-outline' },
+    { key: 'closet', label: 'My Closet', icon: 'shirt-outline' },
+    { key: 'saved', label: 'Saved', icon: 'bookmark-outline' },
+    { key: 'recent', label: 'Recent', icon: 'time-outline' },
+  ];
 
   return (
-    <PickerShell title="Add Product" onClose={onClose}>
-      <View style={styles.searchRow}>
-        <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search listings..."
-          placeholderTextColor={colors.textMuted}
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoFocus
-          accessibilityLabel="Search listings"
-        />
-        {isLoading && <ActivityIndicator size="small" color={colors.brand} />}
+    <PickerShell title="Add Item" onClose={onClose}>
+      {/* ── Source tabs ─────────────────────────────────────────────── */}
+      <View style={styles.productTabBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productTabBarContent}>
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <Pressable
+                key={tab.key}
+                onPress={() => { haptic.light(); setActiveTab(tab.key); }}
+                style={[styles.productTab, isActive && styles.productTabActive]}
+                accessibilityLabel={tab.label}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Ionicons name={tab.icon} size={16} color={isActive ? colors.brand : colors.textSecondary} />
+                <Text style={[styles.productTabLabel, { color: isActive ? colors.brand : colors.textSecondary }]}>{tab.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
-      {error ? (
+
+      {/* ── Search input (only visible on Search tab) ───────────────── */}
+      {activeTab === 'search' && (
+        <View style={styles.searchRow}>
+          <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search listings..."
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+            accessibilityLabel="Search listings"
+          />
+          {isSearchLoading && <ActivityIndicator size="small" color={colors.brand} />}
+        </View>
+      )}
+
+      {/* ── Results / states ────────────────────────────────────────── */}
+      {activeError ? (
         <View style={styles.errorBody}>
-          <Text style={styles.errorText}>Couldn't search listings</Text>
-          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry search" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={styles.errorText}>Couldn't load items</Text>
+          <Pressable onPress={handleRetry} style={styles.retryBtn} accessibilityLabel="Retry" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </Pressable>
         </View>
+      ) : activeLoading ? (
+        <View style={styles.loadingBody}>
+          <ActivityIndicator size="large" color={colors.brand} />
+        </View>
       ) : (
         <FlatList
-          data={results}
+          data={activeResults}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
@@ -1091,7 +1362,23 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
           )}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={hasSearched && !isLoading ? <View style={styles.emptyState}><Text style={styles.emptyText}>No listings found</Text></View> : null}
+          ListEmptyComponent={
+            activeTab === 'search'
+              ? hasSearched && !isSearchLoading
+                ? <View style={styles.emptyState}><Text style={styles.emptyText}>No listings found</Text></View>
+                : null
+              : !activeLoading
+                ? <View style={styles.emptyState}>
+                    <Text style={styles.emptyText}>
+                      {activeTab === 'closet'
+                        ? 'No active listings in your closet'
+                        : activeTab === 'saved'
+                          ? 'No saved items yet'
+                          : 'No recently viewed items'}
+                    </Text>
+                  </View>
+                : null
+          }
         />
       )}
     </PickerShell>
@@ -4085,6 +4372,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md,
     paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: colors.textPrimary,
   },
+  // ── Product picker source tabs ──
   resultList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
@@ -4323,5 +4611,11 @@ function createStyles(colors: ThemeColors) {
   sliderPreviewFill: { height: '100%', borderRadius: Radius.sm },
   sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   sliderPreviewEndLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
+  // ── Product source tabs ──
+  productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, paddingVertical: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  productTabBarContent: { gap: Space.xs, paddingVertical: Space.xs },
+  productTab: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingVertical: Space.sm - 2, paddingHorizontal: Space.md, borderRadius: Radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
+  productTabActive: { borderColor: colors.brand, backgroundColor: colors.brand + '14' },
+  productTabLabel: { fontFamily: Typography.family.medium, fontSize: Type.captionElevated.size, color: colors.textSecondary },
   });
 }

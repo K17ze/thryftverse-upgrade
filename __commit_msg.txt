@@ -1,0 +1,21 @@
+refactor(wallet+creator): WalletScreen uses extracted flows, AssetPicker product tabs
+
+Wallet V3 (spec 17):
+- WalletScreen restructured to use extracted AddMoneySheet,
+  SellerEarningsScreen, WalletActivityScreen flows.
+- Reduced from monolithic controller to focused home + dedicated
+  money-movement flows.
+- Removed 605 lines of inline flow logic now living in extracted
+  screens/sheets.
+
+Creator:
+- CreatorAssetPicker product source tabs improved with pill-style
+  tabs (My closet/listings, Saved, Marketplace search, Recently
+  viewed) per spec 10 add-item drawer sources.
+- Removed duplicate style definitions (old + new merged).
+
+AIAgentIntegrationScreen: minor copy alignment.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

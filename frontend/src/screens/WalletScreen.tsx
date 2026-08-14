@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,38 +15,26 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import {
-  initPaymentSheet,
-  PaymentSheetError,
-  presentPaymentSheet,
-} from '@stripe/stripe-react-native';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
 import { formatIzeAmount } from '../utils/currency';
-import { convertDisplayToGbpAmount, convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
+import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
 import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
   getWalletSnapshot,
   getSellerWalletBalances,
-  createIzeMintQuote,
-  createStripeIntentSheet,
-  buyIze,
   convertIzeToFiat,
   type SellerWalletBalanceItem,
 } from '../services/walletApi';
-import {
-  configureStripeMobile,
-  getStripeReturnUrl,
-} from '../platform/payments/stripeMobile';
 import {
   CoOwnMarketHeader,
   CoOwnWalletBreakdown,
@@ -61,14 +49,12 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
+import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
-/** Add-flow mode: 'load' converts external fiat → 1ZE; 'buy' uses fiat balance → 1ZE. */
-type AddMode = 'load' | 'buy';
-
-// Fee rates sourced from the central config in tradeFlow.ts (single source of truth)
-import { CO_OWN_LOAD_FEE_RATE as LOAD_IZE_FEE_RATE, CO_OWN_CONVERT_FEE_RATE as CONVERT_FEE_RATE } from '../utils/tradeFlow';
+// Fee rate sourced from the central config in tradeFlow.ts (single source of truth)
+import { CO_OWN_CONVERT_FEE_RATE as CONVERT_FEE_RATE } from '../utils/tradeFlow';
 
 export default function WalletScreen({ navigation }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -111,25 +97,19 @@ export default function WalletScreen({ navigation }: Props) {
     heldInReserveGbp: number;
     pendingBreakdown: SellerWalletBalanceItem[];
   } | null>(null);
-  const [showPendingBreakdown, setShowPendingBreakdown] = useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
 
   // ── Inline flow state ──
-  // 'none' = both collapsed; 'add' = Add 1ZE expanded; 'redeem' = Redeem 1ZE expanded.
-  // The two flows are never combined — expanding one collapses the other (spec §2.1).
-  const [activeFlow, setActiveFlow] = useState<'none' | 'add' | 'redeem'>('none');
-  const [addMode, setAddMode] = useState<AddMode>('load');
-  const [loadFiatInput, setLoadFiatInput] = useState('');
-  const [buyFiatInput, setBuyFiatInput] = useState('');
+  // 'none' = collapsed; 'redeem' = Redeem 1ZE (convert to fiat) expanded.
+  // Add money is handled by the extracted AddMoneySheet (spec 17).
+  const [activeFlow, setActiveFlow] = useState<'none' | 'redeem'>('none');
   const [convertIzeInput, setConvertIzeInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const topupIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const [addMoneyVisible, setAddMoneyVisible] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
-  const loadInputRef = useRef<TextInput>(null);
-  const buyInputRef = useRef<TextInput>(null);
   const convertInputRef = useRef<TextInput>(null);
 
   // ── Balance hydration ──
@@ -180,7 +160,11 @@ export default function WalletScreen({ navigation }: Props) {
         setIsError(true);
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          // Finish refresh when the request settles — no fixed timer (spec 17).
+          setRefreshing(false);
+        }
       });
 
     return () => { cancelled = true; };
@@ -194,7 +178,6 @@ export default function WalletScreen({ navigation }: Props) {
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
     loadBalance();
-    setTimeout(() => setRefreshing(false), 800);
   }, [loadBalance]);
 
   const handleBack = React.useCallback(() => {
@@ -202,28 +185,16 @@ export default function WalletScreen({ navigation }: Props) {
     navigation.navigate('CoOwnHub');
   }, [navigation]);
 
-  // ── Flow expansion (separate flows, never combined) ──
-  const expandFlow = React.useCallback((flow: 'add' | 'redeem') => {
+  // ── Flow expansion ( Redeem / Convert 1ZE to fiat) ──
+  const expandFlow = React.useCallback((flow: 'redeem') => {
     haptics.tap();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveFlow((prev) => (prev === flow ? 'none' : flow));
   }, []);
 
-  // ── Derived values for Add / Redeem flows ──
+  // ── Derived values for Redeem / Convert flow ──
   const availableIze = balance.available;
   const isWalletOperational = balance.reconciliationState === 'reconciled' && !isOffline;
-
-  const loadFiatValue = Number(loadFiatInput || '0');
-  const loadGrossIze = convertDisplayToGbpAmount(loadFiatValue, currencyCode, goldRates);
-  const loadFeeIze = loadGrossIze * LOAD_IZE_FEE_RATE;
-  const loadNetIze = Math.max(0, loadGrossIze - loadFeeIze);
-  const loadFeeFiat = loadFiatValue * LOAD_IZE_FEE_RATE;
-  const canLoadIze = Number.isFinite(loadFiatValue) && loadFiatValue > 0 && !isProcessing && isWalletOperational;
-  const loadFeeRateLabel = `${Math.round(LOAD_IZE_FEE_RATE * 100)}%`;
-
-  const buyFiatValue = Number(buyFiatInput || '0');
-  const buyIzeAmount = convertDisplayToGbpAmount(buyFiatValue, currencyCode, goldRates);
-  const canBuyIze = Number.isFinite(buyFiatValue) && buyFiatValue > 0 && buyFiatValue <= availableFiatBalance && !isProcessing && isWalletOperational;
 
   const convertIzeValue = Number(convertIzeInput || '0');
   const convertFiatValue = convertGbpToDisplayAmount(convertIzeValue, currencyCode, goldRates);
@@ -238,137 +209,7 @@ export default function WalletScreen({ navigation }: Props) {
     ? `≈ ${formatFromFiat(balance.available, 'GBP', { displayMode: 'fiat' })}`
     : undefined;
 
-  // ── Handlers (preserved from BalanceScreen — real API calls) ──
-  const handleLoadIze = async () => {
-    if (!canLoadIze) {
-      show('Enter a valid amount to convert into 1ZE.', 'error');
-      return;
-    }
-    if (!currentUser?.id) {
-      show('Sign in to load 1ZE.', 'error');
-      navigation.navigate('AuthLanding');
-      return;
-    }
-
-    const loadAmountGbpRaw = convertDisplayToGbpAmount(loadFiatValue, currencyCode, goldRates);
-    const loadAmountGbp = Number(loadAmountGbpRaw.toFixed(2));
-    if (!Number.isFinite(loadAmountGbp) || loadAmountGbp <= 0) {
-      show('Unable to convert that amount right now.', 'error');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const topupFingerprint = `${currentUser.id}:GBP:${loadAmountGbp.toFixed(2)}`;
-      if (topupIdempotencyRef.current?.fingerprint !== topupFingerprint) {
-        topupIdempotencyRef.current = {
-          fingerprint: topupFingerprint,
-          key: `wallet_topup_${currentUser.id}_${Date.now()}`,
-        };
-      }
-      const quoteResponse = await createIzeMintQuote({
-        userId: currentUser.id,
-        fiatAmount: loadAmountGbp,
-        fiatCurrency: 'GBP',
-        idempotencyKey: topupIdempotencyRef.current.key,
-        metadata: {
-          source: 'wallet_screen_topup_quote',
-          displayCurrency: currencyCode,
-          enteredDisplayAmount: loadFiatValue,
-          enteredGbpAmount: loadAmountGbp,
-        },
-      });
-
-      const intent = quoteResponse.intent;
-      if (intent.clientSecret && intent.gatewayId === 'stripe_americas') {
-        const sheet = await createStripeIntentSheet(intent.id);
-        await configureStripeMobile(sheet.publishableKey);
-        const { error: initializationError } = await initPaymentSheet({
-          merchantDisplayName: sheet.merchantDisplayName,
-          customerId: sheet.customerId,
-          customerSessionClientSecret: sheet.customerSessionClientSecret,
-          paymentIntentClientSecret: sheet.paymentIntentClientSecret,
-          returnURL: getStripeReturnUrl(),
-          allowsDelayedPaymentMethods: false,
-          applePay:
-            sheet.applePayEnabled && Platform.OS === 'ios'
-              ? { merchantCountryCode: sheet.merchantCountryCode }
-              : undefined,
-          googlePay:
-            sheet.googlePayEnabled && Platform.OS === 'android'
-              ? {
-                  merchantCountryCode: sheet.merchantCountryCode,
-                  currencyCode: sheet.currency,
-                  testEnv: sheet.publishableKey.startsWith('pk_test_'),
-                }
-              : undefined,
-        });
-        if (initializationError) {
-          throw new Error(initializationError.message);
-        }
-
-        const { error: presentationError } = await presentPaymentSheet();
-        if (presentationError?.code === PaymentSheetError.Canceled) {
-          show('Top-up cancelled. No funds were added.', 'info');
-          return;
-        }
-        if (presentationError) {
-          throw new Error(presentationError.message);
-        }
-      } else if (intent.status !== 'succeeded') {
-        if (intent.nextActionUrl && await Linking.canOpenURL(intent.nextActionUrl)) {
-          await Linking.openURL(intent.nextActionUrl);
-          setLoadFiatInput('');
-          show('Payment is pending. 1ZE is credited only after provider confirmation.', 'info');
-        } else {
-          show('This payment provider cannot complete checkout on this device.', 'error');
-        }
-        return;
-      }
-
-      setLoadFiatInput('');
-      topupIdempotencyRef.current = null;
-      show(
-        `${formatIzeAmount(quoteResponse.operation.izeAmount)} is pending provider confirmation.`,
-        'success'
-      );
-      loadBalance();
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to load 1ZE right now. Try again shortly.');
-      show(parsed.message, 'error');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleBuyIze = async () => {
-    if (!canBuyIze || !currentUser?.id) {
-      show('Enter a valid amount within your fiat balance.', 'error');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const result = await buyIze({
-        userId: currentUser.id,
-        fiatAmount: buyFiatValue,
-        fiatCurrency: currencyCode,
-      });
-      setAvailableFiatBalance(result.wallet.fiatBalance);
-      setBuyFiatInput('');
-      show(
-        `Bought ${formatIzeAmount(result.purchase.izeAmount)} with ${formatFromFiat(result.purchase.fiatAmount, currencyCode, { displayMode: 'fiat' })}`,
-        'success',
-      );
-      loadBalance();
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to buy 1ZE right now.');
-      show(parsed.message, 'error');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
+  // ── Handlers (preserved — real API calls) ──
   const handleConvertIzeToFiat = async () => {
     if (!canConvertIze || !currentUser?.id) {
       show('Enter a valid amount within your 1ZE balance.', 'error');
@@ -397,19 +238,27 @@ export default function WalletScreen({ navigation }: Props) {
     }
   };
 
+  // ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ──
+  const handleAddMoney = React.useCallback(() => {
+    haptics.tap();
+    setAddMoneyVisible(true);
+  }, []);
+
+  // ── Activity (canonical WalletActivityScreen — spec 17) ──
   const handleViewActivity = React.useCallback(() => {
     haptics.tap();
-    navigation.navigate('CoOwnOrderHistory');
+    navigation.navigate('WalletActivity');
+  }, [navigation]);
+
+  // ── Seller earnings (extracted SellerEarningsScreen — spec 17) ──
+  const handleViewEarnings = React.useCallback(() => {
+    haptics.tap();
+    navigation.navigate('SellerEarnings');
   }, [navigation]);
 
   const handleWithdraw = React.useCallback(() => {
     haptics.tap();
     navigation.navigate('Withdraw');
-  }, [navigation]);
-
-  const handleBalanceHistory = React.useCallback(() => {
-    haptics.tap();
-    navigation.navigate('BalanceHistory');
   }, [navigation]);
 
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.dualActionHeight;
@@ -489,10 +338,18 @@ export default function WalletScreen({ navigation }: Props) {
         <CoOwnStateCanvas
           variant="empty"
           title="No 1ZE yet"
-          subtitle="Add 1ZE to start trading Co-Own units."
-          actionLabel="Add 1ZE"
-          onAction={() => expandFlow('add')}
+          subtitle="Add money to start trading Co-Own units."
+          actionLabel="Add money"
+          onAction={handleAddMoney}
           emptyGraphicVariant="bag"
+        />
+        <AddMoneySheet
+          visible={addMoneyVisible}
+          onDismiss={() => setAddMoneyVisible(false)}
+          availableFiatBalance={availableFiatBalance}
+          isWalletOperational={isWalletOperational}
+          onCompleted={loadBalance}
+          userId={currentUser?.id}
         />
       </SafeAreaView>
     );
@@ -538,118 +395,46 @@ export default function WalletScreen({ navigation }: Props) {
           localFiatSource={currencyCode}
         />
 
-        {/* ── Seller wallet: pending vs available with release countdown ── */}
+        {/* ── Seller earnings summary (spec 17: "Seller earnings · £X available · £Y pending") ── */}
         {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
-          <View style={[styles.sellerWalletCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.sellerWalletHeader}>
-              <Text style={[styles.sellerWalletTitle, { color: colors.textPrimary }]}>
-                Selling balance
+          <Pressable
+            style={({ pressed }) => [
+              styles.earningsSummaryRow,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={handleViewEarnings}
+            accessibilityRole="button"
+            accessibilityLabel={`Seller earnings, ${formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available, ${formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending`}
+            accessibilityHint="View seller earnings and release schedule"
+          >
+            <View style={styles.earningsSummaryInfo}>
+              <Ionicons name="pricetag-outline" size={16} color={colors.brand} />
+              <Text style={[styles.earningsSummaryText, { color: colors.textPrimary }]} numberOfLines={1}>
+                Seller earnings ·{' '}
+                <Text style={{ fontFamily: Typography.family.semibold }}>
+                  {formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available
+                </Text>
+                {' · '}
+                <Text>
+                  {formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending
+                </Text>
               </Text>
-              <View style={[styles.sellerWalletChip, { backgroundColor: colors.brand + '12' }]}>
-                <Ionicons name="pricetag-outline" size={11} color={colors.brand} />
-                <Text style={[styles.sellerWalletChipText, { color: colors.brand }]}>Sale proceeds</Text>
-              </View>
             </View>
-
-            <View style={styles.sellerBalanceRow}>
-              <View style={styles.sellerBalanceItem}>
-                <Text style={[styles.sellerBalanceLabel, { color: colors.textSecondary }]}>
-                  Available
-                </Text>
-                <Text style={[styles.sellerBalanceValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              <View style={[styles.sellerBalanceDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.sellerBalanceItem}>
-                <Text style={[styles.sellerBalanceLabel, { color: colors.textSecondary }]}>
-                  Pending
-                </Text>
-                <Text style={[styles.sellerBalanceValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              {sellerBalances.heldInReserveGbp > 0 && (
-                <>
-                  <View style={[styles.sellerBalanceDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.sellerBalanceItem}>
-                    <Text style={[styles.sellerBalanceLabel, { color: colors.textSecondary }]}>
-                      In reserve
-                    </Text>
-                    <Text style={[styles.sellerBalanceValue, { color: colors.textPrimary }]}>
-                      {formatFromFiat(sellerBalances.heldInReserveGbp, currencyCode, { displayMode: 'fiat' })}
-                    </Text>
-                  </View>
-                </>
-              )}
-            </View>
-
-            {sellerBalances.pendingGbp > 0 && (
-              <Pressable
-                onPress={() => {
-                  haptics.selection();
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                  setShowPendingBreakdown(!showPendingBreakdown);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={showPendingBreakdown ? 'Hide pending breakdown' : 'Show pending breakdown'}
-                style={styles.pendingToggle}
-              >
-                <Text style={[styles.pendingToggleText, { color: colors.textSecondary }]}>
-                  {showPendingBreakdown ? 'Hide' : 'Show'} pending orders ({sellerBalances.pendingBreakdown.length})
-                </Text>
-                <Ionicons
-                  name={showPendingBreakdown ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
-            )}
-
-            {showPendingBreakdown && sellerBalances.pendingBreakdown.length > 0 && (
-              <View style={styles.pendingBreakdownList}>
-                {sellerBalances.pendingBreakdown.map((item) => {
-                  const releaseIn = item.releaseScheduledAt
-                    ? Math.max(0, Math.ceil((new Date(item.releaseScheduledAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-                    : null;
-                  return (
-                    <View key={item.orderId} style={[styles.pendingItem, { borderColor: colors.border }]}>
-                      <View style={styles.pendingItemInfo}>
-                        <Text
-                          style={[styles.pendingItemTitle, { color: colors.textPrimary }]}
-                          numberOfLines={1}
-                        >
-                          {item.listingTitle ?? 'Order'}
-                        </Text>
-                        <Text style={[styles.pendingItemMeta, { color: colors.textMuted }]}>
-                          {item.orderStatus === 'delivered'
-                            ? releaseIn !== null && releaseIn > 0
-                              ? `Releases in ${releaseIn}d`
-                              : 'Releasing soon'
-                            : `Awaiting ${item.orderStatus === 'shipped' ? 'delivery' : 'shipment'}`}
-                        </Text>
-                      </View>
-                      <Text style={[styles.pendingItemAmount, { color: colors.textPrimary }]}>
-                        {formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-          </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+          </Pressable>
         )}
 
-        {/* ── Add 1ZE / Redeem 1ZE — separate flows, never combined ── */}
+        {/* ── Add money / Redeem 1ZE — primary actions (spec 17 Viewport 1) ── */}
         <View style={styles.actionRow}>
           <AppButton
-            title="Add 1ZE"
+            title="Add money"
             icon={<Ionicons name="add-circle-outline" size={18} color={colors.background} />}
-            onPress={() => expandFlow('add')}
-            variant={activeFlow === 'add' ? 'secondary' : 'primary'}
+            onPress={handleAddMoney}
+            variant="primary"
             size="md"
-            accessibilityLabel="Add 1ZE to your wallet"
-            accessibilityHint={activeFlow === 'add' ? 'Collapses the add 1ZE form' : 'Expands the add 1ZE form'}
+            accessibilityLabel="Add money to your wallet"
+            accessibilityHint="Opens the add money flow"
             hapticFeedback="medium"
             style={styles.actionBtn}
             disabled={!isWalletOperational}
@@ -660,164 +445,15 @@ export default function WalletScreen({ navigation }: Props) {
             onPress={() => expandFlow('redeem')}
             variant={activeFlow === 'redeem' ? 'primary' : 'secondary'}
             size="md"
-            accessibilityLabel="Redeem 1ZE to your bank"
-            accessibilityHint={activeFlow === 'redeem' ? 'Collapses the redeem 1ZE form' : 'Expands the redeem 1ZE form'}
+            accessibilityLabel="Redeem 1ZE to fiat"
+            accessibilityHint={activeFlow === 'redeem' ? 'Collapses the redeem form' : 'Expands the redeem form'}
             hapticFeedback="medium"
             style={styles.actionBtn}
             disabled={balance.available <= 0 || !isWalletOperational}
           />
         </View>
 
-        {/* ── Add 1ZE flow (inline, expandable) ── */}
-        {activeFlow === 'add' && (
-          <View style={[styles.flowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.flowHeader}>
-              <Ionicons name="add-circle" size={16} color={colors.brand} />
-              <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>Add 1ZE</Text>
-            </View>
-            <Text style={[styles.flowHint, { color: colors.textMuted }]}>
-              Convert external currency into 1ZE, or buy 1ZE using your fiat balance.
-            </Text>
-
-            {/* Sub-mode tabs: Load (external) vs Buy (from fiat balance) */}
-            <View style={styles.tabRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.tab,
-                  addMode === 'load' && { backgroundColor: colors.brand + '14', borderColor: colors.brand },
-                  pressed && { opacity: 0.7 },
-                ]}
-                onPress={() => { haptics.tap(); setAddMode('load'); }}
-                accessibilityRole="tab"
-                accessibilityLabel="Load 1ZE from external payment"
-                accessibilityState={{ selected: addMode === 'load' }}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    { color: addMode === 'load' ? colors.brand : colors.textSecondary },
-                    addMode === 'load' && { fontFamily: Typography.family.semibold },
-                  ]}
-                >
-                  Load
-                </Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.tab,
-                  addMode === 'buy' && { backgroundColor: colors.brand + '14', borderColor: colors.brand },
-                  pressed && { opacity: 0.7 },
-                ]}
-                onPress={() => { haptics.tap(); setAddMode('buy'); }}
-                accessibilityRole="tab"
-                accessibilityLabel="Buy 1ZE from fiat balance"
-                accessibilityState={{ selected: addMode === 'buy' }}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    { color: addMode === 'buy' ? colors.brand : colors.textSecondary },
-                    addMode === 'buy' && { fontFamily: Typography.family.semibold },
-                  ]}
-                >
-                  Buy
-                </Text>
-              </Pressable>
-            </View>
-
-            {addMode === 'load' && (
-              <>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Amount in {currencyCode}
-                </Text>
-                <TextInput
-                  ref={loadInputRef}
-                  style={[styles.amountInput, { color: colors.textPrimary, borderColor: colors.border }]}
-                  value={loadFiatInput}
-                  onChangeText={(v) => setLoadFiatInput(v.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
-                  placeholder="0.00"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                  returnKeyType="done"
-                  accessibilityLabel={`Amount in ${currencyCode}`}
-                  accessibilityHint="Enter the amount to convert into 1ZE."
-                />
-                <SummaryRow
-                  label="Gross 1ZE"
-                  value={<CoOwnNumericText value={loadGrossIze} unit="1ZE" size="priceList" align="right" />}
-                  colors={colors}
-                />
-                <SummaryRow
-                  label={`Platform fee (${loadFeeRateLabel})`}
-                  value={<CoOwnNumericText value={loadFeeIze} unit="1ZE" size="priceList" align="right" />}
-                  colors={colors}
-                />
-                <SummaryRow
-                  label="Net 1ZE credited"
-                  value={<CoOwnNumericText value={loadNetIze} unit="1ZE" size="price" align="right" />}
-                  colors={colors}
-                  total
-                />
-                <AppButton
-                  title={isProcessing ? 'Processing…' : 'Load 1ZE'}
-                  onPress={handleLoadIze}
-                  variant="primary"
-                  size="md"
-                  disabled={!canLoadIze}
-                  accessibilityLabel="Load 1ZE"
-                  accessibilityHint="Converts the entered amount into 1ZE and credits your wallet."
-                  style={styles.flowSubmitBtn}
-                />
-              </>
-            )}
-
-            {addMode === 'buy' && (
-              <>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Amount in {currencyCode}
-                </Text>
-                <Text style={[styles.balanceHint, { color: colors.textMuted }]}>
-                  Fiat balance available: {formatFromFiat(availableFiatBalance, currencyCode, { displayMode: 'fiat' })}
-                </Text>
-                <TextInput
-                  ref={buyInputRef}
-                  style={[styles.amountInput, { color: colors.textPrimary, borderColor: colors.border }]}
-                  value={buyFiatInput}
-                  onChangeText={(v) => setBuyFiatInput(v.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
-                  placeholder="0.00"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                  returnKeyType="done"
-                  accessibilityLabel={`Amount in ${currencyCode}`}
-                  accessibilityHint="Enter the fiat amount to buy 1ZE."
-                />
-                <SummaryRow
-                  label="You'll receive"
-                  value={<CoOwnNumericText value={buyIzeAmount} unit="1ZE" size="priceList" align="right" />}
-                  colors={colors}
-                />
-                <SummaryRow
-                  label="Rate"
-                  value={<CoOwnNumericText value={localFiatRate} unit={currencyCode} size="priceList" align="right" showUnit={false} />}
-                  colors={colors}
-                  total
-                />
-                <AppButton
-                  title={isProcessing ? 'Processing…' : 'Buy 1ZE'}
-                  onPress={handleBuyIze}
-                  variant="primary"
-                  size="md"
-                  disabled={!canBuyIze}
-                  accessibilityLabel="Buy 1ZE"
-                  accessibilityHint="Buys 1ZE using your fiat balance."
-                  style={styles.flowSubmitBtn}
-                />
-              </>
-            )}
-          </View>
-        )}
-
-        {/* ── Redeem 1ZE flow (inline, expandable) ── */}
+        {/* ── Redeem 1ZE flow (inline, expandable — Convert 1ZE to fiat) ── */}
         {activeFlow === 'redeem' && (
           <View style={[styles.flowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.flowHeader}>
@@ -860,18 +496,12 @@ export default function WalletScreen({ navigation }: Props) {
           </View>
         )}
 
-        {/* ── Quick actions row ── */}
+        {/* ── Quick actions: Withdraw + Activity (spec 17 — one Activity destination) ── */}
         <View style={styles.quickActionsRow}>
           <QuickAction
             icon="library-outline"
             label="Withdraw"
             onPress={handleWithdraw}
-            colors={colors}
-          />
-          <QuickAction
-            icon="time-outline"
-            label="History"
-            onPress={handleBalanceHistory}
             colors={colors}
           />
           <QuickAction
@@ -950,6 +580,16 @@ export default function WalletScreen({ navigation }: Props) {
         </View>
 
       </ScrollView>
+
+      {/* ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ── */}
+      <AddMoneySheet
+        visible={addMoneyVisible}
+        onDismiss={() => setAddMoneyVisible(false)}
+        availableFiatBalance={availableFiatBalance}
+        isWalletOperational={isWalletOperational}
+        onCompleted={loadBalance}
+        userId={currentUser?.id}
+      />
     </SafeAreaView>
   );
 }
@@ -1021,113 +661,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
   },
-  sellerWalletCard: {
+  // ── Seller earnings summary row (spec 17 — compact, taps to SellerEarningsScreen) ──
+  earningsSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
     marginTop: Space.lg,
   },
-  sellerWalletHeader: {
+  earningsSummaryInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.sm,
-    gap: Space.sm,
-  },
-  sellerWalletTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  sellerWalletChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-  },
-  sellerWalletChipText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-  sellerBalanceRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  sellerBalanceItem: {
-    flex: 1,
-    paddingVertical: Space.xs,
-  },
-  sellerBalanceDivider: {
-    width: Stroke.standard,
-    marginVertical: Space.xs,
-  },
-  sellerBalanceLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    marginBottom: Space.xs / 2,
-  },
-  // Seller balance values use priceList with tabular-nums per spec
-  sellerBalanceValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
-  pendingToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: Space.xs,
-    paddingVertical: Space.sm,
-    marginTop: Space.xs,
-  },
-  pendingToggleText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
-  },
-  pendingBreakdownList: {
-    gap: Space.xs,
-  },
-  pendingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  pendingItemInfo: {
     flex: 1,
-    marginRight: Space.sm,
   },
-  pendingItemTitle: {
+  earningsSummaryText: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  pendingItemMeta: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    marginTop: Space.xs / 2,
-  },
-  pendingItemAmount: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
+    letterSpacing: Type.body.letterSpacing,
+    flexShrink: 1,
   },
   // 24pt section spacing between major sections per spec
   actionRow: {
@@ -1138,7 +695,7 @@ const styles = StyleSheet.create({
   // Sections after the main wallet breakdown use 24pt (Space.lg) spacing
   actionBtn: { flex: 1 },
 
-  // ── Flow cards (inline Add / Redeem) ──
+  // ── Flow cards (inline Redeem / Convert) ──
   flowCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1162,26 +719,6 @@ const styles = StyleSheet.create({
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.captionElevated.letterSpacing,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    gap: Space.xs,
-    marginTop: Space.xs,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-    alignItems: 'center',
-  },
-  tabText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
   },
   inputLabel: {
     fontSize: Type.captionElevated.size,

@@ -472,7 +472,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             <Text style={[styles.securityTitle, { color: colors.textPrimary }]}>How your keys are stored</Text>
           </View>
           <Text style={[styles.securityBody, { color: colors.textSecondary }]}>
-            Your API keys are stored locally on this device only — they are never sent to ThryftVerse servers or shared with third parties. When hardware-backed secure storage (iOS Keychain / Android Keystore) is available, keys are stored encrypted at rest; otherwise they fall back to on-device AsyncStorage. Removing a key permanently deletes it from this device. No live request is sent to any provider when testing — only the key format is validated.
+            Your API keys are stored locally on this device only — they are never sent to ThryftVerse servers or shared with third parties. When hardware-backed secure storage (iOS Keychain / Android Keystore) is available, keys are stored encrypted at rest; otherwise they fall back to on-device AsyncStorage. Removing a key permanently deletes it from this device. When you test a key, a minimal live request (such as listing available models) is sent directly to the provider to confirm the key is authorised — the key is only saved after the provider confirms it.
           </Text>
         </View>
       </Reanimated.View>
