@@ -41,10 +41,12 @@ import {
 } from '../components/commerce';
 import {
   CommerceDetailHeader,
+  CommerceDetailIdentity,
   CommerceDetailTransactionSurface,
   CommerceDetailMetricRow,
   CommerceDetailDisclosureRow,
   CommerceDetailSection,
+  CommerceDetailSellerRow,
   CommerceDetailUnavailableInline,
   CommerceDetailStateDock,
   CommerceDetailMediaRail,
@@ -76,6 +78,7 @@ import {
   CoOwnCandleChart,
   CoOwnSupplySheet,
   CoOwnOverflowSheet,
+  CoOwnAssetDossier,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnCandleRange,
@@ -373,6 +376,21 @@ export default function AssetDetailScreen() {
     : null;
   const feePct = Math.round(CO_OWN_FEE_RATE * 100);
 
+  // ── Holder P&L (spec 09 upgrade) ──
+  // avgEntryPriceGbp comes from the backend holdings contract.
+  // Only show P&L if both entry and current value are known.
+  const avgEntryPriceGbp = yourHolding?.avgEntryPriceGbp ?? null;
+  const positionValueGbp = yourUnits != null ? asset.unitPriceGbp * yourUnits : null;
+  const positionCostGbp = avgEntryPriceGbp != null && yourUnits != null
+    ? avgEntryPriceGbp * yourUnits
+    : null;
+  const unrealizedPnlGbp = positionValueGbp != null && positionCostGbp != null
+    ? positionValueGbp - positionCostGbp
+    : null;
+  const unrealizedPnlPct = positionCostGbp != null && positionCostGbp > 0 && unrealizedPnlGbp != null
+    ? (unrealizedPnlGbp / positionCostGbp) * 100
+    : null;
+
   const bestBid = orderBook && orderBook.bids.length > 0 ? orderBook.bids[0] : null;
   const bestAsk = orderBook && orderBook.asks.length > 0 ? orderBook.asks[0] : null;
   const spreadGbp = bestBid?.unitPriceGbp != null && bestAsk?.unitPriceGbp != null
@@ -598,103 +616,74 @@ export default function AssetDetailScreen() {
             price, availability, and market state live BELOW media on
             clean canvas — not overlaid on photography. No Co-Own
             family badge (redundant inside Co-Own). No card surface.
+            Uses the shared CommerceDetailIdentity primitive with
+            family="co_own" for structural consistency across all
+            commerce detail surfaces.
             ════════════════════════════════════════════════════════════ */}
         <View style={[styles.collectibleIdentity, { borderBottomColor: colors.borderSubtle }]}>
-          {/* Title group — eyebrow + title tightly paired so the legal
-              vehicle reads as a caption to the asset name, not as a
-              separate section. */}
-          <View style={styles.collectibleTitleGroup}>
-            {asset.legalVehicleName ? (
-              <Text
-                style={[styles.collectibleEyebrow, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {asset.legalVehicleName}
-              </Text>
-            ) : null}
+          <CommerceDetailIdentity
+            family="co_own"
+            density={isVeryCompact ? 'compact' : 'standard'}
+            eyebrow={asset.legalVehicleName ?? undefined}
+            title={asset.title}
+            secondaryLine={`${availableUnits} of ${totalUnits} units available`}
+            interestSignal={asset.holders != null ? `${asset.holders} holders` : undefined}
+          />
 
-            {/* Asset title — the dominant text object under media */}
-            <Text
-              style={[styles.collectibleTitle, { color: colors.textPrimary }]}
-              numberOfLines={2}
-              accessibilityRole="header"
-            >
-              {asset.title}
-            </Text>
-          </View>
-
-          {/* Issuer — compact row with avatar, name, verification,
-              and message action. Taps into issuer profile. */}
-          <View style={styles.collectibleIssuerRow}>
-            <Pressable
+          {/* Issuer — shared seller row primitive, configured for
+              institutional Co-Own issuers. Taps into issuer profile. */}
+          <View style={styles.collectibleIssuerWrap}>
+            <CommerceDetailSellerRow
+              roleLabel="Issuer"
+              institutional
+              avatarUri={asset.issuer?.avatar ?? undefined}
+              name={issuerUsername}
+              verified={asset.issuerVerification?.tier === 'id' || asset.issuerVerification?.tier === 'seller'}
+              ratingLine={
+                asset.issuerVerification?.tier === 'seller'
+                  ? 'Trusted Seller'
+                  : asset.issuerVerification?.tier === 'id'
+                    ? 'ID Verified'
+                    : asset.issuerVerification?.tier === 'email'
+                      ? 'Email verified'
+                      : undefined
+              }
+              locationLine={issuerTrust?.location ?? asset.issuer?.location ?? undefined}
               onPress={() => openProfile(navigation, asset.issuerId, currentUser?.id)}
-              style={({ pressed }) => [styles.collectibleIssuerTarget, pressed && { opacity: 0.5 }]}
-              accessibilityRole="button"
-              accessibilityLabel={`Issuer ${issuerUsername}`}
-            >
-              <View style={[styles.collectibleIssuerAvatar, { backgroundColor: colors.surfaceAlt }]}>
-                {asset.issuer?.avatar ? (
-                  <Image
-                    source={{ uri: asset.issuer.avatar }}
-                    style={styles.collectibleIssuerAvatarImg}
-                  />
-                ) : (
-                  <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
-                )}
-              </View>
-              <View style={styles.collectibleIssuerCopy}>
-                <Text
-                  style={[styles.collectibleIssuerName, { color: colors.textPrimary }]}
-                  numberOfLines={1}
-                >
-                  {issuerUsername}
-                </Text>
-                {(asset.issuerVerification?.tier === 'id' || asset.issuerVerification?.tier === 'seller') ? (
-                  <View style={styles.collectibleIssuerVerified}>
-                    <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                    <Text style={[styles.collectibleIssuerVerifiedText, { color: colors.textSecondary }]}>
-                      {asset.issuerVerification?.tier === 'seller' ? 'Trusted Seller' : 'ID Verified'}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            </Pressable>
-            {canMessageIssuer ? (
-              <Pressable
-                onPress={async () => {
-                  if (!currentUser?.id) {
-                    show('Sign in to message the issuer.', 'error');
-                    return;
-                  }
-                  if (isResolvingConversation) return;
-                  setIsResolvingConversation(true);
-                  try {
-                    const conversation = await resolveCoOwnConversation(
-                      currentUser.id,
-                      asset.issuerId,
-                      issuerUsername,
-                      asset.listingId,
-                    );
-                    upsertConversation(conversation);
-                    navigation.navigate('Chat', {
-                      conversationId: conversation.id,
-                      focusQuery: issuerUsername,
-                      partnerUserId: asset.issuerId,
-                    });
-                  } catch {
-                    show('Unable to open conversation. Try again.', 'error');
-                  } finally {
-                    setIsResolvingConversation(false);
-                  }
-                }}
-                hitSlop={8}
-                style={({ pressed }) => [styles.collectibleMessageTarget, pressed && { opacity: 0.5 }]}
-                accessibilityRole="button"
-                accessibilityLabel={`Message ${issuerUsername}`}
-              >
-                <Ionicons name="chatbubble-outline" size={20} color={colors.brand} />
-              </Pressable>
-            ) : null}
+              primaryAction={
+                canMessageIssuer
+                  ? {
+                      label: 'Message',
+                      onPress: async () => {
+                        if (!currentUser?.id) {
+                          show('Sign in to message the issuer.', 'error');
+                          return;
+                        }
+                        if (isResolvingConversation) return;
+                        setIsResolvingConversation(true);
+                        try {
+                          const conversation = await resolveCoOwnConversation(
+                            currentUser.id,
+                            asset.issuerId,
+                            issuerUsername,
+                            asset.listingId,
+                          );
+                          upsertConversation(conversation);
+                          navigation.navigate('Chat', {
+                            conversationId: conversation.id,
+                            focusQuery: issuerUsername,
+                            partnerUserId: asset.issuerId,
+                          });
+                        } catch {
+                          show('Unable to open conversation. Try again.', 'error');
+                        } finally {
+                          setIsResolvingConversation(false);
+                        }
+                      },
+                    }
+                  : undefined
+              }
+            />
           </View>
 
           {/* One-unit price — the dominant numeric value.
@@ -803,14 +792,39 @@ export default function AssetDetailScreen() {
           );
         })()}
 
-        {/* Holder position — quiet summary.
-            Spec 14 V3: `You own 12 units · 3.4%`.
-            More detail lives in Portfolio, not here. */}
+        {/* Holder position — quiet summary with P&L.
+            Spec 09: "Your position / 12 units · £1,248 value / Avg. entry
+            (avgEntryPriceGbp from the backend holdings contract).
+            Only show P&L if both entry and current value are known. */}
         {isHolder && yourUnits != null && viewerPct != null ? (
           <View style={styles.holderPositionSummary}>
-            <Text style={[styles.holderPositionText, { color: colors.textSecondary }]}>
-              You own {yourUnits} units · {viewerPct.toFixed(1)}%
-            </Text>
+            <View style={styles.holderPositionLeft}>
+              <Text style={[styles.holderPositionText, { color: colors.textSecondary }]}>
+                Your settled position
+              </Text>
+              {avgEntryPriceGbp != null && (
+                <Text style={[styles.holderPositionText, { color: colors.textSecondary }]}>
+                  Avg. entry {formatCoOwnIze(avgEntryPriceGbp)}
+                </Text>
+              )}
+            </View>
+            <View style={styles.holderPositionRight}>
+              <Text style={[styles.holderPositionText, { color: colors.textSecondary, textAlign: 'right' }]}>
+                You own {yourUnits} units · {viewerPct.toFixed(1)}%
+              </Text>
+              {unrealizedPnlGbp != null && unrealizedPnlPct != null ? (
+                <Text style={[
+                  styles.holderPositionText,
+                  {
+                    color: unrealizedPnlGbp >= 0 ? colors.coownUp : colors.coownDown,
+                    textAlign: 'right',
+                    fontFamily: FontFamily.semibold,
+                  },
+                ]}>
+                  {unrealizedPnlGbp >= 0 ? '+' : ''}{formatCoOwnIze(unrealizedPnlGbp)} ({unrealizedPnlPct >= 0 ? '+' : ''}{unrealizedPnlPct.toFixed(1)}%)
+                </Text>
+              ) : null}
+            </View>
           </View>
         ) : null}
 
@@ -1062,6 +1076,38 @@ export default function AssetDetailScreen() {
             onPress={() => setRiskDisclosureVisible(true)}
             leadingIcon="warning-outline"
             accessibilityLabel="View risks"
+          />
+
+          {/* Full-asset buyout — truthful unavailable state.
+              Spec 03 §10: do not navigate to a Buyout flow that does
+              not exist. Show the capability honestly. */}
+          <CommerceDetailUnavailableInline
+            title="Full-asset buyout"
+            body="Not available"
+            icon="swap-horizontal-outline"
+          />
+
+          {/* Asset dossier — the single source of appraisal truth.
+              Provenance, condition, storage, and appraisal in one
+              flat panel. No separate valuation card. */}
+          <CoOwnAssetDossier
+            provenance={asset.provenance ? [{ event: 'Acquired', date: asset.updatedAt ?? '' }] : undefined}
+            condition={asset.conditionGrade ? {
+              grade: asset.conditionGrade,
+            } : undefined}
+            storage={asset.custodyInsured ? {
+              location: asset.custodianLocation ?? 'Insured custody',
+              custodian: asset.custodianName ?? 'Custodian',
+              insured: true,
+              policyRef: asset.custodyPolicyRef ?? undefined,
+            } : undefined}
+            appraisal={asset.appraisalValueGbp ? {
+              value: asset.appraisalValueGbp,
+              currency: 'GBP',
+              valuedAt: asset.appraisalValuedAt ?? asset.updatedAt ?? '',
+              method: 'Independent appraisal',
+              valuer: asset.appraisalValuer ?? undefined,
+            } : undefined}
           />
         </CommerceDetailSection>
 
@@ -1443,82 +1489,17 @@ const styles = StyleSheet.create({
   },
   // ── Collectible-first identity (Viewport 1, spec 14 V3) ──
   // No card surface — clean canvas with a hairline separator below.
-  // Spacing is deliberate: title group is tight, issuer and price
-  // get breathing room, availability is a footnote to price.
+  // Spacing is deliberate: CommerceDetailIdentity handles eyebrow +
+  // title, issuer row gets breathing room, price and availability
+  // are factual lines.
   collectibleIdentity: {
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
     paddingBottom: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  collectibleTitleGroup: {
-    gap: Space.xs,
-  },
-  collectibleEyebrow: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
-  },
-  collectibleTitle: {
-    fontSize: TypographyV2.screenTitle.size,
-    lineHeight: TypographyV2.screenTitle.lineHeight,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.screenTitle.letterSpacing,
-  },
-  collectibleIssuerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
+  collectibleIssuerWrap: {
     marginTop: Space.md,
-  },
-  collectibleIssuerTarget: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    minHeight: Control.hit,
-    flexShrink: 1,
-  },
-  collectibleIssuerAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  collectibleIssuerAvatarImg: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  collectibleIssuerCopy: {
-    flexShrink: 1,
-    gap: 1,
-  },
-  collectibleIssuerName: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  collectibleIssuerVerified: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  collectibleIssuerVerifiedText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  collectibleMessageTarget: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   collectiblePriceRow: {
     flexDirection: 'row',
@@ -1577,11 +1558,24 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.body.letterSpacing,
   },
-  // ── Holder position summary (spec 14 V3: quiet) ──
+  // ── Holder position summary (spec 09: quiet with P&L) ──
   holderPositionSummary: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Space.md,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.md,
+  },
+  holderPositionLeft: {
+    gap: 2,
+    flexShrink: 1,
+  },
+  holderPositionRight: {
+    gap: 2,
+    flexShrink: 1,
+    alignItems: 'flex-end',
   },
   holderPositionText: {
     fontSize: TypographyV2.body.size,
@@ -1730,6 +1724,14 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     gap: Space.md,
+  },
+  // Secondary market facts — NAV, distribution, report availability.
+  // Kept outside the dominant market surface (spec 03 §2).
+  marketSecondaryFacts: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: Space.sm,
   },
   fundamentalsRow: {
     flexDirection: 'row',

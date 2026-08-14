@@ -70,6 +70,7 @@ describe('settings preference persistence', () => {
       mySizes: [],
       filterPresets: [],
       analyticsOptOut: true,
+      developerMode: false,
     });
   });
 

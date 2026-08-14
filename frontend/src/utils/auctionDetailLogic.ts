@@ -566,7 +566,7 @@ export function resolveStateAction(
       };
     }
     return {
-      primary: { type: 'watchAuction', label: auction.isWatched ? 'Watching' : 'Notify me' },
+      primary: { type: 'watchAuction', label: auction.isWatched ? 'Watching' : 'Watch auction' },
       secondary: { type: 'share', label: 'Share' },
       forbidden: ['placeBid', 'buyNow'],
       viewerMessage: auction.isWatched ? 'You are watching — we’ll notify you when it goes live' : null,
@@ -736,7 +736,7 @@ export function resolveViewerContextMessage(
 
   if (viewerState === 'watching' && effectiveState === 'upcoming') {
     return {
-      title: 'Watching — we’ll notify you when it goes live',
+      title: 'You are watching this auction',
       subtitle: null,
       treatment: 'restrained',
     };
