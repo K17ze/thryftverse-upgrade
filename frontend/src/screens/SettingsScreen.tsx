@@ -1,9 +1,6 @@
 import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CachedImage } from '../components/CachedImage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -33,14 +30,14 @@ import { t } from '../i18n';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
+import { FlatRow } from '../components/ui/FlatRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 import { useAppTheme as useTheme } from '../theme/ThemeContext';
 
-import { Space, FontFamily, Control, Elevation } from '../theme/designTokens';
+import { Space, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 interface DestinationMeta {
@@ -130,7 +127,6 @@ export default function SettingsScreen({ navigation }: Props) {
   const [themePickerVisible, setThemePickerVisible] = React.useState(false);
   const [languagePickerVisible, setLanguagePickerVisible] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [searchVisible, setSearchVisible] = React.useState(false);
   const [pushPermissionGranted, setPushPermissionGranted] = React.useState<boolean | null>(null);
   const [isTogglingPush, setIsTogglingPush] = React.useState(false);
   const [isHydrating, setIsHydrating] = React.useState(!useStore.persist.hasHydrated());
@@ -305,65 +301,11 @@ export default function SettingsScreen({ navigation }: Props) {
   const displayName = currentUser?.displayName ?? currentUser?.username ?? 'Not signed in';
   const username = currentUser?.username ?? '';
 
-  // ── Verification badges — surfaced on the identity hero card ──
-  const verificationBadges: { icon: keyof typeof Ionicons.glyphMap; label: string; color: string; verified: boolean }[] = [
-    {
-      icon: 'mail' as const,
-      label: 'Email',
-      color: colors.success,
-      verified: !!currentUser?.emailVerified,
-    },
-  ].filter((b) => b.verified);
-
   const notificationSummary = `${pushEnabledCount}/${pushTotalCount} categories`;
 
   // ── Search overlay ──
-  if (searchVisible) {
-    return (
-      <FlagshipScreen
-        header={
-          <FlagshipHeader
-            title="Search settings"
-            onBack={() => { setSearchVisible(false); setSearchQuery(''); }}
-          />
-        }
-      >
-        <View style={{ marginBottom: Space.md }}>
-          <AppSearchBar
-            placeholder="Search settings"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            containerStyle={styles.searchField}
-            inputProps={{ autoFocus: true }}
-          />
-        </View>
-        <SettingsSection title={isSearching ? 'Results' : 'All settings'} noCard>
-          {isSearching && searchResults.length === 0 ? (
-            <View style={styles.emptySearch}>
-              <Text style={[styles.emptySearchText, { color: colors.textMuted }]}>
-                No matching settings
-              </Text>
-            </View>
-          ) : (
-            (isSearching ? searchResults : ROUTE_METADATA).map((dest, i) => (
-              <SettingsRow
-                key={`${dest.key}-${i}`}
-                title={dest.label}
-                subtitle={dest.section}
-                onPress={() => {
-                  setSearchQuery('');
-                  setSearchVisible(false);
-                  (navigation.navigate as (key: keyof RootStackParamList) => void)(dest.key);
-                }}
-                isFirst={i === 0}
-                isLast={i === (isSearching ? searchResults : ROUTE_METADATA).length - 1}
-              />
-            ))
-          )}
-        </SettingsSection>
-      </FlagshipScreen>
-    );
-  }
+  // Search is now inline — a search field at the top of the settings list
+  // that filters settings in-place. No separate overlay screen needed.
 
   return (
     <FlagshipScreen
@@ -371,102 +313,73 @@ export default function SettingsScreen({ navigation }: Props) {
         <FlagshipHeader
           title="Settings"
           onBack={() => navigation.goBack()}
-          rightAction={
-            <AnimatedPressable
-              onPress={() => setSearchVisible(true)}
-              scaleValue={0.92}
-              hapticFeedback="light"
-              style={styles.searchBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Search settings"
-            >
-              <Ionicons name="search-outline" size={20} color={colors.textPrimary} />
-            </AnimatedPressable>
-          }
         />
       }
     >
-      {/* ── IDENTITY CARD — profile, verification status, quick actions ── */}
-      <View style={[styles.identityHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <AnimatedPressable
-          onPress={() => navigation.navigate('EditProfile', {})}
-          activeOpacity={0.9}
-          scaleValue={0.99}
-          hapticFeedback="light"
-          accessibilityRole="button"
-          accessibilityLabel="Edit profile and account"
-          accessibilityHint="Opens profile, private details, security and account editor"
-        >
-          <View style={styles.identityHeroMain}>
-            <View style={[styles.identityAvatarWrap, { backgroundColor: colors.surfaceAlt }]}>
-              {avatarUri ? (
-                <CachedImage uri={avatarUri} style={styles.identityAvatarImage} contentFit="cover" />
-              ) : (
-                <Text style={[styles.identityAvatarText, { color: colors.textPrimary }]}>{displayName.charAt(0).toUpperCase()}</Text>
-              )}
-            </View>
-            <View style={styles.identityHeroText}>
-              <Text style={[styles.identityName, { color: colors.textPrimary }]} numberOfLines={1}>
-                {displayName}
-              </Text>
-              {username ? (
-                <Text style={[styles.identityHandle, { color: colors.textMuted }]} numberOfLines={1}>
-                  @{username}
-                </Text>
-              ) : null}
-              {currentUser?.email ? (
-                <Text style={[styles.identityEmail, { color: colors.textMuted }]} numberOfLines={1}>
-                  {currentUser.email}
-                </Text>
-              ) : null}
-            </View>
-            <View style={[styles.identityEditAffordance, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-            </View>
-          </View>
-        </AnimatedPressable>
-
-        {verificationBadges.length > 0 ? (
-          <View style={styles.identityBadges}>
-            {verificationBadges.map((badge, i) => (
-              <View key={i} style={[styles.identityBadge, { backgroundColor: `${badge.color}15` }]}>
-                <Ionicons name={badge.icon} size={12} color={badge.color} />
-                <Text style={[styles.identityBadgeText, { color: badge.color }]}>{badge.label}</Text>
-                {badge.verified ? (
-                  <Ionicons name="checkmark-circle" size={11} color={badge.color} />
-                ) : null}
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        <View style={styles.identityQuickActions}>
-          <AnimatedPressable
-            style={[styles.identityQuickBtn, { borderColor: colors.border }]}
-            onPress={() => navigation.navigate('EditProfile', {})}
-            activeOpacity={0.8}
-            scaleValue={0.97}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="Edit profile"
-          >
-            <Ionicons name="create-outline" size={16} color={colors.textPrimary} />
-            <Text style={[styles.identityQuickBtnText, { color: colors.textPrimary }]}>Edit profile</Text>
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={[styles.identityQuickBtn, { backgroundColor: `${colors.brand}15`, borderColor: `${colors.brand}40` }]}
-            onPress={() => navigation.navigate('Verification')}
-            activeOpacity={0.8}
-            scaleValue={0.97}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="Verify identity"
-          >
-            <Ionicons name="shield-checkmark-outline" size={16} color={colors.brand} />
-            <Text style={[styles.identityQuickBtnText, { color: colors.brand }]}>Verify identity</Text>
-          </AnimatedPressable>
-        </View>
+      {/* ── INLINE SEARCH — filters settings in-place ── */}
+      <View style={{ marginBottom: Space.md }}>
+        <AppSearchBar
+          placeholder="Search settings"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          containerStyle={styles.searchField}
+        />
       </View>
+
+      {isSearching ? (
+        /* ── SEARCH RESULTS — flat filtered list ── */
+        <SettingsSection title={searchResults.length > 0 ? 'Results' : 'All settings'} noCard>
+          {searchResults.length === 0 ? (
+            <View style={styles.emptySearch}>
+              <Text style={[styles.emptySearchText, { color: colors.textMuted }]}>
+                No matching settings
+              </Text>
+            </View>
+          ) : (
+            searchResults.map((dest, i) => (
+              <SettingsRow
+                key={`${dest.key}-${i}`}
+                title={dest.label}
+                subtitle={dest.section}
+                onPress={() => {
+                  setSearchQuery('');
+                  (navigation.navigate as (key: keyof RootStackParamList) => void)(dest.key);
+                }}
+                isFirst={i === 0}
+                isLast={i === searchResults.length - 1}
+              />
+            ))
+          )}
+        </SettingsSection>
+      ) : (
+        <>
+          {/* ── IDENTITY — compact flat row, no card ── */}
+          <FlatRow
+            label={displayName}
+            secondary={username ? `@${username}${currentUser?.email ? ` · ${currentUser.email}` : ''}` : (currentUser?.email ?? 'Not signed in')}
+            imageUri={avatarUri ?? undefined}
+            imageSize={48}
+            imageRadius={24}
+            onPress={() => navigation.navigate('EditProfile', {})}
+            separator={false}
+            accessibilityLabel="Edit profile and account"
+            accessibilityHint="Opens profile, private details, security and account editor"
+            style={{ paddingVertical: Space.sm }}
+          />
+
+          {/* ── Verification prompt — genuine account problem, flat row ── */}
+          {!currentUser?.emailVerified ? (
+            <FlatRow
+              icon="shield-checkmark-outline"
+              iconColor={colors.brand}
+              label="Verify your identity"
+              secondary="Get the verified badge and unlock selling"
+              onPress={() => navigation.navigate('Verification')}
+              separatorInset={false}
+              accessibilityLabel="Verify identity"
+              accessibilityHint="Opens verification and KYC screen"
+            />
+          ) : null}
 
       {/* ── ACCOUNT ── */}
       <SettingsSection title="Account" icon="person-circle-outline" noCard>
@@ -804,6 +717,8 @@ export default function SettingsScreen({ navigation }: Props) {
       <View style={{ marginTop: Space.lg, marginBottom: Space.md }}>
         <SettingsSignOutRow username={currentUser?.username} onSignOut={handleLogout} />
       </View>
+        </>
+      )}
 
       <BottomSheetPicker
         visible={currencyPickerVisible}
@@ -837,114 +752,8 @@ export default function SettingsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  searchBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   searchField: {
-    height: Control.hit,
-  },
-  // ── Identity hero card ──
-  identityHero: {
-    borderRadius: RadiusRoleValue.standalonePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.lg,
-    ...Elevation.subtle,
-  },
-  identityHeroMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  identityAvatarWrap: {
-    width: Space.xxl + Space.sm,
-    height: Space.xxl + Space.sm,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  identityAvatarImage: {
-    width: Space.xxl + Space.sm,
-    height: Space.xxl + Space.sm,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
-  identityAvatarText: {
-    fontSize: TypographyV2.screenTitle.size,
-    fontFamily: FontFamily.bold,
-  },
-  identityHeroText: {
-    flex: 1,
-    gap: Space.xs / 2,
-  },
-  identityName: {
-    fontSize: TypographyV2.bodyStrong.size + 1,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.body.letterSpacing,
-    lineHeight: TypographyV2.priceList.lineHeight,
-  },
-  identityHandle: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    lineHeight: TypographyV2.meta.lineHeight,
-  },
-  identityEmail: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    lineHeight: TypographyV2.meta.lineHeight,
-  },
-  identityBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs + 2,
-    marginTop: Space.sm,
-  },
-  identityBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs / 2 + 1,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
-  identityBadgeText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing * 2,
-  },
-  identityQuickActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.md,
-  },
-  identityQuickBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs + 1,
-    paddingVertical: Space.sm + Space.xs / 2,
-    borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
-  identityQuickBtnText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  identityEditAffordance: {
-    width: Control.chromeCompact,
-    height: Control.chromeCompact,
-    borderRadius: RadiusRoleValue.standalonePanel,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
+    height: 48,
   },
   // ── Search empty state ──
   emptySearch: {
@@ -954,5 +763,14 @@ const styles = StyleSheet.create({
   emptySearchText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
+    // Theme-migrated colour roles preserved for visual integrity
+    color: colors.textPrimary,
+  },
+  // ── Inline status colours (theme migration visual integrity) ──
+  statusSuccess: {
+    color: colors.success,
+  },
+  statusMuted: {
+    color: colors.textMuted,
   },
 });

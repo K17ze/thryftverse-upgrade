@@ -38,7 +38,8 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 // ── Layout constants ──
 const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_HEIGHT = Math.round(SCREEN_W * (10 / 16));
+const HERO_HEIGHT = Math.round(SCREEN_W * (4 / 5));
+const FEATURED_COLLECTION_HEIGHT = Math.round(SCREEN_W * (5 / 6));
 // Collection rail card dimensions — intentional design constants:
 // 200pt width balances cover-image legibility with ~3 cards visible per viewport;
 // 260pt height gives the cover image room to breathe while keeping curator meta compact.
@@ -157,6 +158,58 @@ const CollectionRailCard = React.memo(function CollectionRailCard({
 });
 
 // ---------------------------------------------------------------------------
+// Featured collection card — full-width, large art-directed media object
+// ---------------------------------------------------------------------------
+const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
+  collection,
+  onPress,
+}: {
+  collection: GalleriaCollection;
+  onPress: () => void;
+}) {
+  const styles = useStyles();
+
+  return (
+    <AnimatedPressable
+      style={styles.featuredCollectionContainer}
+      onPress={onPress}
+      activeOpacity={0.94}
+      scaleValue={0.99}
+      accessibilityRole="button"
+      accessibilityLabel={`Featured collection: ${collection.title}`}
+      accessibilityHint="Opens the collection detail"
+    >
+      <CachedImage
+        uri={collection.coverImage}
+        style={styles.featuredCollectionImage}
+        contentFit="cover"
+        priority="high"
+      />
+      <LinearGradient
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.75)']}
+        style={styles.featuredCollectionGradient}
+      />
+      <View style={styles.featuredCollectionOverlay} pointerEvents="none">
+        <Text style={styles.featuredCollectionTheme}>{collection.theme}</Text>
+        <Text style={styles.featuredCollectionTitle} numberOfLines={3}>
+          {collection.title}
+        </Text>
+        <View style={styles.featuredCollectionCuratorRow}>
+          <CachedImage
+            uri={collection.curatorAvatar}
+            style={styles.featuredCollectionAvatar}
+            contentFit="cover"
+          />
+          <Text style={styles.featuredCollectionCurator} numberOfLines={1}>
+            Curated by {collection.curator}
+          </Text>
+        </View>
+      </View>
+    </AnimatedPressable>
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Featured asset card — masonry tile with image, title, valuation, collection
 // ---------------------------------------------------------------------------
 const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
@@ -207,19 +260,24 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
 });
 
 // ---------------------------------------------------------------------------
-// Editorial list item — 16:9 hero, title, excerpt, author + read time
+// Editorial list item — hero, title, excerpt, author + read time
+// Varies size for editorial rhythm: 'large' for the lead story, 'standard' for rest
 // ---------------------------------------------------------------------------
 const EditorialListItem = React.memo(function EditorialListItem({
   editorial,
   onPress,
   isLast,
+  size = 'standard',
 }: {
   editorial: GalleriaEditorial;
   onPress: () => void;
   isLast: boolean;
+  size?: 'large' | 'standard';
 }) {
   const styles = useStyles();
-  const heroHeight = Math.round(SCREEN_W * (9 / 16));
+  const heroHeight = size === 'large'
+    ? Math.round(SCREEN_W * (5 / 8))
+    : Math.round(SCREEN_W * (9 / 16));
 
   return (
     <View style={[styles.editorialItem, isLast && styles.editorialItemLast]}>
@@ -247,10 +305,13 @@ const EditorialListItem = React.memo(function EditorialListItem({
           </View>
         </View>
         <View style={styles.editorialContent}>
-          <Text style={styles.editorialTitle} numberOfLines={2}>
+          <Text
+            style={[styles.editorialTitle, size === 'large' && styles.editorialTitleLarge]}
+            numberOfLines={size === 'large' ? 3 : 2}
+          >
             {editorial.title}
           </Text>
-          <Text style={styles.editorialExcerpt} numberOfLines={3}>
+          <Text style={styles.editorialExcerpt} numberOfLines={size === 'large' ? 4 : 3}>
             {editorial.excerpt}
           </Text>
           <View style={styles.editorialAuthorRow}>
@@ -304,7 +365,7 @@ function HeroSkeleton() {
   const styles = useStyles();
   return (
     <View style={styles.heroContainer}>
-      <PremiumSkeletonTile width="100%" height={HERO_HEIGHT} borderRadius={Radius.xl} />
+      <PremiumSkeletonTile width="100%" height={HERO_HEIGHT} borderRadius={Radius.none} />
     </View>
   );
 }
@@ -474,6 +535,8 @@ export default function GalleriaScreen() {
   // ── Derived data ──
   const heroEditorial = editorials[0] ?? null;
   const remainingEditorials = editorials.slice(1);
+  const featuredCollection = collections[0] ?? null;
+  const railCollections = collections.slice(1);
   const masonryColumns = useMemo(
     () => buildMasonryColumns(featuredAssets),
     [featuredAssets],
@@ -554,25 +617,33 @@ export default function GalleriaScreen() {
           />
         ) : null}
 
-        {/* ── Section 2: Curated Collections rail ── */}
+        {/* ── Section 2: Curated Collections — featured + rail ── */}
         {loading ? (
           <CollectionRailSkeleton />
         ) : collections.length > 0 ? (
           <View style={styles.sectionWrap}>
             <Text style={styles.sectionEyebrow}>CURATED COLLECTIONS</Text>
-            <HorizontalRail
-              contentContainerStyle={styles.railContent}
-              showsHorizontalScrollIndicator={false}
-              accessibilityLabel="Curated collections rail"
-            >
-              {collections.map((col) => (
-                <CollectionRailCard
-                  key={col.id}
-                  collection={col}
-                  onPress={() => handleCollectionPress(col)}
-                />
-              ))}
-            </HorizontalRail>
+            {featuredCollection && (
+              <FeaturedCollectionCard
+                collection={featuredCollection}
+                onPress={() => handleCollectionPress(featuredCollection)}
+              />
+            )}
+            {railCollections.length > 0 && (
+              <HorizontalRail
+                contentContainerStyle={styles.railContent}
+                showsHorizontalScrollIndicator={false}
+                accessibilityLabel="Curated collections rail"
+              >
+                {railCollections.map((col) => (
+                  <CollectionRailCard
+                    key={col.id}
+                    collection={col}
+                    onPress={() => handleCollectionPress(col)}
+                  />
+                ))}
+              </HorizontalRail>
+            )}
           </View>
         ) : null}
 
@@ -621,6 +692,7 @@ export default function GalleriaScreen() {
                 editorial={ed}
                 onPress={() => handleEditorialPress(ed)}
                 isLast={idx === remainingEditorials.length - 1}
+                size={idx === 0 ? 'large' : 'standard'}
               />
             ))}
           </>
@@ -705,11 +777,10 @@ function useStyles() {
           fontFamily: Typography.family.medium,
           color: colors.textSecondary,
         },
-        // ── Hero ──
+        // ── Hero — full-bleed, no card chrome ──
         heroContainer: {
-          marginHorizontal: Space.md,
+          width: '100%',
           marginBottom: Space.lg,
-          borderRadius: Radius.xl,
           overflow: 'hidden',
         },
         heroImage: {
@@ -721,15 +792,15 @@ function useStyles() {
           bottom: 0,
           left: 0,
           right: 0,
-          height: '60%',
+          height: '65%',
         },
         heroOverlay: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          padding: Space.md,
-          gap: Space.xs,
+          padding: Space.lg,
+          gap: Space.sm,
         },
         heroEyebrowRow: {
           flexDirection: 'row',
@@ -747,19 +818,20 @@ function useStyles() {
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
           letterSpacing: Type.metaElevated.letterSpacing,
+          opacity: 0.9,
         },
         heroTitle: {
-          fontSize: Type.title.size,
-          lineHeight: Type.title.lineHeight,
+          fontSize: Type.priceList.size,
+          lineHeight: Type.priceList.lineHeight,
           fontFamily: Typography.family.bold,
           color: colors.textInverse,
-          letterSpacing: Type.title.letterSpacing,
+          letterSpacing: -0.5,
         },
         heroMeta: {
-          fontSize: Type.caption.size,
+          fontSize: Type.body.size,
           fontFamily: Typography.family.medium,
           color: colors.textInverse,
-          opacity: 0.8,
+          opacity: 0.75,
         },
         // ── Section wrappers ──
         sectionWrap: {
@@ -788,6 +860,63 @@ function useStyles() {
         railContent: {
           paddingHorizontal: Space.md,
           gap: Space.sm,
+        },
+        // ── Featured collection ──
+        featuredCollectionContainer: {
+          marginHorizontal: Space.md,
+          marginBottom: Space.md,
+          borderRadius: Radius.xl,
+          overflow: 'hidden',
+        },
+        featuredCollectionImage: {
+          width: '100%',
+          height: FEATURED_COLLECTION_HEIGHT,
+        } as ImageStyle,
+        featuredCollectionGradient: {
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '70%',
+        },
+        featuredCollectionOverlay: {
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: Space.lg,
+          gap: Space.xs,
+        },
+        featuredCollectionTheme: {
+          fontSize: Type.meta.size,
+          fontFamily: Typography.family.semibold,
+          color: colors.textInverse,
+          letterSpacing: Type.metaElevated.letterSpacing,
+          opacity: 0.85,
+        },
+        featuredCollectionTitle: {
+          fontSize: Type.priceList.size,
+          lineHeight: Type.priceList.lineHeight,
+          fontFamily: Typography.family.bold,
+          color: colors.textInverse,
+          letterSpacing: -0.5,
+        },
+        featuredCollectionCuratorRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs,
+          marginTop: Space.xs,
+        },
+        featuredCollectionAvatar: {
+          width: Space.smMd,
+          height: Space.smMd,
+          borderRadius: Radius.full,
+        } as ImageStyle,
+        featuredCollectionCurator: {
+          fontSize: Type.caption.size,
+          fontFamily: Typography.family.medium,
+          color: colors.textInverse,
+          opacity: 0.8,
         },
         collectionCard: {
           gap: Space.sm,
@@ -865,7 +994,6 @@ function useStyles() {
           width: '100%',
           borderRadius: Radius.lg,
           overflow: 'hidden',
-          backgroundColor: colors.surfaceAlt,
         },
         assetImage: {
           width: '100%',
@@ -946,6 +1074,11 @@ function useStyles() {
           fontFamily: Typography.family.bold,
           color: colors.textPrimary,
           letterSpacing: Type.subtitle.letterSpacing,
+        },
+        editorialTitleLarge: {
+          fontSize: Type.priceList.size,
+          lineHeight: Type.priceList.lineHeight,
+          letterSpacing: -0.4,
         },
         editorialExcerpt: {
           fontSize: Type.body.size,

@@ -9,6 +9,7 @@ import {
   Share,
   Alert,
   Dimensions,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
@@ -108,6 +109,10 @@ export default function ClosetScreen() {
   const [showPriceDropsOnly, setShowPriceDropsOnly] = useState(false);
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
   const [collectionsSyncError, setCollectionsSyncError] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [manageMode, setManageMode] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameText, setRenameText] = useState('');
   const scrollY = useSharedValue(0);
   const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -117,6 +122,10 @@ export default function ClosetScreen() {
   const outfits = useStore((state) => state.outfits);
   const removeOutfit = useStore((state) => state.removeOutfit);
   const loadCollectionsFromApi = useStore((state) => state.loadCollectionsFromApi);
+  const deleteCollection = useStore((state) => state.deleteCollection);
+  const deleteCollectionOnApi = useStore((state) => state.deleteCollectionOnApi);
+  const renameCollection = useStore((state) => state.renameCollection);
+  const reorderCollections = useStore((state) => state.reorderCollections);
   const currentUser = useStore((state) => state.currentUser);
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
   React.useEffect(() => {
@@ -317,6 +326,60 @@ export default function ClosetScreen() {
     navigation.navigate('OutfitBuilder');
   }, [haptic, navigation]);
 
+  const handleDeleteCollection = useCallback((id: string, name: string) => {
+    haptic.medium();
+    Alert.alert(
+      'Delete Collection?',
+      `"${name}" will be permanently removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            haptic.medium();
+            void deleteCollectionOnApi(id).catch(() => {
+              // Fallback to local delete if API fails
+              deleteCollection(id);
+            });
+          },
+        },
+      ]
+    );
+  }, [haptic, deleteCollection, deleteCollectionOnApi]);
+
+  const handleStartRename = useCallback((id: string, currentName: string) => {
+    haptic.light();
+    setRenamingId(id);
+    setRenameText(currentName);
+  }, [haptic]);
+
+  const handleConfirmRename = useCallback(() => {
+    if (renamingId && renameText.trim().length > 0) {
+      haptic.light();
+      renameCollection(renamingId, renameText.trim());
+    }
+    setRenamingId(null);
+    setRenameText('');
+  }, [renamingId, renameText, haptic, renameCollection]);
+
+  const handleCancelRename = useCallback(() => {
+    setRenamingId(null);
+    setRenameText('');
+  }, []);
+
+  const handleMoveCollection = useCallback((index: number, direction: -1 | 1) => {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= collections.length) return;
+    haptic.light();
+    reorderCollections(index, newIndex);
+  }, [haptic, reorderCollections, collections.length]);
+
+  const handleToggleManage = useCallback(() => {
+    haptic.light();
+    setManageMode((v) => !v);
+  }, [haptic]);
+
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
@@ -335,8 +398,8 @@ export default function ClosetScreen() {
     OUTFITS: 'shirt-outline' as const,
   };
 
-  const renderBrandChips = () => {
-    if (availableBrands.length <= 1) return null;
+  const renderFilterPanel = () => {
+    if (!showFilters) return null;
     return (
       <ScrollView
         horizontal
@@ -444,7 +507,7 @@ export default function ClosetScreen() {
         {renderSortBar()}
         {renderSortMenu()}
         {/* Brand filter chips */}
-        {availableBrands.length > 1 ? renderBrandChips() : null}
+        {availableBrands.length > 1 ? renderFilterPanel() : null}
         {/* 3-column media mosaic — 3:4 portrait thumbnails, media-first */}
         <ClosetMediaMosaic
           items={filteredSaved}
@@ -473,7 +536,7 @@ export default function ClosetScreen() {
         {renderSortBar()}
         {renderSortMenu()}
         {/* Brand filter chips */}
-        {availableBrands.length > 1 ? renderBrandChips() : null}
+        {availableBrands.length > 1 ? renderFilterPanel() : null}
         {/* Price drop filter chip — only on wishlist */}
         {priceDropCount > 0 ? (
           <View style={styles.filterChipRow}>

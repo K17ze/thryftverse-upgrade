@@ -960,12 +960,18 @@ export default function AuctionHomeScreen() {
   }, [loading, homeData, dedupedWatchlist]);
 
   // ── Scope rail — one canonical taxonomy: Live | Upcoming | Results | Watching ──
+  // Each scope carries a distinct accent color so lifecycle phases are
+  // visually distinguishable at a glance:
+  //   Live     → danger (urgent/warm — active bidding)
+  //   Upcoming → brand  (neutral/calm — scheduled)
+  //   Results  → textMuted (muted/gray — ended)
+  //   Watching → textSecondary (restrained — personal)
   const scopeSegments: Segment[] = useMemo(() => [
-    { key: 'live', label: 'Live', count: homeData.live.length + homeData.closingSoon.length },
-    { key: 'upcoming', label: 'Upcoming', count: homeData.upcoming.length },
-    { key: 'results', label: 'Results', count: homeData.recentlyClosed.length },
-    { key: 'watching', label: 'Watching', count: dedupedWatchlist.length },
-  ], [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length, homeData.recentlyClosed.length, dedupedWatchlist.length]);
+    { key: 'live', label: 'Live', count: homeData.live.length + homeData.closingSoon.length, accentColor: colors.danger },
+    { key: 'upcoming', label: 'Upcoming', count: homeData.upcoming.length, accentColor: colors.brand },
+    { key: 'results', label: 'Results', count: homeData.recentlyClosed.length, accentColor: colors.textMuted },
+    { key: 'watching', label: 'Watching', count: dedupedWatchlist.length, accentColor: colors.textSecondary },
+  ], [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length, homeData.recentlyClosed.length, dedupedWatchlist.length, colors.danger, colors.brand, colors.textMuted, colors.textSecondary]);
 
   // ── Compact header context ──
   const headerContext = useMemo(() => {
@@ -981,14 +987,16 @@ export default function AuctionHomeScreen() {
     return total > 0 ? `${total} active auctions` : undefined;
   }, [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length]);
 
-  // ── Header actions ──
+  // ── Header actions — reduced to title + search + filter only ──
+  // Per P4-09 spec: first viewport allows title/search/filter, lifecycle
+  // scope, attention if real, live content. Create, Seller Centre, and
+  // Activity are accessible elsewhere (tab bar, attention strip) and
+  // were crowding the header with 5 actions. The attention strip
+  // already surfaces real attention needs — the badge icon was redundant.
   const headerActions: AuctionHeaderAction[] = useMemo(() => [
     { key: 'search', icon: 'search-outline', label: 'Search auctions', onPress: () => { haptics.tap(); setSearchOverlayVisible(true); }, priority: 'primary' },
     { key: 'filter', icon: 'options-outline', label: 'Filter auctions', onPress: () => { haptics.tap(); openFilterSheet(); }, priority: 'secondary' },
-    { key: 'create', icon: 'add-outline', label: 'Create auction', onPress: () => { haptics.tap(); navigation.navigate('CreateAuction'); }, priority: 'primary' },
-    { key: 'seller', icon: 'storefront-outline', label: 'Open Seller Centre', onPress: () => { haptics.tap(); navigation.navigate('SellerAuctionCentre'); }, priority: 'primary' },
-    { key: 'activity', icon: 'pulse-outline', label: 'View auction activity', onPress: () => { haptics.tap(); handleActivity(); }, badgeCount: homeData.activity.needsAttentionCount, priority: 'secondary' },
-  ], [openFilterSheet, navigation, handleActivity, homeData.activity.needsAttentionCount]);
+  ], [openFilterSheet]);
 
   // ── Personal attention strip props ──
   const attentionProps = useMemo(() => {

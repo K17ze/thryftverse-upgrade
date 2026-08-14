@@ -16,12 +16,11 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-interface AnalyticsMetric {
+interface KpiRow {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   value: string;
   sublabel?: string;
-  tone: 'default' | 'success' | 'brand';
 }
 
 export default function SellerAnalyticsScreen() {
@@ -67,47 +66,53 @@ export default function SellerAnalyticsScreen() {
     setIsRefreshing(false);
   };
 
-  const metrics = useMemo<AnalyticsMetric[]>(() => {
-    // Use backend analytics when available, fall back to client-side derivation
-    if (analytics) {
-      const likeRate = analytics.totalViews > 0 ? (analytics.totalLikes / analytics.totalViews) * 100 : 0;
-      const conversionRate = analytics.totalViews > 0 ? (analytics.itemsSold / analytics.totalViews) * 100 : 0;
-      return [
-        { icon: 'eye-outline', label: 'Total views', value: String(analytics.totalViews), tone: 'default' },
-        { icon: 'heart-outline', label: 'Total likes', value: String(analytics.totalLikes), sublabel: `${likeRate.toFixed(1)}% like rate`, tone: 'brand' },
-        { icon: 'bookmark-outline', label: 'Total saves', value: String(analytics.totalSaves), tone: 'default' },
-        { icon: 'checkmark-done', label: 'Items sold', value: String(analytics.itemsSold), tone: 'success' },
-        { icon: 'trending-up-outline', label: 'Conversion rate', value: `${conversionRate.toFixed(1)}%`, sublabel: 'Views to sold', tone: 'default' },
-        { icon: 'cash-outline', label: 'Revenue', value: `£${(analytics.revenueGbpMinor / 100).toFixed(2)}`, tone: 'success' },
-        { icon: 'star-outline', label: 'Avg rating', value: analytics.avgRating ? analytics.avgRating.toFixed(1) : '—', sublabel: `${analytics.reviewCount} reviews`, tone: 'brand' },
-        { icon: 'pulse-outline', label: 'Response rate', value: analytics.responseRate != null ? `${(analytics.responseRate * 100).toFixed(0)}%` : '—', tone: 'default' },
-      ];
-    }
-    // Client-side fallback
-    const active = listings.filter((l) => l.status === 'active');
+  // ── Primary outcome: revenue ──
+  const revenue = useMemo(() => {
+    if (analytics) return analytics.revenueGbpMinor / 100;
     const sold = listings.filter((l) => l.status === 'sold');
-    const totalActiveValue = active.reduce((sum, l) => sum + l.priceGbp, 0);
-    const totalSoldValue = sold.reduce((sum, l) => sum + l.priceGbp, 0);
-    const avgActivePrice = active.length > 0 ? totalActiveValue / active.length : 0;
-    const avgSoldPrice = sold.length > 0 ? totalSoldValue / sold.length : 0;
-    const totalViews = listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
-    const totalLikes = listings.reduce((sum, l) => sum + (l.engagement?.likes ?? 0), 0);
-    const totalSaves = listings.reduce((sum, l) => sum + (l.engagement?.saves ?? 0), 0);
-    const conversionRate = totalViews > 0 ? (sold.length / totalViews) * 100 : 0;
-    const likeRate = totalViews > 0 ? (totalLikes / totalViews) * 100 : 0;
+    return sold.reduce((sum, l) => sum + l.priceGbp, 0);
+  }, [analytics, listings]);
 
+  const itemsSold = useMemo(() => {
+    if (analytics) return analytics.itemsSold;
+    return listings.filter((l) => l.status === 'sold').length;
+  }, [analytics, listings]);
+
+  const totalViews = useMemo(() => {
+    if (analytics) return analytics.totalViews;
+    return listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
+  }, [analytics, listings]);
+
+  const totalLikes = useMemo(() => {
+    if (analytics) return analytics.totalLikes;
+    return listings.reduce((sum, l) => sum + (l.engagement?.likes ?? 0), 0);
+  }, [analytics, listings]);
+
+  const conversionRate = useMemo(() => {
+    const views = analytics ? analytics.totalViews : listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
+    const sold = analytics ? analytics.itemsSold : listings.filter((l) => l.status === 'sold').length;
+    return views > 0 ? (sold / views) * 100 : 0;
+  }, [analytics, listings]);
+
+  const avgRating = analytics?.avgRating ?? null;
+  const reviewCount = analytics?.reviewCount ?? 0;
+
+  // ── Supporting KPIs as flat rows (2-4 max) ──
+  const kpiRows = useMemo<KpiRow[]>(() => {
     return [
-      { icon: 'eye-outline', label: 'Total views', value: String(totalViews), tone: 'default' },
-      { icon: 'heart-outline', label: 'Total likes', value: String(totalLikes), sublabel: `${likeRate.toFixed(1)}% like rate`, tone: 'brand' },
-      { icon: 'bookmark-outline', label: 'Total saves', value: String(totalSaves), tone: 'default' },
-      { icon: 'checkmark-done', label: 'Items sold', value: String(sold.length), tone: 'success' },
-      { icon: 'trending-up-outline', label: 'Conversion rate', value: `${conversionRate.toFixed(1)}%`, sublabel: 'Views to sold', tone: 'default' },
-      { icon: 'cash-outline', label: 'Total revenue', value: `£${totalSoldValue.toFixed(2)}`, tone: 'success' },
-      { icon: 'pricetag-outline', label: 'Avg active price', value: `£${avgActivePrice.toFixed(2)}`, tone: 'default' },
-      { icon: 'pulse-outline', label: 'Avg sold price', value: `£${avgSoldPrice.toFixed(2)}`, tone: 'brand' },
+      { icon: 'eye-outline', label: 'Views', value: String(totalViews) },
+      { icon: 'checkmark-done', label: 'Items sold', value: String(itemsSold) },
+      { icon: 'trending-up-outline', label: 'Conversion', value: `${conversionRate.toFixed(1)}%` },
+      {
+        icon: 'star-outline',
+        label: 'Avg rating',
+        value: avgRating ? avgRating.toFixed(1) : '—',
+        sublabel: reviewCount > 0 ? `${reviewCount} reviews` : undefined,
+      },
     ];
-  }, [listings, analytics]);
+  }, [totalViews, itemsSold, conversionRate, avgRating, reviewCount]);
 
+  // ── Top listings ──
   const topPerformers = useMemo(() => {
     if (topPerformersData.length > 0) {
       return topPerformersData.map((t) => ({
@@ -132,6 +137,29 @@ export default function SellerAnalyticsScreen() {
       }));
   }, [listings, topPerformersData]);
 
+  // ── Needs attention: active listings with low views and no sales ──
+  const needsAttention = useMemo(() => {
+    return listings
+      .filter((l) => l.status === 'active')
+      .filter((l) => (l.engagement?.views ?? 0) < 10)
+      .sort((a, b) => (a.engagement?.views ?? 0) - (b.engagement?.views ?? 0))
+      .slice(0, 5)
+      .map((l) => ({
+        id: l.id,
+        title: l.title,
+        price: l.priceGbp,
+        views: l.engagement?.views ?? 0,
+        likes: l.engagement?.likes ?? 0,
+        status: l.status,
+      }));
+  }, [listings]);
+
+  const periodLabel = period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days';
+
+  const handleListingPress = useCallback((listingId: string) => {
+    navigation.navigate('ItemDetail', { itemId: listingId });
+  }, [navigation]);
+
   if (isLoading) {
     return (
       <FlagshipScreen
@@ -153,26 +181,27 @@ export default function SellerAnalyticsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
-        {/* Hero summary — analytics overview */}
+        {/* ── Primary outcome: revenue hero ── */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.heroRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="bar-chart" size={18} color={colors.textInverse} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                  {metrics[0]?.value ?? '—'} {metrics[0]?.label.toLowerCase()}
-                </Text>
-                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                  Last {period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days'}
-                </Text>
-              </View>
+          <View style={styles.heroBlock}>
+            <Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>Revenue · Last {periodLabel}</Text>
+            <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
+              £{revenue.toFixed(2)}
+            </Text>
+            <View style={styles.heroTrendRow}>
+              <Ionicons
+                name={itemsSold > 0 ? 'trending-up' : 'remove'}
+                size={14}
+                color={itemsSold > 0 ? colors.success : colors.textMuted}
+              />
+              <Text style={[styles.heroTrendText, { color: itemsSold > 0 ? colors.success : colors.textMuted }]}>
+                {itemsSold} {itemsSold === 1 ? 'item sold' : 'items sold'}
+              </Text>
             </View>
           </View>
         </Reanimated.View>
 
-        {/* Period selector */}
+        {/* ── Period selector ── */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.periodRow}>
           {(['7d', '30d', '90d'] as const).map((p) => {
             const isActive = period === p;
@@ -190,56 +219,97 @@ export default function SellerAnalyticsScreen() {
           })}
         </Reanimated.View>
 
-        {/* Key metrics grid */}
+        {/* ── Supporting KPIs as flat rows ── */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Key metrics</Text>
-        </View>
-        <View style={styles.metricsGrid}>
-          {metrics.map((metric) => {
-            const color = metric.tone === 'success' ? colors.success : metric.tone === 'brand' ? colors.brand : colors.textPrimary;
-            return (
-              <View key={metric.label} style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.metricHeader}>
-                  <Ionicons name={metric.icon} size={16} color={color} />
-                  <Text style={[styles.metricLabel, { color: colors.textMuted }]}>{metric.label}</Text>
+          <View style={styles.kpiList}>
+            {kpiRows.map((kpi) => (
+              <View key={kpi.label} style={styles.kpiRow}>
+                <View style={styles.kpiLabelCol}>
+                  <Ionicons name={kpi.icon} size={16} color={colors.textSecondary} />
+                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{kpi.label}</Text>
                 </View>
-                <Text style={[styles.metricValue, { color }]}>{metric.value}</Text>
-                {metric.sublabel ? (
-                  <Text style={[styles.metricSublabel, { color: colors.textMuted }]}>{metric.sublabel}</Text>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-        </Reanimated.View>
-
-        {/* Top performing listings */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Top performing listings</Text>
-        </View>
-        {topPerformers.length > 0 ? (
-          <View style={styles.topList}>
-            {topPerformers.map((item, index) => (
-              <View key={item.id} style={[styles.topRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.rankText, { color: colors.textMuted }]}>{index + 1}</Text>
-                <View style={styles.topInfo}>
-                  <Text style={[styles.topTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-                  <Text style={[styles.topMeta, { color: colors.textMuted }]}>{item.views} views · {item.likes} likes</Text>
+                <View style={styles.kpiValueCol}>
+                  <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>{kpi.value}</Text>
+                  {kpi.sublabel ? (
+                    <Text style={[styles.kpiSublabel, { color: colors.textMuted }]}>{kpi.sublabel}</Text>
+                  ) : null}
                 </View>
-                <Text style={[styles.topPrice, { color: colors.brand }]}>£{item.price.toFixed(0)}</Text>
               </View>
             ))}
           </View>
-        ) : (
-          <EmptyState
-            icon="bar-chart-outline"
-            title="No performance data yet"
-            subtitle="Listings with views will appear here"
-          />
-        )}
         </Reanimated.View>
+
+        {/* ── Top listings ── */}
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your top listings</Text>
+          </View>
+          {topPerformers.length > 0 ? (
+            <View style={styles.listingList}>
+              {topPerformers.map((item, index) => (
+                <Pressable
+                  key={item.id}
+                  style={({ pressed }) => [
+                    styles.listingRow,
+                    { borderBottomColor: colors.border },
+                    pressed && { opacity: 0.6 },
+                  ]}
+                  onPress={() => handleListingPress(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Listing: ${item.title}, ${item.views} views, ${item.likes} likes, £${item.price.toFixed(0)}`}
+                >
+                  <Text style={[styles.rankText, { color: colors.textMuted }]}>{index + 1}</Text>
+                  <View style={styles.listingInfo}>
+                    <Text style={[styles.listingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+                    <Text style={[styles.listingMeta, { color: colors.textMuted }]}>{item.views} views · {item.likes} likes</Text>
+                  </View>
+                  <Text style={[styles.listingPrice, { color: colors.brand }]}>£{item.price.toFixed(0)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <EmptyState
+              icon="bar-chart-outline"
+              title="No performance data yet"
+              subtitle="Listings with views will appear here"
+            />
+          )}
+        </Reanimated.View>
+
+        {/* ── Needs attention ── */}
+        {needsAttention.length > 0 ? (
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="alert-circle-outline" size={15} color={colors.warning} />
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Needs attention</Text>
+              </View>
+              <Text style={[styles.sectionHint, { color: colors.textMuted }]}>Low views, no sales</Text>
+            </View>
+            <View style={styles.listingList}>
+              {needsAttention.map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={({ pressed }) => [
+                    styles.listingRow,
+                    { borderBottomColor: colors.border },
+                    pressed && { opacity: 0.6 },
+                  ]}
+                  onPress={() => handleListingPress(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Needs attention: ${item.title}, ${item.views} views, £${item.price.toFixed(0)}`}
+                >
+                  <Ionicons name="eye-off-outline" size={16} color={colors.warning} />
+                  <View style={styles.listingInfo}>
+                    <Text style={[styles.listingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+                    <Text style={[styles.listingMeta, { color: colors.textMuted }]}>{item.views} views · {item.likes} likes</Text>
+                  </View>
+                  <Text style={[styles.listingPrice, { color: colors.textSecondary }]}>£{item.price.toFixed(0)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Reanimated.View>
+        ) : null}
       </ScrollView>
     </FlagshipScreen>
   );
@@ -247,143 +317,146 @@ export default function SellerAnalyticsScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xxl,
-    height: Space.xxl,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs - 2,
-  },
-  scrollContent: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
-  },
-  periodRow: {
-    flexDirection: 'row',
-    gap: Space.xs,
-    marginVertical: Space.sm,
-  },
-  periodTab: {
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.sm + 2,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
-  periodTabText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
-  sectionHeader: {
-    marginTop: Space.md,
-    marginBottom: Space.sm,
-  },
-  sectionTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs,
-  },
-  metricCard: {
-    flex: 1,
-    minWidth: '47%',
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: Space.xs,
-  },
-  metricHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-  },
-  metricLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
-  metricValue: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-  },
-  metricSublabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-  },
-  topList: {
-    gap: Space.xs,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  rankText: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    minWidth: 20,
-  },
-  topInfo: {
-    flex: 1,
-    gap: Space.xs - 2,
-  },
-  topTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-  topMeta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
-  topPrice: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-  },
-  emptyCard: {
-    alignItems: 'center',
-    paddingVertical: Space.xl,
-    gap: Space.xs,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  emptyText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  emptySubtext: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    scrollContent: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.xl,
+    },
+
+    // ── Primary outcome hero ──
+    heroBlock: {
+      paddingVertical: Space.md,
+    },
+    heroEyebrow: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      letterSpacing: Type.caption.letterSpacing,
+      marginBottom: Space.xs - 2,
+    },
+    heroValue: {
+      fontSize: Type.priceHero.size,
+      lineHeight: Type.priceHero.lineHeight,
+      fontFamily: Typography.family.bold,
+      fontVariant: ['tabular-nums'],
+    },
+    heroTrendRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginTop: Space.xs,
+    },
+    heroTrendText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+    },
+
+    // ── Period selector ──
+    periodRow: {
+      flexDirection: 'row',
+      gap: Space.xs,
+      marginVertical: Space.sm,
+    },
+    periodTab: {
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.sm + 2,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+    },
+    periodTabText: {
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
+    },
+
+    // ── KPI flat rows ──
+    kpiList: {
+      marginTop: Space.sm,
+    },
+    kpiRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Space.sm + 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    kpiLabelCol: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs + 2,
+    },
+    kpiLabel: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+    },
+    kpiValueCol: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: Space.xs,
+    },
+    kpiValue: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      fontVariant: ['tabular-nums'],
+    },
+    kpiSublabel: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+    },
+
+    // ── Section headers ──
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: Space.lg,
+      marginBottom: Space.sm,
+    },
+    sectionTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    sectionTitle: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.semibold,
+    },
+    sectionHint: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+    },
+
+    // ── Listing rows ──
+    listingList: {
+      gap: 0,
+    },
+    listingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.sm + 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    rankText: {
+      fontSize: Type.subtitle.size,
+      fontFamily: Typography.family.bold,
+      minWidth: 20,
+    },
+    listingInfo: {
+      flex: 1,
+      gap: Space.xs - 2,
+    },
+    listingTitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+    },
+    listingMeta: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.regular,
+    },
+    listingPrice: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.bold,
+      fontVariant: ['tabular-nums'],
+    },
   });
 }

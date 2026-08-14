@@ -1,5 +1,5 @@
-import React, { useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, type AccessibilityState } from 'react-native';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,7 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import { useStore } from '../store/useStore';
 import { CachedImage } from '../components/CachedImage';
+import { getStoredCreateMode, type PersistedCreateMode } from '../preferences/createModePreferences';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -121,7 +122,6 @@ const AnimatedPressableRe = Reanimated.createAnimatedComponent(Pressable);
 interface CreateTabButtonProps {
   onPress: () => void;
   onLongPress?: ((event: import('react-native').GestureResponderEvent) => void) | null;
-  accessibilityState?: AccessibilityState;
   testID?: string;
   brandColor: string;
   surfaceColor: string;
@@ -130,7 +130,6 @@ interface CreateTabButtonProps {
 const CreateTabButton = ({
   onPress,
   onLongPress,
-  accessibilityState,
   testID,
   brandColor,
   surfaceColor,
@@ -159,7 +158,10 @@ const CreateTabButton = ({
       accessibilityRole="button"
       accessibilityLabel="Create"
       accessibilityHint="Opens camera to list a new item"
-      accessibilityState={accessibilityState}
+      // P4-02: Create is an action, not a navigation destination. It must
+      // never report a "selected" state — pressing it opens a modal overlay
+      // and does not change the active tab.
+      accessibilityState={{ selected: false, expanded: false }}
       testID={testID}
     >
       <View style={[tabStyles.createControl, { backgroundColor: brandColor }]}>
@@ -186,10 +188,25 @@ export default function TabNavigator() {
   }, [conversations, requestIds]);
   const lastTabRef = useRef<string>('Home');
 
+  // P4-02: Persist the user's last-used creation mode (Look / Poster) so the
+  // Create action reopens in that mode instead of silently defaulting to Look.
+  // Only defaults to 'look' on first-ever use (no stored value).
+  const [persistedCreateMode, setPersistedCreateMode] = useState<PersistedCreateMode>('look');
+  useEffect(() => {
+    let mounted = true;
+    getStoredCreateMode().then((mode) => {
+      if (mounted) setPersistedCreateMode(mode);
+    });
+    return () => { mounted = false; };
+  }, []);
+
   const handleCreatePress = useCallback(() => {
     haptic.light();
-    navigation.navigate('CreateCamera', { mode: 'look' });
-  }, [haptic, navigation]);
+    // Opens CreateCamera as a modal overlay (registered with modalScreenOptions
+    // in AppNavigator). This does NOT change the active tab — Create is an
+    // action, not a navigation destination.
+    navigation.navigate('CreateCamera', { mode: persistedCreateMode });
+  }, [haptic, navigation, persistedCreateMode]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -225,8 +242,16 @@ export default function TabNavigator() {
           tabBarInactiveTintColor: colors.textMuted,
         }}
         screenListeners={{
-          tabPress: (e: { target?: string }) => {
+          tabPress: (e: { target?: string; preventDefault?: () => void }) => {
             const currentTab = e.target?.split('-')[0] ?? '';
+            // P4-02: Create is an action, not a navigation destination. Do not
+            // treat its press as a tab switch — skip the tab-switch haptic and
+            // do not update lastTabRef. The Create button's custom onPress
+            // opens a modal overlay without changing the active tab.
+            if (currentTab === 'Create') {
+              e.preventDefault?.();
+              return;
+            }
             if (currentTab !== lastTabRef.current) {
               haptic.patterns.tabSwitch();
               lastTabRef.current = currentTab;
@@ -262,12 +287,20 @@ export default function TabNavigator() {
               <CreateTabButton
                 onPress={handleCreatePress}
                 onLongPress={props.onLongPress}
-                accessibilityState={props.accessibilityState}
                 testID={props.testID}
                 brandColor={colors.brand}
                 surfaceColor={colors.surface}
               />
             ),
+          }}
+          // P4-02: Prevent the tab navigator from ever navigating to the
+          // Create "tab" — it is a placeholder slot for the central Create
+          // action button, not a real destination. The custom tabBarButton
+          // handles the press and opens CreateCamera as a modal.
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+            },
           }}
         />
         <Tab.Screen

@@ -25,6 +25,7 @@ import { EmptyState } from '../EmptyState';
 import { formatCountdown } from '../../data/tradeHub';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
+import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -51,6 +52,20 @@ interface LiveAuctionItem {
   currentBid: number;
   endsAtMs: number;
   listingId: string;
+}
+
+/* ── Trending rail item (merged from EditTab) ── */
+function TrendingRailItem({ item, index, onPress, styles, reducedMotion }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
+  return (
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
+      <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
+        <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+        <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
+        <Text style={styles.trendingTitle} numberOfLines={1}>{item.title}</Text>
+        <Text style={styles.trendingPrice}>£{item.price}</Text>
+      </AnimatedPressable>
+    </Reanimated.View>
+  );
 }
 
 /* ── Sub-components ── */
@@ -125,6 +140,45 @@ export default function PulseTab() {
   const auctionRuntime = useStore((state) => state.auctionRuntime);
   const reducedMotion = useReducedMotion();
 
+  // Trending state (merged from EditTab to preserve trending rail + style quiz)
+  const [trending, setTrending] = React.useState<TrendingListing[]>([]);
+  const [trendingLoading, setTrendingLoading] = React.useState(true);
+  const [trendingWindow, setTrendingWindow] = React.useState<'24h' | '7d' | '30d'>('24h');
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setTrendingLoading(true);
+    fetchTrendingListings({ window: trendingWindow, limit: 20 })
+      .then((items) => { if (!cancelled) setTrending(items); })
+      .catch(() => { if (!cancelled) setTrending([]); })
+      .finally(() => { if (!cancelled) setTrendingLoading(false); });
+    return () => { cancelled = true; };
+  }, [trendingWindow]);
+
+  const trendingListings = React.useMemo(() => {
+    if (trending.length > 0) {
+      return trending.map((t) => ({
+        id: t.id,
+        title: t.title,
+        brand: t.brand ?? '',
+        price: t.priceGbp,
+        image: t.images[0] ?? t.imageUrl ?? '',
+      }));
+    }
+    // Fallback to client-side sorting when backend returns no data
+    return [...listings]
+      .filter((l) => l.images && l.images.length > 0)
+      .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
+      .slice(0, 10)
+      .map((l) => ({
+        id: l.id,
+        title: l.title,
+        brand: l.brand ?? '',
+        price: l.price,
+        image: l.images[0] ?? '',
+      }));
+  }, [trending, listings]);
+
   const now = Date.now();
 
   const liveAuctions = useMemo<LiveAuctionItem[]>(() => {
@@ -185,7 +239,7 @@ export default function PulseTab() {
     navigation.navigate('PulseFeed');
   };
 
-  if (activities.length === 0 && liveAuctions.length === 0) {
+  if (activities.length === 0 && liveAuctions.length === 0 && trendingListings.length === 0) {
     return (
       <EmptyState
         icon="pulse-outline"
@@ -199,6 +253,47 @@ export default function PulseTab() {
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      {/* Trending Now Rail (merged from EditTab) */}
+      {trendingListings.length > 0 && (
+        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+          <DiscoverySectionHeader
+            kicker="What's hot"
+            title="Trending Now"
+            actionLabel="See all"
+            onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
+          />
+          <View style={styles.windowTabs}>
+            {(['24h', '7d', '30d'] as const).map((w) => {
+              const isActive = trendingWindow === w;
+              return (
+                <AnimatedPressable
+                  key={w}
+                  style={[styles.windowTab, isActive && styles.windowTabActive]}
+                  onPress={() => { haptic.selection(); setTrendingWindow(w); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.windowTabText, isActive && styles.windowTabTextActive]}>
+                    {w === '24h' ? '24 hours' : w === '7d' ? '7 days' : '30 days'}
+                  </Text>
+                </AnimatedPressable>
+              );
+            })}
+          </View>
+          <HorizontalRail contentContainerStyle={styles.trendingScroll}>
+            {trendingListings.map((item, i) => (
+              <TrendingRailItem
+                key={item.id}
+                item={item}
+                index={i}
+                onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                styles={styles}
+                reducedMotion={reducedMotion}
+              />
+            ))}
+          </HorizontalRail>
+        </Reanimated.View>
+      )}
+
       {/* Live Now Rail */}
       {liveAuctions.length > 0 && (
         <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
@@ -249,6 +344,30 @@ export default function PulseTab() {
         {activities.map((item, i) => (
           <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} colors={colors} styles={styles} reducedMotion={reducedMotion} />
         ))}
+      </Reanimated.View>
+
+      {/* Style Quiz (merged from EditTab) */}
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(120)} style={{ marginTop: Space.lg }}>
+        <DiscoverySectionHeader
+          kicker="Personalise"
+          title="Find Your Aesthetic"
+        />
+        <AnimatedPressable style={styles.quizCard} onPress={() => navigation.navigate('StyleQuiz')} activeOpacity={0.92}>
+          <View style={styles.quizContent}>
+            <Text style={styles.quizTitle}>Discover your style</Text>
+            <Text style={styles.quizSub}>Take a short quiz to tailor your Explore feed to your preferences.</Text>
+            <View style={styles.quizPills}>
+              {['Minimal', 'Streetwear', 'Vintage', 'Gorpcore'].map((pill) => (
+                <View key={pill} style={styles.quizPill}>
+                  <Text style={styles.quizPillText}>{pill}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+          <View style={styles.quizIconWrap}>
+            <Ionicons name="color-palette-outline" size={28} color={colors.brand} />
+          </View>
+        </AnimatedPressable>
       </Reanimated.View>
 
       <View style={{ height: 100 }} />
@@ -515,6 +634,120 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
+  },
+
+  /* Trending Rail (merged from EditTab) */
+  trendingScroll: {
+    paddingHorizontal: Space.md,
+    marginHorizontal: -Space.md,
+    gap: Space.sm,
+  },
+  trendingItem: {
+    width: 140,
+    gap: 4,
+  },
+  trendingImage: {
+    width: 140,
+    height: 180,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
+  trendingBrand: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textMuted,
+    letterSpacing: Type.meta.letterSpacing,
+    marginTop: Space.xs,
+  },
+  trendingTitle: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  trendingPrice: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.bold,
+    color: colors.brand,
+    letterSpacing: Type.caption.letterSpacing,
+  },
+  windowTabs: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    marginBottom: Space.sm,
+  },
+  windowTab: {
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+  },
+  windowTabActive: {
+    backgroundColor: colors.brand,
+  },
+  windowTabText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.medium,
+    color: colors.textSecondary,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  windowTabTextActive: {
+    color: '#fff',
+  },
+
+  /* Style Quiz (merged from EditTab) */
+  quizCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: Space.md,
+    gap: Space.sm,
+  },
+  quizContent: {
+    flex: 1,
+    gap: 4,
+  },
+  quizTitle: {
+    fontSize: Type.subtitle.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  quizSub: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textSecondary,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: 18,
+  },
+  quizPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: Space.xs,
+  },
+  quizPill: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: Space.xs,
+  },
+  quizPillText: {
+    fontSize: Type.meta.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.brand,
+    letterSpacing: Type.meta.letterSpacing,
+  },
+  quizIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   });
 }

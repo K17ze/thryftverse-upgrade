@@ -25,6 +25,7 @@ import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { Motion } from '../theme/motionTokens';
 import type { RootStackParamList, CreatorInitialMedia } from '../navigation/types';
+import { setStoredCreateMode, type PersistedCreateMode } from '../preferences/createModePreferences';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateCamera'>;
 
@@ -78,7 +79,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
 
   const [mode, setMode] = useState<CreateMode>(initialMode);
   const [showOverflow, setShowOverflow] = useState(false);
-  const [showGrid, setShowGrid] = useState(false);
+  // Grid overlay is handled by CreatorCamera's ControlsRail — no duplicate
+  // grid state or overlay here. This removes redundant idle chrome.
   const opacity = useRef(new Animated.Value(0)).current;
   const modeTransition = useRef(new Animated.Value(1)).current;
 
@@ -147,7 +149,14 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         Animated.spring(modeTransition, { toValue: 1, ...Motion.spring.glide, useNativeDriver: true }),
       ]).start();
     }
-    setMode(MODES[nextIndex].key);
+    const nextMode = MODES[nextIndex].key;
+    setMode(nextMode);
+    // P4-02: Persist Look / Poster as the user's preferred creation mode so the
+    // Create action reopens in it next time. visual-search is a transient
+    // search entry and is not persisted as a creation default.
+    if (nextMode === 'look' || nextMode === 'poster') {
+      setStoredCreateMode(nextMode as PersistedCreateMode);
+    }
   }, [haptic, modeTransition, reducedMotion]);
 
   const panResponder = useRef(
@@ -182,6 +191,12 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
       ]).start();
     }
     setMode(newMode);
+    // P4-02: Persist Look / Poster as the user's preferred creation mode so the
+    // Create action reopens in it next time. visual-search is a transient
+    // search entry and is not persisted as a creation default.
+    if (newMode === 'look' || newMode === 'poster') {
+      setStoredCreateMode(newMode as PersistedCreateMode);
+    }
   }, [haptic, modeTransition, reducedMotion]);
 
   const handleCapture = useCallback((uri: string) => {
@@ -385,22 +400,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
 
   const renderOverflowButton = useCallback(() => (
     <View style={s.topRightRow}>
-      {/* Grid overlay toggle — rule of thirds composition aid */}
-      <Pressable
-        style={({ pressed }) => [s.topIconBtn, pressed && s.controlPressed]}
-        onPress={() => {
-          haptic.patterns.toggle();
-          setShowGrid((g) => !g);
-          AccessibilityInfo.announceForAccessibility(showGrid ? 'Grid hidden' : 'Grid shown');
-        }}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        accessibilityLabel={showGrid ? 'Hide grid overlay' : 'Show grid overlay'}
-        accessibilityHint="Toggles rule-of-thirds composition grid"
-        accessibilityRole="button"
-        accessibilityState={{ selected: showGrid }}
-      >
-        <Ionicons name={showGrid ? 'grid' : 'grid-outline'} size={22} color="#fff" />
-      </Pressable>
+      {/* Grid toggle removed — grid lives in the expanded ControlsRail now.
+          Only the overflow menu remains in the top bar. */}
       <Pressable
         style={({ pressed }) => [s.topIconBtn, pressed && s.controlPressed]}
         onPress={() => { haptic.light(); setShowOverflow((value) => !value); }}
@@ -413,7 +414,7 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         <Ionicons name="ellipsis-horizontal" size={22} color="#fff" />
       </Pressable>
     </View>
-  ), [haptic, showOverflow, showGrid]);
+  ), [haptic, showOverflow]);
 
   return (
     <View style={s.container} {...panResponder.panHandlers}>
@@ -433,15 +434,8 @@ export default function CreateCameraScreen({ navigation, route }: Props) {
         />
       </Animated.View>
 
-      {/* Rule-of-thirds grid overlay — composition aid, toggled by grid button */}
-      {showGrid && (
-        <View style={s.gridOverlay} pointerEvents="none">
-          <View style={s.gridLineVerticalLeft} />
-          <View style={s.gridLineVerticalRight} />
-          <View style={s.gridLineHorizontalTop} />
-          <View style={s.gridLineHorizontalBottom} />
-        </View>
-      )}
+      {/* Grid overlay is handled by CreatorCamera's ControlsRail — no
+          duplicate grid overlay here. */}
 
       {showOverflow && (
         <Modal
@@ -629,48 +623,11 @@ const s = StyleSheet.create({
     opacity: 0.7,
     transform: [{ scale: 0.97 }],
   },
-  // Top-right row — grid toggle + overflow button
+  // Top-right row — overflow button only (grid toggle removed)
   topRightRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-  },
-  // Rule-of-thirds grid overlay — semi-transparent white lines
-  gridOverlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 5,
-  },
-  gridLineVerticalLeft: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: '33.33%',
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.28)',
-  },
-  gridLineVerticalRight: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: '66.66%',
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.28)',
-  },
-  gridLineHorizontalTop: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '33.33%',
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.28)',
-  },
-  gridLineHorizontalBottom: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '66.66%',
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   // ── Overflow bottom sheet ──
   overflowRoot: {

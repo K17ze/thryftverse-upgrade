@@ -360,6 +360,7 @@ interface StoreState {
   deleteCollection: (id: string) => void;
   deleteCollectionOnApi: (id: string) => Promise<void>;
   renameCollection: (id: string, name: string) => void;
+  reorderCollections: (fromIndex: number, toIndex: number) => void;
   updateCollectionOnApi: (id: string, fields: { name?: string; description?: string | null; isPrivate?: boolean }) => Promise<void>;
   addToCollection: (collectionId: string, itemId: string) => void;
   addToCollectionOnApi: (collectionId: string, itemId: string) => Promise<void>;
@@ -672,6 +673,13 @@ export const useStore = create<StoreState>()(
         c.id === id ? { ...c, name, updatedAt: Date.now() } : c
       ),
     })),
+  reorderCollections: (fromIndex, toIndex) =>
+    set((state) => {
+      const next = [...state.collections];
+      const [moved] = next.splice(fromIndex, 1);
+      if (moved) next.splice(toIndex, 0, moved);
+      return { collections: next };
+    }),
   updateCollectionOnApi: async (id, fields) => {
     await updateCollectionOnApi(id, fields);
     set((state) => ({

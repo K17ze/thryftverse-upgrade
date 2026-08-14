@@ -11,6 +11,11 @@ export interface Segment {
   key: string;
   label: string;
   count?: number;
+  /** Per-segment accent color for the underline + active label.
+   * When omitted, falls back to colors.brand. This lets each lifecycle
+   * scope be visually distinct: Live = urgent, Upcoming = calm,
+   * Results = muted, etc. */
+  accentColor?: string;
 }
 
 interface Props {
@@ -32,6 +37,11 @@ export function AuctionSegmentRail({
   const underlineX = useSharedValue(0);
   const underlineWidth = useSharedValue(0);
   const segmentLayouts = useRef<Record<string, { x: number; width: number }>>({});
+
+  // Resolve the active segment's accent color — per-segment visual
+  // distinction so each lifecycle scope reads differently at a glance.
+  const activeSegment = segments.find((s) => s.key === activeKey);
+  const activeAccent = activeSegment?.accentColor ?? colors.brand;
 
   const updateUnderline = React.useCallback((key: string) => {
     const layout = segmentLayouts.current[key];
@@ -67,6 +77,7 @@ export function AuctionSegmentRail({
       >
         {segments.map((seg) => {
           const active = seg.key === activeKey;
+          const segAccent = seg.accentColor ?? colors.brand;
           return (
             <Pressable
               key={seg.key}
@@ -80,7 +91,7 @@ export function AuctionSegmentRail({
               accessibilityState={{ selected: active }}
               accessibilityLabel={`${accessibilityLabelPrefix} ${seg.label}${seg.count != null ? `, ${seg.count} auctions` : ''}`}
             >
-              <Text style={[styles.label, active && styles.labelActive]}>
+              <Text style={[styles.label, active && styles.labelActive, active && { color: segAccent }]}>
                 {seg.label}
               </Text>
               {seg.count != null && (
@@ -92,7 +103,7 @@ export function AuctionSegmentRail({
           );
         })}
       </ScrollView>
-      <Reanimated.View style={[styles.underline, animatedUnderlineStyle]} />
+      <Reanimated.View style={[styles.underline, animatedUnderlineStyle, { backgroundColor: activeAccent }]} />
     </View>
   );
 }

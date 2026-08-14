@@ -931,9 +931,38 @@ export default function ItemDetailScreen() {
           ) : null}
         </View>
 
+        {/* ── Zone C — Trust facts (max 3) ──
+            Cognitive layer: condition, seller rating, dispatch time.
+            These are the three facts a buyer needs to decide whether
+            to keep reading. Full commerce details (protection, returns,
+            authenticity) live in the Shipping & returns section below. */}
         {(() => {
-          const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [];
-          if (commerce.shippingMethod) {
+          const trustChips: { icon: keyof typeof Ionicons.glyphMap; label: string; dotColor?: string }[] = [];
+          // 1. Condition — the most important attribute for second-hand buyers
+          if (item.condition) {
+            trustChips.push({
+              icon: 'checkmark-circle-outline',
+              label: item.condition,
+              dotColor: conditionMeta?.color,
+            });
+          }
+          // 2. Seller rating — social proof
+          if (seller?.rating != null && seller.rating > 0) {
+            const ratingText = seller.reviewCount != null && seller.reviewCount > 0
+              ? `★ ${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
+              : `★ ${seller.rating.toFixed(1)}`;
+            trustChips.push({
+              icon: 'star-outline',
+              label: ratingText,
+            });
+          }
+          // 3. Dispatch time — when will it arrive?
+          if (seller?.dispatchTimeLabel) {
+            trustChips.push({
+              icon: 'cube-outline',
+              label: seller.dispatchTimeLabel,
+            });
+          } else if (commerce.shippingMethod) {
             trustChips.push({
               icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'cube-outline',
               label: commerce.shippingPayer === 'seller'
@@ -941,35 +970,17 @@ export default function ItemDetailScreen() {
                 : commerce.shippingMethod,
             });
           }
-          if (commerce.protectionPolicy?.available) {
-            trustChips.push({
-              icon: 'shield-checkmark-outline',
-              label: commerce.protectionPolicy.label ?? 'Buyer protection',
-            });
-          }
-          if (commerce.returnPolicy?.accepted) {
-            trustChips.push({
-              icon: 'return-up-back-outline',
-              label: commerce.returnPolicy.windowDays
-                ? `${commerce.returnPolicy.windowDays}-day returns`
-                : 'Returns accepted',
-            });
-          }
-          if (commerce.authenticity && commerce.authenticity.status !== 'not_offered') {
-            trustChips.push({
-              icon: 'ribbon-outline',
-              label: commerce.authenticity.label ?? (commerce.authenticity.status === 'verified' ? 'Verified' : 'Authentic'),
-            });
-          }
           if (trustChips.length === 0) return null;
-          // Show at most 3 chips in the elevated strip — the rest are
-          // available in the full "Buying this item" section below.
           const elevated = trustChips.slice(0, 3);
           return (
             <View style={styles.elevatedTrustStrip}>
               {elevated.map((chip, i) => (
                 <View key={i} style={styles.trustChip}>
-                  <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
+                  {chip.dotColor ? (
+                    <View style={[styles.trustChipDot, { backgroundColor: chip.dotColor }]} />
+                  ) : (
+                    <Ionicons name={chip.icon} size={16} color={colors.textSecondary} />
+                  )}
                   <Text style={[styles.trustChipText, { color: colors.textSecondary }]} numberOfLines={1}>
                     {chip.label}
                   </Text>
@@ -979,6 +990,107 @@ export default function ItemDetailScreen() {
           );
         })()}
 
+        {/* ── Zone D — Description (progressive disclosure) ──
+            Description + condition + category evidence + posted date.
+            Moved to cognitive layer 4: after trust facts, before shipping. */}
+        <CommerceDetailSection label="Item details" divider variant="editorial">
+          {item.description ? (
+            <View style={styles.descriptionWrap}>
+              {/* Full-area tap target — the entire collapsed text is
+                  tappable, not just the "Read more" link. Research
+                  (Vestiaire): "buyers very often do not notice that
+                  description can be expanded by clicking 'see more'". */}
+              <Pressable
+                onPress={() => {
+                  if (item.description && item.description.length > 120) {
+                    setDescriptionExpanded((prev) => !prev);
+                  }
+                }}
+                accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: descriptionExpanded }}
+                disabled={descriptionExpanded || (item.description.length <= 120)}
+              >
+                <Text
+                  style={[styles.descriptionText, { color: colors.textPrimary }]}
+                  numberOfLines={descriptionExpanded ? undefined : 4}
+                >
+                  {item.description}
+                </Text>
+                {/* Gradient fade at the collapse edge when collapsed.
+                    Visual signal that there's more content below. */}
+                {!descriptionExpanded && item.description.length > 120 && (
+                  <LinearGradient
+                    colors={[`${colors.background}00`, colors.background]}
+                    style={styles.descriptionFade}
+                    pointerEvents="none"
+                  />
+                )}
+              </Pressable>
+              {item.description.length > 120 && (
+                <Pressable
+                  onPress={() => setDescriptionExpanded((prev) => !prev)}
+                  hitSlop={8}
+                  style={styles.quietTextTarget}
+                  accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: descriptionExpanded }}
+                >
+                  <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]}>
+                    {descriptionExpanded ? 'Show less' : 'Read more'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          ) : null}
+
+          {(() => {
+            const evidenceGroups = resolveEvidenceGroups({
+              category: item.category,
+              subcategory: item.subcategory,
+              brand: item.brand,
+              size: item.size,
+              condition: item.condition,
+              description: item.description,
+            });
+            return evidenceGroups.length > 0 ? (
+              <CategoryEvidence groups={evidenceGroups} />
+            ) : null;
+          })()}
+
+          {item.createdAt ? (
+            <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1}>
+              Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </Text>
+          ) : null}
+        </CommerceDetailSection>
+
+        {/* ── Zone E — Shipping & returns (collapsed by default) ──
+            Full commerce details: costs, delivery, protection, returns,
+            authenticity. Progressive disclosure — summary visible, details
+            expand on tap. Moved to cognitive layer 5. */}
+        {purchaseSummary ? (
+          <CommerceDetailSection label="Buying this item" variant="continuation">
+            <CommerceDetailDisclosureRow
+              label="Costs, delivery & protection"
+              summary="Full breakdown"
+              onPress={() => {
+                haptic.light();
+                setPurchaseDetailsVisible(true);
+              }}
+              leadingIcon="information-circle-outline"
+            />
+            <ShippingReturnsInfo
+              commerce={commerce}
+              carbonNeutral={commerce.shippingPayer === 'seller'}
+            />
+          </CommerceDetailSection>
+        ) : null}
+
+        {/* ── Zone F — Seller row (compact, links to profile) ──
+            Moved to cognitive layer 6: after the buyer has seen media,
+            identity, trust facts, description and shipping. The seller
+            section closes with a "More from this seller" rail. */}
         {seller && (
           <View style={[styles.sellerTrustSection, { borderTopColor: colors.borderSubtle }]}>
             <SellerInfoCard
@@ -1066,102 +1178,10 @@ export default function ItemDetailScreen() {
           </View>
         ) : null}
 
-        {purchaseSummary ? (
-          <CommerceDetailSection label="Buying this item" variant="continuation">
-            <CommerceDetailDisclosureRow
-              label="Costs, delivery & protection"
-              summary="Full breakdown"
-              onPress={() => {
-                haptic.light();
-                setPurchaseDetailsVisible(true);
-              }}
-              leadingIcon="information-circle-outline"
-            />
-            <ShippingReturnsInfo
-              commerce={commerce}
-              carbonNeutral={commerce.shippingPayer === 'seller'}
-            />
-          </CommerceDetailSection>
-        ) : null}
-
-        {/* ── Zone E — Product details ──
-            Description + condition + category evidence + posted date.
-            Spec 05 §5. */}
-        <CommerceDetailSection label="Item details" divider variant="editorial">
-          {item.description ? (
-            <View style={styles.descriptionWrap}>
-              {/* Full-area tap target — the entire collapsed text is
-                  tappable, not just the "Read more" link. Research
-                  (Vestiaire): "buyers very often do not notice that
-                  description can be expanded by clicking 'see more'". */}
-              <Pressable
-                onPress={() => {
-                  if (item.description && item.description.length > 120) {
-                    setDescriptionExpanded((prev) => !prev);
-                  }
-                }}
-                accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: descriptionExpanded }}
-                disabled={descriptionExpanded || (item.description.length <= 120)}
-              >
-                <Text
-                  style={[styles.descriptionText, { color: colors.textPrimary }]}
-                  numberOfLines={descriptionExpanded ? undefined : 4}
-                >
-                  {item.description}
-                </Text>
-                {/* Gradient fade at the collapse edge when collapsed.
-                    Visual signal that there's more content below. */}
-                {!descriptionExpanded && item.description.length > 120 && (
-                  <LinearGradient
-                    colors={[`${colors.background}00`, colors.background]}
-                    style={styles.descriptionFade}
-                    pointerEvents="none"
-                  />
-                )}
-              </Pressable>
-              {item.description.length > 120 && (
-                <Pressable
-                  onPress={() => setDescriptionExpanded((prev) => !prev)}
-                  hitSlop={8}
-                  style={styles.quietTextTarget}
-                  accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: descriptionExpanded }}
-                >
-                  <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]}>
-                    {descriptionExpanded ? 'Show less' : 'Read more'}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          ) : null}
-
-          {(() => {
-            const evidenceGroups = resolveEvidenceGroups({
-              category: item.category,
-              subcategory: item.subcategory,
-              brand: item.brand,
-              size: item.size,
-              condition: item.condition,
-              description: item.description,
-            });
-            return evidenceGroups.length > 0 ? (
-              <CategoryEvidence groups={evidenceGroups} />
-            ) : null;
-          })()}
-
-          {item.createdAt ? (
-            <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1}>
-              Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-            </Text>
-          ) : null}
-        </CommerceDetailSection>
-
-        {/* ── Zone F — Pricing ──
+        {/* ── Pricing insights ──
             Only render facts that are genuinely supported. No fabricated
-            history. Spec 05 §6. */}
+            history. Placed after the seller section — interested buyers
+            who have scrolled this far benefit from price context. */}
         {priceInsightRows.length > 0 ? (
           <CommerceDetailSection label="Pricing" divider variant="editorial">
             {priceInsightRows.map((row) => (
@@ -1203,18 +1223,6 @@ export default function ItemDetailScreen() {
           </CommerceDetailSection>
         ) : null}
 
-        {/* Sync retry banner — only when there is a real sync error */}
-        {lastError ? (
-          <View style={styles.syncRetryWrap}>
-            <SyncRetryBanner
-              message="Pull latest listing changes now."
-              onRetry={() => void refreshListings()}
-              isRetrying={isSyncing}
-              telemetryContext="item_detail_listing_sync"
-            />
-          </View>
-        ) : null}
-
         <CommerceDetailSection label="Questions" variant="compact" divider>
           <CommerceDetailDisclosureRow
             label={qaSummary?.questionCount ? 'View all questions' : 'Ask a question'}
@@ -1226,6 +1234,10 @@ export default function ItemDetailScreen() {
           />
         </CommerceDetailSection>
 
+        {/* ── Zone G — Related / recommended (below fold) ──
+            Bundle upsell + visual-similar grid. These are discovery
+            surfaces that extend the session — they belong below all
+            item-critical content. */}
         <BundleUpsellRow
           items={bundleItems}
           currentListingId={item.id}
@@ -1303,6 +1315,18 @@ export default function ItemDetailScreen() {
             />
           </View>
         )}
+
+        {/* Sync retry banner — only when there is a real sync error */}
+        {lastError ? (
+          <View style={styles.syncRetryWrap}>
+            <SyncRetryBanner
+              message="Pull latest listing changes now."
+              onRetry={() => void refreshListings()}
+              isRetrying={isSyncing}
+              telemetryContext="item_detail_listing_sync"
+            />
+          </View>
+        ) : null}
       </Reanimated.ScrollView>
 
       {/* ── Zone I — Sticky action dock ──
@@ -1838,6 +1862,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
+  },
+  trustChipDot: {
+    width: Space.xs + 2,
+    height: Space.xs + 2,
+    borderRadius: (Space.xs + 2) / 2,
+    flexShrink: 0,
   },
   trustChipText: {
     fontSize: TypographyV2.meta.size,

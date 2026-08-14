@@ -202,11 +202,6 @@ export default function CreatorCamera({
     transform: [{ scale: zoomIndicatorScale.value }],
   }));
 
-  // ── Flash control: spring scale on tap ──
-  const flashControlStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: flashScale.value }],
-  }));
-
   // ── Countdown: spring scale (1.5→1.0 bouncy) + fade ──
   const countdownTextStyle = useAnimatedStyle(() => ({
     opacity: countdownOpacity.value,
@@ -834,30 +829,22 @@ export default function CreatorCamera({
 
         <View style={styles.topRightControls}>
           {renderTopRightAccessory?.()}
-          {/* Flash control — three states with distinct icons + spring scale on tap */}
-          <Pressable
-            style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed]}
-            onPress={cycleFlash}
-            hitSlop={12}
-            accessibilityLabel={`Flash ${flash}`}
-            accessibilityRole="button"
-          >
-            <Reanimated.View style={flashControlStyle}>
-              <Ionicons
-                name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
-                size={22}
-                color={flash === 'off' ? '#fff' : colors.antiqueGold}
-              />
-            </Reanimated.View>
-          </Pressable>
+          {/* Flash control moved to the expanded ControlsRail to reduce
+              idle chrome. The top bar keeps only the close button and the
+              screen-level accessory (overflow menu). */}
         </View>
       </View>
 
       {/* Vertical controls rail — right side */}
+      {/* IDLE: only Flip + More are visible. EXPANDED: Flash, Zoom, Timer,
+          Grid, Multi-capture are revealed. This keeps the viewfinder
+          dominant — the camera preview is the hero, not a wall of controls. */}
       <ControlsRail
         top={Math.max(insets.top, 16) + 60}
         isVisualSearch={isVisualSearch}
         onFlip={toggleFacing}
+        flash={flash}
+        onCycleFlash={cycleFlash}
         onCycleZoom={cycleZoom}
         zoomLabel={zoomLabel}
         onCycleTimer={cycleTimer}

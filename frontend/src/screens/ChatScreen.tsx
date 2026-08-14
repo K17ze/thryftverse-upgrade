@@ -1732,7 +1732,10 @@ export default function ChatScreen({ navigation, route }: Props) {
             placeholder="Message..."
             isSending={composerSending}
             quickReplies={
-              agentSuggestionsActive
+              // Chat stays quiet by default — quick replies only appear when
+              // the conversation is empty to help start it, then recede once
+              // there are messages. Agent suggestions take precedence.
+              agentSuggestionsActive || messages.length > 0
                 ? undefined
                 : agentQuickReplies.length > 0
                 ? agentQuickReplies

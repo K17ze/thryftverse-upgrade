@@ -7,7 +7,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  Dimensions,
   RefreshControl,
 } from 'react-native';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
@@ -24,23 +23,20 @@ import { RefreshIndicator } from '../components/RefreshIndicator';
 import { EmptyState } from '../components/EmptyState';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
-import { Type, Typography, Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Type, Typography, Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
 import PulseTab from '../components/explore/PulseTab';
 import LooksTab from '../components/explore/LooksTab';
-import EditTab from '../components/explore/EditTab';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { AppSegmentControl, type AppSegmentOption } from '../components/ui/AppSegmentControl';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const EXPLORE_TABS = [
   { value: 'discover', label: 'Discover' },
   { value: 'pulse', label: 'Pulse' },
   { value: 'looks', label: 'Looks' },
-  { value: 'edit', label: 'Trending' },
 ];
 
 // Main screen
@@ -55,7 +51,7 @@ export default function SearchScreen() {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useScrollToTop(scrollRef);
 
-  const [activeTab, setActiveTab] = useState<'discover' | 'pulse' | 'looks' | 'edit'>('discover');
+  const [activeTab, setActiveTab] = useState<'discover' | 'pulse' | 'looks'>('discover');
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -87,52 +83,10 @@ export default function SearchScreen() {
   const styles = useMemo(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
 
-  // Header
-  headerRow: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.smMd,
-  },
-  hugeTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    letterSpacing: LetterSpacing.tight,
-  },
-  itemCount: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: LetterSpacing.wide,
-    color: colors.textSecondary,
-  },
-  headerStatusWrap: {
-    marginTop: Space.sm,
-  },
-  discoverBtn: {
-    marginTop: Space.sm,
-    minHeight: Control.chromeCompact,
-    borderRadius: Radius.xl,
-    borderWidth: 0,
-    backgroundColor: colors.surfaceAlt,
-    alignSelf: 'flex-end',
-    paddingHorizontal: Space.smMd,
-  },
-  discoverBtnIconWrap: {
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: Radius.full,
-    backgroundColor: 'transparent',
-  },
-  discoverBtnText: {
-    color: colors.textInverse,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.wide,
-  },
-
   // Search
   searchRow: {
     paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
     paddingBottom: Space.smMd,
     flexDirection: 'row',
     alignItems: 'center',
@@ -174,51 +128,6 @@ export default function SearchScreen() {
     paddingHorizontal: Space.md,
   },
 
-  // Tabs
-  tabsContainer: { paddingHorizontal: Space.md, paddingBottom: Space.smMd },
-  tabsWrapper: { flexDirection: 'row', backgroundColor: 'transparent', gap: Space.smMd },
-  tab: {
-    flex: 1,
-    borderRadius: Radius.xxl,
-    minHeight: Space.xl + Space.sm,
-    borderWidth: 0,
-    backgroundColor: colors.surface,
-    paddingHorizontal: Space.smMd,
-  },
-  activeTab: { backgroundColor: colors.textPrimary },
-  tabIconWrap: {
-    width: Space.md,
-    height: Space.md,
-    borderRadius: Radius.md,
-    backgroundColor: 'transparent',
-  },
-  tabText: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold, color: colors.textMuted, letterSpacing: LetterSpacing.wide },
-  activeTabText: { color: colors.textPrimary },
-  tabCountWrap: {
-    width: 'auto',
-    height: 'auto',
-    borderRadius: Radius.none,
-    backgroundColor: 'transparent',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-  tabCount: {
-    marginLeft: Space.xs + 2,
-    minWidth: Space.lg - Space.xs,
-    textAlign: 'center',
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-    color: colors.textSecondary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
-  tabCountActive: {
-    backgroundColor: colors.textPrimary,
-    color: colors.textInverse,
-  },
   syncRetryBanner: {
     marginHorizontal: Space.md,
     marginBottom: Space.smMd,
@@ -227,74 +136,10 @@ export default function SearchScreen() {
   // Lists
   listContent: { paddingHorizontal: Space.md, paddingBottom: Space.xxl * 2 + Space.lg },
   gridContent: { paddingBottom: Space.xxl * 2 + Space.lg },
-  gridRow: { justifyContent: 'space-between' },
-  wishlistLoadingGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.smMd,
-    paddingBottom: Space.xxl * 2 + Space.lg,
-    rowGap: Space.smMd,
-  },
-  wishlistLoadingCard: {
-    width: (SCREEN_WIDTH - Space.xl) / 2,
-    borderRadius: Radius.xl,
-    borderWidth: 0,
-    borderColor: 'transparent',
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  wishlistLoadingBody: {
-    paddingHorizontal: Space.smMd,
-    paddingVertical: Space.smMd,
-  },
 
   emptyFooter: {
     alignItems: 'center',
     paddingVertical: Space.lg,
-  },
-  footerHint: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    textAlign: 'center',
-    letterSpacing: LetterSpacing.wide,
-  },
-  closetShortcut: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
-  closetShortcutLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.smMd,
-  },
-  closetShortcutIcon: {
-    width: Space.xxl - Space.sm,
-    height: Space.xxl - Space.sm,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closetShortcutTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  closetShortcutSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    marginTop: Space.xs / 2,
   },
   }), [colors]);
 
@@ -319,8 +164,6 @@ export default function SearchScreen() {
         return <PulseTab />;
       case 'looks':
         return <LooksTab />;
-      case 'edit':
-        return <EditTab />;
     }
   };
 
@@ -328,12 +171,7 @@ export default function SearchScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      {/* -- Header -- */}
-      <View style={styles.headerRow}>
-        <Text style={styles.hugeTitle}>Explore</Text>
-      </View>
-
-      {/* -- Search Bar -- */}
+      {/* -- Search Bar (tab navigation supplies the "Explore" context) -- */}
       <View style={styles.searchRow}>
         <AnimatedPressable
           style={styles.searchBar}
@@ -389,7 +227,7 @@ export default function SearchScreen() {
 
           <View style={styles.exploreTabsContainer}>
             <AppSegmentControl
-              options={EXPLORE_TABS as AppSegmentOption<'discover' | 'pulse' | 'looks' | 'edit'>[]}
+              options={EXPLORE_TABS as AppSegmentOption<'discover' | 'pulse' | 'looks'>[]}
               value={activeTab}
               onChange={(next) => setActiveTab(next)}
               fullWidth
@@ -438,15 +276,6 @@ export default function SearchScreen() {
                   subtitle="Creators are styling their first looks. Be the first to share a look."
                   ctaLabel="Create a Look"
                   onCtaPress={() => navigation.navigate('CreateLook')}
-                />
-              ) : activeTab === 'edit' ? (
-                <EmptyState
-                  density="compact"
-                  icon="trending-up-outline"
-                  title="Nothing trending"
-                  subtitle="Trending items will appear here once the community starts engaging."
-                  ctaLabel="Browse All Listings"
-                  onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
                 />
               ) : (
                 <EmptyState

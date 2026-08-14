@@ -17,7 +17,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numeric, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
@@ -205,6 +205,95 @@ export default function AssetDueDiligenceScreen() {
   const hasAppraisal = asset.appraisalValueGbp != null;
   const hasAboutAsset = hasProvenance || hasCondition;
 
+  // ── Timeline events — all dated events combined chronologically ──
+  const timelineEvents = React.useMemo(() => {
+    const events: { event: string; date: Date; sortKey: number }[] = [];
+
+    if (asset.authenticityVerifiedAt) {
+      const d = new Date(asset.authenticityVerifiedAt);
+      if (Number.isFinite(d.getTime())) {
+        events.push({ event: 'Authenticity verified', date: d, sortKey: d.getTime() });
+      }
+    }
+    if (asset.appraisalValuedAt) {
+      const d = new Date(asset.appraisalValuedAt);
+      if (Number.isFinite(d.getTime())) {
+        events.push({ event: 'Appraisal completed', date: d, sortKey: d.getTime() });
+      }
+    }
+    if (asset.trustAuditEvents) {
+      asset.trustAuditEvents.forEach((evt) => {
+        const d = new Date(evt.createdAt);
+        if (Number.isFinite(d.getTime())) {
+          events.push({ event: evt.eventType.replace(/_/g, ' '), date: d, sortKey: d.getTime() });
+        }
+      });
+    }
+    if (asset.marketAuditEvents) {
+      asset.marketAuditEvents.forEach((evt) => {
+        const d = new Date(evt.createdAt);
+        if (Number.isFinite(d.getTime())) {
+          events.push({ event: evt.eventType.replace(/_/g, ' '), date: d, sortKey: d.getTime() });
+        }
+      });
+    }
+
+    return events.sort((a, b) => b.sortKey - a.sortKey);
+  }, [asset.authenticityVerifiedAt, asset.appraisalValuedAt, asset.trustAuditEvents, asset.marketAuditEvents]);
+
+  // ── Document rows — legal/technical documents as flat rows ──
+  const documentRows = React.useMemo(() => {
+    const docs: { icon: string; title: string; subtitle: string | null; url: string | null; isLink: boolean }[] = [];
+
+    if (asset.escrowTermsUrl) {
+      docs.push({
+        icon: 'shield-checkmark-outline',
+        title: 'Escrow terms',
+        subtitle: asset.escrowPartner ?? null,
+        url: asset.escrowTermsUrl,
+        isLink: true,
+      });
+    }
+    if (asset.safeguardingEvidenceUrl) {
+      docs.push({
+        icon: 'lock-closed-outline',
+        title: 'Safeguarding evidence',
+        subtitle: asset.safeguardingPartner ?? null,
+        url: asset.safeguardingEvidenceUrl,
+        isLink: true,
+      });
+    }
+    if (asset.safeguardingTermsUrl) {
+      docs.push({
+        icon: 'document-lock-outline',
+        title: 'Safeguarding terms',
+        subtitle: null,
+        url: asset.safeguardingTermsUrl,
+        isLink: true,
+      });
+    }
+    if (asset.buyerProtectionTermsUrl) {
+      docs.push({
+        icon: 'shield-outline',
+        title: 'Buyer protection terms',
+        subtitle: asset.buyerProtection ? 'Active' : null,
+        url: asset.buyerProtectionTermsUrl,
+        isLink: true,
+      });
+    }
+    if (asset.custodyPolicyRef) {
+      docs.push({
+        icon: 'file-tray-stacked-outline',
+        title: 'Custody policy',
+        subtitle: asset.custodyPolicyRef,
+        url: null,
+        isLink: false,
+      });
+    }
+
+    return docs;
+  }, [asset]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
@@ -245,9 +334,10 @@ export default function AssetDueDiligenceScreen() {
           />
         }
       >
-        {/* ── About this asset ──
-            Story/description (provenance), condition. */}
-        <CommerceDetailSection label="About this asset" variant="editorial">
+        {/* ── Evidence ──
+            Provenance story, condition, category evidence, authentication,
+            custody — presented as a dossier gallery, not settings rows. */}
+        <CommerceDetailSection label="Evidence" variant="editorial">
           {hasAboutAsset ? (
             <>
               {asset.provenance && (
@@ -256,10 +346,14 @@ export default function AssetDueDiligenceScreen() {
                 </Text>
               )}
               {asset.conditionGrade && (
-                <CommerceDetailMetricRow
-                  label="Condition"
-                  value={asset.conditionGrade}
-                />
+                <View style={[styles.evidenceBlock, { borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.evidenceBlockLabel, { color: colors.textMuted }]}>
+                    CONDITION
+                  </Text>
+                  <Text style={[styles.evidenceBlockValue, { color: colors.textPrimary }]}>
+                    {asset.conditionGrade}
+                  </Text>
+                </View>
               )}
               {dossierEvidenceGroups.length > 0 && (
                 <CategoryEvidence groups={dossierEvidenceGroups} />
@@ -270,10 +364,8 @@ export default function AssetDueDiligenceScreen() {
               No story or condition details published yet.
             </Text>
           )}
-        </CommerceDetailSection>
 
-        {/* ── Authentication ── */}
-        <CommerceDetailSection label="Authentication" divider variant="editorial">
+          {/* Authentication evidence */}
           <CoOwnTrustPanel
             authenticityStatus={asset.authenticityStatus ?? null}
             authenticityMethod={asset.authenticityMethod ?? null}
@@ -289,54 +381,31 @@ export default function AssetDueDiligenceScreen() {
             legalVehicleName={asset.legalVehicleName ?? null}
             legalVehicleJurisdiction={asset.legalVehicleJurisdiction ?? null}
           />
-          {asset.authenticityVerifiedAt && (
-            <CommerceDetailMetricRow
-              label="Verified at"
-              value={new Date(asset.authenticityVerifiedAt).toLocaleDateString(undefined, {
-                year: 'numeric', month: 'short', day: 'numeric',
-              })}
-            />
+
+          {/* Custody evidence — flat info, not metric rows */}
+          {(asset.custodianName || asset.custodyInsured || asset.custodianLocation) && (
+            <View style={[styles.custodyEvidence, { borderTopColor: colors.borderSubtle }]}>
+              {asset.custodianName && (
+                <View style={styles.evidenceRow}>
+                  <Ionicons name="cube-outline" size={16} color={colors.textMuted} />
+                  <Text style={[styles.evidenceRowLabel, { color: colors.textSecondary }]}>
+                    {asset.custodianName}
+                    {asset.custodianLocation ? ` · ${asset.custodianLocation}` : ''}
+                  </Text>
+                </View>
+              )}
+              {asset.custodyInsured && (
+                <View style={styles.evidenceRow}>
+                  <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
+                  <Text style={[styles.evidenceRowLabel, { color: colors.textSecondary }]}>
+                    {asset.custodyInsurer ? `Insured · ${asset.custodyInsurer}` : 'Insured'}
+                    {asset.custodyCoverageGbp != null ? ` · ${formatCoOwnIze(asset.custodyCoverageGbp)}` : ''}
+                  </Text>
+                </View>
+              )}
+            </View>
           )}
         </CommerceDetailSection>
-
-        {/* ── Custody & insurance ──
-            Detailed custodian/insurance/policy disclosure. */}
-        {(asset.custodianName || asset.custodyInsured || asset.custodianLocation) && (
-          <CommerceDetailSection label="Custody & insurance" divider variant="editorial">
-            {asset.custodianName && (
-              <CommerceDetailMetricRow
-                label="Custodian"
-                value={asset.custodianName}
-              />
-            )}
-            {asset.custodianLocation && (
-              <CommerceDetailMetricRow
-                label="Location"
-                value={asset.custodianLocation}
-              />
-            )}
-            {asset.custodyInsured && (
-              <>
-                <CommerceDetailMetricRow
-                  label="Insured"
-                  value={asset.custodyInsurer ? `Yes · ${asset.custodyInsurer}` : 'Yes'}
-                />
-                {asset.custodyCoverageGbp != null && (
-                  <CommerceDetailMetricRow
-                    label="Coverage"
-                    value={formatCoOwnIze(asset.custodyCoverageGbp)}
-                  />
-                )}
-                {asset.custodyPolicyRef && (
-                  <CommerceDetailMetricRow
-                    label="Policy ref"
-                    value={asset.custodyPolicyRef}
-                  />
-                )}
-              </>
-            )}
-          </CommerceDetailSection>
-        )}
 
         {/* ── Valuation ──
             Appraisal value, NAV, reference vs NAV, next report. */}
@@ -913,5 +982,39 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  evidenceBlock: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    marginTop: Space.sm,
+  },
+  evidenceBlockLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  evidenceBlockValue: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+  },
+  custodyEvidence: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.md,
+    marginTop: Space.md,
+  },
+  evidenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Space.xs,
+    gap: Space.sm,
+  },
+  evidenceRowLabel: {
+    flex: 1,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
   },
 });

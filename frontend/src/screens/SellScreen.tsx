@@ -37,7 +37,6 @@ import { createListingOnApi, createListingImageOnApi } from '../services/listing
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { ListingModeSelector, ListingMode, getListingModeOptions, getListingModeFromLabel, getListingModeLabel } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
-import { calculateListingQuality } from '../utils/listingQuality';
 import { useListingAutofill } from '../hooks/useListingAutofill';
 import { useSoldComps } from '../hooks/useSoldComps';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -128,9 +127,6 @@ export default function SellScreen() {
     priceNoCompsHint: { color: colors.textMuted },
     charCountWarn: { color: colors.warning },
     fieldRequiredHint: { color: colors.textMuted },
-    qualityTipsText: { color: colors.textSecondary },
-    qualityTipsLabel: { color: colors.brand },
-    qualityBarTier: { color: colors.textSecondary },
     photoGuideTitle: { color: colors.textSecondary },
     photoGuideMin: { color: colors.textMuted },
     photoGuideTip: { color: colors.textMuted },
@@ -207,7 +203,6 @@ export default function SellScreen() {
   // AI autofill suggestions from first photo filename
   const autofillSuggestion = useListingAutofill(mediaDraftItems);
   const [autofillDismissed, setAutofillDismissed] = useState(false);
-  const [qualityTipsExpanded, setQualityTipsExpanded] = useState(false);
   const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(true);
 
   // Reset dismiss when photos change (new photo -> new suggestions)
@@ -919,31 +914,6 @@ export default function SellScreen() {
     });
   }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, navigation]);
 
-  const qualityResult = useMemo(() => calculateListingQuality({
-    photos,
-    title,
-    brand,
-    category,
-    size,
-    condition,
-    description: desc,
-    price,
-    originalPrice,
-    tags,
-    shippingMethod,
-    shippingPayer,
-    listingMode,
-    startingBid,
-  }), [photos, title, brand, category, size, condition, desc, price, originalPrice, tags, shippingMethod, shippingPayer, listingMode, startingBid]);
-
-  // Color-coded quality level: green (excellent), yellow (good), red (basic).
-  // Communicates quality through color, not panel chrome (per §4 surface budget).
-  const qualityColor = qualityResult.tier === 'excellent'
-    ? colors.success
-    : qualityResult.tier === 'good'
-    ? colors.warning
-    : colors.danger;
-
   return (
     <SafeAreaView style={[styles.root, t.root]} edges={['top']}>
         {/* -- 1. COMPACT NAVIGATION HEADER -- */}
@@ -956,7 +926,7 @@ export default function SellScreen() {
           >
             <Ionicons name="close" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={[styles.navTitle, t.navTitle]}>Create listing</Text>
+          <Text style={[styles.navTitle, t.navTitle]}>Sell</Text>
           {/* Transient "Saved" indicator — per audit 04: "visible 'Saved'
               only briefly; never spam toasts on every field." A subtle
               checkmark that fades after 1.5s. Not a permanent label. */}
@@ -990,6 +960,20 @@ export default function SellScreen() {
             onRetryItem={handleRetryItem}
             onSetCover={handleSetCover}
           />
+
+          {/* -- 2a. CONTEXTUAL PHOTO COUNT HINT -- */}
+          {/* Not a quality score — a specific, actionable check next to the
+              media it relates to. Resolves when the user adds enough photos. */}
+          {mediaDraftItems.length < 3 && (
+            <View style={styles.contextualHintRow}>
+              <Ionicons name="camera-outline" size={14} color={colors.brand} />
+              <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
+                {mediaDraftItems.length === 0
+                  ? 'Add at least 1 photo to publish'
+                  : `Add ${3 - mediaDraftItems.length} more photo${3 - mediaDraftItems.length > 1 ? 's' : ''} for more views`}
+              </Text>
+            </View>
+          )}
 
           {/* -- 2a. PHOTO UPLOAD GUIDANCE (contextual, collapsible) -- */}
           <Pressable
@@ -1077,7 +1061,37 @@ export default function SellScreen() {
             );
           })()}
 
-          {/* -- 2b. SUGGESTED DETAILS (neutral, from photo filename) -- */}
+          {/* -- 2c. TITLE FIELD (first identity field, in first viewport) -- */}
+          {/* Per spec: first viewport shows close, Sell title, media studio,
+              first identity fields (title). Placed immediately after media
+              so the user can start describing their item right away. */}
+          <View style={styles.sectionGroup}>
+            <View style={styles.fieldGroup}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
+                {title.trim().length > 0 ? (
+                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                ) : (
+                  <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
+                )}
+              </View>
+              <TextInput
+                style={[styles.fieldInput, t.fieldInput]}
+                value={title}
+                onChangeText={(t) => { setTitle(t); if (errors.title) setErrors((p) => ({ ...p, title: '' })); }}
+                placeholder="e.g. Vintage Levi's 501 Denim Jacket"
+                placeholderTextColor={colors.textMuted}
+                returnKeyType="next"
+              />
+              {errors.title ? <Text style={[styles.fieldError, t.fieldError]}>{errors.title}</Text> : null}
+              {title.trim().length > 0 && title.trim().length < 10 && (
+                <Text style={[styles.fieldHelper, t.fieldHelper]}>Add more detail to help buyers find this item</Text>
+              )}
+              <View style={[styles.hairline, t.hairline]} />
+            </View>
+          </View>
+
+          {/* -- 2d. SUGGESTED DETAILS (neutral, from photo filename) -- */}
           {autofillSuggestion.hasSuggestions && !autofillDismissed && (
             <View style={[styles.autofillCard, t.autofillCard]}>
               <View style={styles.autofillHeader}>
@@ -1142,27 +1156,6 @@ export default function SellScreen() {
           <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
-            <View style={styles.fieldGroup}>
-              <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, t.fieldLabel]}>Title</Text>
-                {title.trim().length > 0 ? (
-                  <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                ) : (
-                  <Text style={[styles.fieldRequiredHint, t.fieldRequiredHint]}>Required</Text>
-                )}
-              </View>
-              <TextInput
-                style={[styles.fieldInput, t.fieldInput]}
-                value={title}
-                onChangeText={(t) => { setTitle(t); if (errors.title) setErrors((p) => ({ ...p, title: '' })); }}
-                placeholder="e.g. Vintage Levi's 501 Denim Jacket"
-                placeholderTextColor={colors.textMuted}
-                returnKeyType="next"
-              />
-              {errors.title ? <Text style={[styles.fieldError, t.fieldError]}>{errors.title}</Text> : null}
-              <View style={[styles.hairline, t.hairline]} />
-            </View>
-
             <Pressable
               style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
               onPress={() => setPickerMode('Category')}
@@ -1208,6 +1201,9 @@ export default function SellScreen() {
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
+            {!brand && (
+              <Text style={[styles.fieldHelper, t.fieldHelper]}>Add brand for better search discoverability</Text>
+            )}
             <View style={[styles.hairline, t.hairline]} />
 
             <Pressable
@@ -1387,6 +1383,9 @@ export default function SellScreen() {
                   </View>
                   {hasDiscount && (
                     <Text style={[styles.discountPreview, t.discountPreview]}>-{discountPercent}% off original</Text>
+                  )}
+                  {!originalPrice && hasValidPrice && (
+                    <Text style={[styles.fieldHelper, t.fieldHelper]}>Add original price to show value</Text>
                   )}
                   <View style={[styles.hairline, t.hairline]} />
                 </View>
@@ -1614,11 +1613,30 @@ export default function SellScreen() {
               />
             </View>
             <Text style={[styles.fieldHelper, t.fieldHelper]}>Press space or comma to add. Up to 8 tags.</Text>
+            {tags.length > 0 && tags.length < 3 && (
+              <Text style={[styles.fieldHelper, t.fieldHelper]}>Add {3 - tags.length} more tag{3 - tags.length > 1 ? 's' : ''} to improve discovery</Text>
+            )}
           </View>
 
           {/* -- 7. SHIPPING -- */}
           <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
+            {!shippingMethod && (
+              <View style={styles.contextualHintRow}>
+                <Ionicons name="cube-outline" size={14} color={colors.brand} />
+                <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
+                  Set a shipping method so buyers know how it'll arrive
+                </Text>
+              </View>
+            )}
+            {shippingMethod && !shippingPayer && (
+              <View style={styles.contextualHintRow}>
+                <Ionicons name="card-outline" size={14} color={colors.brand} />
+                <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
+                  Specify who pays for shipping
+                </Text>
+              </View>
+            )}
 
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, t.fieldLabel]}>Shipping method</Text>
@@ -1741,54 +1759,9 @@ export default function SellScreen() {
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
 
-      {/* -- 8b. EXPANDABLE QUALITY TIPS (fixed above publish footer) -- */}
-      {/* Per audit 04 P1: "Sticky publish footer shows readiness + primary CTA,
-          not a second dashboard." The quality SCORE now lives in the publish
-          footer's built-in readiness indicator. This surface retains only the
-          expandable "Tips to improve" section — no duplicate score display.
-          Flat inline, no panel chrome (§4 surface budget). */}
-      <View style={styles.qualityBar}>
-        <Pressable
-          hitSlop={8}
-          onPress={() => setQualityTipsExpanded((v) => !v)}
-          style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.6 }]}
-          accessibilityRole="button"
-          accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
-        >
-          <View style={styles.qualityBarLeft}>
-            <View style={[styles.qualityDot, { backgroundColor: qualityColor }]} />
-            <Text style={[styles.qualityTipsLabel, t.qualityTipsLabel]}>Tips to improve</Text>
-            <Text style={[styles.qualityBarTier, t.qualityBarTier]}>{qualityResult.tierLabel}</Text>
-          </View>
-          <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} />
-        </Pressable>
-        {qualityTipsExpanded && qualityResult.missingItems.length > 0 && (
-          <View style={styles.qualityTipsRow}>
-            {qualityResult.missingItems.slice(0, 6).map((item) => (
-              <View key={item.key} style={styles.qualityTipChip}>
-                <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={11} color={colors.textMuted} />
-                <Text style={[styles.qualityTipsText, t.qualityTipsText]}>{item.label}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-        {qualityTipsExpanded && qualityResult.tips.length > 0 && (
-          <View style={styles.qualityTipsList}>
-            {qualityResult.tips.slice(0, 4).map((tip, i) => (
-              <View key={i} style={styles.qualityTipBulletRow}>
-                <Text style={[styles.qualityTipBullet, t.qualityTipsText]}>•</Text>
-                <Text style={[styles.qualityTipsText, t.qualityTipsText]}>{tip}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-
       {/* -- 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER -- */}
-      {/* Per audit 04 P1: "Sticky publish footer shows readiness + primary CTA,
-          not a second dashboard." The quality score is passed directly to the
-          footer's built-in readiness indicator, consolidating the two surfaces
-          into one coherent dock. */}
+      {/* No quality score or dashboard — the footer shows readiness state
+          and primary CTA only. Contextual guidance lives next to each field. */}
       <ListingPublishFooter
         mode={listingMode}
         isPublishing={isPublishing}
@@ -1798,9 +1771,6 @@ export default function SellScreen() {
         onPreview={handlePreview}
         onPublish={handlePublish}
         bottomInset={insets.bottom}
-        qualityScore={qualityResult.score}
-        qualityTierLabel={qualityResult.tierLabel}
-        qualityColor={qualityColor}
       />
 
       {/* -- picker -- */}
@@ -2326,71 +2296,19 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
 
-  /* -- expandable quality tips (fixed above footer) -- */
-  /* Flat inline — no surface, no border, no border radius (§4).
-     The quality SCORE lives in the publish footer; this surface
-     retains only the expandable tips toggle + content. */
-  qualityBar: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-    gap: Space.xs,
-  },
-  qualityBarLeft: {
+  /* -- contextual hints (field-specific, not a dashboard) -- */
+  contextualHintRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-    flex: 1,
-  },
-  qualityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  qualityBarTier: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
-  qualityTipsToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: Control.hit,
-    gap: Space.xs,
-  },
-  qualityTipsLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
-  qualityTipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: Space.xs + 1,
+    paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
-    marginTop: Space.xs,
   },
-  qualityTipChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2 + 1,
-  },
-  qualityTipsList: {
-    gap: Space.xs - 1,
-    marginTop: Space.xs,
-  },
-  qualityTipBulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.xs + 2,
-  },
-  qualityTipBullet: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.bold,
-  },
-  qualityTipsText: {
+  contextualHintText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.meta.lineHeight - 1,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });

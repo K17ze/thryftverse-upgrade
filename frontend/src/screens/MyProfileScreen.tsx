@@ -146,7 +146,7 @@ export default function MyProfileScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
-  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about'>('listings');
+  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'portfolio' | 'about'>('listings');
 
   const { show } = useToast();
   const haptic = useHaptic();

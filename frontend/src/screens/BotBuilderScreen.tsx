@@ -421,7 +421,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
 
         <Section
           title="Voice & model"
-          detail="Choose the voice, answer density, and the provider model that powers this agent."
+          detail="Choose the tone, answer length, and the AI model that powers this agent."
         >
           <Text style={styles.fieldLabel}>Voice</Text>
           <OptionGrid
@@ -517,7 +517,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
 
         <Section
           title="Capabilities"
-          detail="Typed grants from the Capability Broker. Critical actions always require explicit approval."
+          detail="Control what this agent can do. Actions that publish or spend always need your approval."
         >
           {RISK_GROUPS.map((group) => {
             const groupGrants = capabilityGrants.filter(
@@ -559,7 +559,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
                   <View style={styles.criticalWarning}>
                     <Ionicons name="shield-checkmark-outline" size={16} color={colors.danger} />
                     <Text style={styles.criticalWarningText}>
-                      Money and security actions can never be auto-allowed. The agent must route every request through the canonical transaction screens.
+                      Money and security actions always need your approval. The agent will send every request through the secure payment screens — it can never complete them on its own.
                     </Text>
                   </View>
                 ) : null}

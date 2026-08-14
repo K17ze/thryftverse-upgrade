@@ -6,9 +6,6 @@ import {
   StatusBar,
   ScrollView,
   RefreshControl,
-  TextInput,
-  LayoutAnimation,
-  Platform,
   Pressable,
   Linking,
 } from 'react-native';
@@ -24,14 +21,12 @@ import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { haptics } from '../utils/haptics';
-import { formatIzeAmount } from '../utils/currency';
 import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
 import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
   getWalletSnapshot,
   getSellerWalletBalances,
-  convertIzeToFiat,
   type SellerWalletBalanceItem,
 } from '../services/walletApi';
 import {
@@ -43,7 +38,6 @@ import {
   CoOwnReconciliationBanner,
   type CoOwn1ZeBalance,
 } from '../components/coown';
-import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
@@ -51,9 +45,6 @@ import { WalletTransactionHistory } from '../components/wallet/WalletTransaction
 import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
-
-// Fee rate sourced from the central config in tradeFlow.ts (single source of truth)
-import { CO_OWN_CONVERT_FEE_RATE as CONVERT_FEE_RATE } from '../utils/tradeFlow';
 
 export default function WalletScreen({ navigation }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -101,17 +92,13 @@ export default function WalletScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = React.useState(false);
 
   // ── Inline flow state ──
-  // 'none' = collapsed; 'redeem' = Redeem 1ZE (convert to fiat) expanded.
   // Add money is handled by the extracted AddMoneySheet (spec 17).
-  const [activeFlow, setActiveFlow] = useState<'none' | 'redeem'>('none');
-  const [convertIzeInput, setConvertIzeInput] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  // Convert is handled by the dedicated WalletConvertScreen (Phase 3.1).
   const [addMoneyVisible, setAddMoneyVisible] = useState(false);
   // ── Privacy eye (spec 17 viewport 1) ──
   const [balanceHidden, setBalanceHidden] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
-  const convertInputRef = useRef<TextInput>(null);
 
   // ── Balance hydration ──
   const loadBalance = React.useCallback(() => {
@@ -186,58 +173,20 @@ export default function WalletScreen({ navigation }: Props) {
     navigation.navigate('CoOwnHub');
   }, [navigation]);
 
-  // ── Flow expansion ( Redeem / Convert 1ZE to fiat) ──
-  const expandFlow = React.useCallback((flow: 'redeem') => {
+  // ── Flow expansion — now navigates to dedicated screens ──
+  const handleConvert = React.useCallback(() => {
     haptics.tap();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setActiveFlow((prev) => (prev === flow ? 'none' : flow));
-  }, []);
+    navigation.navigate('WalletConvert');
+  }, [navigation]);
 
-  // ── Derived values for Redeem / Convert flow ──
-  const availableIze = balance.available;
+  // ── Derived values ──
   const isWalletOperational = balance.reconciliationState === 'reconciled' && !isOffline;
-
-  const convertIzeValue = Number(convertIzeInput || '0');
-  const convertFiatValue = convertGbpToDisplayAmount(convertIzeValue, currencyCode, goldRates);
-  const convertFee = convertFiatValue * CONVERT_FEE_RATE;
-  const convertNetFiat = Math.max(0, convertFiatValue - convertFee);
-  const canConvertIze = Number.isFinite(convertIzeValue) && convertIzeValue > 0 && convertIzeValue <= availableIze && !isProcessing && isWalletOperational;
-  const convertFeeRateLabel = `${Math.round(CONVERT_FEE_RATE * 100)}%`;
 
   // ── Local-fiat indication for spendable hero ──
   const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
   const localFiatLabel = balance.available > 0 && localFiatRate > 0
     ? `≈ ${formatFromFiat(balance.available, 'GBP', { displayMode: 'fiat' })}`
     : undefined;
-
-  // ── Handlers (preserved — real API calls) ──
-  const handleConvertIzeToFiat = async () => {
-    if (!canConvertIze || !currentUser?.id) {
-      show('Enter a valid amount within your 1ZE balance.', 'error');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const result = await convertIzeToFiat({
-        userId: currentUser.id,
-        izeAmount: convertIzeValue,
-        fiatCurrency: currencyCode,
-      });
-      setAvailableFiatBalance(result.wallet.fiatBalance);
-      setConvertIzeInput('');
-      show(
-        `Converted ${formatIzeAmount(result.conversion.izeAmount)} to ${formatFromFiat(result.conversion.fiatAmount, currencyCode, { displayMode: 'fiat' })}`,
-        'success',
-      );
-      loadBalance();
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to convert 1ZE right now.');
-      show(parsed.message, 'error');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   // ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ──
   const handleAddMoney = React.useCallback(() => {
@@ -442,7 +391,7 @@ export default function WalletScreen({ navigation }: Props) {
           disabled={!isWalletOperational}
         />
 
-        {/* ── Withdraw + Redeem 1ZE — secondary actions, restrained (spec 17) ── */}
+        {/* ── Withdraw + Convert — secondary actions, restrained (spec 17) ── */}
         <View style={styles.secondaryActionRow}>
           <AppButton
             title="Withdraw"
@@ -457,61 +406,18 @@ export default function WalletScreen({ navigation }: Props) {
             disabled={!isWalletOperational}
           />
           <AppButton
-            title="Redeem 1ZE"
+            title="Convert"
             icon={<Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />}
-            onPress={() => expandFlow('redeem')}
-            variant={activeFlow === 'redeem' ? 'primary' : 'secondary'}
+            onPress={handleConvert}
+            variant="secondary"
             size="md"
-            accessibilityLabel="Redeem 1ZE to fiat"
-            accessibilityHint={activeFlow === 'redeem' ? 'Collapses the redeem form' : 'Expands the redeem form'}
+            accessibilityLabel="Convert 1ZE to fiat"
+            accessibilityHint="Opens the convert screen"
             hapticFeedback="medium"
             style={styles.secondaryActionBtn}
             disabled={balance.available <= 0 || !isWalletOperational}
           />
         </View>
-
-        {/* ── Redeem 1ZE flow (inline, expandable — Convert 1ZE to fiat) ── */}
-        {activeFlow === 'redeem' && (
-          <View style={[styles.flowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.flowHeader}>
-              <Ionicons name="arrow-down-circle" size={16} color={colors.textSecondary} />
-              <Text style={[styles.flowTitle, { color: colors.textPrimary }]}>Redeem 1ZE</Text>
-            </View>
-            <Text style={[styles.flowHint, { color: colors.textMuted }]}>
-              Convert your 1ZE to {currencyCode} for withdrawal. Settlement details are confirmed at the time of each request.
-            </Text>
-
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Amount in 1ZE</Text>
-            <Text style={[styles.balanceHint, { color: colors.textMuted }]}>
-              1ZE available: {formatIzeAmount(availableIze)}
-            </Text>
-            <TextInput
-              ref={convertInputRef}
-              style={[styles.amountInput, { color: colors.textPrimary, borderColor: colors.border }]}
-              value={convertIzeInput}
-              onChangeText={(v) => setConvertIzeInput(v.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
-              placeholder="0.00"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              returnKeyType="done"
-              accessibilityLabel="Amount in 1ZE"
-              accessibilityHint="Enter the 1ZE amount to convert to fiat."
-            />
-            <SummaryRow label={`Gross ${currencyCode}`} value={<CoOwnNumericText value={convertFiatValue} size="priceList" align="right" showUnit={false} />} colors={colors} />
-            <SummaryRow label={`Platform fee (${convertFeeRateLabel})`} value={<CoOwnNumericText value={convertFee} size="priceList" align="right" showUnit={false} />} colors={colors} />
-            <SummaryRow label="Net fiat credited" value={<CoOwnNumericText value={convertNetFiat} size="price" align="right" showUnit={false} />} colors={colors} total />
-            <AppButton
-              title={isProcessing ? 'Processing…' : 'Convert to Fiat'}
-              onPress={handleConvertIzeToFiat}
-              variant="primary"
-              size="md"
-              disabled={!canConvertIze}
-              accessibilityLabel="Convert 1ZE to fiat"
-              accessibilityHint="Converts 1ZE to fiat and credits your wallet."
-              style={styles.flowSubmitBtn}
-            />
-          </View>
-        )}
 
         {/* ── Transaction history (spec 17 viewport 2: latest activity) ── */}
         <View style={styles.txHistorySection}>
@@ -596,37 +502,6 @@ export default function WalletScreen({ navigation }: Props) {
 
 // ── Helper sub-components ──
 
-function SummaryRow({
-  label,
-  value,
-  colors,
-  total,
-}: {
-  label: string;
-  value: React.ReactNode;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  total?: boolean;
-}) {
-  return (
-    <View
-      style={[styles.summaryRow, total && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, marginTop: Space.xs, paddingTop: Space.xs }]}
-      accessibilityRole="text"
-      accessibilityLabel={label}
-    >
-      <Text
-        style={[
-          styles.summaryLabel,
-          { color: total ? colors.textPrimary : colors.textSecondary },
-          total && { fontFamily: Typography.family.semibold },
-        ]}
-      >
-        {label}
-      </Text>
-      {value}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: {
@@ -668,76 +543,6 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   secondaryActionBtn: { flex: 1 },
-
-  // ── Flow cards (inline Redeem / Convert) ──
-  flowCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm,
-    marginTop: Space.lg,
-  },
-  flowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  flowTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-  },
-  flowHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-  },
-  inputLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    marginTop: Space.xs,
-  },
-  balanceHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-  },
-  amountInput: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Platform.OS === 'ios' ? Space.sm : Space.xs,
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Space.xs,
-  },
-  summaryLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-  },
-  summaryValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
-  flowSubmitBtn: {
-    marginTop: Space.sm,
-  },
 
   // ── Transaction history ──
   txHistorySection: {

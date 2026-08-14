@@ -14,18 +14,21 @@ export interface ControlsRailProps {
   top: number;
   /** Whether the visual-search mode is active (hides multi-capture). */
   isVisualSearch: boolean;
-  // ── Flip ──
+  // ── Flip (always visible) ──
   onFlip: () => void;
-  // ── Zoom ──
+  // ── Flash (expanded only) ──
+  flash: FlashMode;
+  onCycleFlash: () => void;
+  // ── Zoom (expanded only) ──
   onCycleZoom: () => void;
   zoomLabel: string;
-  // ── Timer ──
+  // ── Timer (expanded only) ──
   onCycleTimer: () => void;
   timerOption: TimerOption;
-  // ── Grid ──
+  // ── Grid (expanded only) ──
   onToggleGrid: () => void;
   showGrid: boolean;
-  // ── Multi-capture ──
+  // ── Multi-capture (expanded only) ──
   onToggleMultiCapture: () => void;
   multiCaptureMode: boolean;
   multiCaptureCount: number;
@@ -40,17 +43,24 @@ export interface ControlsRailProps {
 /**
  * Vertical controls rail — right-side.
  *
- * Stacked icon + label controls for Flip, Zoom, Timer, Grid and (when not in
- * visual-search mode) Multi-capture. Each control is a transparent 48×56
- * target with a 22pt glyph and a 10pt label — no decorative chrome.
+ * IDLE (showTools = false): Only Flip + a "More" disclosure button are
+ * visible. This keeps the viewfinder dominant — the camera preview is the
+ * hero, not a wall of controls.
  *
- * Active states (timer, grid, multi-capture) switch to the theme accent
- * colour so the user can read the current toggle state at a glance.
+ * EXPANDED (showTools = true): Flip, Flash, Zoom, Timer, Grid, Multi-capture
+ * are revealed. The disclosure button becomes a "Hide" collapse control.
+ *
+ * Each control is a transparent 48×56 target with a 22pt glyph and a 10pt
+ * label — no decorative chrome. Active states (flash, timer, grid,
+ * multi-capture) switch to the theme accent colour so the user can read the
+ * current toggle state at a glance.
  */
 export function ControlsRail({
   top,
   isVisualSearch,
   onFlip,
+  flash,
+  onCycleFlash,
   onCycleZoom,
   zoomLabel,
   onCycleTimer,
@@ -67,7 +77,7 @@ export function ControlsRail({
 }: ControlsRailProps) {
   return (
     <View style={[styles.rail, { top }]} pointerEvents="box-none">
-      {/* Flip */}
+      {/* Flip — always visible (core capture control) */}
       <Pressable
         style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
         onPress={onFlip}
@@ -79,71 +89,92 @@ export function ControlsRail({
         <Text style={styles.railLabel}>Flip</Text>
       </Pressable>
 
-      {/* Zoom */}
-      <Pressable
-        style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
-        onPress={onCycleZoom}
-        hitSlop={12}
-        accessibilityLabel={`Zoom ${zoomLabel}`}
-        accessibilityRole="button"
-      >
-        <Text style={styles.zoomLabel}>{zoomLabel}</Text>
-        <Text style={styles.railLabel}>Zoom</Text>
-      </Pressable>
+      {/* ── Expanded tools — hidden when idle ── */}
+      {showTools && (
+        <>
+          {/* Flash */}
+          <Pressable
+            style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
+            onPress={onCycleFlash}
+            hitSlop={12}
+            accessibilityLabel={`Flash ${flash}`}
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
+              size={CONTROL_RAIL_ICON}
+              color={flash === 'off' ? '#fff' : accentColor}
+            />
+            <Text style={styles.railLabel}>{flash === 'off' ? 'Flash' : flash === 'auto' ? 'Auto' : 'On'}</Text>
+          </Pressable>
 
-      {/* Timer */}
-      <Pressable
-        style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
-        onPress={onCycleTimer}
-        hitSlop={12}
-        accessibilityLabel={timerOption === 0 ? 'Timer off' : `Timer ${timerOption} seconds`}
-        accessibilityRole="button"
-      >
-        <Ionicons
-          name={timerOption === 0 ? 'timer-outline' : 'timer'}
-          size={CONTROL_RAIL_ICON}
-          color={timerOption > 0 ? accentColor : '#fff'}
-        />
-        <Text style={styles.railLabel}>{timerOption === 0 ? 'Timer' : `${timerOption}s`}</Text>
-      </Pressable>
+          {/* Zoom */}
+          <Pressable
+            style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
+            onPress={onCycleZoom}
+            hitSlop={12}
+            accessibilityLabel={`Zoom ${zoomLabel}`}
+            accessibilityRole="button"
+          >
+            <Text style={styles.zoomLabel}>{zoomLabel}</Text>
+            <Text style={styles.railLabel}>Zoom</Text>
+          </Pressable>
 
-      {/* Grid */}
-      <Pressable
-        style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
-        onPress={onToggleGrid}
-        hitSlop={12}
-        accessibilityLabel={showGrid ? 'Grid on' : 'Grid off'}
-        accessibilityRole="button"
-      >
-        <Ionicons
-          name="grid-outline"
-          size={CONTROL_RAIL_ICON}
-          color={showGrid ? accentColor : '#fff'}
-        />
-        <Text style={styles.railLabel}>Grid</Text>
-      </Pressable>
+          {/* Timer */}
+          <Pressable
+            style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
+            onPress={onCycleTimer}
+            hitSlop={12}
+            accessibilityLabel={timerOption === 0 ? 'Timer off' : `Timer ${timerOption} seconds`}
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name={timerOption === 0 ? 'timer-outline' : 'timer'}
+              size={CONTROL_RAIL_ICON}
+              color={timerOption > 0 ? accentColor : '#fff'}
+            />
+            <Text style={styles.railLabel}>{timerOption === 0 ? 'Timer' : `${timerOption}s`}</Text>
+          </Pressable>
 
-      {/* Multi-capture (Instagram Layout-style sequential captures) */}
-      {!isVisualSearch && (
-        <Pressable
-          style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
-          onPress={onToggleMultiCapture}
-          hitSlop={12}
-          accessibilityLabel={multiCaptureMode ? 'Multi-capture on' : 'Multi-capture off'}
-          accessibilityRole="button"
-        >
-          <Ionicons
-            name={multiCaptureMode ? 'albums' : 'albums-outline'}
-            size={CONTROL_RAIL_ICON}
-            color={multiCaptureMode ? accentColor : '#fff'}
-          />
-          <Text style={styles.railLabel}>
-            {multiCaptureMode ? `${multiCaptureCount + (hasCapturedUri ? 1 : 0)} photos` : 'Multi'}
-          </Text>
-        </Pressable>
+          {/* Grid */}
+          <Pressable
+            style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
+            onPress={onToggleGrid}
+            hitSlop={12}
+            accessibilityLabel={showGrid ? 'Grid on' : 'Grid off'}
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name="grid-outline"
+              size={CONTROL_RAIL_ICON}
+              color={showGrid ? accentColor : '#fff'}
+            />
+            <Text style={styles.railLabel}>Grid</Text>
+          </Pressable>
+
+          {/* Multi-capture (Instagram Layout-style sequential captures) */}
+          {!isVisualSearch && (
+            <Pressable
+              style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
+              onPress={onToggleMultiCapture}
+              hitSlop={12}
+              accessibilityLabel={multiCaptureMode ? 'Multi-capture on' : 'Multi-capture off'}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={multiCaptureMode ? 'albums' : 'albums-outline'}
+                size={CONTROL_RAIL_ICON}
+                color={multiCaptureMode ? accentColor : '#fff'}
+              />
+              <Text style={styles.railLabel}>
+                {multiCaptureMode ? `${multiCaptureCount + (hasCapturedUri ? 1 : 0)} photos` : 'Multi'}
+              </Text>
+            </Pressable>
+          )}
+        </>
       )}
 
-      {/* Tools disclosure — timer/grid live behind this when collapsed */}
+      {/* Tools disclosure — expands/collapses the advanced controls */}
       <Pressable
         style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
         onPress={onToggleTools}
@@ -152,11 +183,11 @@ export function ControlsRail({
         accessibilityRole="button"
       >
         <Ionicons
-          name={showTools ? 'options' : 'options-outline'}
+          name={showTools ? 'chevron-up-outline' : 'chevron-down-outline'}
           size={CONTROL_RAIL_ICON}
           color={showTools ? accentColor : '#fff'}
         />
-        <Text style={styles.railLabel}>Tools</Text>
+        <Text style={styles.railLabel}>{showTools ? 'Hide' : 'More'}</Text>
       </Pressable>
     </View>
   );

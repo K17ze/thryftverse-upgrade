@@ -269,102 +269,84 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Hero summary — connected count ── */}
+      {/* ── Summary — connected count as typography, no card ── */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View
-              style={[
-                styles.heroIcon,
-                { backgroundColor: connectedCount > 0 ? colors.brand : colors.surfaceAlt },
-              ]}
-            >
-              <Ionicons
-                name="key"
-                size={20}
-                color={connectedCount > 0 ? colors.textInverse : colors.textMuted}
-              />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {connectedCount > 0
-                  ? `${connectedCount} of ${PROVIDER_ORDER.length} providers connected`
-                  : 'No providers connected'}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {connectedCount > 0
-                  ? 'Your keys are stored on this device only'
-                  : 'Connect an OpenAI, Anthropic, Gemini or custom endpoint'}
-              </Text>
-            </View>
-          </View>
+        <View style={styles.summaryWrap}>
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
+            {connectedCount > 0
+              ? `${connectedCount} of ${PROVIDER_ORDER.length} providers connected`
+              : 'No providers connected'}
+          </Text>
+          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+            {connectedCount > 0
+              ? 'Your keys are stored on this device only'
+              : 'Connect an OpenAI, Anthropic, Gemini or custom endpoint'}
+          </Text>
         </View>
       </Reanimated.View>
 
-      {/* ── Agent management — pause all + activity ledger ── */}
+      {/* ── Agent management — flat rows, no card ── */}
       <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
         <View style={styles.sectionLabelWrap}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>AGENT MANAGEMENT</Text>
         </View>
-        <View style={[styles.agentMgmtCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.mgmtRow,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-            onPress={handlePauseAllAgents}
-            disabled={activeAgentSessions === 0}
-            accessibilityRole="button"
-            accessibilityLabel={
-              activeAgentSessions === 0
-                ? 'Pause all agents — none running'
-                : `Pause all agents — ${activeAgentSessions} running`
-            }
-          >
-            <Ionicons
-              name="pause-circle-outline"
-              size={22}
-              color={activeAgentSessions > 0 ? colors.danger : colors.textMuted}
-            />
-            <View style={styles.mgmtText}>
-              <Text
-                style={[
-                  styles.mgmtTitle,
-                  { color: activeAgentSessions > 0 ? colors.textPrimary : colors.textMuted },
-                ]}
-              >
-                Pause all agents
-              </Text>
-              <Text style={[styles.mgmtSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                {activeAgentSessions > 0
-                  ? `${activeAgentSessions} agent session${activeAgentSessions === 1 ? '' : 's'} running`
-                  : 'No agent sessions running'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-          <View style={[styles.mgmtDivider, { backgroundColor: colors.border }]} />
-          <Pressable
-            style={({ pressed }) => [
-              styles.mgmtRow,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-            onPress={() => navigation.navigate('AgentActivity')}
-            accessibilityRole="button"
-            accessibilityLabel="View agent activity ledger"
-          >
-            <Ionicons name="list-outline" size={22} color={colors.textPrimary} />
-            <View style={styles.mgmtText}>
-              <Text style={[styles.mgmtTitle, { color: colors.textPrimary }]}>
-                Agent activity
-              </Text>
-              <Text style={[styles.mgmtSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                Record of agent actions and approvals
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-        </View>
+        <Pressable
+          style={({ pressed }) => [
+            styles.flatRow,
+            { opacity: pressed ? 0.6 : 1 },
+          ]}
+          onPress={handlePauseAllAgents}
+          disabled={activeAgentSessions === 0}
+          accessibilityRole="button"
+          accessibilityLabel={
+            activeAgentSessions === 0
+              ? 'Pause all agents — none running'
+              : `Pause all agents — ${activeAgentSessions} running`
+          }
+        >
+          <Ionicons
+            name="pause-circle-outline"
+            size={20}
+            color={activeAgentSessions > 0 ? colors.danger : colors.textMuted}
+          />
+          <View style={styles.flatRowText}>
+            <Text
+              style={[
+                styles.flatRowTitle,
+                { color: activeAgentSessions > 0 ? colors.textPrimary : colors.textMuted },
+              ]}
+            >
+              Pause all agents
+            </Text>
+            <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+              {activeAgentSessions > 0
+                ? `${activeAgentSessions} agent session${activeAgentSessions === 1 ? '' : 's'} running`
+                : 'No agent sessions running'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Pressable>
+        <View style={[styles.flatRowSeparator, { backgroundColor: colors.border }]} />
+        <Pressable
+          style={({ pressed }) => [
+            styles.flatRow,
+            { opacity: pressed ? 0.6 : 1 },
+          ]}
+          onPress={() => navigation.navigate('AgentActivity')}
+          accessibilityRole="button"
+          accessibilityLabel="View agent activity ledger"
+        >
+          <Ionicons name="list-outline" size={20} color={colors.textPrimary} />
+          <View style={styles.flatRowText}>
+            <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]}>
+              Agent activity
+            </Text>
+            <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+              Record of agent actions and approvals
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Pressable>
       </Reanimated.View>
 
       {/* ── Provider list ── */}
@@ -399,7 +381,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 {/* Provider header row */}
                 <View style={styles.providerHeader}>
                   <View style={styles.providerIdentity}>
-                    <Ionicons name={config.icon as any} size={22} color={colors.textPrimary} />
+                    <Ionicons name={config.icon as any} size={20} color={colors.textPrimary} />
                     <View style={styles.providerNameWrap}>
                       <Text style={[styles.providerName, { color: colors.textPrimary }]} numberOfLines={1}>
                         {config.name}
@@ -412,7 +394,26 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                       </Text>
                     </View>
                   </View>
-                  <StatusBadge status={status} colors={colors} styles={styles} />
+                  <Text
+                    style={[
+                      styles.providerStatus,
+                      {
+                        color:
+                          status === 'connected'
+                            ? colors.success
+                            : status === 'invalid'
+                              ? colors.danger
+                              : colors.textMuted,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {status === 'connected'
+                      ? 'Connected'
+                      : status === 'invalid'
+                        ? 'Invalid'
+                        : 'Not connected'}
+                  </Text>
                 </View>
 
                 {/* Connected state — masked key + actions */}
@@ -434,31 +435,18 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                         {state.testResult.message}
                       </Text>
                     ) : null}
-                    {/* Discovered models (provider-authoritative) */}
+                    {/* Discovered models (provider-authoritative) — text, not chips */}
                     {state.discoveredModels && state.discoveredModels.length > 0 ? (
                       <View style={styles.modelsWrap}>
                         <Text style={[styles.modelsLabel, { color: colors.textMuted }]}>
                           {state.discoveredModels.length} model{state.discoveredModels.length === 1 ? '' : 's'} available
                         </Text>
-                        <View style={styles.modelChips}>
-                          {state.discoveredModels.slice(0, 8).map((model) => (
-                            <View
-                              key={model.providerModelId}
-                              style={[styles.modelChip, { backgroundColor: colors.surfaceAlt }]}
-                            >
-                              <Text style={[styles.modelChipText, { color: colors.textSecondary }]} numberOfLines={1}>
-                                {model.displayName}
-                              </Text>
-                            </View>
-                          ))}
-                          {state.discoveredModels.length > 8 ? (
-                            <View style={[styles.modelChip, { backgroundColor: colors.surfaceAlt }]}>
-                              <Text style={[styles.modelChipText, { color: colors.textMuted }]} numberOfLines={1}>
-                                +{state.discoveredModels.length - 8} more
-                              </Text>
-                            </View>
-                          ) : null}
-                        </View>
+                        <Text style={[styles.modelsList, { color: colors.textSecondary }]} numberOfLines={3}>
+                          {state.discoveredModels.slice(0, 8).map((m) => m.displayName).join(', ')}
+                          {state.discoveredModels.length > 8
+                            ? `, +${state.discoveredModels.length - 8} more`
+                            : ''}
+                        </Text>
                       </View>
                     ) : state.discovering ? (
                       <View style={styles.modelDiscovering}>
@@ -558,18 +546,9 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                         Available models
                       </Text>
                       {state.discoveredModels && state.discoveredModels.length > 0 ? (
-                        <View style={styles.modelChips}>
-                          {state.discoveredModels.map((model) => (
-                            <View
-                              key={model.providerModelId}
-                              style={[styles.modelChip, { backgroundColor: colors.surfaceAlt }]}
-                            >
-                              <Text style={[styles.modelChipText, { color: colors.textSecondary }]} numberOfLines={1}>
-                                {model.displayName}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
+                        <Text style={[styles.modelsList, { color: colors.textSecondary }]} numberOfLines={4}>
+                          {state.discoveredModels.map((m) => m.displayName).join(', ')}
+                        </Text>
                       ) : state.discovering ? (
                         <View style={styles.modelDiscovering}>
                           <ActivityIndicator size="small" color={colors.textMuted} />
@@ -645,42 +624,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function StatusBadge({
-  status,
-  colors,
-  styles,
-}: {
-  status: ConnectionStatus;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}) {
-  const label =
-    status === 'connected' ? 'Connected' : status === 'invalid' ? 'Invalid format' : 'Not connected';
-  const color = status === 'connected' ? colors.success : status === 'invalid' ? colors.danger : colors.textMuted;
-  return (
-    <View
-      style={[
-        styles.statusBadge,
-        {
-          backgroundColor:
-            status === 'connected'
-              ? withAlpha(colors.success, 0.14)
-              : status === 'invalid'
-                ? withAlpha(colors.danger, 0.14)
-                : colors.surfaceAlt,
-        },
-      ]}
-      accessibilityRole="text"
-      accessibilityLabel={label}
-    >
-      <View style={[styles.statusDot, { backgroundColor: color }]} />
-      <Text style={[styles.statusText, { color }]} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
 
 function PrimaryButton({
   label,
@@ -777,16 +720,6 @@ function emptyProviderState(): ProviderState {
   };
 }
 
-/** Approximate alpha blend for badge backgrounds (hex + alpha percentage). */
-function withAlpha(hex: string, alpha: number): string {
-  // Only handle #RRGGBB inputs; fall back to the raw colour otherwise.
-  if (!hex.startsWith('#') || hex.length !== 7) return hex;
-  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
-    .toString(16)
-    .padStart(2, '0');
-  return `${hex}${a}`;
-}
-
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
@@ -810,65 +743,48 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       flex: 1,
     },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.lg,
+    summaryWrap: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.md,
     },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xl + Space.sm,
-      height: Space.xl + Space.sm,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+    summaryTitle: {
+      fontSize: Type.subtitle.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      letterSpacing: Type.subtitle.letterSpacing,
+      lineHeight: Type.subtitle.lineHeight,
     },
-    heroSubtitle: {
+    summarySubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
+      letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight,
       marginTop: Space.xs / 2,
     },
-    agentMgmtCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      marginBottom: Space.lg,
-      overflow: 'hidden',
-    },
-    mgmtRow: {
+    flatRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
+      paddingVertical: Space.sm + Space.xs,
       minHeight: Control.hit,
     },
-    mgmtText: {
+    flatRowText: {
       flex: 1,
       minWidth: 0,
     },
-    mgmtTitle: {
+    flatRowTitle: {
       fontSize: Type.bodyEmphasis.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
-    mgmtSubtitle: {
+    flatRowSubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       letterSpacing: Type.caption.letterSpacing,
       marginTop: Space.xs / 2,
     },
-    mgmtDivider: {
+    flatRowSeparator: {
       height: StyleSheet.hairlineWidth,
       marginLeft: Space.md + Control.icon + Space.sm,
     },
@@ -917,24 +833,12 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight,
       marginTop: Space.xs / 2,
     },
-    statusBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-      flexShrink: 0,
-    },
-    statusDot: {
-      width: Space.xs + 2,
-      height: Space.xs + 2,
-      borderRadius: Radius.full,
-    },
-    statusText: {
+    providerStatus: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.caption.letterSpacing,
+      flexShrink: 0,
+      textAlign: 'right',
     },
     connectedBody: {
       marginTop: Space.sm,
@@ -1019,20 +923,11 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
       letterSpacing: Type.caption.letterSpacing,
     },
-    modelChips: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.xs,
-    },
-    modelChip: {
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.md,
-    },
-    modelChipText: {
+    modelsList: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       letterSpacing: Type.caption.letterSpacing,
+      lineHeight: Type.caption.lineHeight + 2,
     },
     testResult: {
       fontSize: Type.caption.size,

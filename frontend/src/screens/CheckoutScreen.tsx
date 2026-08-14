@@ -226,11 +226,11 @@ function buildOrderSignature(params: {
 
 const STAGE_LABELS: Record<CheckoutStage, string> = {
   idle: '',
-  creating_order: 'Creating your order…',
-  opening_payment: 'Preparing payment…',
-  authenticating: 'Authenticating with your bank…',
-  awaiting_payment: 'Confirming payment…',
-  payment_succeeded: 'Payment confirmed',
+  creating_order: 'Reviewing order…',
+  opening_payment: 'Processing payment…',
+  authenticating: 'Processing payment…',
+  awaiting_payment: 'Processing payment…',
+  payment_succeeded: 'Confirmed',
   payment_pending: 'Payment is still pending.',
   payment_failed: 'Payment failed. Try again.',
 };

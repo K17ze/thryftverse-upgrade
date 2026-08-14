@@ -87,6 +87,11 @@ export default function InboxScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState('');
   const [isOffline, setIsOffline] = useState(false);
+  // Search is behind an icon in the first viewport — expands on tap.
+  const [searchVisible, setSearchVisible] = useState(false);
+  // Additional classifiers (Requests, Unread, Archived, Groups) are behind
+  // a filter icon — expands on tap to show secondary scope chips.
+  const [filterExpanded, setFilterExpanded] = useState(false);
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -193,6 +198,11 @@ export default function InboxScreen() {
     errorBannerRetry: { color: colors.brand },
     needsActionChip: { backgroundColor: `${colors.brand}0F`, borderColor: `${colors.brand}30` },
     needsActionText: { color: colors.brand },
+    filterChipSecondary: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    filterChipSecondaryActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
+    filterChipSecondaryText: { color: colors.textSecondary },
+    filterChipSecondaryTextActive: { color: colors.textInverse },
+    filterDot: { backgroundColor: colors.brand },
   }), [colors]);
   const participantNameLookup = useMemo(() => {
     const map = new Map<string, string>();
@@ -508,6 +518,46 @@ export default function InboxScreen() {
         <View style={styles.headerActions}>
           <AnimatedPressable
             style={[styles.iconBtn, t.iconBtn]}
+            onPress={() => {
+              setSearchVisible((v) => !v);
+              if (searchVisible) setSearchQuery('');
+            }}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Search messages"
+            accessibilityHint="Opens the search bar to find conversations"
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name={searchVisible ? 'search' : 'search-outline'}
+              size={20}
+              color={searchVisible ? colors.brand : colors.textSecondary}
+            />
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[styles.iconBtn, t.iconBtn]}
+            onPress={() => setFilterExpanded((v) => !v)}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="More filters"
+            accessibilityHint="Shows additional filters: requests, unread, archived, groups"
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name={filterExpanded ? 'options' : 'options-outline'}
+              size={20}
+              color={filterExpanded || ['requests', 'unread', 'archived', 'groups'].includes(segment) ? colors.brand : colors.textSecondary}
+            />
+            {['requests', 'unread', 'archived', 'groups'].includes(segment) && !filterExpanded ? (
+              <View style={[styles.filterDot, t.filterDot]} />
+            ) : null}
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[styles.iconBtn, t.iconBtn]}
             onPress={() => navigation.navigate('ChatSettings')}
             activeOpacity={0.7}
             scaleValue={0.95}
@@ -534,24 +584,77 @@ export default function InboxScreen() {
         </View>
       </View>
       <View style={styles.header}>
-        <AppSearchBar
-          placeholder="Search messages"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          containerStyle={[styles.searchWrap, t.searchWrap]}
-          inputProps={{
-            autoCapitalize: 'none',
-            autoCorrect: false,
-            accessibilityLabel: 'Search conversations',
-          }}
-        />
+        {searchVisible && (
+          <AppSearchBar
+            placeholder="Search messages"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            containerStyle={[styles.searchWrap, t.searchWrap]}
+            inputProps={{
+              autoCapitalize: 'none',
+              autoCorrect: false,
+              accessibilityLabel: 'Search conversations',
+            }}
+          />
+        )}
         <MessagingSegmentRail
-          active={segment === 'unread' || segment === 'archived' || segment === 'groups' ? 'all' : segment}
+          active={segment === 'all' || segment === 'buying' || segment === 'selling' ? segment : 'all'}
           onChange={(s) => setSegment(s)}
           requestCount={messageRequests.length}
           buyingCount={buyingUnreadCount}
           sellingCount={sellingUnreadCount}
         />
+        {filterExpanded && (
+          <View style={styles.filterChips}>
+            {([
+              { key: 'requests' as const, label: 'Requests', badge: messageRequests.length },
+              { key: 'unread' as const, label: 'Unread' },
+              { key: 'archived' as const, label: 'Archived' },
+              { key: 'groups' as const, label: 'Groups' },
+            ]).map((chip) => {
+              const isActive = segment === chip.key;
+              return (
+                <AnimatedPressable
+                  key={chip.key}
+                  style={[
+                    styles.filterChip,
+                    t.filterChipSecondary,
+                    isActive && t.filterChipSecondaryActive,
+                  ]}
+                  onPress={() => {
+                    haptic.light();
+                    setSegment(chip.key);
+                    setFilterExpanded(false);
+                  }}
+                  activeOpacity={0.85}
+                  scaleValue={0.96}
+                  hapticFeedback="light"
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`${chip.label} filter${chip.badge ? `, ${chip.badge} pending` : ''}`}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      t.filterChipSecondaryText,
+                      isActive && t.filterChipSecondaryTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {chip.label}
+                  </Text>
+                  {chip.badge ? (
+                    <View style={[styles.unreadPill, t.unreadPill, isActive && { backgroundColor: `${colors.textInverse}30` }]}>
+                      <Text style={[styles.unreadPillText, t.unreadPillText, isActive && { color: colors.textInverse }]}>
+                        {chip.badge > 99 ? '99+' : chip.badge}
+                      </Text>
+                    </View>
+                  ) : null}
+                </AnimatedPressable>
+              );
+            })}
+          </View>
+        )}
       </View>
       {isOffline && (
         <OfflineBanner message="You are offline" />
@@ -774,6 +877,14 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.pillAvatar,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  filterDot: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
+    width: Space.xs,
+    height: Space.xs,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   newMessageBtn: {
     flexDirection: 'row',

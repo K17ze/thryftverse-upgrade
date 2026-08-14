@@ -790,10 +790,12 @@ export default function AuctionDetailScreen() {
               <AuctionStateBadge
                 state={isLive ? 'live' : isUpcoming ? 'upcoming' : isCancelled ? 'cancelled' : isSettled ? 'settled' : 'ended'}
               />
-              {isLive && !countdown.isFinalMinutes && (
-                <View style={styles.livePollIndicator} accessibilityLabel="Live auction · updating in real time">
+              {isLive && (
+                <View style={styles.livePollIndicator} accessibilityLabel={`Live auction · ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'} · updating in real time`}>
                   <Reanimated.View style={styles.livePollDot} entering={FadeInDown.duration(300)} />
-                  <Text style={styles.livePollText}>updating</Text>
+                  <Text style={styles.livePollText}>
+                    {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+                  </Text>
                 </View>
               )}
             </View>
@@ -858,106 +860,109 @@ export default function AuctionDetailScreen() {
             already carries AuctionStateBadge). */}
         {/* ── Zone C — Auction transaction surface ──
             One strong contained module: current bid + bid count + reserve
-            + countdown + viewer state. Replaces the stacked
-            transactionModule + outbid/leading/watching blocks. Spec 02 §C
+            + countdown + viewer state. For LIVE state, the price and
+            countdown dominate with a live accent bar. Spec 02 §C
             + spec 04 §3/§4: "Integrate viewer state into the transaction
             surface rather than adding another full-width block." */}
         {!isTerminal && (
-          <CommerceDetailTransactionSurface
-            family="auction"
-            flush
-            surfaceColor={colors.surface}
-            primaryLabel={priceLabel}
-            primaryValue={priceText}
-            headlineAside={
-              <AuctionCountdown
-                text={countdown.text}
-                urgent={countdown.isFinalMinutes && viewerState !== 'outbid'}
-                stage={countdown.stage}
-                progress={isLive ? countdownProgress : undefined}
-                showProgress={isLive}
-                prominent
-              />
-            }
-            viewerState={
-              viewerContext ? (
-                <Text
-                  style={[
-                    styles.viewerStateLine,
-                    viewerContext.treatment === 'warning' && { color: colors.danger },
-                    viewerContext.treatment === 'calm' && { color: colors.success },
-                    viewerContext.treatment === 'seller' && { color: colors.brand },
-                    viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
-                  ]}
-                  numberOfLines={2}
-                  accessibilityLiveRegion="polite"
-                >
-                  {viewerContext.title}
-                  {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
-                </Text>
-              ) : undefined
-            }
-            statusRow={reserveStatus !== 'none' ? (
-              <View style={styles.transactionStatusRow}>
-                <View style={styles.transactionReserveRow}>
-                  <ReserveStatusBadge status={reserveStatus} showExplanation />
-                  {reserveStatus === 'not-met' && isLive && (
-                    <Text style={[styles.transactionReserveHint, { color: colors.textSecondary }]} numberOfLines={1}>
-                      Bidding continues until reserve is met
-                    </Text>
-                  )}
+          <View style={isLive && styles.liveAccentWrap}>
+            {isLive && <View style={[styles.liveAccentBar, { backgroundColor: countdown.isFinalMinutes ? colors.danger : colors.warning }]} />}
+            <CommerceDetailTransactionSurface
+              family="auction"
+              flush
+              surfaceColor={colors.surface}
+              primaryLabel={priceLabel}
+              primaryValue={priceText}
+              headlineAside={
+                <AuctionCountdown
+                  text={countdown.text}
+                  urgent={countdown.isFinalMinutes && viewerState !== 'outbid'}
+                  stage={countdown.stage}
+                  progress={isLive ? countdownProgress : undefined}
+                  showProgress={isLive}
+                  prominent
+                />
+              }
+              viewerState={
+                viewerContext ? (
+                  <Text
+                    style={[
+                      styles.viewerStateLine,
+                      viewerContext.treatment === 'warning' && { color: colors.danger },
+                      viewerContext.treatment === 'calm' && { color: colors.success },
+                      viewerContext.treatment === 'seller' && { color: colors.brand },
+                      viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
+                    ]}
+                    numberOfLines={2}
+                    accessibilityLiveRegion="polite"
+                  >
+                    {viewerContext.title}
+                    {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
+                  </Text>
+                ) : undefined
+              }
+              statusRow={reserveStatus !== 'none' ? (
+                <View style={styles.transactionStatusRow}>
+                  <View style={styles.transactionReserveRow}>
+                    <ReserveStatusBadge status={reserveStatus} showExplanation />
+                    {reserveStatus === 'not-met' && isLive && (
+                      <Text style={[styles.transactionReserveHint, { color: colors.textSecondary }]} numberOfLines={1}>
+                        Bidding continues until reserve is met
+                      </Text>
+                    )}
+                  </View>
+                  {/* ── Progressive reserve guidance (2026 Catawiki benchmark) ──
+                      Show how close the current bid is to the reserve price.
+                      Catawiki case study: progressive reserve transparency
+                      increased winning bids and platform profitability.
+                      Only shown when reserve is not met and current bid is
+                      at least 70% of the reserve. */}
+                  {reserveStatus === 'not-met' && isLive && auction.reservePriceGbp && auction.currentBidGbp > 0 && (() => {
+                    const ratio = auction.currentBidGbp / auction.reservePriceGbp;
+                    if (ratio < 0.7) return null;
+                    const remaining = auction.reservePriceGbp - auction.currentBidGbp;
+                    const remainingText = formatFromFiat(remaining, 'GBP');
+                    const guidance = ratio >= 0.9
+                      ? `Just ${remainingText} away from the reserve`
+                      : ratio >= 0.8
+                        ? `Close to the reserve — ${remainingText} more to meet it`
+                        : `Almost at reserve — ${remainingText} more needed`;
+                    return (
+                      <Text
+                        style={[styles.transactionReserveProgress, { color: colors.warning }]}
+                        numberOfLines={2}
+                        accessibilityRole="text"
+                        accessibilityLabel={guidance}
+                      >
+                        {guidance}
+                      </Text>
+                    );
+                  })()}
                 </View>
-                {/* ── Progressive reserve guidance (2026 Catawiki benchmark) ──
-                    Show how close the current bid is to the reserve price.
-                    Catawiki case study: progressive reserve transparency
-                    increased winning bids and platform profitability.
-                    Only shown when reserve is not met and current bid is
-                    at least 70% of the reserve. */}
-                {reserveStatus === 'not-met' && isLive && auction.reservePriceGbp && auction.currentBidGbp > 0 && (() => {
-                  const ratio = auction.currentBidGbp / auction.reservePriceGbp;
-                  if (ratio < 0.7) return null;
-                  const remaining = auction.reservePriceGbp - auction.currentBidGbp;
-                  const remainingText = formatFromFiat(remaining, 'GBP');
-                  const guidance = ratio >= 0.9
-                    ? `Just ${remainingText} away from the reserve`
-                    : ratio >= 0.8
-                      ? `Close to the reserve — ${remainingText} more to meet it`
-                      : `Almost at reserve — ${remainingText} more needed`;
-                  return (
-                    <Text
-                      style={[styles.transactionReserveProgress, { color: colors.warning }]}
-                      numberOfLines={2}
-                      accessibilityRole="text"
-                      accessibilityLabel={guidance}
-                    >
-                      {guidance}
-                    </Text>
-                  );
-                })()}
-              </View>
-            ) : undefined}
-          >
-            <View style={[styles.transactionBidActivityRow, { borderTopColor: colors.border }]}>
-              <Text style={[styles.transactionBidActivityLabel, { color: colors.textSecondary }]}>
-                Bid activity
-              </Text>
-              <Text style={[styles.transactionBidActivityValue, { color: colors.textPrimary }]}>
-                {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
-              </Text>
-            </View>
-            {/* Minimum to lead (outbid) — actionable emphasis inside the
-                surface. The dock carries the "Bid again" action. */}
-            {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
-              <View style={[styles.transactionMinRow, { borderTopColor: colors.border }]}>
-                <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]}>
-                  Minimum to lead
+              ) : undefined}
+            >
+              <View style={[styles.transactionBidActivityRow, { borderTopColor: colors.border }]}>
+                <Text style={[styles.transactionBidActivityLabel, { color: colors.textSecondary }]}>
+                  {isLive ? 'Live bids' : 'Bid activity'}
                 </Text>
-                <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(auction.minimumNextBidGbp, 'GBP')}
+                <Text style={[styles.transactionBidActivityValue, { color: colors.textPrimary }]}>
+                  {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
                 </Text>
               </View>
-            )}
-          </CommerceDetailTransactionSurface>
+              {/* Minimum to lead (outbid) — actionable emphasis inside the
+                  surface. The dock carries the "Bid again" action. */}
+              {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
+                <View style={[styles.transactionMinRow, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]}>
+                    Minimum to lead
+                  </Text>
+                  <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
+                    {formatFromFiat(auction.minimumNextBidGbp, 'GBP')}
+                  </Text>
+                </View>
+              )}
+            </CommerceDetailTransactionSurface>
+          </View>
         )}
 
         {/* ── Terminal result — one compact module, no duplicate title/brand ──
@@ -1371,6 +1376,11 @@ export default function AuctionDetailScreen() {
               ? countdown.text
               : undefined;
           const primaryType = stateAction.primary.type;
+          // For upcoming state, use "Notify me" as the primary label to
+          // make the notification intent explicit (P4-10 spec).
+          const primaryLabel = isUpcoming && primaryType === 'watchAuction'
+            ? (auction.isWatched ? 'Watching' : 'Notify me')
+            : stateAction.primary.label;
           return (
             <CommerceDetailStateDock
               value={dockValue}
@@ -1379,7 +1389,7 @@ export default function AuctionDetailScreen() {
               thumbnailUri={auctionMediaItems[0]?.uri}
               showProtectionStrip={auction.buyerProtection ?? false}
               primaryAction={{
-                label: stateAction.primary.label,
+                label: primaryLabel,
                 onPress: () => {
                   if (primaryType === 'placeBid' || primaryType === 'increaseBid' || primaryType === 'bidAgain') {
                     HapticPatterns.bidPlaced();
@@ -1409,7 +1419,7 @@ export default function AuctionDetailScreen() {
                 },
                 loading: isSubmittingBid || watchToggling,
                 disabled: isSubmittingBid || watchToggling,
-                accessibilityLabel: stateAction.primary.label,
+                accessibilityLabel: primaryLabel,
               }}
               secondaryAction={
                 buyNowAvailable && stateAction.secondary.type === 'buyNow'
@@ -1911,6 +1921,20 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
   },
   // ── Transaction surface internal rows ──
+  // Live accent wrap — a thin colored bar above the transaction surface
+  // that makes the live state visually dominant at thumbnail size.
+  // Color interpolates: warning (amber) for normal live, danger (red)
+  // when in final minutes. This is the single most important visual
+  // signal for "this auction is live right now."
+  liveAccentWrap: {
+    marginHorizontal: Space.md,
+    marginTop: Space.md,
+  },
+  liveAccentBar: {
+    height: 3,
+    borderRadius: 1.5,
+    marginBottom: 0,
+  },
   transactionBidActivityRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -2058,6 +2082,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.label.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   // ── Seller identity extension ──
   // Tight rhythm: the seller row follows the transaction surface

@@ -160,13 +160,14 @@ function PosterComposerInner() {
 
   // ── Auto-show frame tray on frame change (doc 04) ──────────────────
   // "show a bottom frame tray that appears when frame change occurs or
-  // user adds another frame." Auto-collapses after 3.5s to restore
-  // full-screen canvas.
+  // user adds another frame." Auto-collapses after 2.5s to restore
+  // full-screen canvas — the frame tray is a transient navigation aid,
+  // not permanent chrome.
   useEffect(() => {
     if (!hasMultipleFrames) return;
     setShowFrameTray(true);
     setVideoInfoFrameIndex(null);
-    const timer = setTimeout(() => setShowFrameTray(false), 3500);
+    const timer = setTimeout(() => setShowFrameTray(false), 2500);
     return () => clearTimeout(timer);
   }, [hasMultipleFrames, activePageIndex, pageCount]);
 
@@ -635,8 +636,10 @@ function PosterComposerInner() {
 
       {/* ── Context toolbar (selected layer only) ────────────────────── */}
       {/* Per spec 09: selected object produces a context toolbar, not a
-          permanent dock. Object-specific actions: edit, front/back,
-          duplicate, delete. Opacity lives here too (not permanent chrome). */}
+          permanent dock. Only tools relevant to the current selection are
+          shown. Z-order (Front/Back) only appears when there are 2+ layers
+          to reorder. Opacity is shown only when the layer has non-default
+          opacity or when there are multiple layers (advanced context). */}
       {selectedLayer && (
         <View style={[styles.contextToolbarContainer, { bottom: insets.bottom + 88 }]}>
           <ScrollView
@@ -667,17 +670,21 @@ function PosterComposerInner() {
               />
             )}
 
-            {/* Z-order: front / back (advanced, but useful in context) */}
-            <FrameTool
-              icon="arrow-up"
-              label="Front"
-              onPress={() => handleReorderLayer(selectedLayer.id, 'forward')}
-            />
-            <FrameTool
-              icon="arrow-down"
-              label="Back"
-              onPress={() => handleReorderLayer(selectedLayer.id, 'backward')}
-            />
+            {/* Z-order: front / back — only when there are 2+ layers to reorder */}
+            {page.layers.length > 1 && (
+              <>
+                <FrameTool
+                  icon="arrow-up"
+                  label="Front"
+                  onPress={() => handleReorderLayer(selectedLayer.id, 'forward')}
+                />
+                <FrameTool
+                  icon="arrow-down"
+                  label="Back"
+                  onPress={() => handleReorderLayer(selectedLayer.id, 'backward')}
+                />
+              </>
+            )}
 
             {/* Duplicate */}
             <FrameTool
@@ -686,14 +693,16 @@ function PosterComposerInner() {
               onPress={() => handleDuplicateLayer(selectedLayer.id)}
             />
 
-            {/* Opacity — drag slider, not permanent chrome */}
-            <View style={styles.opacityInline}>
-              <OpacityBar
-                value={selectedLayer.opacity ?? 1}
-                onChange={(v) => updateLayer(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
-                onCommit={(v) => commitLayerTransform(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
-              />
-            </View>
+            {/* Opacity — drag slider, only when multiple layers (advanced) */}
+            {page.layers.length > 1 && (
+              <View style={styles.opacityInline}>
+                <OpacityBar
+                  value={selectedLayer.opacity ?? 1}
+                  onChange={(v) => updateLayer(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
+                  onCommit={(v) => commitLayerTransform(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
+                />
+              </View>
+            )}
 
             {/* Delete — danger, separated */}
             <View style={styles.contextDivider} />

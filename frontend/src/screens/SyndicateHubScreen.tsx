@@ -69,6 +69,7 @@ interface HubAsset {
 
 type HubRow =
   | { kind: 'highlights'; key: 'highlights' }
+  | { kind: 'sectionBreak'; key: 'section-break' }
   | { kind: 'tabs'; key: 'tabs' }
   | { kind: 'positions'; key: 'positions' }
   | { kind: 'instrumentsHeader'; key: 'instruments-header' }
@@ -361,12 +362,20 @@ export default function CoOwnHubScreen() {
   }, [columns, filteredAssets]);
 
   const hubRows = React.useMemo<HubRow[]>(() => {
-    const rows: HubRow[] = [
-      { kind: 'highlights', key: 'highlights' },
-      { kind: 'tabs', key: 'tabs' },
-      { kind: 'positions', key: 'positions' },
-      { kind: 'instrumentsHeader', key: 'instruments-header' },
-    ];
+    const hasPositions = yourPositions.length > 0;
+    const rows: HubRow[] = [];
+
+    // Holders: positions first (personal portfolio), then market.
+    // Non-holders: market highlights first (education/discovery), then market.
+    if (hasPositions) {
+      rows.push({ kind: 'positions', key: 'positions' });
+      rows.push({ kind: 'sectionBreak', key: 'section-break' });
+    }
+
+    rows.push({ kind: 'highlights', key: 'highlights' });
+    rows.push({ kind: 'tabs', key: 'tabs' });
+    rows.push({ kind: 'instrumentsHeader', key: 'instruments-header' });
+
     if (instrumentRows.length === 0) {
       rows.push({ kind: 'instrumentsEmpty', key: 'instruments-empty' });
     } else {
@@ -376,7 +385,7 @@ export default function CoOwnHubScreen() {
     }
     rows.push({ kind: 'remaining', key: 'remaining' });
     return rows;
-  }, [instrumentRows]);
+  }, [instrumentRows, yourPositions.length]);
 
   const handleHighlightPress = React.useCallback((item: CoOwnMarketHighlight) => {
     navigation.navigate('AssetDetail', { assetId: item.id });
@@ -449,6 +458,16 @@ export default function CoOwnHubScreen() {
   ), [activeSegment, colors, segmentCounts]);
 
   const renderRow = React.useCallback(({ item }: { item: HubRow }) => {
+    if (item.kind === 'sectionBreak') {
+      return (
+        <View style={[styles.sectionBreak, { borderTopColor: colors.border }]} accessibilityRole="header">
+          <Text style={[styles.sectionBreakLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+            MARKET
+          </Text>
+        </View>
+      );
+    }
+
     if (item.kind === 'highlights') {
       return (
         <View style={styles.highlightsSection}>
@@ -822,6 +841,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  sectionBreak: {
+    paddingTop: Space.lg,
+    paddingBottom: Space.sm,
+    paddingHorizontal: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  sectionBreakLabel: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: LetterSpacing.caps,
+    textTransform: 'uppercase',
   },
   tabsSurface: {
     minHeight: Control.hit + 6,

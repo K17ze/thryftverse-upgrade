@@ -80,25 +80,25 @@ interface RankedListing {
   mediaHeightRatio: number;
 }
 
-type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
+type SearchSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked';
 
-const DISCOVER_SORT_OPTIONS: BrowseSortOption[] = [
+const DISCOVER_SORT_OPTIONS: SearchSortOption[] = [
   'Recommended',
   'Newest',
   'Price: Low to High',
   'Price: High to Low',
   'Most liked',
-  'Ending soon',
 ];
 
-// Trending categories — derived from the app's canonical category tree so
+// Category shortcuts — derived from the app's canonical category tree so
 // pills map to real browse destinations. Shown in both the focus and resting
-// states (Depop/Vinted pattern) with category emoji icons. No hardcoded
+// states (Depop/Vinted pattern) with category emoji icons. These are the
+// canonical categories, not "trending" — the label is honest. No hardcoded
 // editorial "Top Searches" cards — the discover landing only renders real
 // backend data, real recent/saved searches, and the canonical category tree
 // (audit: Global P0 — remove production sample editorial constants and
 // empty-URI rendering).
-const TRENDING_CATEGORIES: { label: string; icon: string; query: string }[] = CATEGORIES.slice(0, 8).map((cat) => ({
+const CATEGORY_SHORTCUTS: { label: string; icon: string; query: string }[] = CATEGORIES.slice(0, 8).map((cat) => ({
   label: cat.name,
   icon: cat.emoji,
   query: cat.id,
@@ -450,6 +450,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
           return bDate - aDate;
         });
         break;
+      case 'Most liked':
+        sorted.sort((a, b) => b.likes - a.likes || b.score - a.score);
+        break;
       case 'Recommended':
       default:
         sorted.sort((a, b) => b.score - a.score || b.likes - a.likes);
@@ -575,7 +578,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const showSearchLoadingSkeleton = isSyncing && listings.length === 0 && !lastError;
 
   const handleCycleSort = () => {
-    const activeSortIndex = DISCOVER_SORT_OPTIONS.indexOf(browseFilters.sort);
+    const activeSortIndex = DISCOVER_SORT_OPTIONS.indexOf(browseFilters.sort as SearchSortOption);
     const nextSort = DISCOVER_SORT_OPTIONS[(activeSortIndex + 1) % DISCOVER_SORT_OPTIONS.length];
     updateBrowseFilters({ sort: nextSort, query: normalizedQuery });
   };
@@ -885,7 +888,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.trendingFocusScroll}
                       >
-                        {TRENDING_CATEGORIES.map((cat, idx) => (
+                        {CATEGORY_SHORTCUTS.map((cat, idx) => (
                           <AnimatedPressable
                             key={idx}
                             style={[styles.trendingFocusPill, t.trendingFocusPill]}
@@ -983,7 +986,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 {/* Suggested categories — canonical category tree, no editorial seed */}
                 <EditorialSection title="Categories">
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendingFocusScroll}>
-                    {TRENDING_CATEGORIES.map((cat, idx) => (
+                    {CATEGORY_SHORTCUTS.map((cat, idx) => (
                       <AnimatedPressable
                         key={idx}
                         style={[styles.trendingFocusPill, t.trendingFocusPill]}

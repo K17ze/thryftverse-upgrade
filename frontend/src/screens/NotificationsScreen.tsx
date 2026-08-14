@@ -21,6 +21,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { BottomSheet } from '../components/BottomSheet';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import {
@@ -67,10 +68,16 @@ type NotificationCard = {
   aggregatedActors?: string[];
 };
 
-type NotificationFilter = 'all' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
+type NotificationFilter = 'all' | 'unread' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
 
-const FILTER_TABS: { key: NotificationFilter; label: string }[] = [
+// Primary visible scopes — only 2 tabs shown in the first viewport.
+const PRIMARY_SCOPES: { key: NotificationFilter; label: string }[] = [
   { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
+];
+
+// Additional filters moved behind overflow menu.
+const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'order', label: 'Orders' },
   { key: 'new_item', label: 'Items' },
   { key: 'review', label: 'Reviews' },
@@ -311,6 +318,7 @@ export default function NotificationsScreen() {
   const [hasMore, setHasMore] = React.useState(false);
   const hasShownSyncErrorRef = React.useRef(false);
   const [activeFilter, setActiveFilter] = React.useState<NotificationFilter>('all');
+  const [overflowVisible, setOverflowVisible] = React.useState(false);
   const swipeableRefs = React.useRef<Record<string, Swipeable | null>>({});
 
   const quietActive = isQuietHoursActive(quietHours);
@@ -386,6 +394,7 @@ export default function NotificationsScreen() {
 
   const filteredNotifications = React.useMemo(() => {
     if (activeFilter === 'all') return notifications;
+    if (activeFilter === 'unread') return notifications.filter((n) => !n.read);
     return notifications.filter((n) => n.type === activeFilter);
   }, [notifications, activeFilter]);
 
@@ -396,9 +405,10 @@ export default function NotificationsScreen() {
   const hasUnread = React.useMemo(() => notifications.some((item) => !item.read), [notifications]);
 
   const filterCounts = React.useMemo(() => {
-    const counts: Record<NotificationFilter, number> = { all: 0, order: 0, new_item: 0, review: 0, price: 0, auction: 0 };
+    const counts: Record<NotificationFilter, number> = { all: 0, unread: 0, order: 0, new_item: 0, review: 0, price: 0, auction: 0 };
     for (const n of notifications) {
       counts.all++;
+      if (!n.read) counts.unread++;
       if (n.type === 'order') counts.order++;
       else if (n.type === 'new_item') counts.new_item++;
       else if (n.type === 'review') counts.review++;
@@ -694,14 +704,10 @@ export default function NotificationsScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
 
-      {/* Filter tabs */}
+      {/* Primary scopes: All + Unread, plus overflow for additional filters */}
       <View style={styles.filterTabsRow}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterTabsContent}
-        >
-          {FILTER_TABS.map((tab) => {
+        <View style={styles.filterTabsContent}>
+          {PRIMARY_SCOPES.map((tab) => {
             const isActive = activeFilter === tab.key;
             const count = filterCounts[tab.key] ?? 0;
             return (
@@ -735,7 +741,38 @@ export default function NotificationsScreen() {
               </Pressable>
             );
           })}
-        </ScrollView>
+
+          {/* Overflow button — shows active overflow filter label if selected */}
+          {OVERFLOW_FILTERS.some((f) => f.key === activeFilter) ? (
+            <Pressable
+              style={[styles.filterTab, styles.filterTabActive]}
+              onPress={() => { haptics.tap(); setOverflowVisible(true); }}
+              accessibilityRole="button"
+              accessibilityLabel="Change filter"
+              accessibilityState={{ selected: true }}
+            >
+              <View style={styles.filterTabContent}>
+                <Text style={[styles.filterTabText, styles.filterTabTextActive]} numberOfLines={1}>
+                  {OVERFLOW_FILTERS.find((f) => f.key === activeFilter)?.label}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color={colors.textPrimary} />
+              </View>
+              <View style={styles.filterTabIndicator} />
+            </Pressable>
+          ) : (
+            <Pressable
+              style={styles.filterTab}
+              onPress={() => { haptics.tap(); setOverflowVisible(true); }}
+              accessibilityRole="button"
+              accessibilityLabel="More filters"
+            >
+              <View style={styles.filterTabContent}>
+                <Ionicons name="filter-outline" size={16} color={colors.textMuted} />
+                <Text style={styles.filterTabText} numberOfLines={1}>More</Text>
+              </View>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* Unread summary + quiet hours indicator */}
@@ -824,7 +861,7 @@ export default function NotificationsScreen() {
             <EmptyState
               density="compact"
               icon="notifications-outline"
-              title={`No ${FILTER_TABS.find((t) => t.key === activeFilter)?.label.toLowerCase() ?? 'notifications'} yet`}
+              title={`No ${[...PRIMARY_SCOPES, ...OVERFLOW_FILTERS].find((t) => t.key === activeFilter)?.label.toLowerCase() ?? 'notifications'} yet`}
               subtitle="Switch to 'All' to see everything."
               iconColor={colors.textMuted}
             />
@@ -855,6 +892,59 @@ export default function NotificationsScreen() {
           ) : null
         }
       />
+
+      {/* Overflow filter sheet — additional filters behind overflow */}
+      <BottomSheet
+        visible={overflowVisible}
+        onDismiss={() => setOverflowVisible(false)}
+        snapPoint={0.45}
+      >
+        <View style={styles.overflowSheetContent}>
+          <Text style={styles.overflowSheetTitle}>Filter by type</Text>
+          {OVERFLOW_FILTERS.map((filter) => {
+            const isActive = activeFilter === filter.key;
+            const count = filterCounts[filter.key] ?? 0;
+            return (
+              <Pressable
+                key={filter.key}
+                style={({ pressed }) => [
+                  styles.overflowRow,
+                  isActive && { backgroundColor: `${colors.brand}0A` },
+                  pressed && { opacity: 0.6 },
+                ]}
+                onPress={() => {
+                  haptics.tap();
+                  setActiveFilter(filter.key);
+                  setOverflowVisible(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter: ${filter.label}${count > 0 ? `, ${count} items` : ''}`}
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text
+                  style={[
+                    styles.overflowRowText,
+                    { color: isActive ? colors.brand : colors.textPrimary },
+                    isActive && { fontFamily: Typography.family.semibold },
+                  ]}
+                >
+                  {filter.label}
+                </Text>
+                <View style={styles.overflowRowRight}>
+                  {count > 0 ? (
+                    <Text style={[styles.overflowRowCount, { color: colors.textMuted }]}>
+                      {count}
+                    </Text>
+                  ) : null}
+                  {isActive ? (
+                    <Ionicons name="checkmark" size={18} color={colors.brand} />
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
     </FlagshipScreen>
   );
 }
@@ -879,8 +969,10 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   filterTabsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Space.md,
-    gap: Space.xl,
+    gap: Space.lg,
   },
   filterTab: {
     alignItems: 'center',
@@ -1206,6 +1298,37 @@ function createStyles(colors: ThemeColors) {
   },
   notificationSkeletonCopy: {
     flex: 1,
+  },
+  overflowSheetContent: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+  },
+  overflowSheetTitle: {
+    fontSize: Type.title.size,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: Space.sm,
+  },
+  overflowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  overflowRowText: {
+    fontSize: Type.body.size,
+    color: colors.textPrimary,
+  },
+  overflowRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  overflowRowCount: {
+    fontSize: Type.meta.size,
+    color: colors.textMuted,
+    marginRight: Space.sm,
   },
   });
 }

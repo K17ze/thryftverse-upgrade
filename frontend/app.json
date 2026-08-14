@@ -118,9 +118,7 @@
     "updates": {
       "url": "https://u.expo.dev/e94afae8-2794-4230-a184-785eb8d7ad36",
       "checkAutomatically": "ON_LOAD",
-      "enableBsdiffPatchSupport": true,
-      "codeSigningCertificate": "certs/update-certificate.pem",
-      "codeSigningMetadata": { "keyid": "main", "alg": "rsa-v1_5-sha256" }
+      "enableBsdiffPatchSupport": true
     },
     "runtimeVersion": {
       "policy": "fingerprint"

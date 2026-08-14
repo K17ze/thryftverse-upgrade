@@ -26,6 +26,7 @@ import Reanimated, {
 import { Video, ResizeMode } from '../components/compat/Video';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
@@ -54,7 +55,6 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { SharedTransitionView } from '../components/SharedTransitionView';
-import { MasonryGrid, ProductCardV2 } from '../components/ProductCardV2';
 import { DoubleTapHeart } from '../components/DoubleTapHeart';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
@@ -62,9 +62,6 @@ import { AppButton } from '../components/ui/AppButton';
 import { Space, FontFamily, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
-import { T } from '../components/ui/Text';
-import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
-import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
@@ -284,13 +281,23 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
     }
   }, [item.routeId, toggleWishlist, haptic]);
 
+  // Deterministic feed display role: media is primary, price is overlaid,
+  // and ONE interaction signal (likes) is shown as a compact overlay.
+  // Seller avatar, seller name, title text, and condition badges are
+  // removed from the tile so media dominates at thumbnail size.
+  // Seller profile navigation is preserved via the peek modal + ItemDetail.
+  const showLikes = item.likes > 0;
+  void onPressSellerProfile; // preserved in API, not rendered on tile
+  void sellerUsername;
+  void sellerAvatar;
+
   return (
     <View style={[styles.exploreItemBox, { width: tileWidth }]}>
       <AnimatedPressable
         style={[styles.exploreMediaWrap, { height: mediaHeight }]}
         onPress={() => onPress(item.routeId)}
         onLongPress={() => onLongPress(item)}
-        accessibilityLabel={`${item.caption}, ${formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}`}
+        accessibilityLabel={`${item.caption}, ${formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}${showLikes ? `, ${item.likes} likes` : ''}`}
         accessibilityRole="button"
         accessibilityHint="Opens item details. Long press to preview this listing"
       >
@@ -319,40 +326,29 @@ const ExploreGridItem = React.memo(function ExploreGridItem({
             )}
           </SharedTransitionView>
         </DoubleTapHeart>
-      </AnimatedPressable>
 
-      <View style={styles.exploreDetails}>
-        <Text style={styles.exploreTitle} numberOfLines={2}>{item.caption}</Text>
-        <Text style={styles.explorePrice} numberOfLines={1}>
-          {formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}
-        </Text>
-      </View>
-
-      {(sellerUsername || item.sellerId) && (
-        <AnimatedPressable
-          style={styles.exploreSellerRow}
-          onPress={() => item.sellerId && onPressSellerProfile(item.sellerId)}
-          accessibilityRole="button"
-          accessibilityLabel={sellerUsername ? `Seller: @${sellerUsername}` : 'Open seller profile'}
-          accessibilityHint="Opens the seller's profile"
-        >
-          {sellerAvatar ? (
-            <CachedImage
-              uri={sellerAvatar}
-              style={styles.exploreSellerAvatar}
-              contentFit="cover"
-              downscaleWidth={64}
-            />
-          ) : (
-            <View style={styles.exploreSellerAvatarFallback}>
-              <Ionicons name="person" size={13} color={colors.textMuted} />
-            </View>
-          )}
-          <Text style={styles.exploreSellerText} numberOfLines={1}>
-            @{sellerUsername ?? item.sellerId}
+        {/* Bottom gradient + price overlay — media-first, price as secondary signal */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.62)']}
+          style={styles.exploreBottomScrim}
+          pointerEvents="none"
+        />
+        <View style={styles.explorePriceOverlay} pointerEvents="none">
+          <Text style={styles.explorePriceOverlayText} numberOfLines={1}>
+            {formatPrice(item.price ?? 0, 'GBP', { displayMode: 'fiat' })}
           </Text>
-        </AnimatedPressable>
-      )}
+        </View>
+
+        {/* ONE interaction signal: likes count (heart + number), top-right */}
+        {showLikes ? (
+          <View style={styles.exploreLikesBadge} pointerEvents="none">
+            <Ionicons name="heart" size={10} color="#fff" style={styles.exploreLikesGlyph} />
+            <Text style={styles.exploreLikesText} numberOfLines={1}>
+              {item.likes > 999 ? `${(item.likes / 1000).toFixed(1)}k` : item.likes}
+            </Text>
+          </View>
+        ) : null}
+      </AnimatedPressable>
     </View>
   );
 });
@@ -875,14 +871,6 @@ export default function HomeScreen() {
           return (
             <View key={`feed_loading_left_${index}`} style={styles.skeletonTileWrap}>
               <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={RadiusRoleValue.sheetDialog} />
-              <View style={styles.skeletonMetaRow}>
-                <PremiumSkeletonTile width="70%" height={TypographyV2.meta.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
-                <PremiumSkeletonTile width="40%" height={TypographyV2.priceList.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
-              </View>
-              <View style={styles.skeletonSellerRow}>
-                <PremiumSkeletonTile width={24} height={24} borderRadius={RadiusRoleValue.pillAvatar} />
-                <PremiumSkeletonTile width="45%" height={TypographyV2.meta.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
-              </View>
             </View>
           );
         })}
@@ -893,14 +881,6 @@ export default function HomeScreen() {
           return (
             <View key={`feed_loading_right_${index}`} style={styles.skeletonTileWrap}>
               <PremiumSkeletonTile width="100%" height={Math.round(gridTileWidth * ratio)} borderRadius={RadiusRoleValue.sheetDialog} />
-              <View style={styles.skeletonMetaRow}>
-                <PremiumSkeletonTile width="70%" height={TypographyV2.meta.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
-                <PremiumSkeletonTile width="40%" height={TypographyV2.priceList.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
-              </View>
-              <View style={styles.skeletonSellerRow}>
-                <PremiumSkeletonTile width={24} height={24} borderRadius={RadiusRoleValue.pillAvatar} />
-                <PremiumSkeletonTile width="45%" height={TypographyV2.meta.lineHeight} borderRadius={RadiusRoleValue.compactControl} />
-              </View>
             </View>
           );
         })}
@@ -1049,14 +1029,6 @@ export default function HomeScreen() {
         }}
         ListHeaderComponent={
           <View>
-            <DiscoverySectionHeader
-              kicker={feedMode === 'following' ? 'Latest from people you follow' : undefined}
-              title="Explore"
-              actionLabel="See all"
-              onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-              style={styles.feedDiscoveryHeader}
-            />
-
             <View style={styles.feedTabBar} accessibilityRole="tablist">
               {(['foryou', 'following'] as const).map((option) => {
                 const isSelected = feedMode === option;
@@ -1317,10 +1289,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   feedContent: {
     paddingBottom: 120,
-  },
-  feedDiscoveryHeader: {
-    marginTop: 0,
-    marginBottom: 2,
   },
   feedTabBar: {
     minHeight: 46,
@@ -1896,61 +1864,75 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   exploreDetails: {
-    paddingTop: Space.sm,
-    paddingHorizontal: Space.xs,
-    gap: Space.xxs,
+    display: 'none',
   },
-  // Title: captionElevated (13/18/400) — quiet, lets price dominate.
   exploreTitle: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    color: colors.textPrimary,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+    display: 'none',
   },
-  // Price: bodyLarge (16/22/700) — clearly dominant over title.
   explorePrice: {
-    color: colors.textPrimary,
+    display: 'none',
+  },
+  exploreSellerRow: {
+    display: 'none',
+  },
+  exploreSellerAvatar: {
+    display: 'none',
+  },
+  exploreSellerAvatarFallback: {
+    display: 'none',
+  },
+  exploreSellerText: {
+    display: 'none',
+  },
+  // Bottom gradient scrim for price overlay legibility
+  exploreBottomScrim: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 52,
+  },
+  explorePriceOverlay: {
+    position: 'absolute',
+    bottom: Space.xs + 1,
+    left: Space.xs + 1,
+    right: Space.xs + 1,
+  },
+  explorePriceOverlayText: {
     fontSize: TypographyV2.priceList.size,
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
     letterSpacing: TypographyV2.priceList.letterSpacing,
+    color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  exploreSellerRow: {
-    minHeight: 44,
-    marginTop: Space.xs,
-    paddingHorizontal: Space.xs,
+  // Likes badge — compact interaction signal, top-right
+  exploreLikesBadge: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
+    gap: 3,
+    paddingHorizontal: Space.xs + 1,
+    paddingVertical: 2,
+    borderRadius: RadiusRoleValue.compactControl,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  // Avatar: 24pt circle with subtle border — proper identity element.
-  exploreSellerAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    borderWidth: Stroke.hairline,
-    borderColor: colors.border,
+  exploreLikesGlyph: {
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  exploreSellerAvatarFallback: {
-    width: 24,
-    height: 24,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: Stroke.hairline,
-    borderColor: colors.border,
-  },
-  // Seller text: meta (11/14/500) — restrained, secondary to price/title.
-  exploreSellerText: {
-    flex: 1,
-    color: colors.textSecondary,
+  exploreLikesText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontFamily: FontFamily.semibold,
+    color: '#fff',
+    letterSpacing: 0.1,
   },
   videoBadge: {
     position: 'absolute',
@@ -1978,18 +1960,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     gap: Space.sm,
   },
-  // Skeleton tile wrapper: media + metadata lines matching final tile silhouette.
+  // Skeleton tile wrapper: media-only silhouette matching the reduced tile.
   skeletonTileWrap: {
-    gap: Space.xs,
-  },
-  skeletonMetaRow: {
-    paddingHorizontal: Space.xs,
-    gap: Space.xxs,
-  },
-  skeletonSellerRow: {
-    paddingHorizontal: Space.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: Space.xs,
   },
 
