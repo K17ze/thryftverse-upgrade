@@ -31,4 +31,10 @@ export const queryKeys = {
   notifications: {
     unreadCount: ['notifications', 'unread-count'] as const,
   },
+  coOwn: {
+    asset: (assetId: string) => ['coOwn', 'asset', assetId] as const,
+    orderBook: (assetId: string) => ['coOwn', 'orderBook', assetId] as const,
+    holdings: (userId: string) => ['coOwn', 'holdings', userId] as const,
+    recourse: (assetId: string) => ['coOwn', 'recourse', assetId] as const,
+  },
 } as const;

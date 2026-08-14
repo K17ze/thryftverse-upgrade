@@ -22,9 +22,7 @@ import { Space, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numer
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
-  fetchCoOwnAssetById,
   fetchCoOwnOrderBook,
-  fetchCoOwnHoldings,
   type CoOwnOrderBookSnapshot,
   type MarketCoOwnAsset,
   type MarketCoOwnHolding,
@@ -32,6 +30,10 @@ import {
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
+import {
+  useCoOwnAssetQuery,
+  useCoOwnHoldingsQuery,
+} from '../platform/server/useCoOwnQueries';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { formatCoOwnIze } from '../utils/currency';
 import {
@@ -125,14 +127,19 @@ export default function AssetDetailScreen() {
 
   const assetId = route.params?.assetId;
 
-  const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
+  // ── Shared cache (deduplicated with AssetDueDiligenceScreen) ──
+  const assetQuery = useCoOwnAssetQuery(assetId);
+  const holdingsQuery = useCoOwnHoldingsQuery(currentUser?.id);
+
+  const asset = assetQuery.data ?? null;
+  const isLoading = assetQuery.isLoading;
+  const isError = assetQuery.isError;
+  const yourHolding = holdingsQuery.data?.find((entry) => entry.assetId === assetId) ?? null;
+  const yourUnits = currentUser?.id ? (yourHolding?.unitsOwned ?? null) : 0;
+  const holdingsError = currentUser?.id ? holdingsQuery.isError : false;
+
   const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [orderBookError, setOrderBookError] = React.useState(false);
-  const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
-  const [yourHolding, setYourHolding] = React.useState<MarketCoOwnHolding | null>(null);
-  const [holdingsError, setHoldingsError] = React.useState(false);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [isError, setIsError] = React.useState(false);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
   const [fullscreenVisible, setFullscreenVisible] = React.useState(false);
@@ -193,56 +200,30 @@ export default function AssetDetailScreen() {
     }
   });
 
+  // ── Order book fetch (asset + holdings come from shared cache) ──
   React.useEffect(() => {
-    if (!assetId) { setIsLoading(false); setIsError(true); return; }
+    if (!assetId) return;
     let cancelled = false;
-    setIsLoading(true);
-    setIsError(false);
     setOrderBookError(false);
-    setHoldingsError(false);
     setOrderBook(null);
-    setYourUnits(currentUser?.id ? null : 0);
-    setYourHolding(null);
-
-    void Promise.allSettled([
-      fetchCoOwnAssetById(assetId),
-      fetchCoOwnOrderBook(assetId, { limit: 40 }),
-      currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
-    ]).then(([assetResult, bookResult, holdingsResult]) => {
-      if (cancelled) return;
-
-      if (assetResult.status === 'rejected') {
-        const parsed = parseApiError(assetResult.reason, 'Unable to load asset');
-        show(parsed.message, 'error');
-        setIsError(true);
-        setIsLoading(false);
-        return;
-      }
-
-      setAsset(assetResult.value);
-      setDataLoadedAt(Date.now());
-
-      if (bookResult.status === 'fulfilled') {
-        setOrderBook(bookResult.value);
-      } else {
-        setOrderBookError(true);
-      }
-
-      if (holdingsResult.status === 'fulfilled') {
-        const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
-        setYourHolding(holding ?? null);
-        setYourUnits(holding?.unitsOwned ?? 0);
-      } else {
-        setHoldingsError(true);
-        setYourUnits(null);
-        setYourHolding(null);
-      }
-
-      setIsLoading(false);
-    });
-
+    void fetchCoOwnOrderBook(assetId, { limit: 40 })
+      .then((book) => { if (!cancelled) setOrderBook(book); })
+      .catch(() => { if (!cancelled) setOrderBookError(true); });
     return () => { cancelled = true; };
-  }, [assetId, currentUser?.id, show]);
+  }, [assetId]);
+
+  // Track when asset data first arrives for staleness computation
+  React.useEffect(() => {
+    if (asset) setDataLoadedAt(Date.now());
+  }, [asset]);
+
+  // Show error toast on asset fetch failure
+  React.useEffect(() => {
+    if (assetQuery.error) {
+      const parsed = parseApiError(assetQuery.error, 'Unable to load asset');
+      show(parsed.message, 'error');
+    }
+  }, [assetQuery.error, show]);
 
   const retryOrderBook = React.useCallback(() => {
     if (!assetId) return;
@@ -253,20 +234,9 @@ export default function AssetDetailScreen() {
   }, [assetId]);
 
   const retryHoldings = React.useCallback(() => {
-    if (!assetId || !currentUser?.id) return;
-    setHoldingsError(false);
-    void fetchCoOwnHoldings(currentUser.id)
-      .then((holdings) => {
-        const holding = holdings.find((entry) => entry.assetId === assetId);
-        setYourHolding(holding ?? null);
-        setYourUnits(holding?.unitsOwned ?? 0);
-      })
-      .catch(() => {
-        setYourUnits(null);
-        setYourHolding(null);
-        setHoldingsError(true);
-      });
-  }, [assetId, currentUser?.id]);
+    if (!currentUser?.id) return;
+    holdingsQuery.refetch();
+  }, [holdingsQuery, currentUser?.id]);
 
   // Pull-to-refresh — reloads asset, order book, and holdings in parallel.
   // Recourse status is fetched by the Due Diligence screen independently.
@@ -274,33 +244,19 @@ export default function AssetDetailScreen() {
     if (!assetId) return;
     setRefreshing(true);
     void Promise.allSettled([
-      fetchCoOwnAssetById(assetId),
+      assetQuery.refetch(),
       fetchCoOwnOrderBook(assetId, { limit: 40 }),
-      currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
-    ]).then(([assetResult, bookResult, holdingsResult]) => {
-      if (assetResult.status === 'fulfilled') {
-        setAsset(assetResult.value);
-        setDataLoadedAt(Date.now());
-      }
+      currentUser?.id ? holdingsQuery.refetch() : Promise.resolve(),
+    ]).then(([_, bookResult]) => {
       if (bookResult.status === 'fulfilled') {
-        setOrderBook(bookResult.value);
+        setOrderBook(bookResult.value as CoOwnOrderBookSnapshot);
         setOrderBookError(false);
       } else {
         setOrderBookError(true);
       }
-      if (holdingsResult.status === 'fulfilled') {
-        const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
-        setYourHolding(holding ?? null);
-        setYourUnits(holding?.unitsOwned ?? 0);
-        setHoldingsError(false);
-      } else if (currentUser?.id) {
-        setYourUnits(null);
-        setYourHolding(null);
-        setHoldingsError(true);
-      }
       setRefreshing(false);
     });
-  }, [assetId, currentUser?.id]);
+  }, [assetId, assetQuery, holdingsQuery, currentUser?.id]);
 
   // ── Hooks must run before conditional returns (Rules of Hooks) ──
 

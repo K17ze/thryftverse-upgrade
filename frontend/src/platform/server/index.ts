@@ -5,6 +5,13 @@ export { useMobileQueryLifecycle } from './useMobileQueryLifecycle';
 export { clearUserScopedQueryCache } from './clearUserCache';
 export { usePublicProfileQuery } from './usePublicProfileQuery';
 export {
+  useCoOwnAssetQuery,
+  useCoOwnOrderBookQuery,
+  useCoOwnHoldingsQuery,
+  useCoOwnRecourseQuery,
+  useInvalidateCoOwnAsset,
+} from './useCoOwnQueries';
+export {
   useUserListingsInfinite,
   useUserLooksInfinite,
   useSellerReviewsInfinite,

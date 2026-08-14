@@ -21,9 +21,6 @@ import { Space, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numer
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
-  fetchCoOwnAssetById,
-  fetchCoOwnRecourseStatus,
-  fetchCoOwnHoldings,
   refreshCoOwnAppraisal,
   createVerificationDemand,
   type MarketCoOwnAsset,
@@ -31,6 +28,11 @@ import {
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
+import {
+  useCoOwnAssetQuery,
+  useCoOwnRecourseQuery,
+  useCoOwnHoldingsQuery,
+} from '../platform/server/useCoOwnQueries';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { formatCoOwnIze } from '../utils/currency';
 import { CategoryEvidence } from '../components/commerce';
@@ -94,73 +96,38 @@ export default function AssetDueDiligenceScreen() {
 
   const assetId = route.params?.assetId;
 
-  const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
   const [isRefreshingAppraisal, setIsRefreshingAppraisal] = React.useState(false);
-  const [recourseStatus, setRecourseStatus] = React.useState<CoOwnRecourseStatus | null>(null);
   const [verificationDemandLoading, setVerificationDemandLoading] = React.useState(false);
-  const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [isError, setIsError] = React.useState(false);
-  const [refreshing, setRefreshing] = React.useState(false);
   const [rightsSheetVisible, setRightsSheetVisible] = React.useState(false);
   const [supplySheetVisible, setSupplySheetVisible] = React.useState(false);
 
-  // ── Data loading ──
+  // ── Data loading via shared cache (deduplicated with AssetDetailScreen) ──
+  const assetQuery = useCoOwnAssetQuery(assetId);
+  const recourseQuery = useCoOwnRecourseQuery(assetId);
+  const holdingsQuery = useCoOwnHoldingsQuery(currentUser?.id);
+
+  const asset = assetQuery.data ?? null;
+  const recourseStatus = recourseQuery.data ?? null;
+  const isLoading = assetQuery.isLoading;
+  const isError = assetQuery.isError;
+  const refreshing = assetQuery.isRefetching || recourseQuery.isRefetching;
+
+  const yourHolding = holdingsQuery.data?.find((entry) => entry.assetId === assetId) ?? null;
+  const yourUnits = currentUser?.id ? (yourHolding?.unitsOwned ?? null) : 0;
+
+  // Show error toast on fetch failure
   React.useEffect(() => {
-    if (!assetId) { setIsLoading(false); setIsError(true); return; }
-    let cancelled = false;
-    setIsLoading(true);
-    setIsError(false);
-    setYourUnits(currentUser?.id ? null : 0);
-
-    void Promise.allSettled([
-      fetchCoOwnAssetById(assetId),
-      fetchCoOwnRecourseStatus(assetId).catch(() => null),
-      currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
-    ]).then(([assetResult, recourseResult, holdingsResult]) => {
-      if (cancelled) return;
-      if (assetResult.status === 'rejected') {
-        const parsed = parseApiError(assetResult.reason, 'Unable to load asset');
-        show(parsed.message, 'error');
-        setIsError(true);
-        setIsLoading(false);
-        return;
-      }
-      setAsset(assetResult.value);
-      if (recourseResult.status === 'fulfilled' && recourseResult.value) {
-        setRecourseStatus(recourseResult.value);
-      }
-      if (holdingsResult.status === 'fulfilled') {
-        const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
-        setYourUnits(holding?.unitsOwned ?? 0);
-      } else if (currentUser?.id) {
-        setYourUnits(null);
-      }
-      setIsLoading(false);
-    });
-
-    return () => { cancelled = true; };
-  }, [assetId, show, currentUser?.id]);
+    if (assetQuery.error) {
+      const parsed = parseApiError(assetQuery.error, 'Unable to load asset');
+      show(parsed.message, 'error');
+    }
+  }, [assetQuery.error, show]);
 
   const handleRefresh = React.useCallback(() => {
-    if (!assetId) return;
-    setRefreshing(true);
-    void Promise.allSettled([
-      fetchCoOwnAssetById(assetId),
-      fetchCoOwnRecourseStatus(assetId).catch(() => null),
-      currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
-    ]).then(([assetResult, recourseResult, holdingsResult]) => {
-      if (assetResult.status === 'fulfilled') setAsset(assetResult.value);
-      if (recourseResult.status === 'fulfilled' && recourseResult.value) {
-        setRecourseStatus(recourseResult.value);
-      }
-      if (holdingsResult.status === 'fulfilled') {
-        const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
-        setYourUnits(holding?.unitsOwned ?? 0);
-      }
-      setRefreshing(false);
-    });
-  }, [assetId, currentUser?.id]);
+    assetQuery.refetch();
+    recourseQuery.refetch();
+    if (currentUser?.id) holdingsQuery.refetch();
+  }, [assetQuery, recourseQuery, holdingsQuery, currentUser?.id]);
 
   // ── Loading / error states ──
   if (isLoading) {
@@ -429,8 +396,7 @@ export default function AssetDueDiligenceScreen() {
                             appraisalValuer: 'Issuer refresh',
                           });
                           show('Appraisal refresh requested', 'success');
-                          const updated = await fetchCoOwnAssetById(assetId);
-                          setAsset(updated);
+                          await assetQuery.refetch();
                         } catch {
                           show('Unable to refresh appraisal', 'error');
                         } finally {
@@ -616,8 +582,7 @@ export default function AssetDueDiligenceScreen() {
               try {
                 await createVerificationDemand(assetId, 'authenticity');
                 show('Verification request sent to seller', 'success');
-                const updated = await fetchCoOwnRecourseStatus(assetId);
-                setRecourseStatus(updated);
+                await recourseQuery.refetch();
               } catch {
                 show('Could not send verification request', 'error');
               } finally {

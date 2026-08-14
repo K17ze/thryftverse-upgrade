@@ -1,0 +1,21 @@
+refactor(coown): shared cached asset query for Detail + Due Diligence
+
+AssetDetailScreen and AssetDueDiligenceScreen previously fetched the
+same Co-Own asset and holdings independently, causing duplicate
+network requests and potential truth mismatch when navigating between
+the two surfaces.
+
+Added useCoOwnQueries hooks (useCoOwnAssetQuery, useCoOwnHoldingsQuery,
+useCoOwnRecourseQuery, useCoOwnOrderBookQuery) backed by React Query
+with coOwn query keys. Both screens now consume the shared cache:
+- AssetDetailScreen uses shared asset + holdings queries; order book
+  remains screen-local (only this screen needs it).
+- AssetDueDiligenceScreen uses shared asset + recourse + holdings
+  queries. Appraisal refresh and verification demand now refetch
+  via the query hooks instead of local state setters.
+
+Stale times: asset 2min, order book 30s, holdings 1min, recourse 2min.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
