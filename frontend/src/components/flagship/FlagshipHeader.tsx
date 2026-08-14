@@ -46,7 +46,7 @@ export function FlagshipHeader({
   const isLarge = variant === 'large';
   const isModal = variant === 'modal';
 
-  const effectiveBackIcon = backIcon ?? (isModal ? 'close' : 'arrow-back');
+  const effectiveBackIcon = backIcon ?? (isModal ? 'close' : 'chevron-back');
   const effectiveOnBack = onClose ?? onBack;
 
   // Large-title collapse: when a collapse progress is supplied (0→1), the

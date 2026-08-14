@@ -10,6 +10,7 @@ import {
   TextInput,
   useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -349,6 +350,34 @@ export default function AuctionHomeScreen() {
   const [isLoadingMoreSearch, setIsLoadingMoreSearch] = React.useState(false);
   const [paginationError, setPaginationError] = React.useState<string | null>(null);
 
+  // ── Recent auction searches (persisted, per audit doc 07) ──
+  const RECENT_AUCTION_SEARCHES_KEY = '@thryftverse_recent_auction_searches';
+  const [recentSearches, setRecentSearches] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    AsyncStorage.getItem(RECENT_AUCTION_SEARCHES_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as string[];
+          if (Array.isArray(parsed)) setRecentSearches(parsed);
+        } catch { /* ignore corrupt */ }
+      }
+    }).catch(() => { /* non-fatal */ });
+  }, []);
+
+  const saveRecentSearch = React.useCallback(async (term: string) => {
+    setRecentSearches((prev) => {
+      const updated = [term, ...prev.filter((s) => s !== term)].slice(0, 6);
+      void AsyncStorage.setItem(RECENT_AUCTION_SEARCHES_KEY, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+
+  const clearRecentSearches = React.useCallback(() => {
+    setRecentSearches([]);
+    void AsyncStorage.removeItem(RECENT_AUCTION_SEARCHES_KEY).catch(() => {});
+  }, []);
+
   // ── Browse result (API-fetched when filters are active) ──
   const [browseResult, setBrowseResult] = React.useState<{
     status: 'idle' | 'loading' | 'ready' | 'empty' | 'error';
@@ -471,11 +500,19 @@ export default function AuctionHomeScreen() {
   // ── Fetch server-driven facets when the filter sheet opens ──
   // Provides canonical category list + price range + status counts
   // independent of loaded home inventory (Phase 2 Finding D fix).
-  const fetchFacets = React.useCallback(async (scope: AuctionScope) => {
+  // Passes the full draft state so the CTA count reflects all active
+  // filters, not just the scope (2026 best practice: live counts).
+  const fetchFacets = React.useCallback(async (draft: AuctionBrowseState) => {
     setFacetsLoading(true);
     const reqId = ++facetsReqIdRef.current;
     try {
-      const result = await getAuctionFacets({ scope });
+      const result = await getAuctionFacets({
+        scope: draft.scope,
+        query: draft.query,
+        category: draft.categories.length > 0 ? draft.categories[0] : undefined,
+        priceMin: draft.priceMin,
+        priceMax: draft.priceMax,
+      });
       if (reqId !== facetsReqIdRef.current) return;
       setFacets(result);
     } catch {
@@ -492,9 +529,9 @@ export default function AuctionHomeScreen() {
 
   React.useEffect(() => {
     if (filterSheetVisible) {
-      void fetchFacets(draftBrowse.scope);
+      void fetchFacets(draftBrowse);
     }
-  }, [filterSheetVisible, draftBrowse.scope, fetchFacets]);
+  }, [filterSheetVisible, draftBrowse, fetchFacets]);
 
   // ── Search ──
   const searchReqIdRef = useRef(0);
@@ -562,6 +599,10 @@ export default function AuctionHomeScreen() {
           if (reqId !== searchReqIdRef.current) return;
           const items = result.items.map(toViewModel);
           setSearchState(createSearchState(debouncedQuery, items.length > 0 ? 'ready' : 'empty', items, result.nextCursor));
+          // Persist recent search only when results are found
+          if (items.length > 0) {
+            void saveRecentSearch(debouncedQuery.trim());
+          }
         })
         .catch(() => {
           if (reqId !== searchReqIdRef.current) return;
@@ -569,7 +610,7 @@ export default function AuctionHomeScreen() {
         });
     }, 400);
     return () => clearTimeout(timer);
-  }, [debouncedQuery, browseState.scope, browseState.sort]);
+  }, [debouncedQuery, browseState.scope, browseState.sort, saveRecentSearch]);
 
   React.useEffect(() => {
     return () => { searchReqIdRef.current++; };
@@ -798,6 +839,17 @@ export default function AuctionHomeScreen() {
     return map;
   }, [facets]);
 
+  // ── Category counts from facets (2026: show counts next to each option) ──
+  const categoryCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (facets) {
+      for (const c of facets.categories) {
+        map[c.id] = c.count;
+      }
+    }
+    return map;
+  }, [facets]);
+
   // ── Result count for filter sheet CTA ──
   // Uses statusCounts from facets when available, otherwise falls back to
   // the active filter count.
@@ -861,7 +913,29 @@ export default function AuctionHomeScreen() {
   }, [homeData.closingSoon, homeData.live]);
 
   const dedupedWatchlist = useMemo(
-    () => homeData.watchlist.filter((a) => !spotlightIds.has(a.id)),
+    () => homeData.watchlist
+      .filter((a) => !spotlightIds.has(a.id))
+      .sort((a, b) => {
+        // Urgency sort: ending soonest first, then upcoming soonest.
+        // Ended/cancelled items sink to the bottom.
+        const aEnd = new Date(a.endsAt).getTime();
+        const bEnd = new Date(b.endsAt).getTime();
+        const aStart = new Date(a.startsAt).getTime();
+        const bStart = new Date(b.startsAt).getTime();
+        const now = Date.now();
+        const aLive = aEnd > now && aStart <= now;
+        const bLive = bEnd > now && bStart <= now;
+        const aUpcoming = aStart > now;
+        const bUpcoming = bStart > now;
+        // Live items first (sorted by soonest end), then upcoming (sorted by soonest start), then ended
+        if (aLive && !bLive) return -1;
+        if (!aLive && bLive) return 1;
+        if (aLive && bLive) return aEnd - bEnd;
+        if (aUpcoming && !bUpcoming) return -1;
+        if (!aUpcoming && bUpcoming) return 1;
+        if (aUpcoming && bUpcoming) return aStart - bStart;
+        return 0; // both ended — preserve server order
+      }),
     [homeData.watchlist, spotlightIds]
   );
 
@@ -1088,9 +1162,70 @@ export default function AuctionHomeScreen() {
             onEndReachedThreshold={0.25}
           />
         ) : (
-          <View style={styles.searchIdleContainer}>
-            <Text style={styles.searchIdleHint}>Search by title, brand, or category</Text>
-          </View>
+          <ScrollView
+            style={styles.searchIdleScroll}
+            contentContainerStyle={styles.searchIdleContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Recent searches */}
+            {recentSearches.length > 0 && (
+              <View style={styles.searchIdleSection}>
+                <View style={styles.searchIdleSectionHeader}>
+                  <Text style={styles.searchIdleSectionTitle}>Recent searches</Text>
+                  <Pressable
+                    onPress={() => { haptics.tap(); clearRecentSearches(); }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear recent searches"
+                  >
+                    <Text style={styles.searchIdleClearBtn}>Clear</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.searchIdleChips}>
+                  {recentSearches.map((term, idx) => (
+                    <Pressable
+                      key={idx}
+                      style={styles.searchIdleChip}
+                      onPress={() => { haptics.tap(); handleSearchChange(term); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Search for ${term}`}
+                    >
+                      <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+                      <Text style={styles.searchIdleChipText} numberOfLines={1}>{term}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Watched categories */}
+            {homeData.categoryWorlds.length > 0 && (
+              <View style={styles.searchIdleSection}>
+                <Text style={styles.searchIdleSectionTitle}>Browse by category</Text>
+                <View style={styles.searchIdleChips}>
+                  {homeData.categoryWorlds.slice(0, 6).map((world) => (
+                    <Pressable
+                      key={world.categoryKey}
+                      style={styles.searchIdleChip}
+                      onPress={() => { haptics.tap(); handleSearchChange(world.displayName); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Search ${world.displayName} auctions`}
+                    >
+                      <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
+                      <Text style={styles.searchIdleChipText} numberOfLines={1}>{world.displayName}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Fallback hint when no recent searches and no categories */}
+            {recentSearches.length === 0 && homeData.categoryWorlds.length === 0 && (
+              <View style={styles.searchIdleFallback}>
+                <Text style={styles.searchIdleHint}>Search by title, brand, or category</Text>
+              </View>
+            )}
+          </ScrollView>
         )}
       </SafeAreaView>
     );
@@ -1178,6 +1313,7 @@ export default function AuctionHomeScreen() {
           onDismiss={() => setFilterSheetVisible(false)}
           categoryOptions={categoryOptions}
           categoryLabels={categoryLabels}
+          categoryCounts={categoryCounts}
           draftBrowse={draftBrowse}
           setDraftBrowse={setDraftBrowse}
           onReset={resetDraftFilters}
@@ -1640,9 +1776,14 @@ export default function AuctionHomeScreen() {
           </View>
         )}
 
-        {/* Active filter chips — individually removable */}
+        {/* Active filter chips — individually removable, with result count */}
         {activeFilterChips.length > 0 && (
           <View style={styles.filterChipsBar}>
+            {browseResult.status === 'ready' && (
+              <Text style={styles.filterResultSummary}>
+                {browseResult.items.length} {browseResult.items.length === 1 ? 'result' : 'results'}
+              </Text>
+            )}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1758,6 +1899,7 @@ export default function AuctionHomeScreen() {
         onDismiss={() => setFilterSheetVisible(false)}
         categoryOptions={categoryOptions}
         categoryLabels={categoryLabels}
+        categoryCounts={categoryCounts}
         draftBrowse={draftBrowse}
         setDraftBrowse={setDraftBrowse}
         onReset={resetDraftFilters}
@@ -1794,6 +1936,7 @@ const FilterSheet = memo(function FilterSheet({
   onDismiss,
   categoryOptions,
   categoryLabels,
+  categoryCounts,
   draftBrowse,
   setDraftBrowse,
   onReset,
@@ -1805,6 +1948,7 @@ const FilterSheet = memo(function FilterSheet({
   onDismiss: () => void;
   categoryOptions: string[];
   categoryLabels?: Record<string, string>;
+  categoryCounts?: Record<string, number>;
   draftBrowse: AuctionBrowseState;
   setDraftBrowse: React.Dispatch<React.SetStateAction<AuctionBrowseState>>;
   onReset: () => void;
@@ -1944,6 +2088,7 @@ const FilterSheet = memo(function FilterSheet({
               {categoryOptions.map((cat) => {
                 const selected = draftBrowse.categories.includes(cat);
                 const displayLabel = categoryLabels?.[cat] ?? cat;
+                const count = categoryCounts?.[cat];
                 return (
                   <Pressable
                     key={cat}
@@ -1953,12 +2098,17 @@ const FilterSheet = memo(function FilterSheet({
                     ]}
                     onPress={() => toggleCategory(cat)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Category ${displayLabel}`}
+                    accessibilityLabel={`Category ${displayLabel}${count != null ? `, ${count} auctions` : ''}`}
                     accessibilityState={{ selected }}
                   >
-                    <Text style={[styles.filterCategoryRowText, selected && styles.filterCategoryRowTextActive]}>
-                      {displayLabel}
-                    </Text>
+                    <View style={styles.filterCategoryRowLabel}>
+                      <Text style={[styles.filterCategoryRowText, selected && styles.filterCategoryRowTextActive]}>
+                        {displayLabel}
+                      </Text>
+                      {count != null && (
+                        <Text style={styles.filterCategoryCount}>{count}</Text>
+                      )}
+                    </View>
                     <View style={styles.filterCheckbox}>
                       {selected && <Ionicons name="checkmark" size={16} color={colors.brand} />}
                     </View>
@@ -2023,6 +2173,15 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+  },
+  filterResultSummary: {
+    fontSize: Type.caption.size,
+    color: colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    letterSpacing: 0,
+    fontVariant: ['tabular-nums'],
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xs,
   },
   filterChipsContent: {
     paddingHorizontal: Space.md,
@@ -2314,11 +2473,65 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
   },
+  searchIdleScroll: {
+    flex: 1,
+  },
+  searchIdleContent: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.lg,
+    gap: Space.xl,
+  },
+  searchIdleFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.xxl,
+  },
   searchIdleHint: {
     fontSize: Type.body.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
+  },
+  searchIdleSection: {
+    gap: Space.sm,
+  },
+  searchIdleSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  searchIdleSectionTitle: {
+    fontSize: Type.caption.size,
+    fontWeight: '600',
+    letterSpacing: LetterSpacing.wide + 0.08,
+    color: colors.textSecondary,
+    fontFamily: Typography.family.semibold,
+  },
+  searchIdleClearBtn: {
+    fontSize: Type.caption.size,
+    color: colors.brand,
+    fontFamily: Typography.family.medium,
+  },
+  searchIdleChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.xs,
+  },
+  searchIdleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+  },
+  searchIdleChipText: {
+    fontSize: Type.caption.size,
+    color: colors.textPrimary,
+    fontFamily: Typography.family.medium,
+    maxWidth: 140,
   },
 
   // ── Filter sheet ──
@@ -2419,6 +2632,18 @@ function createStyles(colors: ThemeColors) {
   },
   filterCategoryRowTextActive: {
     fontFamily: Typography.family.semibold,
+  },
+  filterCategoryRowLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    flex: 1,
+  },
+  filterCategoryCount: {
+    fontSize: Type.caption.size,
+    color: colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontVariant: ['tabular-nums'],
   },
   filterCheckbox: {
     width: 22,

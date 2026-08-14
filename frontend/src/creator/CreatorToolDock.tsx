@@ -412,16 +412,22 @@ function buildDefaultTools(
   onLayoutPresets?: () => void,
 ): RailTool[] {
   if (isLook) {
-    // Look: collage-first tool set. Per Phase D spec:
-    // Visible: add item/media, cutout, text, product, background, more.
+    // Look: collage-first tool set. Per audit doc 02/05:
+    // Visible by default: add item/media, cutout, text, product, background, more.
     // Primary tools (Media, Text) lead with brand fill; secondary tools
-    // (cutout, product, background, layout) follow a divider.
+    // (cutout, product, background, layout, draw, gif, music) follow a
+    // divider and are revealed via the chevron "more" toggle. Draw, GIF,
+    // and Music are preserved behind "more" rather than removed — they
+    // are real creator capabilities useful for collage composition.
     return [
       { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
       { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
       { icon: 'cut-outline', label: 'Cutout', action: () => onToolPress('media') },
       { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
       { icon: 'color-fill-outline', label: 'Background', action: () => onToolPress('shape') },
+      { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
+      { icon: 'image-outline', label: 'GIF', action: () => onToolPress('gif') },
+      { icon: 'musical-notes-outline', label: 'Music', action: () => onToolPress('music') },
       ...(onLayoutPresets ? [{ icon: 'grid-outline' as const, label: 'Layout', action: onLayoutPresets }] : []),
     ];
   }

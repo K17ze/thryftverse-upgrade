@@ -939,7 +939,7 @@ export function CommerceMediaStage({
             {...PressPresets.iconButton}
             accessibilityLabel="Go back"
           >
-            <Ionicons name="arrow-back" size={24} color="#fff" style={styles.controlIcon} />
+            <Ionicons name="chevron-back" size={24} color="#fff" style={styles.controlIcon} />
           </AnimatedPressable>
 
           <View style={styles.headerRight}>

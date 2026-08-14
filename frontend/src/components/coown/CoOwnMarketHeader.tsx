@@ -45,7 +45,7 @@ export function CoOwnMarketHeader({
             hapticFeedback="light"
             activeOpacity={0.62}
           >
-            <Ionicons name="arrow-back" size={Control.icon} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={Control.icon} color={colors.textPrimary} />
           </AnimatedPressable>
         ) : (
           <View style={styles.iconBtnPlaceholder} />

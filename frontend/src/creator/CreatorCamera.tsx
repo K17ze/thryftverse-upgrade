@@ -139,6 +139,11 @@ export default function CreatorCamera({
   const [recentImages, setRecentImages] = useState<string[]>([]);
   const [showRecentCarousel, setShowRecentCarousel] = useState(false);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
+  // Track whether the current capture is a photo or video so the
+  // confirmed capture is sent with the correct kind. Without this, video
+  // recordings are misclassified as images, breaking playback in the
+  // poster/look canvas.
+  const [capturedKind, setCapturedKind] = useState<'image' | 'video'>('image');
   const [countdown, setCountdown] = useState<number | null>(null);
   const reviewOpacity = useSharedValue(0);
   const captureFlash = useSharedValue(0);
@@ -414,6 +419,7 @@ export default function CreatorCamera({
             withTiming(0, { duration: 120, easing: Easing.in(Easing.cubic) })
           );
         }
+        setCapturedKind('image');
         setCapturedUri(photo.uri);
         // ── Capture latency telemetry ──
         // Tracks shutter-to-photo-ready time so we can monitor camera
@@ -480,6 +486,7 @@ export default function CreatorCamera({
             withTiming(0, { duration: 120, easing: Easing.in(Easing.cubic) }),
           );
         }
+        setCapturedKind('video');
         setCapturedUri(result.uri);
         CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', Date.now() - startTime);
       }
@@ -573,10 +580,12 @@ export default function CreatorCamera({
     if (!reducedMotion) {
       reviewOpacity.value = withSpring(0, spring.entrance, () => {
         runOnJS(setCapturedUri)(null);
+        runOnJS(setCapturedKind)('image');
       });
     } else {
       reviewOpacity.value = 0;
       setCapturedUri(null);
+      setCapturedKind('image');
     }
   }, [haptic, reducedMotion, reviewOpacity, spring]);
 
@@ -588,7 +597,7 @@ export default function CreatorCamera({
       const media: CreatorInitialMedia = {
         id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         uri: capturedUri,
-        kind: 'image',
+        kind: capturedKind,
       };
       setMultiCaptures((prev) => [...prev, media]);
       setCapturedUri(null);
@@ -599,12 +608,12 @@ export default function CreatorCamera({
       onCaptureBatch([{
         id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         uri: capturedUri,
-        kind: 'image',
+        kind: capturedKind,
       }]);
     } else {
       onCapture(capturedUri);
     }
-  }, [capturedUri, haptic, onCapture, onCaptureBatch, multiCaptureMode, isVisualSearch]);
+  }, [capturedUri, capturedKind, haptic, onCapture, onCaptureBatch, multiCaptureMode, isVisualSearch]);
 
   // ── Multi-capture: add another photo without leaving camera ──
   const handleAddAnother = useCallback(() => {
@@ -613,12 +622,12 @@ export default function CreatorCamera({
       const media: CreatorInitialMedia = {
         id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         uri: capturedUri,
-        kind: 'image',
+        kind: capturedKind,
       };
       setMultiCaptures((prev) => [...prev, media]);
       setCapturedUri(null);
     }
-  }, [capturedUri, haptic]);
+  }, [capturedUri, capturedKind, haptic]);
 
   // ── Multi-capture: finish and send ALL captures (P0.3 fix) ──
   // Every capture is retained and sent as a CreatorInitialMedia[] batch.
@@ -630,7 +639,7 @@ export default function CreatorCamera({
       ? [{
           id: `capture_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           uri: capturedUri,
-          kind: 'image',
+          kind: capturedKind,
         }]
       : [];
     const all = [...multiCaptures, ...currentCapture];
@@ -642,7 +651,7 @@ export default function CreatorCamera({
     }
     setMultiCaptures([]);
     setMultiCaptureMode(false);
-  }, [multiCaptures, capturedUri, haptic, onCapture, onCaptureBatch]);
+  }, [multiCaptures, capturedUri, capturedKind, haptic, onCapture, onCaptureBatch]);
 
   // ── Multi-capture: toggle mode ──
   const toggleMultiCapture = useCallback(() => {

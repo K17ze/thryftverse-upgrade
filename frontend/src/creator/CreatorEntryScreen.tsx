@@ -176,6 +176,9 @@ export function CreatorEntryScreen({
   }, [view, mediaPerm, requestMediaPerm]);
 
   // ── Camera capture → typed media payload → enter editor ──
+  // Legacy single-URI path (visual search, backward-compatible callers).
+  // For poster/look modes, the camera sends a typed batch via
+  // onCaptureBatch instead, preserving the correct kind (image/video).
   const handleCapture = useCallback((uri: string) => {
     // Get image dimensions to preserve aspect ratio in the typed payload
     RNImage.getSize(uri, (imgW: number, imgH: number) => {
@@ -196,6 +199,16 @@ export function CreatorEntryScreen({
       };
       onMediaSelected([media]);
     });
+  }, [onMediaSelected]);
+
+  // ── Camera batch capture → typed media payload → enter editor ──
+  // The camera sends a CreatorInitialMedia[] batch with the correct kind
+  // (image or video) for each capture. This is the primary path for
+  // poster/look camera captures — it preserves video kind so recordings
+  // are not misclassified as images.
+  const handleCaptureBatch = useCallback((captures: CreatorInitialMedia[]) => {
+    if (captures.length === 0) return;
+    onMediaSelected(captures);
   }, [onMediaSelected]);
 
   // ── Gallery selection → ordered media payload → enter editor ──
@@ -248,6 +261,7 @@ export function CreatorEntryScreen({
         <CreatorCamera
           mode={documentType}
           onCapture={handleCapture}
+          onCaptureBatch={handleCaptureBatch}
           onGallery={() => setView('gallery')}
           onClose={onClose}
         />

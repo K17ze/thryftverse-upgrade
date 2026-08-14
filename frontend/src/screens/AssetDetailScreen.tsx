@@ -24,7 +24,6 @@ import {
   fetchCoOwnAssetById,
   fetchCoOwnOrderBook,
   fetchCoOwnHoldings,
-  refreshCoOwnAppraisal,
   type CoOwnOrderBookSnapshot,
   type MarketCoOwnAsset,
   type MarketCoOwnHolding,
@@ -85,7 +84,6 @@ import {
 import { AppButton } from '../components/ui/AppButton';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -130,7 +128,6 @@ export default function AssetDetailScreen() {
   const assetId = route.params?.assetId;
 
   const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
-  const [isRefreshingAppraisal, setIsRefreshingAppraisal] = React.useState(false);
   const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [orderBookError, setOrderBookError] = React.useState(false);
   const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
@@ -482,30 +479,6 @@ export default function AssetDetailScreen() {
   }));
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
-  // Co-Own assets don't carry a marketplace category/condition/description
-  // (those are listing-level fields). The dossier evidence groups are
-  // derived from the trust profile instead.
-  const dossierEvidenceGroups = resolveEvidenceGroups({
-    category: null,
-    condition: asset.conditionGrade ?? null,
-    description: asset.provenance ?? null,
-  });
-  const hasTrustDetails = Boolean(
-    asset.authenticityStatus
-    || asset.buyerProtection
-    || asset.custodianName
-    || asset.custodianLocation,
-  );
-  const hasStructuredDossier = Boolean(
-    asset.provenance?.length
-    || asset.conditionGrade
-    || asset.custodianLocation
-    || asset.appraisalValueGbp
-    || asset.legalVehicleType,
-  );
-  const hasExpandedDossier = dossierEvidenceGroups.length > 0
-    || hasTrustDetails
-    || hasStructuredDossier;
 
   const recommendationSections = recommendationsData?.sections ?? [];
   const railSections = recommendationSections.filter(
@@ -856,8 +829,18 @@ export default function AssetDetailScreen() {
             }
           >
           {/* Thin allocation indicator — compact, one line.
-              "78% allocated · 220 units available" pattern per spec 09. */}
-          <View style={[styles.allocationIndicatorRow, { borderTopColor: colors.border }]}>
+              "78% allocated · 220 units available" pattern per spec 09.
+              Tap → Supply details (opens the supply structure sheet). */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.allocationIndicatorRow,
+              { borderTopColor: colors.border },
+              pressed && { opacity: 0.6 },
+            ]}
+            onPress={() => setSupplySheetVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Supply details · ${allocatedPct}% allocated, ${availableUnits} units available`}
+          >
             <View style={[styles.allocationBar, { backgroundColor: colors.surfaceAlt, flex: 1 }]}>
               <View
                 style={[
@@ -872,7 +855,8 @@ export default function AssetDetailScreen() {
             <Text style={[styles.allocationIndicatorText, { color: colors.textSecondary }]}>
               {allocatedPct}% allocated · {availableUnits} units available
             </Text>
-          </View>
+            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+          </Pressable>
           </CommerceDetailTransactionSurface>
         </CoOwnMarketOverview>
 
@@ -1704,30 +1688,6 @@ const styles = StyleSheet.create({
     letterSpacing: Numeric.priceList.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  // ── Secondary facts (NAV / distribution / report) ──
-  marketSecondaryFacts: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: Space.sm,
-  },
-  marketSecondaryFact: {
-    flex: 1,
-    gap: Space.xs,
-  },
-  marketSecondaryLabel: {
-    fontSize: TypographyV2.label.size,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
-  marketSecondaryValue: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
   // ── Fundamentals — stacked layout (per spec 03_COOWN §1) ──
   // ── Fundamentals — stacked layout (per spec 03_COOWN §1) ──
   // Per spec 11_COOWN: 12-16pt between data rows. Space.md (16px) gap
@@ -1765,11 +1725,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flexShrink: 1,
   },
-  // Unavailable fundamentals values: italic, no tabular nums.
-  fundamentalsValueUnavailable: {
-    fontStyle: 'italic',
-    fontVariant: [],
-  },
   // ── Risk disclosure sheet (per spec 03_COOWN §8) ──
   // Uses the shared BottomSheet primitive; only the header and scroll
   // content styles are screen-local.
@@ -1798,65 +1753,6 @@ const styles = StyleSheet.create({
   riskDisclosureSheetContent: {
     padding: Space.md,
   },
-  // ── Viewer position ──
-  // Trust chips — flat inline icon+text pairs. Same pattern as
-  // ItemDetailScreen. No card, no surface fill, no border.
-  // Per spec 11_COOWN: "Professional, not gamified."
-  // 16pt bottom padding for breathing room before the metric rows.
-  trustChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.md,
-    paddingBottom: Space.md,
-  },
-  trustChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  // Trust chip text uses captionElevated for quiet, professional readability.
-  trustChipText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  // ── Audit trail — calm, professional history ──
-  // Per spec 11_COOWN: 24pt between sections. Space.lg (24px) top margin
-  // and padding. Hairline separator. Tabular-nums for dates.
-  auditTrailWrap: {
-    gap: Space.sm,
-    paddingTop: Space.lg,
-    marginTop: Space.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  auditTrailTitle: {
-    fontSize: TypographyV2.label.size,
-    lineHeight: TypographyV2.label.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
-  // Audit trail rows — 12-16pt between data rows per spec.
-  auditTrailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
-  auditTrailEvent: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    textTransform: 'capitalize',
-  },
-  auditTrailDate: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
   // ── Viewer position header — calm, professional ownership display ──
   // Per spec 11_COOWN: "Clear ownership stake, current value." 24pt
   // section spacing (Space.lg) between the header and supply summary.
@@ -1867,23 +1763,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.md,
     marginBottom: Space.lg,
-  },
-  // Stale appraisal refresh action
-  staleAppraisalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  refreshBtn: {
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.sm,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-    borderWidth: Stroke.standard,
-  },
-  refreshBtnText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
   },
   viewerPositionCopy: {
     gap: Space.xs,
@@ -1911,44 +1790,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
-  // ── Supply summary ──
-  // ── Supply summary — calm, professional allocation display ──
-  // Per spec 11_COOWN: 12-16pt between data rows. Space.md (16px) between
-  // the summary and the allocation bar. Values use tabular-nums.
-  supplySummary: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    marginBottom: Space.md,
-  },
-  supplyMetric: {
-    gap: Space.xs,
-    flex: 1,
-  },
-  supplyMetricTrailing: {
-    alignItems: 'flex-end',
-  },
-  // Supply metric labels — captionElevated for quiet hierarchy.
-  supplyMetricLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  supplyUnits: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
-  supplyAllocated: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: FontFamily.bold,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+  // ── Allocation bar (used in Layer 1 compact indicator) ──
   allocationBar: {
     height: Space.sm,
     borderRadius: RadiusRoleValue.pillAvatar,
@@ -1957,54 +1799,6 @@ const styles = StyleSheet.create({
   allocationFill: {
     height: '100%',
     borderRadius: RadiusRoleValue.pillAvatar,
-  },
-  // Supply holders — quiet metadata, 16pt from allocation bar.
-  supplyHolders: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    marginTop: Space.md,
-  },
-  // ── Rights summary ──
-  // ── Rights summary — calm, professional risk communication ──
-  // Per spec 11_COOWN: "Financial disclosures should be reachable before
-  // order confirmation." 16pt vertical padding for breathing room.
-  rightsSummary: {
-    paddingVertical: Space.md,
-  },
-  // Critical statement uses bodyEmphasis (15/21/600) for clear hierarchy.
-  // This is the most important risk fact the user needs to understand.
-  rightsCriticalStatement: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-  },
-  // ── Unavailable exit row (truthful disabled state) ──
-  unavailableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    minHeight: Control.hit,
-  },
-  unavailableRowLabelCluster: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    flexShrink: 1,
-  },
-  unavailableRowLabel: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.medium,
-    flexShrink: 1,
-  },
-  unavailableRowSummary: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
   },
   // ── Dock state badge — calm, professional status ──
   // Uses bodyEmphasis (15/21/600) for clear hierarchy in the dock.

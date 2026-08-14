@@ -73,7 +73,7 @@ export function ProductDetailHeader({
         <View style={styles.leftSection}>
           <View style={styles.iconBtn}>
             <Ionicons
-              name="arrow-back"
+              name="chevron-back"
               size={22}
               color={colors.textPrimary}
               onPress={onBack}

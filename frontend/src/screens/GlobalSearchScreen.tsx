@@ -264,7 +264,9 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   }, [normalizedQuery]);
 
   // People search — fetches matching users when scope is 'people' and a
-  // query is active. Uses the same debounced pattern as listing search.
+  // query is active. Debounced 300ms to avoid hammering the user-search
+  // endpoint on every keystroke (user search is more expensive than
+  // listing search and benefits from explicit debouncing).
   useEffect(() => {
     if (!normalizedQuery || normalizedQuery.length < 2) {
       setPeopleResults([]);
@@ -273,23 +275,26 @@ export default function GlobalSearchScreen({ navigation }: Props) {
     }
 
     let cancelled = false;
-    setIsSearchingPeople(true);
+    const timer = setTimeout(() => {
+      setIsSearchingPeople(true);
 
-    searchUsers(normalizedQuery, 20)
-      .then((results) => {
-        if (cancelled) return;
-        setPeopleResults(results);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setPeopleResults([]);
-      })
-      .finally(() => {
-        if (!cancelled) setIsSearchingPeople(false);
-      });
+      searchUsers(normalizedQuery, 20)
+        .then((results) => {
+          if (cancelled) return;
+          setPeopleResults(results);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setPeopleResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setIsSearchingPeople(false);
+        });
+    }, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [normalizedQuery]);
 
@@ -1080,27 +1085,40 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                   </View>
                 )}
 
-                {/* Scope tabs — Items | People */}
-                <View style={styles.scopeTabBar} accessibilityRole="tablist">
+                {/* Scope tabs — Items | People with result counts */}
+                <View style={[styles.scopeTabBar, { borderBottomColor: colors.borderSubtle }]} accessibilityRole="tablist">
                   {(['items', 'people'] as const).map((scope) => {
                     const isActive = searchScope === scope;
                     const label = scope === 'items' ? 'Items' : 'People';
+                    const count = scope === 'items'
+                      ? discoverListings.length
+                      : peopleResults.length;
+                    const isLoading = scope === 'items'
+                      ? isSearching
+                      : isSearchingPeople;
                     return (
                       <AnimatedPressable
                         key={scope}
                         style={styles.scopeTab}
                         onPress={() => setSearchScope(scope)}
-                        accessibilityLabel={`${label} tab`}
+                        accessibilityLabel={`${label} tab${count > 0 ? `, ${count} results` : ''}`}
                         accessibilityRole="tab"
                         accessibilityState={{ selected: isActive }}
                       >
-                        <Text style={[
-                          styles.scopeTabText,
-                          { color: isActive ? colors.textPrimary : colors.textMuted },
-                          isActive && { fontFamily: FontFamily.semibold },
-                        ]}>
-                          {label}
-                        </Text>
+                        <View style={styles.scopeTabLabelRow}>
+                          <Text style={[
+                            styles.scopeTabText,
+                            { color: isActive ? colors.textPrimary : colors.textMuted },
+                            isActive && { fontFamily: FontFamily.semibold },
+                          ]}>
+                            {label}
+                          </Text>
+                          {count > 0 && !isLoading && (
+                            <Text style={[styles.scopeTabCount, { color: colors.textMuted }]}>
+                              {count}
+                            </Text>
+                          )}
+                        </View>
                         {isActive && (
                           <View style={[styles.scopeTabIndicator, { backgroundColor: colors.textPrimary }]} />
                         )}
@@ -1113,8 +1131,16 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                 {searchScope === 'people' && (
                   <View style={styles.sectionWrap}>
                     {isSearchingPeople ? (
-                      <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                        <SkeletonLoader width="60%" height={14} borderRadius={7} />
+                      <View style={styles.peopleResultsList}>
+                        {[0, 1, 2].map((i) => (
+                          <View key={`people-skel-${i}`} style={[styles.peopleResultRow, { borderColor: colors.border }]}>
+                            <SkeletonLoader width={44} height={44} borderRadius={22} />
+                            <View style={{ flex: 1, gap: 4 }}>
+                              <SkeletonLoader width="50%" height={14} borderRadius={7} />
+                              <SkeletonLoader width="30%" height={12} borderRadius={6} />
+                            </View>
+                          </View>
+                        ))}
                       </View>
                     ) : peopleResults.length > 0 ? (
                       <View style={styles.peopleResultsList}>
@@ -1766,16 +1792,25 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.06)',
   },
   scopeTab: {
     paddingVertical: 10,
     alignItems: 'center',
     position: 'relative',
   },
+  scopeTabLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   scopeTabText: {
     fontSize: 15,
     fontFamily: FontFamily.medium,
+  },
+  scopeTabCount: {
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
   },
   scopeTabIndicator: {
     position: 'absolute',

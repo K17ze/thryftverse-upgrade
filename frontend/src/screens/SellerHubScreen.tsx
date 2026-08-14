@@ -51,14 +51,18 @@ export default function SellerHubScreen() {
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
       const res = await fetchUserListingsFromApi(currentUser.id, { limit: 100 });
       setListings(res.items);
+      setLoadError(false);
     } catch {
-      // silent -- empty state will show
+      // Show a truthful error state rather than masking as empty
+      // (AGENTS.md Â§11: truthful UI; Â§14: complete state coverage).
+      setLoadError(true);
     }
   }, [currentUser?.id]);
 
@@ -249,6 +253,26 @@ export default function SellerHubScreen() {
         header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />}
       >
         <FlagshipState variant="loading" />
+      </FlagshipScreen>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <FlagshipScreen
+        header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />}
+      >
+        <FlagshipState
+          variant="error"
+          title="Couldn't load your shop"
+          subtitle="Check your connection and try again."
+          actionLabel="Retry"
+          onAction={() => {
+            setLoadError(false);
+            setIsLoading(true);
+            load().finally(() => setIsLoading(false));
+          }}
+        />
       </FlagshipScreen>
     );
   }

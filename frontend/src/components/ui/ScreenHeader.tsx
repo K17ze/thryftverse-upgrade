@@ -27,7 +27,7 @@ export function ScreenHeader({
   style,
   showBackButton = true,
   backButtonColor,
-  backIcon = 'arrow-back',
+  backIcon = 'chevron-back',
   subtitle,
 }: ScreenHeaderProps) {
   const { colors } = useAppTheme();

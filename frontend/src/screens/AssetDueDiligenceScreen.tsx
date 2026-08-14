@@ -23,6 +23,7 @@ import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
   fetchCoOwnAssetById,
   fetchCoOwnRecourseStatus,
+  fetchCoOwnHoldings,
   refreshCoOwnAppraisal,
   createVerificationDemand,
   type MarketCoOwnAsset,
@@ -52,8 +53,6 @@ import {
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
 } from '../components/coown';
-import { useConnectivity } from '../hooks/useConnectivity';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDueDiligence'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -88,8 +87,6 @@ export default function AssetDueDiligenceScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors, isDark } = useAppTheme();
-  const { isOffline } = useConnectivity();
-  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
@@ -101,6 +98,7 @@ export default function AssetDueDiligenceScreen() {
   const [isRefreshingAppraisal, setIsRefreshingAppraisal] = React.useState(false);
   const [recourseStatus, setRecourseStatus] = React.useState<CoOwnRecourseStatus | null>(null);
   const [verificationDemandLoading, setVerificationDemandLoading] = React.useState(false);
+  const [yourUnits, setYourUnits] = React.useState<number | null>(currentUser?.id ? null : 0);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -113,11 +111,13 @@ export default function AssetDueDiligenceScreen() {
     let cancelled = false;
     setIsLoading(true);
     setIsError(false);
+    setYourUnits(currentUser?.id ? null : 0);
 
     void Promise.allSettled([
       fetchCoOwnAssetById(assetId),
       fetchCoOwnRecourseStatus(assetId).catch(() => null),
-    ]).then(([assetResult, recourseResult]) => {
+      currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
+    ]).then(([assetResult, recourseResult, holdingsResult]) => {
       if (cancelled) return;
       if (assetResult.status === 'rejected') {
         const parsed = parseApiError(assetResult.reason, 'Unable to load asset');
@@ -130,11 +130,17 @@ export default function AssetDueDiligenceScreen() {
       if (recourseResult.status === 'fulfilled' && recourseResult.value) {
         setRecourseStatus(recourseResult.value);
       }
+      if (holdingsResult.status === 'fulfilled') {
+        const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
+        setYourUnits(holding?.unitsOwned ?? 0);
+      } else if (currentUser?.id) {
+        setYourUnits(null);
+      }
       setIsLoading(false);
     });
 
     return () => { cancelled = true; };
-  }, [assetId, show]);
+  }, [assetId, show, currentUser?.id]);
 
   const handleRefresh = React.useCallback(() => {
     if (!assetId) return;
@@ -142,14 +148,19 @@ export default function AssetDueDiligenceScreen() {
     void Promise.allSettled([
       fetchCoOwnAssetById(assetId),
       fetchCoOwnRecourseStatus(assetId).catch(() => null),
-    ]).then(([assetResult, recourseResult]) => {
+      currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
+    ]).then(([assetResult, recourseResult, holdingsResult]) => {
       if (assetResult.status === 'fulfilled') setAsset(assetResult.value);
       if (recourseResult.status === 'fulfilled' && recourseResult.value) {
         setRecourseStatus(recourseResult.value);
       }
+      if (holdingsResult.status === 'fulfilled') {
+        const holding = holdingsResult.value.find((entry) => entry.assetId === assetId);
+        setYourUnits(holding?.unitsOwned ?? 0);
+      }
       setRefreshing(false);
     });
-  }, [assetId]);
+  }, [assetId, currentUser?.id]);
 
   // ── Loading / error states ──
   if (isLoading) {
@@ -178,7 +189,7 @@ export default function AssetDueDiligenceScreen() {
 
   // ── Derived values ──
   const isIssuer = currentUser?.id === asset.issuerId;
-  const isHolder = currentUser?.id != null && recourseStatus != null;
+  const isHolder = yourUnits != null && yourUnits > 0;
   const totalUnits = asset.totalUnits;
   const availableUnits = asset.availableUnits;
   const navPerUnitGbp = asset.appraisalValueGbp && totalUnits > 0
@@ -188,6 +199,9 @@ export default function AssetDueDiligenceScreen() {
     ? ((asset.unitPriceGbp - navPerUnitGbp) / navPerUnitGbp) * 100
     : null;
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
+  const viewerPct = yourUnits != null && totalUnits > 0
+    ? Math.round((yourUnits / totalUnits) * 100 * 10) / 10
+    : null;
   const feePct = Math.round(CO_OWN_FEE_RATE * 100);
 
   // Dossier evidence groups — derived from the trust profile.
@@ -720,8 +734,8 @@ export default function AssetDueDiligenceScreen() {
         totalUnits={totalUnits}
         availableUnits={availableUnits}
         allocatedPct={allocatedPct}
-        viewerUnits={null}
-        viewerPct={null}
+        viewerUnits={yourUnits}
+        viewerPct={viewerPct}
         settlementMode={asset.settlementMode}
         feePct={feePct}
         holderCount={asset.holders}

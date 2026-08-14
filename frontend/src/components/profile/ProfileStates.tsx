@@ -34,7 +34,7 @@ export function ProfileErrorState({ onRetry, onBack, coverHeight = COVER_HEIGHT 
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color="#fff" />
+            <Ionicons name="chevron-back" size={18} color="#fff" />
           </AnimatedPressable>
         </View>
       </View>
@@ -74,7 +74,7 @@ export function ProfileUnavailableState({ onBack, coverHeight = COVER_HEIGHT }: 
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color="#fff" />
+            <Ionicons name="chevron-back" size={18} color="#fff" />
           </AnimatedPressable>
         </View>
       </View>
@@ -112,7 +112,7 @@ export function ProfileBlockedState({
             accessibilityRole="button"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={18} color="#fff" />
+            <Ionicons name="chevron-back" size={18} color="#fff" />
           </AnimatedPressable>
           <View style={{ flex: 1 }} />
           <AnimatedPressable

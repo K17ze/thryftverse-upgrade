@@ -63,7 +63,7 @@ export function ChatTopBar({
             accessibilityLabel="Close search"
             accessibilityRole="button"
           >
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </AnimatedPressable>
           <View style={styles.searchFieldWrap}>
             <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchFieldIcon} />

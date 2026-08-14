@@ -686,7 +686,7 @@ export default function BrowseScreen() {
       {/* Heavy Typography Header */}
       <View style={styles.header}>
         <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </AnimatedPressable>
         <View style={styles.headerActions}>
           <AnimatedPressable
