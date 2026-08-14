@@ -840,13 +840,19 @@ export function CommerceMediaStage({
     };
   });
 
+  // FlatList requires onViewableItemsChanged to have a stable identity —
+  // changing it between renders throws "Changing onViewableItemsChanged on
+  // the fly is not supported". Use a ref to hold the latest onActiveIndexChange
+  // so the callback identity never changes.
+  const onActiveIndexChangeRef = useRef(onActiveIndexChange);
+  onActiveIndexChangeRef.current = onActiveIndexChange;
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       const next = viewableItems[0].index ?? 0;
       setActiveIndex(next);
-      onActiveIndexChange?.(next);
+      onActiveIndexChangeRef.current?.(next);
     }
-  }, [onActiveIndexChange]);
+  }, []);
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 });
 
   const scrollToIndex = (index: number) => {
