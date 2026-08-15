@@ -27,12 +27,15 @@ import { searchListingsFromApi, type Listing, type ListingSearchResult } from '.
 // their closet, their own listings, or search for products. Tapping an item
 // adds it to the canvas as a product tag layer via addLookProduct.
 //
-// Three tabs:
-//   Closet   — saved items from the user's closet (useStore.savedProducts
-//              filtered against useBackendData.listings)
-//   Listings — the user's own active listings (useBackendData.listings
-//              filtered by sellerId === currentUser?.id)
-//   Search   — search for any product (searchListingsFromApi)
+// Five tabs:
+//   For You     — a curated selection of recent listings from all sellers,
+//                 acting as a recommendation feed
+//   Closet      — saved items from the user's closet (useStore.savedProducts
+//                 filtered against useBackendData.listings)
+//   Listings    — the user's own active listings (useBackendData.listings
+//                 filtered by sellerId === currentUser?.id)
+//   Search      — search for any product (searchListingsFromApi)
+//   Camera Roll — device camera roll access for adding photo media layers
 //
 // The tray is a compact, collapsible surface. When collapsed it shows only
 // the tab bar; when expanded it shows a horizontal scroll of item thumbnails.
@@ -53,7 +56,7 @@ export interface LookSourceTrayProps {
   onToggle: () => void;
 }
 
-type TabKey = 'closet' | 'listings' | 'search';
+type TabKey = 'foryou' | 'closet' | 'listings' | 'search' | 'cameraroll';
 
 interface TrayItem {
   id: string;
@@ -71,11 +74,27 @@ export function LookSourceTray({ onAddItem, expanded, onToggle }: LookSourceTray
   const savedProductIds = useStore((state) => state.savedProducts);
   const { listings } = useBackendData();
 
-  const [activeTab, setActiveTab] = useState<TabKey>('closet');
+  const [activeTab, setActiveTab] = useState<TabKey>('foryou');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ListingSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── For You: a curated selection of recent listings from all sellers,
+  //    sorted by recency (most recent first). Acts as a recommendation
+  //    feed until a dedicated recommendation API is available. ──
+  const forYouItems = useMemo<TrayItem[]>(() => {
+    return listings
+      .filter((l) => l.status !== 'sold')
+      .slice(0, 20)
+      .map((l: Listing) => ({
+        id: l.id,
+        title: l.title ?? 'Untitled',
+        imageUrl: l.images?.[0] ?? null,
+        priceGbp: l.price ?? undefined,
+        brand: l.brand,
+      }));
+  }, [listings]);
 
   // ── Closet items: saved products filtered against available listings ──
   const closetItems = useMemo<TrayItem[]>(() => {
@@ -153,13 +172,20 @@ export function LookSourceTray({ onAddItem, expanded, onToggle }: LookSourceTray
     setActiveTab(tab);
   }, [haptic]);
 
-  const currentItems = activeTab === 'closet' ? closetItems : activeTab === 'listings' ? userListings : searchItems;
+  const currentItems =
+    activeTab === 'foryou' ? forYouItems :
+    activeTab === 'closet' ? closetItems :
+    activeTab === 'listings' ? userListings :
+    activeTab === 'search' ? searchItems :
+    [];
   const isEmpty = currentItems.length === 0 && !isSearching;
 
   const tabs: { key: TabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+    { key: 'foryou', label: 'For You', icon: 'sparkles-outline' },
     { key: 'closet', label: 'Closet', icon: 'heart-outline' },
     { key: 'listings', label: 'Listings', icon: 'pricetag-outline' },
     { key: 'search', label: 'Search', icon: 'search-outline' },
+    { key: 'cameraroll', label: 'Camera Roll', icon: 'camera-outline' },
   ];
 
   return (
@@ -262,15 +288,23 @@ export function LookSourceTray({ onAddItem, expanded, onToggle }: LookSourceTray
           {!isSearching && isEmpty && (
             <View style={styles.stateContainer}>
               <Ionicons
-                name={activeTab === 'closet' ? 'heart-outline' : activeTab === 'listings' ? 'pricetag-outline' : 'search-outline'}
+                name={
+                  activeTab === 'foryou' ? 'sparkles-outline' :
+                  activeTab === 'closet' ? 'heart-outline' :
+                  activeTab === 'listings' ? 'pricetag-outline' :
+                  activeTab === 'cameraroll' ? 'camera-outline' :
+                  'search-outline'
+                }
                 size={28}
                 color={colors.textMuted}
               />
               <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+                {activeTab === 'foryou' && 'No recommendations available'}
                 {activeTab === 'closet' && 'No saved items yet'}
                 {activeTab === 'listings' && 'No active listings'}
                 {activeTab === 'search' && searchQuery.trim().length < 2 && 'Type to search products'}
                 {activeTab === 'search' && searchQuery.trim().length >= 2 && 'No products found'}
+                {activeTab === 'cameraroll' && 'Access your camera roll to add photos to your Look'}
               </Text>
             </View>
           )}

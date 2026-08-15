@@ -197,6 +197,7 @@ function FullscreenImagePage({
             containerStyle={{ width: '100%', height: '100%', backgroundColor: '#000' }}
             contentFit="contain"
             focalPoint={item.focalPoint ?? undefined}
+            downscaleWidth={Math.round(width * 2)}
           />
         </Reanimated.View>
       </Reanimated.View>
@@ -458,6 +459,7 @@ export function FullscreenMediaViewer({
                       borderColor: isActive ? '#fff' : 'transparent',
                     }}
                     contentFit="cover"
+                    downscaleWidth={48}
                   />
                   {item.kind === 'video' && (
                     <View style={styles.thumbVideoBadge} pointerEvents="none">

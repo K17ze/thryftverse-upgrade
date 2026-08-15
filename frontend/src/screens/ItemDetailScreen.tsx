@@ -1427,6 +1427,170 @@ export default function ItemDetailScreen() {
           );
         }
 
+        // ── Tier-adaptive dock actions ──
+        // The commerce ladder (Phase 6) introduces category-adaptive CTAs:
+        //   - brokered: Enquire + Request viewing (no direct buy/offer)
+        //   - specialist: Buy now + Enquire (expert review questions)
+        //   - authenticated_luxury: Buy now + Make offer (authentication
+        //     note shows in the trust strip)
+        //   - standard: Buy now + Make offer (existing behaviour)
+        // The enquiry/viewing actions open a DM conversation with the
+        // seller, following the same createDmConversationOnApi → Chat
+        // navigation pattern used by the SellerInfoCard message action.
+        const enquireAction = capabilities.canEnquire
+          ? {
+              label: 'Enquire',
+              onPress: async () => {
+                if (!currentUser?.id) {
+                  show('Sign in to enquire about this item.', 'error');
+                  return;
+                }
+                if (isResolvingConversation) return;
+                const sellerId = item.sellerId ?? item.seller?.id;
+                if (!sellerId) return;
+                if (item) ProductAnalytics.sellerMessageStart(item.id);
+                setIsResolvingConversation(true);
+                try {
+                  const conversation = await createDmConversationOnApi({
+                    recipientUserId: sellerId,
+                    itemId: item.id,
+                  });
+                  upsertConversation(conversation);
+                  haptic.light();
+                  navigation.navigate('Chat', {
+                    conversationId: conversation.id,
+                    partnerUserId: sellerId,
+                  });
+                } catch {
+                  show('Could not start conversation. Try again.', 'error');
+                } finally {
+                  setIsResolvingConversation(false);
+                }
+              },
+            }
+          : undefined;
+
+        const requestViewingAction = capabilities.canRequestViewing
+          ? {
+              label: 'Request viewing',
+              onPress: async () => {
+                if (!currentUser?.id) {
+                  show('Sign in to request a viewing.', 'error');
+                  return;
+                }
+                if (isResolvingConversation) return;
+                const sellerId = item.sellerId ?? item.seller?.id;
+                if (!sellerId) return;
+                if (item) ProductAnalytics.sellerMessageStart(item.id);
+                setIsResolvingConversation(true);
+                try {
+                  const conversation = await createDmConversationOnApi({
+                    recipientUserId: sellerId,
+                    itemId: item.id,
+                  });
+                  upsertConversation(conversation);
+                  haptic.light();
+                  navigation.navigate('Chat', {
+                    conversationId: conversation.id,
+                    partnerUserId: sellerId,
+                  });
+                } catch {
+                  show('Could not start conversation. Try again.', 'error');
+                } finally {
+                  setIsResolvingConversation(false);
+                }
+              },
+            }
+          : undefined;
+
+        const buyNowAction = {
+          label: t('product.buyNow'),
+          onPress: () => {
+            if (item) ProductAnalytics.checkoutStart(item.id);
+            // Per AGENTS.md §11: do not fire a success haptic before the
+            // purchase has actually completed. "Buy now" navigates to
+            // checkout — it does not complete the purchase. A medium
+            // impact acknowledges the primary-action press; the success
+            // pattern belongs in the Checkout confirmation flow.
+            haptic.medium();
+            navigation.navigate('Checkout', { itemId: item.id });
+          },
+        };
+
+        const makeOfferAction = capabilities.canOffer
+          ? {
+              label: 'Make offer',
+              onPress: () => {
+                if (item) ProductAnalytics.offerStart(item.id);
+                setMakeOfferVisible(true);
+              },
+            }
+          : undefined;
+
+        // Brokered assets: enquire + request viewing replace buy/offer.
+        if (capabilities.commerceTier === 'brokered') {
+          return (
+            <CommerceDetailStateDock
+              value={formattedPrice}
+              thumbnailUri={item.images?.[0]}
+              shippingHint={
+                commerce.shippingPayer === 'seller'
+                  ? 'Free shipping'
+                  : commerce.shippingMethod
+                    ? 'Shipping calculated at checkout'
+                    : undefined
+              }
+              commerceTier="brokered"
+              primaryAction={enquireAction}
+              secondaryAction={requestViewingAction}
+            />
+          );
+        }
+
+        // Specialist items: buy now + enquire (for expert review questions).
+        if (capabilities.commerceTier === 'specialist') {
+          return (
+            <CommerceDetailStateDock
+              value={formattedPrice}
+              thumbnailUri={item.images?.[0]}
+              shippingHint={
+                commerce.shippingPayer === 'seller'
+                  ? 'Free shipping'
+                  : commerce.shippingMethod
+                    ? 'Shipping calculated at checkout'
+                    : undefined
+              }
+              showProtectionStrip={commerce.protectionPolicy?.available ?? false}
+              commerceTier="specialist"
+              primaryAction={buyNowAction}
+              secondaryAction={enquireAction}
+            />
+          );
+        }
+
+        // Authenticated luxury: buy now + make offer; authentication
+        // note shows in the trust strip.
+        if (capabilities.commerceTier === 'authenticated_luxury') {
+          return (
+            <CommerceDetailStateDock
+              value={formattedPrice}
+              thumbnailUri={item.images?.[0]}
+              shippingHint={
+                commerce.shippingPayer === 'seller'
+                  ? 'Free shipping'
+                  : commerce.shippingMethod
+                    ? 'Shipping calculated at checkout'
+                    : undefined
+              }
+              showProtectionStrip={commerce.protectionPolicy?.available ?? false}
+              commerceTier="authenticated_luxury"
+              primaryAction={buyNowAction}
+              secondaryAction={makeOfferAction}
+            />
+          );
+        }
+
+        // Standard tier: existing buy now + make offer behaviour.
         return (
           <CommerceDetailStateDock
             value={formattedPrice}
@@ -1439,30 +1603,9 @@ export default function ItemDetailScreen() {
                   : undefined
             }
             showProtectionStrip={commerce.protectionPolicy?.available ?? false}
-            primaryAction={{
-              label: t('product.buyNow'),
-              onPress: () => {
-                if (item) ProductAnalytics.checkoutStart(item.id);
-                // Per AGENTS.md §11: do not fire a success haptic before the
-                // purchase has actually completed. "Buy now" navigates to
-                // checkout — it does not complete the purchase. A medium
-                // impact acknowledges the primary-action press; the success
-                // pattern belongs in the Checkout confirmation flow.
-                haptic.medium();
-                navigation.navigate('Checkout', { itemId: item.id });
-              },
-            }}
-            secondaryAction={
-              capabilities.canOffer
-                ? {
-                    label: 'Make offer',
-                    onPress: () => {
-                      if (item) ProductAnalytics.offerStart(item.id);
-                      setMakeOfferVisible(true);
-                    },
-                  }
-                : undefined
-            }
+            commerceTier="standard"
+            primaryAction={buyNowAction}
+            secondaryAction={makeOfferAction}
           />
         );
       })()}

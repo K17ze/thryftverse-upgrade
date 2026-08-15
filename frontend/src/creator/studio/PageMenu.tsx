@@ -59,8 +59,8 @@ export function PageMenu({
   return (
     <SheetContainer visible={true} onClose={onClose} maxHeight={0.6}>
       <View style={styles.pageSheetHeader}>
-        <Text style={[styles.pageSheetTitle, { color: colors.textPrimary }]}>Page {pageIndex + 1}</Text>
-        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close page options">
+        <Text style={[styles.pageSheetTitle, { color: colors.textPrimary }]}>Frame {pageIndex + 1}</Text>
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close frame options">
           <Ionicons name="close" size={22} color={colors.textSecondary} />
         </PressScale>
       </View>
@@ -96,7 +96,7 @@ export function PageMenu({
             disabled={!canMoveLeft}
             style={({ pressed }) => [styles.pageSheetActionBtn, { backgroundColor: colors.surfaceAlt }, !canMoveLeft && { opacity: 0.35 }, pressed && canMoveLeft && { opacity: 0.6 }]}
             hitSlop={8}
-            accessibilityLabel="Move page left"
+            accessibilityLabel="Move frame left"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canMoveLeft }}
           >
@@ -108,7 +108,7 @@ export function PageMenu({
             disabled={!canMoveRight}
             style={({ pressed }) => [styles.pageSheetActionBtn, { backgroundColor: colors.surfaceAlt }, !canMoveRight && { opacity: 0.35 }, pressed && canMoveRight && { opacity: 0.6 }]}
             hitSlop={8}
-            accessibilityLabel="Move page right"
+            accessibilityLabel="Move frame right"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canMoveRight }}
           >
@@ -123,7 +123,7 @@ export function PageMenu({
             onPress={() => { haptic.medium(); onDuplicate(); }}
             style={({ pressed }) => [styles.pageSheetActionBtn, { backgroundColor: colors.surfaceAlt }, pressed && { opacity: 0.6 }]}
             hitSlop={8}
-            accessibilityLabel="Duplicate page"
+            accessibilityLabel="Duplicate frame"
             accessibilityRole="button"
           >
             <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
@@ -134,7 +134,7 @@ export function PageMenu({
             disabled={!canDelete}
             style={({ pressed }) => [styles.pageSheetActionBtn, { backgroundColor: colors.surfaceAlt }, !canDelete && { opacity: 0.35 }, pressed && canDelete && { opacity: 0.6 }]}
             hitSlop={8}
-            accessibilityLabel="Delete page"
+            accessibilityLabel="Delete frame"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canDelete }}
           >

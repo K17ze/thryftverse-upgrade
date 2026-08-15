@@ -86,6 +86,14 @@ export interface CommerceDetailStateDockProps {
    *  Radius.lg, shield icon 20pt, Type.captionElevated text, placed above
    *  the action dock." Only render when protection is actually available. */
   showProtectionStrip?: boolean;
+  /** Detected commerce tier for category-adaptive trust strip copy. When
+   *  set to a non-standard tier, the dock shows a tier-appropriate hint
+   *  instead of the default "Buyer protection" strip:
+   *    - brokered: "Brokered asset — enquire to arrange viewing"
+   *    - authenticated_luxury: "Eligible for authentication"
+   *    - specialist: "Expert review available"
+   *  The standard tier falls back to the showProtectionStrip behaviour. */
+  commerceTier?: 'standard' | 'authenticated_luxury' | 'specialist' | 'brokered';
   /** Primary action (max 1). Required when no blocked state is shown. */
   primaryAction?: CommerceDetailStateDockAction;
   /** Secondary action (max 1). */
@@ -118,6 +126,7 @@ export function CommerceDetailStateDock({
   thumbnailUri,
   shippingHint,
   showProtectionStrip = false,
+  commerceTier,
   primaryAction,
   secondaryAction,
   elevated = false,
@@ -160,26 +169,73 @@ export function CommerceDetailStateDock({
         },
       ]}
     >
-      {/* ── Buyer protection strip (top section of the unified dock) ──
+      {/* ── Trust strip (top section of the unified dock) ──
           Per Design.md trust/commerce card micro spec: shield icon,
           Type.captionElevated text, placed at the top of the action dock.
           Research (Vinted/Depop): trust signal at the payment decision
           point increases conversion more than any other single change.
           Flattened per AGENTS.md §4 — no separate surface; a hairline
-          borderBottom divides it from the action row. */}
-      {showProtectionStrip && !stateBadge && (
-        <View
-          style={[
-            styles.protectionStrip,
-            { borderBottomColor: colors.borderSubtle },
-          ]}
-        >
-          <Ionicons name="shield-checkmark" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
-          <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
-            Buyer protection
-          </Text>
-        </View>
-      )}
+          borderBottom divides it from the action row.
+
+          The strip copy is tier-adaptive:
+            - brokered: "Brokered asset — enquire to arrange viewing"
+              (no direct buy; the enquiry flow replaces buyer protection)
+            - authenticated_luxury: "Eligible for authentication"
+            - specialist: "Expert review available"
+            - standard / unset: "Buyer protection" (only when
+              showProtectionStrip is true) */}
+      {(() => {
+        if (stateBadge) return null;
+        if (commerceTier === 'brokered') {
+          return (
+            <View
+              style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
+            >
+              <Ionicons name="eye-outline" size={CommerceLayout.dockProtectionIcon} color={colors.textSecondary} />
+              <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
+                Brokered asset — enquire to arrange viewing
+              </Text>
+            </View>
+          );
+        }
+        if (commerceTier === 'authenticated_luxury') {
+          return (
+            <View
+              style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
+            >
+              <Ionicons name="shield-checkmark" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
+              <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
+                Eligible for authentication
+              </Text>
+            </View>
+          );
+        }
+        if (commerceTier === 'specialist') {
+          return (
+            <View
+              style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
+            >
+              <Ionicons name="ribbon-outline" size={CommerceLayout.dockProtectionIcon} color={colors.textSecondary} />
+              <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
+                Expert review available
+              </Text>
+            </View>
+          );
+        }
+        if (showProtectionStrip) {
+          return (
+            <View
+              style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
+            >
+              <Ionicons name="shield-checkmark" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
+              <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
+                Buyer protection
+              </Text>
+            </View>
+          );
+        }
+        return null;
+      })()}
       <View style={shouldStack ? styles.rowStacked : styles.row}>
         <View style={styles.valueCluster}>
           {/* Product thumbnail — anchors the user to the product when

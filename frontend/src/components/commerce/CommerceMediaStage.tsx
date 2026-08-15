@@ -210,6 +210,7 @@ function MediaPage({
               contentFit={item.fit ?? 'contain'}
               focalPoint={item.focalPoint}
               onError={() => setFailed(true)}
+              downscaleWidth={width}
             />
           ) : (
             <SharedTransitionImage
