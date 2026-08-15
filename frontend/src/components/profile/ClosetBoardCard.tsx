@@ -80,6 +80,7 @@ export function ClosetBoardCard({
                 uri={covers[0]}
                 style={styles.coverImg}
                 contentFit="cover"
+                downscaleWidth={CARD_W}
                 emptyLabel={title}
                 emptyIcon="image-outline"
               />
@@ -100,6 +101,7 @@ export function ClosetBoardCard({
                         uri={uri}
                         style={styles.coverImg}
                         contentFit="cover"
+                        downscaleWidth={CARD_W / 2}
                         emptyIcon="image-outline"
                       />
                     </View>

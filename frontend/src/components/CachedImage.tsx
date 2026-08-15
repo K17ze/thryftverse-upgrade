@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ViewStyle, StyleProp, ImageStyle, Image as NativeImage } from 'react-native';
+import { View, StyleSheet, ViewStyle, StyleProp, ImageStyle, Image as NativeImage, PixelRatio } from 'react-native';
 import { Image as ExpoImage, ImageContentFit } from 'expo-image';
 import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
@@ -55,15 +55,17 @@ interface CachedImageProps {
   /** Show a small play glyph over video poster frames (default false). */
   showPlayBadge?: boolean;
   /**
-   * Image resolution policy: target display width in pixels.
+   * Image resolution policy: target display width in logical dp (layout points).
    *
-   * When set, the component appends CDN resize parameters to the URI for
-   * supported providers (Cloudinary, Imgix, Supabase Storage) so grid
-   * thumbnails do not download full-resolution images. This reduces
-   * memory usage and decode time on long feeds (audit §Caching/prefetch:
-   * "avoid loading full-resolution media for grid thumbnails").
+   * When set, the component converts to physical pixels using PixelRatio,
+   * snaps to a derivative bucket, and appends CDN resize parameters for
+   * supported providers (Cloudinary, Imgix, Supabase Storage, CloudFront)
+   * so grid thumbnails do not download full-resolution images.
    *
-   * Pass the pixel width of the tile/card (e.g. `downscaleWidth={180}`).
+   * Pass the layout width of the tile/card in dp (e.g. `downscaleWidth={180}`).
+   * The component handles DPR conversion internally — callers always pass
+   * logical dp, never physical pixels.
+   *
    * Leave undefined for detail/gallery surfaces that need full resolution.
    *
    * For providers not in the supported list, the prop is a no-op and the
@@ -155,33 +157,46 @@ export function CachedImage({
   // §Caching/prefetch / LIST_RENDERING_POLICY.md §5.1).
   // Supported: Cloudinary (/upload/ → /upload/w_<width>/), Imgix (?w=),
   // Supabase Storage (?width=). Others pass through unchanged.
+  //
+  // Phase 6 P0 (§04_MEDIA_FIDELITY_NORTH_STAR): The `downscaleWidth` prop
+  // is in logical dp (layout points). CDN resize parameters expect physical
+  // pixels. On a 3× device, requesting a 180px image for a 180dp tile
+  // produces visibly soft results. We multiply by PixelRatio and snap to
+  // a derivative bucket to avoid requesting arbitrary widths.
   const sourceUri = React.useMemo(() => {
     if (!uri) return uri;
     let result = uri;
 
     // Apply downscale for supported CDNs
     if (downscaleWidth && downscaleWidth > 0) {
+      // Convert logical dp → physical pixels with a small overscan factor
+      // (1.1×) to handle minor scale changes without a re-request, then
+      // snap to the nearest derivative bucket so the CDN can cache efficiently.
+      const DERIVATIVE_BUCKETS = [160, 240, 360, 540, 720, 1080, 1440, 2048, 2560];
+      const physicalWidth = Math.ceil(downscaleWidth * PixelRatio.get() * 1.1);
+      const bucketWidth = DERIVATIVE_BUCKETS.find((b) => b >= physicalWidth) ?? physicalWidth;
+
       // Cloudinary: /upload/ → /upload/w_<width>,f_auto,q_auto/
       if (/cloudinary\.com|res\.cloudinary\.com/i.test(uri)) {
         result = uri.replace(
           /\/upload\//i,
-          `/upload/w_${downscaleWidth},f_auto,q_auto/`,
+          `/upload/w_${bucketWidth},f_auto,q_auto/`,
         );
       }
       // Imgix: append ?w=<width>&auto=format,compress
       else if (/imgix\.net/i.test(uri)) {
         const sep = uri.includes('?') ? '&' : '?';
-        result = `${uri}${sep}w=${downscaleWidth}&auto=format,compress`;
+        result = `${uri}${sep}w=${bucketWidth}&auto=format,compress`;
       }
       // Supabase Storage: append ?width=<width>
       else if (/supabase\.co\/storage/i.test(uri)) {
         const sep = uri.includes('?') ? '&' : '?';
-        result = `${uri}${sep}width=${downscaleWidth}`;
+        result = `${uri}${sep}width=${bucketWidth}`;
       }
       // AWS CloudFront with Lambda edge: append ?w=<width> (common pattern)
       else if (/cloudfront\.net/i.test(uri) && !uri.includes('?w=')) {
         const sep = uri.includes('?') ? '&' : '?';
-        result = `${uri}${sep}w=${downscaleWidth}`;
+        result = `${uri}${sep}w=${bucketWidth}`;
       }
     }
 

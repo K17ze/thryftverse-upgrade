@@ -185,6 +185,12 @@ export interface ListingCapabilities {
   canEdit: boolean;
   canManage: boolean;
   canMessage: boolean;
+  /** For brokered assets (cars, yachts) — replaces direct buy with an enquiry flow. */
+  canEnquire?: boolean;
+  /** For brokered assets — request an in-person or sea-trial viewing. */
+  canRequestViewing?: boolean;
+  /** Detected commerce tier for category-adaptive CTA logic. */
+  commerceTier?: CommerceTier;
   isOwner: boolean;
   isSold: boolean;
   isAvailable: boolean;
@@ -256,6 +262,52 @@ export function buildEngagementSummary(
   return engagement;
 }
 
+// ── Commerce tier detection ────────────────────────────────────────────────
+//
+// Phase 6 Wave 5: High-value commerce ladder. The tier drives category-adaptive
+// CTA logic so that brokered assets (cars, yachts) surface "Enquire" and
+// "Request viewing" instead of a direct "Buy now".
+
+export type CommerceTier = 'standard' | 'authenticated_luxury' | 'specialist' | 'brokered';
+
+/**
+ * Detect the commerce tier for a listing based on its category and price.
+ *
+ * - brokered: cars, yachts, boats — transaction is handled off-platform via enquiry
+ * - specialist: art, collectibles — buy enabled but with inspection note
+ * - authenticated_luxury: bags, watches, jewellery at high value — buy + offer with authentication note
+ * - standard: everything else — current buy + offer behaviour
+ */
+export function detectCommerceTier(
+  category: string,
+  priceMinor: number,
+  _currency?: string,
+): CommerceTier {
+  const normalized = category.toLowerCase();
+
+  // Tier 4 — brokered: cars, yachts, boats
+  if (normalized.includes('car') || normalized.includes('yacht') || normalized.includes('boat')) {
+    return 'brokered';
+  }
+
+  // Tier 3 — specialist: art, collectibles (regardless of price)
+  if (normalized.includes('art') || normalized.includes('collect')) {
+    return 'specialist';
+  }
+
+  // Tier 2 — authenticated luxury: bags, watches, jewellery at high value
+  const highValueThreshold = 10000_00; // £10,000 in minor units
+  if (
+    priceMinor >= highValueThreshold &&
+    (normalized.includes('bag') || normalized.includes('watch') || normalized.includes('jewel'))
+  ) {
+    return 'authenticated_luxury';
+  }
+
+  // Tier 1 — standard
+  return 'standard';
+}
+
 export function buildCapabilities(
   listing: Listing,
   currentUserId?: string
@@ -275,12 +327,46 @@ export function buildCapabilities(
 
   const isAvailable = unavailableReason === null;
 
+  // ── Category-adaptive CTA logic (Phase 6 Wave 5) ──
+  const category = listing.category ?? '';
+  const priceMinor = listing.price ?? 0;
+  const commerceTier = detectCommerceTier(category, priceMinor);
+
+  let canBuy = !isOwner && isAvailable;
+  let canOffer = !isOwner && isAvailable;
+  let canEnquire = false;
+  let canRequestViewing = false;
+
+  switch (commerceTier) {
+    case 'brokered':
+      // Cars, yachts — no direct buy/offer; enquire and request viewing instead
+      canBuy = false;
+      canOffer = false;
+      canEnquire = !isOwner && listing.sellerId !== null;
+      canRequestViewing = !isOwner && listing.sellerId !== null;
+      break;
+    case 'specialist':
+      // Art, collectibles — buy enabled with inspection note
+      canEnquire = !isOwner && listing.sellerId !== null;
+      break;
+    case 'authenticated_luxury':
+      // High-value bags, watches, jewellery — buy + offer with authentication note
+      break;
+    case 'standard':
+    default:
+      // Current behaviour: buy + offer
+      break;
+  }
+
   return {
-    canBuy: !isOwner && isAvailable,
-    canOffer: !isOwner && isAvailable,
+    canBuy,
+    canOffer,
     canEdit: isOwner,
     canManage: isOwner,
     canMessage: !isOwner && listing.sellerId !== null,
+    canEnquire,
+    canRequestViewing,
+    commerceTier,
     isOwner,
     isSold,
     isAvailable,

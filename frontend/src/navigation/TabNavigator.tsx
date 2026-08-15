@@ -202,10 +202,14 @@ export default function TabNavigator() {
 
   const handleCreatePress = useCallback(() => {
     haptic.light();
-    // Opens CreateCamera as a modal overlay (registered with modalScreenOptions
-    // in AppNavigator). This does NOT change the active tab — Create is an
-    // action, not a navigation destination.
-    navigation.navigate('CreateCamera', { mode: persistedCreateMode });
+    // Opens CreatorStudio directly as a modal overlay with the camera/gallery
+    // entry screen shown (openEntry). This removes the redundant CreateCamera
+    // hop — CreatorStudio already has a CreatorEntryScreen built in. Create is
+    // an action, not a navigation destination, so the active tab is unchanged.
+    navigation.navigate('CreatorStudio', {
+      type: persistedCreateMode,
+      openEntry: true,
+    });
   }, [haptic, navigation, persistedCreateMode]);
 
   return (

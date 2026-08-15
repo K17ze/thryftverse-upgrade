@@ -946,7 +946,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
   // Instagram 2025-2026: 10 fonts with distinct visual character
   const styleMap: Record<string, any> = {
     headline: {
-      fontFamily: Typography.family.bold,
+      // Anton — display/impact for cover statements
+      fontFamily: 'Anton_400Regular',
       fontSize: Type.title.size + 4,
       lineHeight: (Type.title.size + 4) * 1.15,
       textShadowColor: 'rgba(0,0,0,0.4)',
@@ -954,7 +955,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       textShadowRadius: 4,
     },
     editorial: {
-      fontFamily: Typography.family.bold,
+      // Playfair Display Bold — editorial serif for issue/collection titles
+      fontFamily: 'PlayfairDisplay_700Bold',
       fontSize: Type.title.size + 1,
       lineHeight: (Type.title.size + 1) * 1.2,
       textShadowColor: 'rgba(0,0,0,0.35)',
@@ -962,7 +964,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       textShadowRadius: 3,
     },
     clean: {
-      fontFamily: Typography.family.medium,
+      // Inter Regular — clean modern sans (lighter weight)
+      fontFamily: 'Inter_400Regular',
       fontSize: Type.body.size + 1,
       lineHeight: (Type.body.size + 1) * 1.35,
       textShadowColor: 'rgba(0,0,0,0.3)',
@@ -970,47 +973,52 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       textShadowRadius: 2,
     },
     compact: {
-      fontFamily: Typography.family.semibold,
+      // Inter SemiBold — uppercase labels (kept as-is)
+      fontFamily: 'Inter_600SemiBold',
       fontSize: Type.caption.size,
       lineHeight: Type.caption.size * 1.3,
       letterSpacing: 0.8,
       textTransform: 'uppercase',
     },
     handwritten: {
-      fontFamily: Typography.family.medium,
+      // Caveat — genuine handwriting font
+      fontFamily: 'Caveat_400Regular',
       fontSize: Type.body.size + 2,
       lineHeight: (Type.body.size + 2) * 1.3,
-      fontStyle: 'italic',
     },
     bubble: {
-      fontFamily: Typography.family.bold,
+      // Pacifico — round, friendly script
+      fontFamily: 'Pacifico_400Regular',
       fontSize: Type.bodyEmphasis.size + 6,
       lineHeight: (Type.bodyEmphasis.size + 6) * 1.2,
       letterSpacing: 0.5,
     },
     deco: {
-      fontFamily: Typography.family.bold,
+      // Lobster — decorative display
+      fontFamily: 'Lobster_400Regular',
       fontSize: Type.bodyEmphasis.size + 2,
       lineHeight: (Type.bodyEmphasis.size + 2) * 1.3,
       letterSpacing: 1.5,
     },
     poster: {
-      fontFamily: Typography.family.bold,
+      // Bebas Neue — condensed display for poster titles
+      fontFamily: 'BebasNeue_400Regular',
       fontSize: Type.title.size - 2,
       lineHeight: (Type.title.size - 2) * 1.1,
       letterSpacing: -0.5,
     },
     squeeze: {
-      fontFamily: Typography.family.semibold,
+      // Bebas Neue — condensed display (tighter feel)
+      fontFamily: 'BebasNeue_400Regular',
       fontSize: Type.body.size,
       lineHeight: Type.body.size * 1.1,
       letterSpacing: -0.3,
     },
     signature: {
-      fontFamily: Typography.family.regular,
+      // Dancing Script — script/signature font
+      fontFamily: 'DancingScript_400Regular',
       fontSize: Type.bodyEmphasis.size + 2,
       lineHeight: (Type.bodyEmphasis.size + 2) * 1.4,
-      fontStyle: 'italic',
     },
   };
 

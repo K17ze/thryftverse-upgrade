@@ -168,6 +168,7 @@ export default function AppNavigator() {
       <Stack.Screen name="MyListings" getComponent={() => require('../screens/MyListingsScreen').default} />
       <Stack.Screen name="InventoryManagement" getComponent={() => require('../screens/InventoryManagementScreen').default} />
       <Stack.Screen name="SellerAnalytics" getComponent={() => require('../screens/SellerAnalyticsScreen').default} />
+      <Stack.Screen name="SellerHub" getComponent={() => require('../screens/SellerHubScreen').default} />
       <Stack.Screen name="CreatorAnalyticsDashboard" getComponent={() => require('../screens/CreatorAnalyticsDashboardScreen').default} />
       <Stack.Screen name="BundleBag" getComponent={() => require('../screens/BundleBagScreen').default} />
       <Stack.Screen name="SellerVerification" getComponent={() => require('../screens/SellerVerificationScreen').default} />

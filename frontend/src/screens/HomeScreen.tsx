@@ -10,6 +10,7 @@ import {
   Pressable,
   AppState,
   Platform,
+  ScrollView,
   useWindowDimensions,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -32,6 +33,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 // Typography simplified - using direct font names
 import { fetchPosterStories } from '../services/postersApi';
 import type { PosterStory } from '../services/postersApi';
+import { fetchLooksFromApi } from '../services/looksApi';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -61,7 +63,7 @@ import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, FontFamily, Stroke } from '../theme/designTokens';
+import { Space, FontFamily, Stroke, Type, Typography } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
@@ -159,10 +161,33 @@ interface PosterRailMarker {
   type: 'posters';
 }
 
-type FeedDataItem = HomeDiscoveryItemVM | PosterRailMarker;
+/**
+ * Look feed marker — an authored interruption rail of Looks interspersed
+ * into the product grid based on real content semantics (not a flat list).
+ * Carries the resolved Look thumbnails so the FlashList can render the rail
+ * inline without re-fetching.
+ */
+interface LookFeedMarker {
+  id: string;
+  type: 'looks';
+  looks: Array<{
+    id: string;
+    mediaUri: string;
+    title?: string;
+    sellerUsername?: string;
+    sellerAvatar?: string;
+    taggedCount?: number;
+  }>;
+}
+
+type FeedDataItem = HomeDiscoveryItemVM | PosterRailMarker | LookFeedMarker;
 
 function isPosterMarker(item: FeedDataItem): item is PosterRailMarker {
   return (item as PosterRailMarker).type === 'posters';
+}
+
+function isLookMarker(item: FeedDataItem): item is LookFeedMarker {
+  return (item as LookFeedMarker).type === 'looks';
 }
 
 type StoryBubble = {
@@ -606,6 +631,10 @@ export default function HomeScreen() {
 
   const [realPosters, setRealPosters] = React.useState<PosterStory[]>([]);
   const [postersLoading, setPostersLoading] = React.useState(false);
+  // Looks fetched for the feed interruption rail. Optional enrichment — a
+  // fetch failure silently leaves the feed without a Looks rail rather than
+  // surfacing an error (looks are not core to the commerce feed).
+  const [feedLooks, setFeedLooks] = React.useState<LookFeedMarker['looks']>([]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -616,6 +645,21 @@ export default function HomeScreen() {
       })
       .catch(() => { /* noop */ })
       .finally(() => { if (mounted) setPostersLoading(false); });
+    // Fetch looks for feed interruption — published public looks only.
+    fetchLooksFromApi({ status: 'published', limit: 6 })
+      .then((res) => {
+        if (!mounted) return;
+        const lookItems = res.items.map((l) => ({
+          id: l.id,
+          mediaUri: l.mediaUrl,
+          title: l.title,
+          sellerUsername: l.creator.username ?? undefined,
+          sellerAvatar: l.creator.avatar ?? undefined,
+          taggedCount: l.tags?.length ?? 0,
+        }));
+        setFeedLooks(lookItems);
+      })
+      .catch(() => { /* silent fail — looks are optional enrichment */ });
     return () => { mounted = false; };
   }, []);
 
@@ -725,18 +769,36 @@ export default function HomeScreen() {
   // (spec: "First viewport: compact header, For You/Following tabs, first
   // media row — nothing else").
   const POSTERS_INJECT_INDEX = 4;
+  // Looks rail injected further down than the posters rail to create a
+  // natural rhythm: posters interrupt early (index 4), looks interrupt
+  // later (index 12, ~6 rows of products) so the feed reads as authored
+  // interruptions rather than a flat product list.
+  const LOOKS_INJECT_INDEX = 12;
   const hasPosters = !postersLoading && realPosters.length > 0;
   const feedGridData = React.useMemo<FeedDataItem[]>(() => {
     if (showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading) return [];
     if (activeFeedData.length === 0) return [];
-    if (!hasPosters || activeFeedData.length <= POSTERS_INJECT_INDEX) return activeFeedData;
     const result: FeedDataItem[] = [...activeFeedData];
-    result.splice(POSTERS_INJECT_INDEX, 0, {
-      id: 'posters_rail',
-      type: 'posters',
-    });
+    // Posters rail — inject after the first 2 rows (index 4)
+    if (hasPosters && result.length > POSTERS_INJECT_INDEX) {
+      result.splice(POSTERS_INJECT_INDEX, 0, {
+        id: 'posters_rail',
+        type: 'posters',
+      });
+    }
+    // Looks rail — inject as an authored interruption further down the feed.
+    // Spliced after the posters rail so the index is relative to the
+    // already-injected list. Only inject when there is enough content to
+    // justify the interruption (more than 12 items post-posters-injection).
+    if (feedLooks.length > 0 && result.length > LOOKS_INJECT_INDEX) {
+      result.splice(LOOKS_INJECT_INDEX, 0, {
+        id: 'feed-looks-rail',
+        type: 'looks',
+        looks: feedLooks,
+      } as LookFeedMarker);
+    }
     return result;
-  }, [activeFeedData, hasPosters, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
+  }, [activeFeedData, hasPosters, feedLooks, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
 
   // EAS Observe: record TTI once the home feed has real content rendered for
   // the first time. Only the first markInteractive() call across the whole app
@@ -948,7 +1010,7 @@ export default function HomeScreen() {
   // layout thrash when switching between item geometries.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.2)
   const getItemType = React.useCallback(
-    (item: FeedDataItem) => (isPosterMarker(item) ? 'posters' : 'listing'),
+    (item: FeedDataItem) => (isPosterMarker(item) ? 'posters' : isLookMarker(item) ? 'looks' : 'listing'),
     [],
   );
 
@@ -963,6 +1025,46 @@ export default function HomeScreen() {
         return (
           <View style={styles.flashListItem}>
             {renderPosters()}
+          </View>
+        );
+      }
+      // Looks rail — authored interruption of Look thumbnails
+      if (isLookMarker(item)) {
+        return (
+          <View style={[styles.flashListItem, { width: SCREEN_WIDTH }]}>
+            <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Space.xs }}>
+                <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textPrimary }}>
+                  Looks to shop
+                </Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Space.sm }}>
+                {item.looks.map((look) => (
+                  <Pressable
+                    key={look.id}
+                    onPress={() => { haptic.light(); navigation.navigate('LookDetail', { lookId: look.id }); }}
+                    style={{ width: 120, borderRadius: 12, overflow: 'hidden' }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open Look${look.title ? ` ${look.title}` : ''}${look.taggedCount ? `, ${look.taggedCount} tagged items` : ''}`}
+                    accessibilityHint="Opens Look details"
+                  >
+                    <CachedImage
+                      uri={look.mediaUri}
+                      style={{ width: 120, height: 160 }}
+                      contentFit="cover"
+                      downscaleWidth={120}
+                    />
+                    {look.taggedCount && look.taggedCount > 0 ? (
+                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontFamily: Typography.family.semibold }}>
+                          {look.taggedCount} items
+                        </Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
           </View>
         );
       }
@@ -993,6 +1095,9 @@ export default function HomeScreen() {
       handleTileLongPress,
       activePlaybackIndex,
       renderPosters,
+      colors,
+      haptic,
+      navigation,
     ],
   );
 
@@ -1066,8 +1171,8 @@ export default function HomeScreen() {
         getItemType={getItemType}
         renderItem={renderFeedItem}
         overrideItemLayout={(layout: { span?: number }, item: FeedDataItem) => {
-          // Featured tiles and posters rail span both columns
-          if (isPosterMarker(item)) {
+          // Featured tiles, posters rail and looks rail span both columns
+          if (isPosterMarker(item) || isLookMarker(item)) {
             layout.span = 2;
           } else {
             layout.span = item.featured ? 2 : 1;

@@ -49,6 +49,7 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
           style={styles.lookImage}
           containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
           contentFit="cover"
+          downscaleWidth={cardWidth}
         />
         {/* Single small badge bottom-right — video glyph takes priority,
             tagged indicator only when no video. One visual signal. */}

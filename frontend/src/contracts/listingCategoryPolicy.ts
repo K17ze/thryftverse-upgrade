@@ -40,7 +40,9 @@ export type CategoryId =
   | 'electronics'
   | 'entertainment'
   | 'hobbies'
-  | 'sports';
+  | 'sports'
+  | 'cars'
+  | 'yachts';
 
 export type SubcategoryId = string;
 
@@ -167,6 +169,28 @@ const SPORTS_POLICY: ListingCategoryPresentationPolicy = {
   sizelessValid: true, // some sports gear is one-size
 };
 
+// ── High-value commerce: Cars ──────────────────────────────────────────────
+
+const CARS_POLICY: ListingCategoryPresentationPolicy = {
+  requiredForActivation: [...UNIVERSAL_REQUIRED],
+  recommended: ['brand', 'subcategory', ...UNIVERSAL_RECOMMENDED],
+  searchable: ['brand', 'condition', 'subcategory'],
+  cardIdentity: ['brand', 'subcategory'],
+  brandlessValid: false, // cars always have a make/brand
+  sizelessValid: true, // cars don't use apparel sizing
+};
+
+// ── High-value commerce: Yachts ────────────────────────────────────────────
+
+const YACHTS_POLICY: ListingCategoryPresentationPolicy = {
+  requiredForActivation: [...UNIVERSAL_REQUIRED],
+  recommended: ['brand', 'subcategory', ...UNIVERSAL_RECOMMENDED],
+  searchable: ['brand', 'condition', 'subcategory'],
+  cardIdentity: ['brand', 'subcategory'],
+  brandlessValid: false, // yachts always have a make/brand
+  sizelessValid: true, // yachts don't use apparel sizing
+};
+
 // ── Subcategory → policy mapping ───────────────────────────────────────────
 
 const SUBCATEGORY_POLICIES: Record<string, ListingCategoryPresentationPolicy> = {
@@ -243,6 +267,15 @@ const SUBCATEGORY_POLICIES: Record<string, ListingCategoryPresentationPolicy> = 
   'spt-skate': SPORTS_POLICY,
   'spt-boxing': SPORTS_POLICY,
   'spt-casual': SPORTS_POLICY,
+  // Cars
+  'cars-luxury': CARS_POLICY,
+  'cars-sports': CARS_POLICY,
+  'cars-classic': CARS_POLICY,
+  'cars-electric': CARS_POLICY,
+  // Yachts
+  'yachts-motor': YACHTS_POLICY,
+  'yachts-sailing': YACHTS_POLICY,
+  'yachts-classic': YACHTS_POLICY,
 };
 
 // ── Top-level category fallbacks ───────────────────────────────────────────
@@ -257,6 +290,8 @@ const CATEGORY_FALLBACKS: Record<CategoryId, ListingCategoryPresentationPolicy> 
   entertainment: MEDIA_POLICY,
   hobbies: COLLECTABLES_POLICY,
   sports: SPORTS_POLICY,
+  cars: CARS_POLICY,
+  yachts: YACHTS_POLICY,
 };
 
 const DEFAULT_POLICY: ListingCategoryPresentationPolicy = {

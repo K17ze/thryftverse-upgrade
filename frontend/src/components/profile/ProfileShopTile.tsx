@@ -60,6 +60,7 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
           style={styles.gridImage}
           containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
           contentFit="cover"
+          downscaleWidth={cardWidth}
         />
         {/* Quiet lower-edge sold marker — real short fade, image stays readable */}
         {showSold ? (

@@ -70,6 +70,7 @@ import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/Prof
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { SellerReputationCard } from '../components/seller/SellerReputationCard';
+import { EmptyState } from '../components/EmptyState';
 
 // AnimatedFlashList crashes on web with Reanimated 4.x (issue #9266).
 // Use plain FlashList on web; animated version on native for UI-thread perf.
@@ -87,7 +88,7 @@ const LOOK_GAP = 4;
 const LOOK_COLS = 3;
 const COLLAPSED_BAR_HEIGHT = 50;
 
-type Tab = 'Shop' | 'Looks' | 'Reviews';
+type Tab = 'Shop' | 'Looks' | 'Collections' | 'Drops' | 'Reviews';
 type ShopSegment = 'forsale' | 'sold';
 
 const PROFILE_WEB_BASE = 'https://thryftverse.app';
@@ -136,6 +137,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     awayBannerSub: { color: MUTED },
     listStateTitle: { color: TEXT },
     listStateSub: { color: MUTED },
+    sellerHubBtn: { borderColor: BORDER, backgroundColor: SURFACE_ALT },
+    sellerHubBtnText: { color: TEXT },
   };
 
 
@@ -169,6 +172,19 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   // Seller trust summary — verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
+
+  // Idle query placeholder for tabs that have no backend data source yet
+  // (Collections, Drops). Provides the same surface as React Query infinite
+  // hooks so the shared scroll/refresh/load-more logic works without branching.
+  const idleQuery = useMemo(() => ({
+    isRefetching: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: () => {},
+    refetch: () => {},
+    isLoading: false,
+    error: null as unknown,
+  } as any), []);
 
   const followMutation = useFollowMutation(targetUserId ?? '');
   const blockMutation = useBlockMutation(targetUserId ?? '');
@@ -220,13 +236,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       for (const page of pages) for (const item of page.items) items.push(item);
       return items;
     }
+    if (activeTab === 'Collections' || activeTab === 'Drops') {
+      return [];
+    }
     const pages = reviewsQuery.data?.pages ?? [];
     const items: SellerReviewItem[] = [];
     for (const page of pages) for (const item of page.items) items.push(item);
     return items;
   }, [activeTab, shopSegment, activeListingsQuery.data, soldListingsQuery.data, looksQuery.data, reviewsQuery.data]);
 
-  const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : reviewsQuery;
+  const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : (activeTab === 'Collections' || activeTab === 'Drops') ? idleQuery : reviewsQuery;
   const isRefreshing = activeQuery.isRefetching;
   const hasNextPage = Boolean(activeQuery.hasNextPage);
   const isFetchingNextPage = activeQuery.isFetchingNextPage;
@@ -444,7 +463,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // CONDITIONAL RENDERS â€” loading, error, unavailable, blocked
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   if (isLoadingProfile && !targetProfile) {
-    return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab} />;
+    return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab as 'Shop' | 'Looks' | 'Reviews'} />;
   }
   if (profileError && !targetProfile) {
     return <ProfileErrorState onRetry={() => publicProfileQuery.refetch()} onBack={() => navigation.goBack()} coverHeight={COVER_HEIGHT} />;
@@ -461,7 +480,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // MAIN RENDER
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
+  const numColumns = (activeTab === 'Reviews' || activeTab === 'Collections' || activeTab === 'Drops') ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
 
   const listHeader = (
     <View>
@@ -512,15 +531,35 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       {/* Seller reputation metrics — prominent trust display */}
       <SellerReputationCard seller={sellerTrust ?? null} />
 
+      {/* Seller Hub entry — visible only when the viewer is the profile owner */}
+      {viewer?.isSelf ? (
+        <View style={styles.sellerHubWrap}>
+          <AnimatedPressable
+            style={[styles.sellerHubBtn, t.sellerHubBtn]}
+            onPress={() => navigation.navigate('SellerHub')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Seller Hub"
+            accessibilityHint="Opens the seller management dashboard"
+          >
+            <Ionicons name="storefront-outline" size={18} color={TEXT} />
+            <Text style={[styles.sellerHubBtnText, t.sellerHubBtnText]}>Seller Hub</Text>
+            <Ionicons name="chevron-forward" size={16} color={MUTED} />
+          </AnimatedPressable>
+        </View>
+      ) : null}
+
       {/* Tab rail â€” measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
         <TabRail
           tabs={[
             { key: 'Shop', label: 'Shop', count: activeCount + soldCount },
             { key: 'Looks', label: 'Looks', count: lookCount },
+            { key: 'Collections' as any, label: 'Collections' },
+            { key: 'Drops' as any, label: 'Drops' },
             { key: 'Reviews', label: 'Reviews', count: reviewCount },
           ]}
-          activeKey={activeTab}
+          activeKey={activeTab as any}
           onChange={(k) => setActiveTab(k as Tab)}
           reducedMotion={reducedMotion}
         />
@@ -578,6 +617,26 @@ export default function UserProfileScreen({ navigation, route }: Props) {
             <Text style={[styles.listStateTitle, t.listStateTitle]}>No published Looks</Text>
             <Text style={[styles.listStateSub, t.listStateSub]}>This creator hasn't published any Looks yet.</Text>
           </View>
+        );
+      }
+      if (activeTab === 'Collections') {
+        return (
+          <EmptyState
+            icon="folder-open-outline"
+            title="No collections yet"
+            subtitle="Curated collections from this seller will appear here."
+            density="compact"
+          />
+        );
+      }
+      if (activeTab === 'Drops') {
+        return (
+          <EmptyState
+            icon="calendar-outline"
+            title="No upcoming drops"
+            subtitle="Scheduled releases will appear here."
+            density="compact"
+          />
         );
       }
       return (
@@ -710,9 +769,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           tabs={[
             { key: 'Shop', label: 'Shop', count: activeCount + soldCount },
             { key: 'Looks', label: 'Looks', count: lookCount },
+            { key: 'Collections' as any, label: 'Collections' },
+            { key: 'Drops' as any, label: 'Drops' },
             { key: 'Reviews', label: 'Reviews', count: reviewCount },
           ]}
-          activeKey={activeTab}
+          activeKey={activeTab as any}
           onChange={(k) => setActiveTab(k as Tab)}
           reducedMotion={reducedMotion}
         />
@@ -899,6 +960,9 @@ const styles = StyleSheet.create({
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
   listStateTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.semibold },
   listStateSub: { fontSize: TypographyV2.meta.size, fontFamily: FontFamily.regular, textAlign: 'center' },
+  sellerHubWrap: { paddingHorizontal: Space.md, marginTop: Space.sm },
+  sellerHubBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md - 2, borderRadius: RadiusRoleValue.sheetDialog, borderWidth: StyleSheet.hairlineWidth },
+  sellerHubBtnText: { flex: 1, fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.semibold },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
 });

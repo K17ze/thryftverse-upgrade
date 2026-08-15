@@ -248,6 +248,13 @@ export type RootStackParamList = {
     initialMedia?: CreatorInitialMedia[];
     startBlank?: boolean;
     openTemplates?: boolean;
+    /**
+     * Signal to show the CreatorEntryScreen (camera/gallery) overlay on
+     * open. Used by the Create tab action and the CreateCamera redirect so
+     * the user lands in the in-studio capture surface instead of a blank
+     * composer.
+     */
+    openEntry?: boolean;
   };
   VisualSearch: { initialImageUri?: string } | undefined;
   CreatorDraftList: undefined;
@@ -351,6 +358,8 @@ export type RootStackParamList = {
   VerificationStatus: undefined;
   // Seller analytics (entry via MyListings)
   SellerAnalytics: undefined;
+  // Seller Hub — unified seller management dashboard
+  SellerHub: undefined;
   // Creator analytics — creator-side performance insights (views, engagement, timeline)
   CreatorAnalyticsDashboard: undefined;
   BundleBag: { sellerId: string; sellerName?: string } | undefined;

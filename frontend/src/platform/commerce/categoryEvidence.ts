@@ -22,6 +22,8 @@ export type EvidenceCategory =
   | 'watches_jewellery'
   | 'electronics'
   | 'art_collectibles'
+  | 'cars'
+  | 'yachts'
   | 'fallback';
 
 interface CategoryInput {
@@ -55,6 +57,36 @@ interface CategoryInput {
   year?: string | null;
   medium?: string | null;
   edition?: string | null;
+  // ── Cars ──
+  make?: string | null;
+  mileage?: string | null;
+  transmission?: string | null;
+  fuelType?: string | null;
+  bodyType?: string | null;
+  serviceRecords?: string | null;
+  motInspection?: string | null;
+  mechanicalCondition?: string | null;
+  inspectionAvailable?: string | null;
+  inspectionReport?: string | null;
+  v5Logbook?: string | null;
+  numberOfOwners?: string | null;
+  financeStatus?: string | null;
+  // ── Yachts ──
+  length?: string | null;
+  beam?: string | null;
+  draft?: string | null;
+  displacement?: string | null;
+  engineType?: string | null;
+  engineHours?: string | null;
+  surveyAvailable?: string | null;
+  surveyDate?: string | null;
+  surveyReport?: string | null;
+  registration?: string | null;
+  flag?: string | null;
+  ownershipDocs?: string | null;
+  viewingAvailable?: string | null;
+  viewingLocation?: string | null;
+  seaTrialAvailable?: string | null;
 }
 
 const CATEGORY_ALIASES: Record<string, EvidenceCategory> = {
@@ -87,6 +119,18 @@ const CATEGORY_ALIASES: Record<string, EvidenceCategory> = {
   prints: 'art_collectibles',
   vinyl: 'art_collectibles',
   toys: 'art_collectibles',
+  // Cars
+  cars: 'cars',
+  car: 'cars',
+  vehicles: 'cars',
+  vehicle: 'cars',
+  automobile: 'cars',
+  // Yachts
+  yachts: 'yachts',
+  yacht: 'yachts',
+  boats: 'yachts',
+  boat: 'yachts',
+  vessel: 'yachts',
 };
 
 export function resolveEvidenceCategory(
@@ -305,6 +349,158 @@ export function resolveEvidenceGroups(input: CategoryInput): EvidenceGroup[] {
       }
       if (technical.length > 0) {
         groups.push({ title: 'Provenance', items: technical });
+      }
+      break;
+    }
+
+    case 'cars': {
+      // Vehicle spec
+      const specItems: EvidenceItem[] = [];
+      const makeItem = buildEvidenceItem('make', 'Make', input.make ?? input.brand, 'primary');
+      const modelItem = buildEvidenceItem('model', 'Model', input.model, 'primary');
+      const yearItem = buildEvidenceItem('year', 'Year', input.year, 'primary');
+      const mileageItem = buildEvidenceItem('mileage', 'Mileage', input.mileage, 'primary');
+      const transmissionItem = buildEvidenceItem('transmission', 'Transmission', input.transmission, 'secondary');
+      const fuelTypeItem = buildEvidenceItem('fuelType', 'Fuel type', input.fuelType, 'secondary');
+      const bodyTypeItem = buildEvidenceItem('bodyType', 'Body type', input.bodyType, 'secondary');
+      if (makeItem) specItems.push(makeItem);
+      if (modelItem) specItems.push(modelItem);
+      if (yearItem) specItems.push(yearItem);
+      if (mileageItem) specItems.push(mileageItem);
+      if (transmissionItem) specItems.push(transmissionItem);
+      if (fuelTypeItem) specItems.push(fuelTypeItem);
+      if (bodyTypeItem) specItems.push(bodyTypeItem);
+
+      // Service history
+      const serviceItems: EvidenceItem[] = [];
+      const serviceRecordsItem = buildEvidenceItem('serviceRecords', 'Service records', input.serviceRecords, 'secondary');
+      const motItem = buildEvidenceItem('motInspection', 'MOT / Inspection', input.motInspection, 'secondary');
+      const serviceHistoryItem = buildEvidenceItem('serviceHistory', 'Service history', input.serviceHistory, 'secondary');
+      if (serviceRecordsItem) serviceItems.push(serviceRecordsItem);
+      if (motItem) serviceItems.push(motItem);
+      if (serviceHistoryItem) serviceItems.push(serviceHistoryItem);
+
+      // Condition
+      const conditionItems: EvidenceItem[] = [];
+      const exteriorItem = buildEvidenceItem('exteriorCondition', 'Exterior condition', input.exteriorCondition, 'secondary');
+      const interiorItem = buildEvidenceItem('interiorCondition', 'Interior condition', input.interiorCondition, 'secondary');
+      const mechanicalItem = buildEvidenceItem('mechanicalCondition', 'Mechanical condition', input.mechanicalCondition, 'secondary');
+      const generalConditionItem = buildEvidenceItem('condition', 'Condition', input.condition, 'primary');
+      if (generalConditionItem) conditionItems.push(generalConditionItem);
+      if (exteriorItem) conditionItems.push(exteriorItem);
+      if (interiorItem) conditionItems.push(interiorItem);
+      if (mechanicalItem) conditionItems.push(mechanicalItem);
+
+      // Inspection
+      const inspectionItems: EvidenceItem[] = [];
+      const inspectionAvailableItem = buildEvidenceItem('inspectionAvailable', 'Inspection available', input.inspectionAvailable, 'technical');
+      const inspectionReportItem = buildEvidenceItem('inspectionReport', 'Inspection report', input.inspectionReport, 'technical');
+      if (inspectionAvailableItem) inspectionItems.push(inspectionAvailableItem);
+      if (inspectionReportItem) inspectionItems.push(inspectionReportItem);
+
+      // Ownership
+      const ownershipItems: EvidenceItem[] = [];
+      const v5Item = buildEvidenceItem('v5Logbook', 'V5 / Logbook', input.v5Logbook, 'technical');
+      const ownersItem = buildEvidenceItem('numberOfOwners', 'Number of owners', input.numberOfOwners, 'technical');
+      const financeItem = buildEvidenceItem('financeStatus', 'Finance status', input.financeStatus, 'technical');
+      if (v5Item) ownershipItems.push(v5Item);
+      if (ownersItem) ownershipItems.push(ownersItem);
+      if (financeItem) ownershipItems.push(financeItem);
+
+      if (specItems.length > 0) {
+        groups.push({
+          title: 'Vehicle specification',
+          summary: specItems.map((i) => i.value).join(' · '),
+          items: specItems,
+        });
+      }
+      if (serviceItems.length > 0) {
+        groups.push({ title: 'Service history', items: serviceItems });
+      }
+      if (conditionItems.length > 0) {
+        groups.push({ title: 'Condition', items: conditionItems });
+      }
+      if (inspectionItems.length > 0) {
+        groups.push({ title: 'Inspection', items: inspectionItems });
+      }
+      if (ownershipItems.length > 0) {
+        groups.push({ title: 'Ownership', items: ownershipItems });
+      }
+      break;
+    }
+
+    case 'yachts': {
+      // Vessel spec
+      const specItems: EvidenceItem[] = [];
+      const makeItem = buildEvidenceItem('make', 'Make', input.make ?? input.brand, 'primary');
+      const modelItem = buildEvidenceItem('model', 'Model', input.model, 'primary');
+      const yearItem = buildEvidenceItem('year', 'Year', input.year, 'primary');
+      const lengthItem = buildEvidenceItem('length', 'Length', input.length, 'primary');
+      const beamItem = buildEvidenceItem('beam', 'Beam', input.beam, 'secondary');
+      const draftItem = buildEvidenceItem('draft', 'Draft', input.draft, 'secondary');
+      const displacementItem = buildEvidenceItem('displacement', 'Displacement', input.displacement, 'secondary');
+      if (makeItem) specItems.push(makeItem);
+      if (modelItem) specItems.push(modelItem);
+      if (yearItem) specItems.push(yearItem);
+      if (lengthItem) specItems.push(lengthItem);
+      if (beamItem) specItems.push(beamItem);
+      if (draftItem) specItems.push(draftItem);
+      if (displacementItem) specItems.push(displacementItem);
+
+      // Engine
+      const engineItems: EvidenceItem[] = [];
+      const engineTypeItem = buildEvidenceItem('engineType', 'Engine type', input.engineType, 'secondary');
+      const engineHoursItem = buildEvidenceItem('engineHours', 'Engine hours', input.engineHours, 'secondary');
+      const engineServiceItem = buildEvidenceItem('serviceHistory', 'Service history', input.serviceHistory, 'secondary');
+      if (engineTypeItem) engineItems.push(engineTypeItem);
+      if (engineHoursItem) engineItems.push(engineHoursItem);
+      if (engineServiceItem) engineItems.push(engineServiceItem);
+
+      // Survey
+      const surveyItems: EvidenceItem[] = [];
+      const surveyAvailableItem = buildEvidenceItem('surveyAvailable', 'Survey available', input.surveyAvailable, 'technical');
+      const surveyDateItem = buildEvidenceItem('surveyDate', 'Survey date', input.surveyDate, 'technical');
+      const surveyReportItem = buildEvidenceItem('surveyReport', 'Survey report', input.surveyReport, 'technical');
+      if (surveyAvailableItem) surveyItems.push(surveyAvailableItem);
+      if (surveyDateItem) surveyItems.push(surveyDateItem);
+      if (surveyReportItem) surveyItems.push(surveyReportItem);
+
+      // Documentation
+      const docItems: EvidenceItem[] = [];
+      const registrationItem = buildEvidenceItem('registration', 'Registration', input.registration, 'technical');
+      const flagItem = buildEvidenceItem('flag', 'Flag', input.flag, 'technical');
+      const ownershipDocsItem = buildEvidenceItem('ownershipDocs', 'Ownership docs', input.ownershipDocs, 'technical');
+      if (registrationItem) docItems.push(registrationItem);
+      if (flagItem) docItems.push(flagItem);
+      if (ownershipDocsItem) docItems.push(ownershipDocsItem);
+
+      // Viewing
+      const viewingItems: EvidenceItem[] = [];
+      const viewingAvailableItem = buildEvidenceItem('viewingAvailable', 'Viewing available', input.viewingAvailable, 'technical');
+      const viewingLocationItem = buildEvidenceItem('viewingLocation', 'Viewing location', input.viewingLocation, 'technical');
+      const seaTrialItem = buildEvidenceItem('seaTrialAvailable', 'Sea trial available', input.seaTrialAvailable, 'technical');
+      if (viewingAvailableItem) viewingItems.push(viewingAvailableItem);
+      if (viewingLocationItem) viewingItems.push(viewingLocationItem);
+      if (seaTrialItem) viewingItems.push(seaTrialItem);
+
+      if (specItems.length > 0) {
+        groups.push({
+          title: 'Vessel specification',
+          summary: specItems.map((i) => i.value).join(' · '),
+          items: specItems,
+        });
+      }
+      if (engineItems.length > 0) {
+        groups.push({ title: 'Engine', items: engineItems });
+      }
+      if (surveyItems.length > 0) {
+        groups.push({ title: 'Survey', items: surveyItems });
+      }
+      if (docItems.length > 0) {
+        groups.push({ title: 'Documentation', items: docItems });
+      }
+      if (viewingItems.length > 0) {
+        groups.push({ title: 'Viewing', items: viewingItems });
       }
       break;
     }
