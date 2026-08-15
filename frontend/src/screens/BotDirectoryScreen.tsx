@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { Space, Type, Typography, Control, Stroke } from '../theme/designTokens';
@@ -34,7 +33,7 @@ const CATEGORIES: Array<{ value: AgentCategory; label: string }> = [
 ];
 
 export default function BotDirectoryScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedCategory, setSelectedCategory] = useState<AgentCategory>('all');
   const systemAgents = useStore((state) => state.availableChatBots);
@@ -76,33 +75,32 @@ export default function BotDirectoryScreen({ navigation }: Props) {
     : 'Specialists for your group conversations';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
-      />
-      <ScreenHeader
-        title="Agents"
-        subtitle={directorySubtitle}
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <AnimatedPressable
-            onPress={() => navigation.navigate('BotBuilder', {})}
-            style={styles.headerAction}
-            scaleValue={0.92}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel={
-              aiCapability?.capabilityLevel === 'provider_backed'
-                ? 'Create an AI agent'
-                : 'Create a specialist agent'
-            }
-          >
-            <Ionicons name="add" size={22} color={colors.textPrimary} />
-          </AnimatedPressable>
-        }
-      />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      header={
+        <FlagshipHeader
+          title="Agents"
+          subtitle={directorySubtitle}
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              onPress={() => navigation.navigate('BotBuilder', {})}
+              style={styles.headerAction}
+              scaleValue={0.92}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={
+                aiCapability?.capabilityLevel === 'provider_backed'
+                  ? 'Create an AI agent'
+                  : 'Create a specialist agent'
+              }
+            >
+              <Ionicons name="add" size={22} color={colors.textPrimary} />
+            </AnimatedPressable>
+          }
+        />
+      }
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
@@ -228,16 +226,12 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   content: {
     paddingBottom: Space.xxl,
   },

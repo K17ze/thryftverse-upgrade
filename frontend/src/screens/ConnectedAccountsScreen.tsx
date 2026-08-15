@@ -18,7 +18,6 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -27,7 +26,7 @@ import { Space, Radius, Type, Typography, Control } from '../theme/designTokens'
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
 import { ConnectedAccountsSkeleton } from '../components/skeletons/ConnectedAccountsSkeleton';
 import { EmptyState } from '../components/EmptyState';
@@ -55,7 +54,7 @@ function formatDate(iso: string): string {
 }
 
 export default function ConnectedAccountsScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
@@ -115,18 +114,22 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Connected Accounts" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Connected Accounts" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <ConnectedAccountsSkeleton />
         </ScrollView>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Connected Accounts" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      header={<FlagshipHeader title="Connected Accounts" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
@@ -238,13 +241,12 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
 
         <View style={{ height: Space.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 

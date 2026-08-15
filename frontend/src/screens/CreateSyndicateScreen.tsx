@@ -1,8 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,8 +29,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { useHaptic } from '../hooks/useHaptic';
 import { haptics } from '../utils/haptics';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import {
-  CoOwnMarketHeader,
   CoOwnIssueStudioStep,
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
@@ -51,7 +50,7 @@ type Stage = 'select' | 'configure' | 'review' | 'recourse';
 export default function CreateCoOwnScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
@@ -358,28 +357,36 @@ export default function CreateCoOwnScreen() {
   // ── Loading state ──
   if (isLoadingListings) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Issue Co-Own"
-          subtitle="Create a shared ownership item"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Issue Co-Own"
+            subtitle="Create a shared ownership item"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnCreateStudioSkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Empty state (no listings) ──
   if (issuerListings.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Issue Co-Own"
-          subtitle="Create a shared ownership item"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Issue Co-Own"
+            subtitle="Create a shared ownership item"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="empty"
           title={issuerId ? 'No eligible listings' : 'Sign in required'}
@@ -395,20 +402,22 @@ export default function CreateCoOwnScreen() {
           }}
           emptyGraphicVariant="box"
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title={stageTitles[stage]}
-        subtitle="Issue Co-Own"
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title={stageTitles[stage]}
+          subtitle="Issue Co-Own"
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* ── Stage 1: Select listing ── */}
         {stage === 'select' && (
@@ -843,14 +852,11 @@ export default function CreateCoOwnScreen() {
           />
         )}
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

@@ -3,12 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
-  ScrollView,
   Alert,
-  Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,7 +14,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type, Typography, Elevation, Stroke, Control } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -40,7 +36,7 @@ const STATUS_CONFIG: Record<string, { label: string; tone: 'pending' | 'success'
 
 export default function SupportTicketDetailScreen({ navigation, route }: Props) {
   const { ticketId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
@@ -102,15 +98,16 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
 
   if (!ticket) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ScreenHeader title="Support Request" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        scrollEnabled={false}
+        header={<FlagshipHeader title="Support Request" onBack={() => navigation.goBack()} />}
+      >
         <View style={styles.center}>
           <Ionicons name="help-circle-outline" size={48} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>Ticket not found</Text>
           <Text style={styles.emptySub}>This support request may have been removed.</Text>
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -129,11 +126,10 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
   const evidenceUrls = ticket.evidenceMediaUrls ?? [];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader title="Support Request" onBack={() => navigation.goBack()} />
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+    <FlagshipScreen
+      header={<FlagshipHeader title="Support Request" onBack={() => navigation.goBack()} />}
+      contentStyle={{ gap: Space.lg }}
+    >
         {/* Order context card */}
         {order && (
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)}>
@@ -294,23 +290,12 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </AnimatedPressable>
         </Reanimated.View>
-      </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xxl,
-    gap: Space.lg,
-  },
   center: {
     flex: 1,
     justifyContent: 'center',

@@ -11,8 +11,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -24,13 +23,13 @@ import { Space, Radius, Type, Typography, DockConstants, Stroke, LetterSpacing }
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import {
-  CoOwnMarketHeader,
   CoOwnStickyActionDock,
   CoOwnCorporateActionRow,
   CoOwnStateCanvas,
   type CoOwnCorporateActionType,
   type CoOwnCorporateActionStatus,
 } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnAssetDetailSkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { fetchCoOwnAssetCorporateActions, fetchGovernanceVotes, castGovernanceVote, type CoOwnCorporateAction } from '../services/marketApi';
@@ -69,7 +68,7 @@ function formatAmount(minor: number | null): string | null {
 export default function CorporateActionDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -187,29 +186,35 @@ export default function CorporateActionDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Corporate action"
-          subtitle={dateLabel}
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Corporate action"
+            subtitle={dateLabel}
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
         <View style={styles.loadingContainer}>
           <CoOwnAssetDetailSkeleton />
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (error && !fetchedAction) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Corporate action"
-          subtitle={dateLabel}
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Corporate action"
+            subtitle={dateLabel}
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
         <CoOwnStateCanvas
           variant="error"
           title="Couldn't load corporate action"
@@ -217,20 +222,21 @@ export default function CorporateActionDetailScreen() {
           actionLabel="Retry"
           onAction={() => { haptics.tap(); setLoading(true); void loadAction(); }}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Corporate action"
-        subtitle={displayDateLabel}
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Corporate action"
+          subtitle={displayDateLabel}
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+    >
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]}
         showsVerticalScrollIndicator={false}
@@ -459,13 +465,12 @@ export default function CorporateActionDetailScreen() {
           style={{ flex: 1 }}
         />
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1 },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

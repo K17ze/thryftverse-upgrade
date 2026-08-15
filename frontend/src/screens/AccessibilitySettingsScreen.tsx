@@ -18,7 +18,6 @@ import {
   Switch,
   Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -26,7 +25,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { RootStackParamList } from '../navigation/types';
 import { useAccessibilityPreferences } from '../context/AccessibilityPreferencesContext';
 import type { TextSize } from '../preferences/accessibilityPreferences';
@@ -142,8 +141,10 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Accessibility" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      scrollEnabled={false}
+      header={<FlagshipHeader title="Accessibility" onBack={() => navigation.goBack()} />}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -272,13 +273,12 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
 
         <View style={{ height: Space.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
     // Hero summary

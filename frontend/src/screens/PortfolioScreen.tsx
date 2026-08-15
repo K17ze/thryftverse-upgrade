@@ -1,8 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, RefreshControl, useWindowDimensions, Pressable } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,10 +15,10 @@ import { Space, FontFamily, Stroke, LetterSpacing, Numeric } from '../theme/desi
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { haptics } from '../utils/haptics';
 import {
-  CoOwnMarketHeader,
   CoOwnPositionCard,
   CoOwnPositionActionSheet,
   CoOwnPortfolioSkeleton,
@@ -43,7 +41,7 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export default function PortfolioScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
   const { formatFromFiat } = useFormattedPrice();
@@ -302,56 +300,95 @@ export default function PortfolioScreen() {
   // ── Loading state ──
   if (isLoading && positions.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Portfolio"
-          subtitle="Your Co-Own positions"
-          onBack={handleBack}
-          actions={[
-            { icon: 'receipt-outline', label: 'Activity', onPress: () => navigation.navigate('CoOwnOrderHistory') },
-          ]}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Portfolio"
+            subtitle="Your Co-Own positions"
+            onBack={handleBack}
+            rightAction={
+              <AnimatedPressable
+                onPress={() => navigation.navigate('CoOwnOrderHistory')}
+                scaleValue={0.9}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Activity"
+                accessibilityHint="View order history"
+              >
+                <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+              </AnimatedPressable>
+            }
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnPortfolioSkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Error state ──
   if (isError && positions.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Portfolio"
-          subtitle="Your Co-Own positions"
-          onBack={handleBack}
-          actions={[
-            { icon: 'receipt-outline', label: 'Activity', onPress: () => navigation.navigate('CoOwnOrderHistory') },
-          ]}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Portfolio"
+            subtitle="Your Co-Own positions"
+            onBack={handleBack}
+            rightAction={
+              <AnimatedPressable
+                onPress={() => navigation.navigate('CoOwnOrderHistory')}
+                scaleValue={0.9}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Activity"
+                accessibilityHint="View order history"
+              >
+                <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+              </AnimatedPressable>
+            }
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="error"
           actionLabel="Try again"
           onAction={() => loadPortfolio()}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Empty state ──
   if (positions.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Portfolio"
-          subtitle="Your Co-Own positions"
-          onBack={handleBack}
-          actions={[
-            { icon: 'receipt-outline', label: 'Activity', onPress: () => navigation.navigate('CoOwnOrderHistory') },
-          ]}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Portfolio"
+            subtitle="Your Co-Own positions"
+            onBack={handleBack}
+            rightAction={
+              <AnimatedPressable
+                onPress={() => navigation.navigate('CoOwnOrderHistory')}
+                scaleValue={0.9}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Activity"
+                accessibilityHint="View order history"
+              >
+                <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+              </AnimatedPressable>
+            }
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="empty"
           title="No positions yet"
@@ -360,23 +397,34 @@ export default function PortfolioScreen() {
           onAction={() => navigation.navigate('CoOwnHub')}
           emptyGraphicVariant="bag"
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Portfolio"
-        subtitle="Your Co-Own positions"
-        onBack={handleBack}
-        actions={[
-          { icon: 'receipt-outline', label: 'Activity', onPress: () => navigation.navigate('CoOwnOrderHistory') },
-        ]}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Portfolio"
+          subtitle="Your Co-Own positions"
+          onBack={handleBack}
+          rightAction={
+            <AnimatedPressable
+              onPress={() => navigation.navigate('CoOwnOrderHistory')}
+              scaleValue={0.9}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Activity"
+              accessibilityHint="View order history"
+            >
+              <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
 
@@ -821,14 +869,11 @@ export default function PortfolioScreen() {
         statusLabel={actionSheetAsset ? (actionSheetAsset.isOpen ? 'Active' : 'Closed') : ''}
         actions={actionSheetActions}
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   listContent: {
     paddingHorizontal: Space.md,
   },

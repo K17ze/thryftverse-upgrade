@@ -9,12 +9,10 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
-  StatusBar,
   Platform,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -32,7 +30,7 @@ import {
   sanitizeDecimalInput,
 } from '../utils/currencyAuthoringFlows';
 import { AppButton } from '../components/ui/AppButton';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
 import {
@@ -46,8 +44,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
 
 export default function MakeOfferScreen({ navigation, route }: Props) {
   const { itemId, price, title } = route.params;
-  const { colors, isDark } = useAppTheme();
-  const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
   const { show } = useToast();
@@ -230,15 +227,17 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const itemImageUri = listing?.images?.[0] ?? listing?.imageUrl;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-
-      <ScreenHeader
-        title={isCounterOffer ? 'Counter-offer' : 'Make offer'}
-        onBack={() => navigation.goBack()}
-        backIcon="close"
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title={isCounterOffer ? 'Counter-offer' : 'Make offer'}
+          onBack={() => navigation.goBack()}
+          backIcon="close"
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -712,14 +711,11 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           )}
         </View>
       )}
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,

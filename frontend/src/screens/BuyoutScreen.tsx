@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TextInput, ActivityIndicator, Alert } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,8 +18,8 @@ import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import {
-  CoOwnMarketHeader,
   CoOwnStateCanvas,
   CoOwnStickyActionDock,
 } from '../components/coown';
@@ -31,7 +30,7 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 export default function BuyoutScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
@@ -137,27 +136,35 @@ export default function BuyoutScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Buyout"
-          subtitle="Acquire remaining units"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        style={{ backgroundColor: colors.background }}
+        header={
+          <FlagshipHeader
+            title="Buyout"
+            subtitle="Acquire remaining units"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
         <CoOwnStateCanvas variant="loading" />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (isError || !asset) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Buyout"
-          subtitle="Acquire remaining units"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        style={{ backgroundColor: colors.background }}
+        header={
+          <FlagshipHeader
+            title="Buyout"
+            subtitle="Acquire remaining units"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
         <CoOwnStateCanvas
           variant="error"
           title="Asset not found"
@@ -165,7 +172,7 @@ export default function BuyoutScreen() {
           actionLabel="Back to Co-Own"
           onAction={() => navigation.navigate('CoOwnHub')}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -175,15 +182,18 @@ export default function BuyoutScreen() {
   const imageHeight = Math.min(screenWidth * 0.5, 240);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Buyout"
-        subtitle={asset.title}
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      style={{ backgroundColor: colors.background }}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      header={
+        <FlagshipHeader
+          title="Buyout"
+          subtitle={asset.title}
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+    >
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Item image */}
         {asset.imageUrl ? (
@@ -308,14 +318,11 @@ export default function BuyoutScreen() {
           </View>
         )}
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

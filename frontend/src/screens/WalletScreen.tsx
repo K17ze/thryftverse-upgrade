@@ -3,13 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   ScrollView,
   RefreshControl,
   Pressable,
   Linking,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -29,12 +28,13 @@ import {
   type SellerWalletBalanceItem,
 } from '../services/walletApi';
 import {
-  CoOwnMarketHeader,
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
   type CoOwn1ZeBalance,
 } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useBiometricGate } from '../hooks/useBiometricGate';
@@ -45,7 +45,7 @@ import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
 export default function WalletScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
   const { currencyCode, goldRates } = useCurrencyContext();
@@ -237,32 +237,37 @@ export default function WalletScreen({ navigation }: Props) {
   // ── Biometric gate: block sensitive content until authenticated ──
   if (biometricGate.status === 'pending' || biometricGate.status === 'locked') {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Wallet"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
         <BiometricGatePrompt
           gate={biometricGate}
           reason="Authenticate to view your wallet"
-          header={
-            <CoOwnMarketHeader
-              title="Wallet"
-              onBack={handleBack}
-            />
-          }
           onBack={handleBack}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Loading state — skeleton matching final layout ──
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Wallet"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Wallet"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={styles.content}
@@ -293,37 +298,45 @@ export default function WalletScreen({ navigation }: Props) {
             </View>
           ))}
         </ScrollView>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Error state ──
   if (isError) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Wallet"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Wallet"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="error"
           actionLabel="Try again"
           onAction={loadBalance}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Empty state ──
   if (balance.available === 0 && balance.reservedForOrders === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Wallet"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Wallet"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="empty"
           title="No 1ZE yet"
@@ -340,22 +353,33 @@ export default function WalletScreen({ navigation }: Props) {
           onCompleted={loadBalance}
           userId={currentUser?.id}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-      <CoOwnMarketHeader
-        title="Wallet"
-        onBack={handleBack}
-        actions={[
-          { icon: 'receipt-outline', label: 'Activity', onPress: handleViewActivity },
-        ]}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Wallet"
+          onBack={handleBack}
+          rightAction={
+            <AnimatedPressable
+              onPress={handleViewActivity}
+              scaleValue={0.9}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Activity"
+              accessibilityHint="View all wallet activity"
+            >
+              <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner
         isActive={balance.reconciliationState === 'reconciling' || balance.reconciliationState === 'break'}
@@ -658,7 +682,7 @@ export default function WalletScreen({ navigation }: Props) {
         onCompleted={loadBalance}
         userId={currentUser?.id}
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -709,7 +733,6 @@ function SubBalanceRow({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

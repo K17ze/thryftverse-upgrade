@@ -21,7 +21,6 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -30,7 +29,7 @@ import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/desig
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
@@ -155,12 +154,15 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Auto-Invest" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Auto-Invest" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <CoOwnActivitySkeleton />
         </ScrollView>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -168,13 +170,17 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
   const inactiveOrders = orders.filter((o) => !o.active);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Auto-Invest" onBack={() => navigation.goBack()} />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
-        showsVerticalScrollIndicator={false}
+    <>
+      <FlagshipScreen
+        header={<FlagshipHeader title="Auto-Invest" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
       >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Hero summary */}
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroCard}>
@@ -337,7 +343,8 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
         />
 
         <View style={{ height: Space.xxl }} />
-      </ScrollView>
+        </ScrollView>
+      </FlagshipScreen>
 
       {/* Create Modal */}
       <Modal visible={showCreate} animationType="slide" transparent onRequestClose={() => setShowCreate(false)}>
@@ -424,13 +431,12 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 

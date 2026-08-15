@@ -12,13 +12,12 @@
  * in their own hub and commerce payout history lives in BalanceHistory.
  */
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Type, Typography, Radius, Stroke } from '../theme/designTokens';
-import { CoOwnMarketHeader } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { WalletTransactionHistory } from '../components/wallet/WalletTransactionHistory';
 import { haptics } from '../utils/haptics';
 
@@ -33,7 +32,7 @@ const FILTERS: Array<{ value: AssetFilter; label: string; accessibilityLabel: st
 ];
 
 export default function WalletActivityScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const [assetFilter, setAssetFilter] = React.useState<AssetFilter>('ALL');
 
   const handleBack = React.useCallback(() => {
@@ -45,15 +44,16 @@ export default function WalletActivityScreen({ navigation }: Props) {
   }, [navigation]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-      <CoOwnMarketHeader
-        title="Activity"
-        subtitle="Wallet money movement"
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Activity"
+          subtitle="Wallet money movement"
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+    >
       {/* Filter chips — single row, hairline-selected grammar per AGENTS.md §4 */}
       <View style={styles.filterRow} accessibilityRole="tablist">
         {FILTERS.map((filter) => {
@@ -91,12 +91,11 @@ export default function WalletActivityScreen({ navigation }: Props) {
       <View style={styles.listWrap}>
         <WalletTransactionHistory assetFilter={assetFilter} limit={200} />
       </View>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,

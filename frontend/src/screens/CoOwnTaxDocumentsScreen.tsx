@@ -18,7 +18,6 @@ import {
   RefreshControl,
   Share,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -27,7 +26,7 @@ import { Space, Radius, Type, Typography, Control } from '../theme/designTokens'
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
@@ -87,20 +86,34 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Tax Documents" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Tax Documents"
+            onBack={() => navigation.goBack()}
+          />
+        }
+        scrollEnabled={false}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <CoOwnActivitySkeleton />
         </ScrollView>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   const pnlPositive = (doc?.summary.realizedPnlGbpMinor ?? 0) >= 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Tax Documents" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Tax Documents"
+          onBack={() => navigation.goBack()}
+        />
+      }
+      scrollEnabled={false}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
@@ -278,13 +291,12 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
           </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     loadingBody: { flex: 1 },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 

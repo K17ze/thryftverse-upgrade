@@ -1,7 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,12 +15,12 @@ import { listCoOwnAssets } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
 import {
-  CoOwnMarketHeader,
   CoOwnLeaderboardSkeleton,
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
 } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
@@ -43,7 +41,7 @@ interface LeaderboardAsset {
 
 export default function AssetLeaderboardScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
@@ -200,45 +198,57 @@ export default function AssetLeaderboardScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Market overview"
-          subtitle="Issued supply and recency"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Market overview"
+            subtitle="Issued supply and recency"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnLeaderboardSkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (isError && assets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Market overview"
-          subtitle="Issued supply and recency"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Market overview"
+            subtitle="Issued supply and recency"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="error"
           actionLabel="Try again"
           onAction={() => loadLeaderboard()}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (assets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Market overview"
-          subtitle="Issued supply and recency"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Market overview"
+            subtitle="Issued supply and recency"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <CoOwnStateCanvas
           variant="empty"
           title="No market overview yet"
@@ -246,24 +256,27 @@ export default function AssetLeaderboardScreen() {
           actionLabel="Browse items"
           onAction={() => navigation.navigate('CoOwnHub')}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Market overview"
-        subtitle="Issued supply and recency"
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Market overview"
+          subtitle="Issued supply and recency"
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
 
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -302,14 +315,11 @@ export default function AssetLeaderboardScreen() {
         )}
         <View style={{ height: Space.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.xs,

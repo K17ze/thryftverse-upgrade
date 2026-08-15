@@ -1,8 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, RefreshControl } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,7 +21,8 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
 import { haptics } from '../utils/haptics';
 import { formatCoOwnIze } from '../utils/currency';
-import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -96,7 +95,7 @@ function mapHistoryToLedgerEntries(items: MarketHistoryItem[]): LedgerEntry[] {
 
 export default function MarketLedgerScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const localEntries = useStore((state) => state.marketLedger);
   const currentUser = useStore((state) => state.currentUser);
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
@@ -201,15 +200,18 @@ export default function MarketLedgerScreen() {
   // ── Loading state (initial sync, no entries yet) ──
   if (isSyncingLedger && entries.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader
-          title="Ledger"
-          subtitle="Market activity and trade history"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Ledger"
+            subtitle="Market activity and trade history"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+      >
         <CoOwnActivitySkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -274,15 +276,16 @@ export default function MarketLedgerScreen() {
   ]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Ledger"
-        subtitle="Market activity and trade history"
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Ledger"
+          subtitle="Market activity and trade history"
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
 
@@ -376,14 +379,11 @@ export default function MarketLedgerScreen() {
           />
         }
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',

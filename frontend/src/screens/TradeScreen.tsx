@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, useWindowDimensions, Keyboard } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, useWindowDimensions, Keyboard } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -39,8 +39,8 @@ import { Space, FontFamily, DockConstants, LetterSpacing, Numeric } from '../the
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useHaptic } from '../hooks/useHaptic';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import {
-  CoOwnMarketHeader,
   CoOwnTradeComposer,
   CoOwnTradeSkeleton,
   CoOwnStateCanvas,
@@ -77,7 +77,7 @@ const ORDER_TYPE_OPTIONS: Array<{ value: CoOwnTicketOrderType; label: string; ac
 export default function TradeScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -306,28 +306,36 @@ export default function TradeScreen() {
   // ── Loading state ──
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Trade"
-          subtitle="Buy or sell Co-Own units"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        header={
+          <FlagshipHeader
+            title="Trade"
+            subtitle="Buy or sell Co-Own units"
+            onBack={handleBack}
+          />
+        }
+      >
         <CoOwnTradeSkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   // ── Error state ──
   if (isError || !asset) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <CoOwnMarketHeader
-          title="Trade"
-          subtitle="Buy or sell Co-Own units"
-          onBack={handleBack}
-        />
+      <FlagshipScreen
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        header={
+          <FlagshipHeader
+            title="Trade"
+            subtitle="Buy or sell Co-Own units"
+            onBack={handleBack}
+          />
+        }
+      >
         <CoOwnStateCanvas
           variant="error"
           title="Item not found"
@@ -335,7 +343,7 @@ export default function TradeScreen() {
           actionLabel="Back to Co-Own"
           onAction={() => navigation.navigate('CoOwnHub')}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -347,15 +355,17 @@ export default function TradeScreen() {
   const settlementLabel = '1ZE';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-      <CoOwnMarketHeader
-        title={side === 'buy' ? 'Buy units' : 'Sell units'}
-        subtitle={asset.title}
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      header={
+        <FlagshipHeader
+          title={side === 'buy' ? 'Buy units' : 'Sell units'}
+          subtitle={asset.title}
+          onBack={handleBack}
+        />
+      }
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner
         isActive={Boolean(orderBook && orderBook.reconciliationState !== 'reconciled')}
@@ -706,14 +716,11 @@ export default function TradeScreen() {
           </View>
         )}
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   // ── Content padding — 24pt top for calm breathing room ──
   // Per spec 11_COOWN: "24pt between sections." The trade surface should
   // feel calm and deliberate, not cramped.

@@ -13,12 +13,11 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   ScrollView,
   RefreshControl,
   Pressable,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -28,7 +27,8 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, Type, Typography, Stroke, DockConstants } from '../theme/designTokens';
-import { CoOwnMarketHeader, CoOwnStateCanvas, CoOwnWalletBreakdownSkeleton } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { CoOwnStateCanvas, CoOwnWalletBreakdownSkeleton } from '../components/coown';
 import { getSellerWalletBalances, type SellerWalletBalanceItem } from '../services/walletApi';
 import { parseApiError } from '../lib/apiClient';
 import { haptics } from '../utils/haptics';
@@ -43,7 +43,7 @@ interface SellerBalances {
 }
 
 export default function SellerEarningsScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
   const { currencyCode } = useCurrencyContext();
@@ -121,15 +121,16 @@ export default function SellerEarningsScreen({ navigation }: Props) {
     (balances.pendingGbp > 0 || balances.availableGbp > 0 || balances.heldInReserveGbp > 0);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-      <CoOwnMarketHeader
-        title="Seller earnings"
-        subtitle="Sale proceeds & release schedule"
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Seller earnings"
+          subtitle="Sale proceeds & release schedule"
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+    >
       {isLoading ? (
         <CoOwnWalletBreakdownSkeleton />
       ) : isError ? (
@@ -260,12 +261,11 @@ export default function SellerEarningsScreen({ navigation }: Props) {
           </View>
         </ScrollView>
       )}
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

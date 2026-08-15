@@ -4,9 +4,9 @@ import {
   Text,
   StyleSheet,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -20,7 +20,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useToast } from '../context/ToastContext';
 import { fetchFilteredListings } from '../services/listingsApi';
@@ -129,8 +129,11 @@ export default function ExploreCollectionScreen() {
 
   if ((isSyncing || isFetching) && filteredListings.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title={title} onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        header={<FlagshipHeader title={title} onBack={() => navigation.goBack()} />}
+      >
         <View style={styles.loadingWrap}>
           <SkeletonLoader width={120} height={18} borderRadius={8} style={{ marginBottom: Space.md }} />
           <View style={styles.loadingGrid}>
@@ -143,14 +146,17 @@ export default function ExploreCollectionScreen() {
             ))}
           </View>
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (filteredListings.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title={title} onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        header={<FlagshipHeader title={title} onBack={() => navigation.goBack()} />}
+      >
         <EmptyState
           icon="albums-outline"
           title="No items yet"
@@ -158,30 +164,37 @@ export default function ExploreCollectionScreen() {
           ctaLabel="Browse All"
           onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title={title} onBack={() => navigation.goBack()} />
-      {renderHeader()}
-      <MasonryGrid
-        items={filteredListings}
-        onPressItem={(item) => {
-          haptic.light();
-          ProductAnalytics.itemView(item.id);
-          navigation.push('ItemDetail', { itemId: item.id });
-        }}
-        showSaveButton
-      />
-    </SafeAreaView>
+    <FlagshipScreen
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      header={<FlagshipHeader title={title} onBack={() => navigation.goBack()} />}
+    >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {renderHeader()}
+        <MasonryGrid
+          items={filteredListings}
+          onPressItem={(item) => {
+            haptic.light();
+            ProductAnalytics.itemView(item.id);
+            navigation.push('ItemDetail', { itemId: item.id });
+          }}
+          showSaveButton
+        />
+      </ScrollView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    scrollContent: {
+      paddingBottom: Space.xl,
+    },
     headerInfo: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.sm,

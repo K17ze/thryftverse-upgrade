@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Radius, Space, Type, Typography, Stroke, Control } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -77,7 +76,7 @@ const RISK_DOT: Record<RiskLevel, string> = {
 
 export default function BotBuilderScreen({ navigation, route }: Props) {
   const { botId } = route.params ?? {};
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const existingBot = useStore((state) =>
@@ -318,13 +317,16 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title={existingBot ? 'Edit agent' : 'Create agent'}
-        onBack={() => navigation.goBack()}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title={existingBot ? 'Edit agent' : 'Create agent'}
+          onBack={() => navigation.goBack()}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -654,7 +656,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           />
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -844,7 +846,6 @@ function ChoiceList({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,

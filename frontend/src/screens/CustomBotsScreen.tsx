@@ -5,17 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  StatusBar,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { useHaptic } from '../hooks/useHaptic';
@@ -24,7 +22,7 @@ import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 type Props = NativeStackScreenProps<RootStackParamList, 'CustomBots'>;
 
 export default function CustomBotsScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
@@ -81,27 +79,29 @@ export default function CustomBotsScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title="Your agents"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <AnimatedPressable
-            onPress={() => navigation.navigate('BotBuilder', {})}
-            activeOpacity={0.7}
-            scaleValue={0.92}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="Create agent"
-          >
-            <View style={styles.createBtn}>
-              <Ionicons name="add" size={22} color={colors.textPrimary} />
-            </View>
-          </AnimatedPressable>
-        }
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Your agents"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              onPress={() => navigation.navigate('BotBuilder', {})}
+              activeOpacity={0.7}
+              scaleValue={0.92}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Create agent"
+            >
+              <View style={styles.createBtn}>
+                <Ionicons name="add" size={22} color={colors.textPrimary} />
+              </View>
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+    >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Active bots */}
         {active.length > 0 && (
@@ -189,7 +189,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -291,10 +291,6 @@ function BotRow({
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,

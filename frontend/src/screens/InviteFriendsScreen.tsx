@@ -5,12 +5,9 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  StatusBar,
   Share
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -18,7 +15,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type, Typography, LetterSpacing, Stroke, Control } from '../theme/designTokens';
 
@@ -38,11 +35,10 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   const currentUser = useStore((s) => s.currentUser);
   const { show } = useToast();
   const reducedMotionEnabled = useReducedMotion();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const ACCENT = colors.brand;
-  const BG = colors.background;
   const CARD = colors.surface;
   const CARD_ALT = colors.surfaceAlt;
   const BORDER = colors.border;
@@ -112,181 +108,178 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   }, [referralCode, show]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={BG} />
-      <ScreenHeader title="Invite friends" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      header={<FlagshipHeader title="Invite friends" onBack={() => navigation.goBack()} />}
+      contentStyle={styles.content}
+    >
+      {/* Hero */}
+      <Reanimated.View
+        style={styles.heroCard}
+        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(0).duration(400)}
+      >
+        <Ionicons name="gift-outline" size={48} color={ACCENT} />
+        <Text style={styles.heroTitle}>Invite & earn</Text>
+        <Text style={styles.heroSubtitle}>
+          Invite friends to Thryftverse. When they make their first sale, you both get a reward.
+        </Text>
+      </Reanimated.View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Hero */}
-        <Reanimated.View
-          style={styles.heroCard}
-          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(0).duration(400)}
-        >
-          <Ionicons name="gift-outline" size={48} color={ACCENT} />
-          <Text style={styles.heroTitle}>Invite & earn</Text>
-          <Text style={styles.heroSubtitle}>
-            Invite friends to Thryftverse. When they make their first sale, you both get a reward.
-          </Text>
-        </Reanimated.View>
-
-        {/* Referral Code */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(80).duration(400)}
-        >
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>YOUR REFERRAL CODE</Text>
-            <View style={styles.codeRow}>
-              <Text style={styles.codeText}>{referralCode}</Text>
-              <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
-                <Ionicons name="copy-outline" size={18} color={ACCENT} />
-                <Text style={styles.copyText}>Copy</Text>
-              </AnimatedPressable>
-            </View>
+      {/* Referral Code */}
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(80).duration(400)}
+      >
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>YOUR REFERRAL CODE</Text>
+          <View style={styles.codeRow}>
+            <Text style={styles.codeText}>{referralCode}</Text>
+            <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
+              <Ionicons name="copy-outline" size={18} color={ACCENT} />
+              <Text style={styles.copyText}>Copy</Text>
+            </AnimatedPressable>
           </View>
-        </Reanimated.View>
+        </View>
+      </Reanimated.View>
 
-        {/* Share Link */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(160).duration(400)}
-        >
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
-            <View style={styles.linkRow}>
-              <Text style={styles.linkText} numberOfLines={1}>
-                {inviteLink}
-              </Text>
-              <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
-                <Ionicons name="copy-outline" size={18} color={ACCENT} />
-                <Text style={styles.copyText}>Copy</Text>
-              </AnimatedPressable>
-            </View>
-          </View>
-        </Reanimated.View>
-
-        {/* Share Options */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(240).duration(400)}
-        >
-          <View style={styles.shareRow}>
-            {([
-              { icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },
-              { icon: 'logo-instagram', label: 'Instagram', color: '#E1306C' },
-              { icon: 'mail-outline', label: 'Email', color: ACCENT },
-              { icon: 'share-social-outline', label: 'More', color: MUTED },
-            ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string }>).map(s => (
-              <AnimatedPressable key={s.label} style={styles.shareIconBtn} onPress={handleShare} accessibilityLabel={`Share via ${s.label}`} accessibilityRole="button">
-                <View style={[styles.shareIconCircle, { borderColor: s.color }]}>
-                  <Ionicons name={s.icon} size={22} color={s.color} />
-                </View>
-                <Text style={styles.shareIconLabel}>{s.label}</Text>
-              </AnimatedPressable>
-            ))}
-          </View>
-        </Reanimated.View>
-
-        {/* Rewards Summary */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(320).duration(400)}
-        >
-          <View style={styles.rewardsCard}>
-            <View style={styles.rewardsHeader}>
-              <Ionicons name="ribbon-outline" size={18} color={ACCENT} />
-              <Text style={styles.rewardsTitle}>Your rewards</Text>
-            </View>
-            <View style={styles.statsRow}>
-              <View style={styles.statCell}>
-                <Text style={styles.statValue}>{referralStats.invited}</Text>
-                <Text style={styles.statLabel}>Invited</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statCell}>
-                <Text style={styles.statValue}>{referralStats.joined}</Text>
-                <Text style={styles.statLabel}>Joined</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statCell}>
-                <Text style={[styles.statValue, { color: SUCCESS }]}>{referralStats.rewarded}</Text>
-                <Text style={styles.statLabel}>Rewarded</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statCell}>
-                <Text style={[styles.statValue, { color: ACCENT }]}>£{referralStats.creditsBalance}</Text>
-                <Text style={styles.statLabel}>Credits</Text>
-              </View>
-            </View>
-            <Text style={styles.rewardsFootnote}>
-              Earn £5 credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
+      {/* Share Link */}
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(160).duration(400)}
+      >
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
+          <View style={styles.linkRow}>
+            <Text style={styles.linkText} numberOfLines={1}>
+              {inviteLink}
             </Text>
+            <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
+              <Ionicons name="copy-outline" size={18} color={ACCENT} />
+              <Text style={styles.copyText}>Copy</Text>
+            </AnimatedPressable>
           </View>
-        </Reanimated.View>
+        </View>
+      </Reanimated.View>
 
-        {/* Loyalty Tier Card */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(360).duration(400)}
-        >
-          <View style={styles.loyaltyCard}>
-            <View style={styles.loyaltyHeader}>
-              <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
-                <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
+      {/* Share Options */}
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(240).duration(400)}
+      >
+        <View style={styles.shareRow}>
+          {([
+            { icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },
+            { icon: 'logo-instagram', label: 'Instagram', color: '#E1306C' },
+            { icon: 'mail-outline', label: 'Email', color: ACCENT },
+            { icon: 'share-social-outline', label: 'More', color: MUTED },
+          ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; color: string }>).map(s => (
+            <AnimatedPressable key={s.label} style={styles.shareIconBtn} onPress={handleShare} accessibilityLabel={`Share via ${s.label}`} accessibilityRole="button">
+              <View style={[styles.shareIconCircle, { borderColor: s.color }]}>
+                <Ionicons name={s.icon} size={22} color={s.color} />
               </View>
-              <View style={styles.loyaltyInfo}>
-                <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
-                <Text style={styles.loyaltySubtext}>
-                  {loyaltyTier.nextThreshold
-                    ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more referrals to reach ${loyaltyTier.name === 'Bronze' ? 'Silver' : 'Gold'}`
-                    : 'Highest tier reached'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.loyaltyProgressTrack}>
-              <View style={[styles.loyaltyProgressFill, { width: `${Math.min(loyaltyTier.progress, 100)}%`, backgroundColor: loyaltyTier.color }]} />
-            </View>
-            <View style={styles.loyaltyBenefitsRow}>
-              <View style={styles.loyaltyBenefit}>
-                <Ionicons name="pricetag-outline" size={16} color={MUTED} />
-                <Text style={styles.loyaltyBenefitText}>Reduced fees</Text>
-              </View>
-              <View style={styles.loyaltyBenefit}>
-                <Ionicons name="flash-outline" size={16} color={MUTED} />
-                <Text style={styles.loyaltyBenefitText}>Priority support</Text>
-              </View>
-              <View style={styles.loyaltyBenefit}>
-                <Ionicons name="star-outline" size={16} color={MUTED} />
-                <Text style={styles.loyaltyBenefitText}>Exclusive drops</Text>
-              </View>
-            </View>
-          </View>
-        </Reanimated.View>
+              <Text style={styles.shareIconLabel}>{s.label}</Text>
+            </AnimatedPressable>
+          ))}
+        </View>
+      </Reanimated.View>
 
-        {/* How it works */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.delay(400).duration(400)}
-        >
-          <View style={styles.howItWorksCard}>
-            <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
-            {([
-              { icon: 'share-outline', text: 'Share your referral link with friends' },
-              { icon: 'person-add-outline', text: 'They sign up and create an account' },
-              { icon: 'pricetag-outline', text: 'They list their first item for sale' },
-              { icon: 'gift-outline', text: 'You both get £5 credit automatically' },
-            ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
-              <View key={i} style={styles.stepRow}>
-                <View style={styles.stepIconWrap}>
-                  <Ionicons name={step.icon} size={18} color={ACCENT} />
-                </View>
-                <Text style={styles.stepText}>{step.text}</Text>
-              </View>
-            ))}
+      {/* Rewards Summary */}
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(320).duration(400)}
+      >
+        <View style={styles.rewardsCard}>
+          <View style={styles.rewardsHeader}>
+            <Ionicons name="ribbon-outline" size={18} color={ACCENT} />
+            <Text style={styles.rewardsTitle}>Your rewards</Text>
           </View>
-        </Reanimated.View>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.statsRow}>
+            <View style={styles.statCell}>
+              <Text style={styles.statValue}>{referralStats.invited}</Text>
+              <Text style={styles.statLabel}>Invited</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCell}>
+              <Text style={styles.statValue}>{referralStats.joined}</Text>
+              <Text style={styles.statLabel}>Joined</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCell}>
+              <Text style={[styles.statValue, { color: SUCCESS }]}>{referralStats.rewarded}</Text>
+              <Text style={styles.statLabel}>Rewarded</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCell}>
+              <Text style={[styles.statValue, { color: ACCENT }]}>£{referralStats.creditsBalance}</Text>
+              <Text style={styles.statLabel}>Credits</Text>
+            </View>
+          </View>
+          <Text style={styles.rewardsFootnote}>
+            Earn £5 credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
+          </Text>
+        </View>
+      </Reanimated.View>
+
+      {/* Loyalty Tier Card */}
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(360).duration(400)}
+      >
+        <View style={styles.loyaltyCard}>
+          <View style={styles.loyaltyHeader}>
+            <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
+              <Ionicons name={loyaltyTier.icon} size={24} color={loyaltyTier.color} />
+            </View>
+            <View style={styles.loyaltyInfo}>
+              <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
+              <Text style={styles.loyaltySubtext}>
+                {loyaltyTier.nextThreshold
+                  ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more referrals to reach ${loyaltyTier.name === 'Bronze' ? 'Silver' : 'Gold'}`
+                  : 'Highest tier reached'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.loyaltyProgressTrack}>
+            <View style={[styles.loyaltyProgressFill, { width: `${Math.min(loyaltyTier.progress, 100)}%`, backgroundColor: loyaltyTier.color }]} />
+          </View>
+          <View style={styles.loyaltyBenefitsRow}>
+            <View style={styles.loyaltyBenefit}>
+              <Ionicons name="pricetag-outline" size={16} color={MUTED} />
+              <Text style={styles.loyaltyBenefitText}>Reduced fees</Text>
+            </View>
+            <View style={styles.loyaltyBenefit}>
+              <Ionicons name="flash-outline" size={16} color={MUTED} />
+              <Text style={styles.loyaltyBenefitText}>Priority support</Text>
+            </View>
+            <View style={styles.loyaltyBenefit}>
+              <Ionicons name="star-outline" size={16} color={MUTED} />
+              <Text style={styles.loyaltyBenefitText}>Exclusive drops</Text>
+            </View>
+          </View>
+        </View>
+      </Reanimated.View>
+
+      {/* How it works */}
+      <Reanimated.View
+        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(400).duration(400)}
+      >
+        <View style={styles.howItWorksCard}>
+          <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
+          {([
+            { icon: 'share-outline', text: 'Share your referral link with friends' },
+            { icon: 'person-add-outline', text: 'They sign up and create an account' },
+            { icon: 'pricetag-outline', text: 'They list their first item for sale' },
+            { icon: 'gift-outline', text: 'You both get £5 credit automatically' },
+          ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
+            <View key={i} style={styles.stepRow}>
+              <View style={styles.stepIconWrap}>
+                <Ionicons name={step.icon} size={18} color={ACCENT} />
+              </View>
+              <Text style={styles.stepText}>{step.text}</Text>
+            </View>
+          ))}
+        </View>
+      </Reanimated.View>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     content: { padding: Space.lg },
     heroCard: {
       backgroundColor: colors.surface,

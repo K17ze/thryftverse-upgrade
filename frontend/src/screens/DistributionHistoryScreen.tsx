@@ -10,8 +10,6 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,9 +21,9 @@ import { Space, Radius, Type, Typography, Control } from '../theme/designTokens'
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import {
-  CoOwnMarketHeader,
   CoOwnStateCanvas,
 } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { fetchCoOwnDistributions, fetchDripEnrollments, updateDripEnrollment, type CoOwnDistribution } from '../services/marketApi';
 import { formatCoOwnIze } from '../utils/currency';
@@ -55,7 +53,7 @@ function formatDate(iso: string | null): string {
 export default function DistributionHistoryScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const filterAssetId = route.params?.assetId;
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -124,15 +122,16 @@ export default function DistributionHistoryScreen() {
   const totalReceived = distributions.reduce((sum, d) => sum + d.amountGbpMinor, 0);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Distributions"
-        subtitle={filterAssetId ? 'For this position' : 'All positions'}
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Distributions"
+          subtitle={filterAssetId ? 'For this position' : 'All positions'}
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+    >
       {loading ? (
         <View style={styles.loadingContainer}>
           <CoOwnActivitySkeleton />
@@ -285,13 +284,12 @@ export default function DistributionHistoryScreen() {
           ))}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1 },
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

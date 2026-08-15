@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -17,8 +16,8 @@ import { cancelCoOwnOrderReservation, placeCoOwnOrder } from '../services/market
 import { parseApiError } from '../lib/apiClient';
 import { useStore } from '../store/useStore';
 import { makeStableId } from '../utils/createStableId';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import {
-  CoOwnMarketHeader,
   CoOwnTradeReceipt,
   CoOwnStickyActionDock,
   CoOwnRiskDisclosure,
@@ -49,7 +48,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     maxReserved1ze,
     marketDataTimestamp,
   } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isCompactDock = width < 360;
@@ -195,15 +194,17 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const handleBack = handleCancel;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Confirm order"
-        subtitle={isBuy ? 'Review your buy' : 'Review your sell'}
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      header={
+        <FlagshipHeader
+          title="Confirm order"
+          subtitle={isBuy ? 'Review your buy' : 'Review your sell'}
+          onBack={handleBack}
+        />
+      }
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -267,14 +268,11 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           />
         </View>
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   // ── Content padding — 24pt top for calm breathing room ──
   // Per spec 11_COOWN: "24pt between sections." The confirmation surface
   // should feel calm and deliberate — this is the final decision point.

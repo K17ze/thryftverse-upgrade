@@ -4,11 +4,9 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -20,7 +18,7 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation<any>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const [email, setEmail] = useState('');
   const [isSent, setIsSent] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -60,15 +58,16 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-
-      <ScreenHeader
-        title=""
-        onBack={() => navigation.goBack()}
-        showBackButton
-      />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      header={
+        <FlagshipHeader
+          title=""
+          onBack={() => navigation.goBack()}
+          showBackButton
+        />
+      }
+    >
       <KeyboardAwareScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
@@ -136,14 +135,12 @@ export default function ForgotPasswordScreen() {
         )}
 
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-
   content: { flex: 1, paddingHorizontal: Space.lg },
   contentContainer: { justifyContent: 'center', flexGrow: 1, paddingBottom: Space.xl },
   title: { fontSize: Type.display.size + Space.sm + Space.xs, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight + 10, letterSpacing: Type.display.letterSpacing * 2, marginBottom: Space.lg },

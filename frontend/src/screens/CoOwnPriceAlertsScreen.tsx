@@ -18,7 +18,6 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
@@ -27,7 +26,7 @@ import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/desig
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { EmptyState } from '../components/EmptyState';
 import {
@@ -132,18 +131,22 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Price Alerts" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Price Alerts" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <CoOwnActivitySkeleton />
         </ScrollView>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Price Alerts" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      header={<FlagshipHeader title="Price Alerts" onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}
@@ -361,13 +364,12 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
         )}
         <View style={{ height: Space.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
     // Section headers — flat, no count badge dashboard

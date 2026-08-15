@@ -1,8 +1,6 @@
 import React, { useCallback } from 'react';
 import { Alert, View, Text, StyleSheet, RefreshControl } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { FlashList } from '@shopify/flash-list';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -27,7 +25,8 @@ import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
 import { formatCoOwnIze } from '../utils/currency';
-import { CoOwnMarketHeader, CoOwnStateCanvas } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { CoOwnStateCanvas } from '../components/coown';
 import type { OrderStatus } from '../data/coOwnModels';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -116,7 +115,7 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
 
 export default function CoOwnOrderHistoryScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
@@ -281,15 +280,17 @@ export default function CoOwnOrderHistoryScreen() {
   ]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Activity"
-        subtitle="Orders and executions"
-        onBack={handleBack}
-      />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      header={
+        <FlagshipHeader
+          title="Activity"
+          subtitle="Orders and executions"
+          onBack={handleBack}
+        />
+      }
+    >
       <View style={[styles.filterToolbar, { borderBottomColor: colors.border }]}>
         <View style={styles.sideTabs} accessibilityRole="tablist">
           {SIDE_FILTERS.map((filter) => {
@@ -395,14 +396,11 @@ export default function CoOwnOrderHistoryScreen() {
           }
         }}
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   filterToolbar: {
     minHeight: Space.xxl + Space.xs + 2,
     paddingHorizontal: Space.md,

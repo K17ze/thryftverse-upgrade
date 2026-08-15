@@ -3,12 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   TextInput,
   Pressable,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
@@ -21,7 +19,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -37,7 +35,7 @@ const MOSAIC_SIZE = 72;
 
 export default function CreateCollectionScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
@@ -140,28 +138,31 @@ export default function CreateCollectionScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title="New Collection"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          <AnimatedPressable
-            onPress={handleCreate}
-            disabled={!canSubmit}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityLabel="Create collection"
-            accessibilityRole="button"
-          >
-            <Text style={[styles.headerAction, !canSubmit && styles.headerActionDisabled]}>
-              Create
-            </Text>
-          </AnimatedPressable>
-        }
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="New Collection"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              onPress={handleCreate}
+              disabled={!canSubmit}
+              activeOpacity={0.7}
+              scaleValue={0.95}
+              hapticFeedback="light"
+              accessibilityLabel="Create collection"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.headerAction, !canSubmit && styles.headerActionDisabled]}>
+                Create
+              </Text>
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <KeyboardAwareScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
@@ -328,16 +329,12 @@ export default function CreateCollectionScreen() {
           />
         </Reanimated.View>
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   content: {
     flex: 1,
     paddingHorizontal: Space.md,

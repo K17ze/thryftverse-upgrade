@@ -1,14 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { AppButton } from '../components/ui/AppButton';
 import { Caption } from '../components/ui/Text';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
@@ -24,7 +23,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'BotDetail'>;
 
 export default function BotDetailScreen({ navigation, route }: Props) {
   const { botId, conversationId } = route.params;
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
@@ -54,13 +53,17 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 
   if (!bot) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ScreenHeader title="Agent details" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        header={
+          <FlagshipHeader title="Agent details" onBack={() => navigation.goBack()} />
+        }
+      >
         <View style={styles.center}>
           <Caption color={colors.textMuted}>Agent not found</Caption>
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -131,28 +134,31 @@ export default function BotDetailScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader
-        title="Agent details"
-        onBack={() => navigation.goBack()}
-        rightAction={
-          isCustomAgent ? (
-            <AnimatedPressable
-              onPress={() => navigation.navigate('BotBuilder', { botId: bot.id })}
-              style={styles.headerAction}
-              activeOpacity={0.68}
-              scaleValue={0.92}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel="Edit agent"
-            >
-              <Ionicons name="create-outline" size={21} color={colors.textPrimary} />
-            </AnimatedPressable>
-          ) : undefined
-        }
-      />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      header={
+        <FlagshipHeader
+          title="Agent details"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            isCustomAgent ? (
+              <AnimatedPressable
+                onPress={() => navigation.navigate('BotBuilder', { botId: bot.id })}
+                style={styles.headerAction}
+                activeOpacity={0.68}
+                scaleValue={0.92}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Edit agent"
+              >
+                <Ionicons name="create-outline" size={21} color={colors.textPrimary} />
+              </AnimatedPressable>
+            ) : undefined
+          }
+        />
+      }
+    >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.identity}>
           <View style={styles.identityIcon}>
@@ -256,16 +262,12 @@ export default function BotDetailScreen({ navigation, route }: Props) {
           </View>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   center: {
     flex: 1,
     alignItems: 'center',

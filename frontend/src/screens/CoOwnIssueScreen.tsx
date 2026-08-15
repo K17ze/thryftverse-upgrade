@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -11,11 +10,12 @@ import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useToast } from '../context/ToastContext';
 import { fetchCoOwnAssetById } from '../services/marketApi';
 import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { CoOwnMarketHeader, CoOwnStickyActionDock } from '../components/coown';
+import { CoOwnStickyActionDock } from '../components/coown';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnIssue'>;
 
@@ -27,7 +27,7 @@ const CATEGORIES = [
 ];
 
 export default function CoOwnIssueScreen({ navigation, route }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
   const reducedMotionEnabled = useReducedMotion();
@@ -67,15 +67,17 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-
-      <CoOwnMarketHeader
-        title="Report an issue"
-        subtitle="Help us resolve your concern"
-        onBack={() => navigation.goBack()}
-      />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Report an issue"
+          subtitle="Help us resolve your concern"
+          onBack={() => navigation.goBack()}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Asset context — show title, not UUID */}
         {assetId && (
@@ -167,14 +169,11 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
           style={{ flex: 1 }}
         />
       </CoOwnStickyActionDock>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   scroll: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,

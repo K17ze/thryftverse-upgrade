@@ -7,8 +7,6 @@ import {
   View,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,16 +27,15 @@ import {
   CoOwnEducationCard,
   CoOwnHubSkeleton,
   CoOwnInstrumentCard,
-  CoOwnMarketHeader,
   CoOwnMarketHighlightsCarousel,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
   CoOwnStateCanvas,
   COOWN_POSITION_CARD_WIDTH,
   type CoOwnAssetStatus,
-  type CoOwnMarketHeaderAction,
   type CoOwnMarketHighlight,
 } from '../components/coown';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
@@ -119,7 +116,7 @@ export default function CoOwnHubScreen() {
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
   const { isOffline } = useConnectivity();
@@ -253,19 +250,38 @@ export default function CoOwnHubScreen() {
     [marketAssets]
   );
 
-  const headerActions = React.useMemo<CoOwnMarketHeaderAction[]>(() => [
-    {
-      icon: 'pie-chart-outline',
-      label: yourPositions.length > 0 ? `Portfolio, ${yourPositions.length} positions held` : 'Portfolio',
-      badge: yourPositions.length,
-      onPress: () => navigation.navigate('Portfolio'),
-    },
-    {
-      icon: 'pulse-outline',
-      label: 'Activity',
-      onPress: () => navigation.navigate('CoOwnOrderHistory'),
-    },
-  ], [navigation, yourPositions.length]);
+  const headerRightAction = React.useMemo(
+    () => (
+      <View style={styles.headerActions}>
+        <AnimatedPressable
+          style={styles.headerAction}
+          onPress={() => navigation.navigate('Portfolio')}
+          accessibilityRole="button"
+          accessibilityLabel={yourPositions.length > 0 ? `Portfolio, ${yourPositions.length} positions held` : 'Portfolio'}
+          hapticFeedback="light"
+        >
+          <Ionicons name="pie-chart-outline" size={20} color={colors.textPrimary} />
+          {yourPositions.length > 0 ? (
+            <View style={[styles.headerBadge, { backgroundColor: colors.brand, borderColor: colors.background }]}>
+              <Text style={[styles.headerBadgeText, { color: colors.background }]} maxFontSizeMultiplier={1.1}>
+                {yourPositions.length > 9 ? '9+' : yourPositions.length}
+              </Text>
+            </View>
+          ) : null}
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.headerAction}
+          onPress={() => navigation.navigate('CoOwnOrderHistory')}
+          accessibilityRole="button"
+          accessibilityLabel="Activity"
+          hapticFeedback="light"
+        >
+          <Ionicons name="pulse-outline" size={20} color={colors.textPrimary} />
+        </AnimatedPressable>
+      </View>
+    ),
+    [colors, navigation, yourPositions.length]
+  );
 
   const segmentCounts = React.useMemo<Record<HubSegment, number>>(() => {
     const now = Date.now();
@@ -753,29 +769,29 @@ export default function CoOwnHubScreen() {
 
   if (isSyncing && remoteAssets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+      >
         <CoOwnHubSkeleton />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (isError && remoteAssets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+      >
         <CoOwnStateCanvas variant="error" actionLabel="Try again" onAction={loadData} />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   if (remoteAssets.length === 0) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+      <FlagshipScreen
+        header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+      >
         <CoOwnStateCanvas
           variant="empty"
           title="No items yet"
@@ -787,14 +803,16 @@ export default function CoOwnHubScreen() {
           secondaryActionLabel="Learn how it works"
           onSecondaryAction={() => navigation.navigate('CoOwnOnboarding')}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <CoOwnMarketHeader title="Co-Own" onBack={handleBack} actions={headerActions} />
+    <FlagshipScreen
+      header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <CoOwnReconciliationBanner isActive={false} />
       <FlashList
@@ -813,16 +831,40 @@ export default function CoOwnHubScreen() {
         }
         keyboardShouldPersistTaps="handled"
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   listContent: {
     paddingBottom: Space.xxl,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerAction: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    minWidth: 17,
+    height: 17,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.xs,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerBadgeText: {
+    fontSize: 10,
+    fontFamily: Typography.family.bold,
   },
   highlightsSection: {
     paddingTop: Space.sm,

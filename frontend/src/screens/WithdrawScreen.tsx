@@ -2,17 +2,15 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { View,
   Text,
   StyleSheet,
   TextInput,
-  StatusBar,
   ScrollView,
   Pressable,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -66,7 +64,7 @@ interface WithdrawSuccessData {
 
 export default function WithdrawScreen() {
   const navigation = useNavigation<any>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [step, setStep] = useState<WithdrawStep>('form');
   const [amount, setAmount] = useState('');
@@ -488,27 +486,22 @@ export default function WithdrawScreen() {
   // ── Biometric gate: block the withdrawal form until authenticated ──
   if (biometricGate.status === 'pending' || biometricGate.status === 'locked') {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={styles.header}>
-          <AnimatedPressable
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            accessibilityHint="Returns to the previous screen"
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.headerTitle}>Withdraw Balance</Text>
-          <View style={{ width: 44 }} />
-        </View>
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Withdraw Balance"
+            onBack={() => navigation.goBack()}
+            backIcon="arrow-back"
+          />
+        }
+        scrollEnabled={false}
+      >
         <BiometricGatePrompt
           gate={biometricGate}
           reason="Authenticate to withdraw funds"
           onBack={() => navigation.goBack()}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -516,28 +509,23 @@ export default function WithdrawScreen() {
   // Prevents layout shift and provides immediate visual feedback on first render.
   if (isHydratingBalance) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={styles.header}>
-          <AnimatedPressable
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            accessibilityHint="Returns to the previous screen"
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.headerTitle}>Withdraw Balance</Text>
-          <View style={{ width: 44 }} />
-        </View>
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Withdraw Balance"
+            onBack={() => navigation.goBack()}
+            backIcon="arrow-back"
+          />
+        }
+        scrollEnabled={false}
+      >
         <View style={styles.skeletonContainer}>
           <SkeletonLoader width="60%" height={32} borderRadius={Radius.md} style={{ marginBottom: Space.lg }} />
           <SkeletonLoader width="100%" height={80} borderRadius={Radius.lg} style={{ marginBottom: Space.md }} />
           <SkeletonLoader width="100%" height={56} borderRadius={Radius.md} style={{ marginBottom: Space.sm }} />
           <SkeletonLoader width="100%" height={56} borderRadius={Radius.md} />
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -551,21 +539,29 @@ export default function WithdrawScreen() {
       minute: '2-digit',
     });
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={styles.header}>
-          <AnimatedPressable
-            style={styles.backBtn}
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Withdraw Balance"
+            onBack={() => navigation.goBack()}
+            backIcon="arrow-back"
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        stickyFooter={
+          <AppButton
+            title="Done"
             onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
+            variant="primary"
+            style={[styles.primaryBtn]}
+            titleStyle={styles.primaryText}
+            accessibilityLabel="Close withdrawal confirmation"
             accessibilityHint="Returns to the previous screen"
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.headerTitle}>Withdraw Balance</Text>
-          <View style={{ width: 44 }} />
-        </View>
+            hapticFeedback="light"
+          />
+        }
+      >
         <ScrollView
           style={styles.content}
           contentContainerStyle={{ paddingHorizontal: Space.md + Space.xs, paddingTop: Space.xxl, paddingBottom: Space.xxl }}
@@ -623,19 +619,7 @@ export default function WithdrawScreen() {
             </View>
           </Reanimated.View>
         </ScrollView>
-        <View style={styles.footer}>
-          <AppButton
-            title="Done"
-            onPress={() => navigation.goBack()}
-            variant="primary"
-            style={[styles.primaryBtn]}
-            titleStyle={styles.primaryText}
-            accessibilityLabel="Close withdrawal confirmation"
-            accessibilityHint="Returns to the previous screen"
-            hapticFeedback="light"
-          />
-        </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
@@ -645,21 +629,45 @@ export default function WithdrawScreen() {
       ? `${payoutAccount.gatewayId} · ${payoutAccount.currency}${payoutAccount.countryCode ? ` · ${payoutAccount.countryCode}` : ''}`
       : bankCopy.details;
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={styles.header}>
-          <AnimatedPressable
-            style={styles.backBtn}
-            onPress={handleBackToForm}
-            accessibilityRole="button"
-            accessibilityLabel="Go back to edit amount"
-            accessibilityHint="Returns to the withdrawal form"
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.headerTitle}>Confirm withdrawal</Text>
-          <View style={{ width: 44 }} />
-        </View>
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Confirm withdrawal"
+            onBack={handleBackToForm}
+            backIcon="arrow-back"
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        stickyFooter={
+          <>
+            <AppButton
+              title={isWithdrawing ? 'Processing...' : 'Confirm withdrawal'}
+              onPress={handleWithdraw}
+              disabled={isWithdrawing}
+              loading={isWithdrawing}
+              variant="primary"
+              style={[styles.primaryBtn, isWithdrawing && styles.primaryBtnDisabled]}
+              titleStyle={styles.primaryText}
+              accessibilityLabel={
+                isWithdrawing
+                  ? 'Processing withdrawal'
+                  : `Confirm withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
+              }
+              accessibilityHint="Submits your withdrawal request"
+            />
+            <AppButton
+              title="Back to edit"
+              onPress={handleBackToForm}
+              variant="secondary"
+              style={[styles.secondaryBtn, { marginTop: Space.sm }]}
+              accessibilityLabel="Back to edit amount"
+              accessibilityHint="Returns to the withdrawal form"
+              hapticFeedback="light"
+            />
+          </>
+        }
+      >
         <ScrollView
           style={styles.content}
           contentContainerStyle={{ paddingHorizontal: Space.md + Space.xs, paddingTop: Space.lg, paddingBottom: 120 }}
@@ -717,54 +725,51 @@ export default function WithdrawScreen() {
             </View>
           </Reanimated.View>
         </ScrollView>
-        <View style={styles.footer}>
-          <AppButton
-            title={isWithdrawing ? 'Processing...' : 'Confirm withdrawal'}
-            onPress={handleWithdraw}
-            disabled={isWithdrawing}
-            loading={isWithdrawing}
-            variant="primary"
-            style={[styles.primaryBtn, isWithdrawing && styles.primaryBtnDisabled]}
-            titleStyle={styles.primaryText}
-            accessibilityLabel={
-              isWithdrawing
-                ? 'Processing withdrawal'
-                : `Confirm withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
-            }
-            accessibilityHint="Submits your withdrawal request"
-          />
-          <AppButton
-            title="Back to edit"
-            onPress={handleBackToForm}
-            variant="secondary"
-            style={[styles.secondaryBtn, { marginTop: Space.sm }]}
-            accessibilityLabel="Back to edit amount"
-            accessibilityHint="Returns to the withdrawal form"
-            hapticFeedback="light"
-          />
-        </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-
-      <View style={styles.header}>
-        <AnimatedPressable
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the previous screen"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Withdraw Balance</Text>
-        <View style={{ width: 44 }} />
-      </View>
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Withdraw Balance"
+          onBack={() => navigation.goBack()}
+          backIcon="arrow-back"
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      stickyFooter={
+        <>
+          {/* Estimated arrival — clear, prominent disclosure per spec */}
+          <View style={[styles.arrivalRow, { borderColor: colors.border }]}>
+            <View style={styles.arrivalLeft}>
+              <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+              <Text style={[styles.arrivalLabel, { color: colors.textSecondary }]}>
+                Estimated arrival
+              </Text>
+            </View>
+            <Text style={[styles.arrivalValue, { color: colors.textPrimary }]}>
+              3–5 working days
+            </Text>
+          </View>
+          <Text style={styles.feeText}>Withdrawals are processed from completed sale proceeds.</Text>
+          <AppButton
+            title={`Review withdrawal`}
+            onPress={handleReview}
+            disabled={!canWithdraw}
+            variant="primary"
+            style={[styles.primaryBtn, !canWithdraw && styles.primaryBtnDisabled]}
+            titleStyle={styles.primaryText}
+            accessibilityLabel={
+              `Review withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
+            }
+            accessibilityHint="Proceeds to the confirmation step"
+          />
+        </>
+      }
+    >
       {isOffline && (
         <View style={[styles.offlineBanner, { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border }]}>
           <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
@@ -878,42 +883,13 @@ export default function WithdrawScreen() {
             <Text style={styles.railHintText}>Bank account setup is currently disabled for this region policy.</Text>
           )}
           </Reanimated.View>
-
-        <View style={styles.footer}>
-          {/* Estimated arrival — clear, prominent disclosure per spec */}
-          <View style={[styles.arrivalRow, { borderColor: colors.border }]}>
-            <View style={styles.arrivalLeft}>
-              <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-              <Text style={[styles.arrivalLabel, { color: colors.textSecondary }]}>
-                Estimated arrival
-              </Text>
-            </View>
-            <Text style={[styles.arrivalValue, { color: colors.textPrimary }]}>
-              3–5 working days
-            </Text>
-          </View>
-          <Text style={styles.feeText}>Withdrawals are processed from completed sale proceeds.</Text>
-          <AppButton
-            title={`Review withdrawal`}
-            onPress={handleReview}
-            disabled={!canWithdraw}
-            variant="primary"
-            style={[styles.primaryBtn, !canWithdraw && styles.primaryBtnDisabled]}
-            titleStyle={styles.primaryText}
-            accessibilityLabel={
-              `Review withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
-            }
-            accessibilityHint="Proceeds to the confirmation step"
-          />
-        </View>
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   skeletonContainer: { paddingHorizontal: Space.md + Space.xs, paddingTop: Space.md },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, height: Space.xl + Space.xl + 8, borderBottomWidth: Stroke.standard, borderBottomColor: colors.border },
   backBtn: { width: Control.hit, height: Control.hit, justifyContent: 'center', alignItems: 'flex-start' },

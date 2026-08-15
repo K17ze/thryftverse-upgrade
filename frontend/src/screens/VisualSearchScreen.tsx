@@ -5,13 +5,12 @@ import {
   StyleSheet,
   Image,
   ScrollView,
-  StatusBar,
   TextInput,
   RefreshControl,
   Animated as RNAnimated,
   Easing,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,13 +23,13 @@ import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from 
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { useStore } from '../store/useStore';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { DiscoverySectionHeader } from '../components/discover/DiscoverySectionHeader';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import type { Listing } from '../domain';
 import { visualSearch } from '../services/listingsApi';
 import VisualSearchCamera from '../components/VisualSearchCamera';
@@ -41,7 +40,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'VisualSearch'>;
 type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error';
 
 export default function VisualSearchScreen({ navigation, route }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -712,7 +711,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   if (!imageUri) {
     return (
       <>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <StatusBar style="light" />
         <VisualSearchCamera
           onPhotoCapture={handlePhotoCapture}
           onGallery={openGallery}
@@ -724,10 +723,13 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-      <ScreenHeader title="Visual Search" onBack={() => navigation.goBack()} />
-
+    <FlagshipScreen
+      header={
+        <FlagshipHeader title="Visual Search" onBack={() => navigation.goBack()} />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
@@ -747,13 +749,12 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           {renderResults()}
         </Reanimated.View>
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   scroll: { paddingHorizontal: Space.md, paddingBottom: Space.xxl },
 
   // ── Visual-query header ───────────────────────────────────────────────

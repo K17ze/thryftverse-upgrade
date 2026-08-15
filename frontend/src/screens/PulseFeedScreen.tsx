@@ -8,7 +8,6 @@ import {
 } from 'react-native';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -22,7 +21,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
 import { formatCountdown } from '../data/tradeHub';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -171,8 +170,10 @@ export default function PulseFeedScreen() {
 
   if (events.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <ScreenHeader title="Pulse Feed" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        scrollEnabled={false}
+        header={<FlagshipHeader title="Pulse Feed" onBack={() => navigation.goBack()} />}
+      >
         <EmptyState
           icon="pulse-outline"
           title="The marketplace is quiet"
@@ -180,26 +181,27 @@ export default function PulseFeedScreen() {
           ctaLabel="Browse All"
           onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Pulse Feed" onBack={() => navigation.goBack()} />
+    <FlagshipScreen
+      scrollEnabled={false}
+      header={<FlagshipHeader title="Pulse Feed" onBack={() => navigation.goBack()} />}
+    >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {events.map((event, i) => (
           <EventCard key={event.id} event={event} index={i} />
         ))}
         <View style={{ height: 40 }} />
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,

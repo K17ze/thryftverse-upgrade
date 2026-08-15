@@ -1,12 +1,10 @@
 import React, { useMemo } from 'react';
 import {
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { CATEGORIES } from '../constants/categories';
@@ -15,8 +13,8 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Space, Typography, Type, Control, Stroke } from '../theme/designTokens';
 
@@ -27,7 +25,7 @@ export default function CategoryDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const categoryId = route.params?.categoryId as string | undefined;
 
@@ -60,10 +58,6 @@ export default function CategoryDetailScreen() {
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background,
-        },
         content: {
           paddingBottom: Space.xl,
         },
@@ -130,12 +124,11 @@ export default function CategoryDetailScreen() {
 
   if (!category) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar
-          barStyle={!isDark ? 'dark-content' : 'light-content'}
-          backgroundColor={colors.background}
-        />
-        <ScreenHeader title="Category" onBack={() => navigation.goBack()} />
+      <FlagshipScreen
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+        header={<FlagshipHeader title="Category" onBack={() => navigation.goBack()} />}
+      >
         <EmptyState
           icon="grid-outline"
           title="Category unavailable"
@@ -145,18 +138,16 @@ export default function CategoryDetailScreen() {
             navigation.replace('Browse', { categoryId: 'all', title: 'Browse' })
           }
         />
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={!isDark ? 'dark-content' : 'light-content'}
-        backgroundColor={colors.background}
-      />
-      <ScreenHeader title={category.name} onBack={() => navigation.goBack()} />
-
+    <FlagshipScreen
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      header={<FlagshipHeader title={category.name} onBack={() => navigation.goBack()} />}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
@@ -242,7 +233,7 @@ export default function CategoryDetailScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
