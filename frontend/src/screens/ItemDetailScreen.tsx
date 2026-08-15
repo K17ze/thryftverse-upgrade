@@ -1068,13 +1068,96 @@ export default function ItemDetailScreen() {
           ) : null}
 
           {(() => {
+            // ── Category evidence ──
+            // resolveEvidenceGroups() supports car/yacht fields (make,
+            // mileage, transmission, fuelType, bodyType, serviceRecords,
+            // motInspection, mechanicalCondition, inspectionAvailable,
+            // inspectionReport, v5Logbook, numberOfOwners, financeStatus,
+            // length, beam, draft, displacement, engineType, engineHours,
+            // surveyAvailable, surveyDate, surveyReport, registration,
+            // flag, ownershipDocs, viewingAvailable, viewingLocation,
+            // seaTrialAvailable) plus watch/art/electronics extras
+            // (material, measurements, flaws, reference, movement,
+            // caseSize, serviceHistory, boxPapers, dimensions, hardware,
+            // exteriorCondition, interiorCondition, includedAccessories,
+            // serialImagery, provenance, model, storage, batteryCondition,
+            // functionalIssues, warranty, creator, year, medium, edition).
+            //
+            // The Listing model does not yet declare these fields, so we
+            // read them dynamically from the listing object. When the
+            // backend schema is extended to return them, they will flow
+            // through here without further frontend changes. Until then
+            // only the known fields (category, subcategory, brand, size,
+            // condition, description) are guaranteed to be present, which
+            // keeps the existing evidence groups rendering correctly.
+            const dynamicItem = item as unknown as Record<string, string | null | undefined>;
+            const pickStr = (key: string): string | null | undefined => {
+              const value = dynamicItem[key];
+              return typeof value === 'string' ? value : null;
+            };
             const evidenceGroups = resolveEvidenceGroups({
+              // Known Listing fields
               category: item.category,
               subcategory: item.subcategory,
               brand: item.brand,
               size: item.size,
               condition: item.condition,
               description: item.description,
+              // Watch / jewellery / electronics / art extras
+              material: pickStr('material'),
+              measurements: pickStr('measurements'),
+              flaws: pickStr('flaws'),
+              reference: pickStr('reference'),
+              movement: pickStr('movement'),
+              caseSize: pickStr('caseSize'),
+              serviceHistory: pickStr('serviceHistory'),
+              boxPapers: pickStr('boxPapers'),
+              dimensions: pickStr('dimensions'),
+              hardware: pickStr('hardware'),
+              exteriorCondition: pickStr('exteriorCondition'),
+              interiorCondition: pickStr('interiorCondition'),
+              includedAccessories: pickStr('includedAccessories'),
+              serialImagery: pickStr('serialImagery'),
+              provenance: pickStr('provenance'),
+              model: pickStr('model'),
+              storage: pickStr('storage'),
+              batteryCondition: pickStr('batteryCondition'),
+              functionalIssues: pickStr('functionalIssues'),
+              warranty: pickStr('warranty'),
+              creator: pickStr('creator'),
+              year: pickStr('year'),
+              medium: pickStr('medium'),
+              edition: pickStr('edition'),
+              // Car fields
+              make: pickStr('make'),
+              mileage: pickStr('mileage'),
+              transmission: pickStr('transmission'),
+              fuelType: pickStr('fuelType'),
+              bodyType: pickStr('bodyType'),
+              serviceRecords: pickStr('serviceRecords'),
+              motInspection: pickStr('motInspection'),
+              mechanicalCondition: pickStr('mechanicalCondition'),
+              inspectionAvailable: pickStr('inspectionAvailable'),
+              inspectionReport: pickStr('inspectionReport'),
+              v5Logbook: pickStr('v5Logbook'),
+              numberOfOwners: pickStr('numberOfOwners'),
+              financeStatus: pickStr('financeStatus'),
+              // Yacht fields
+              length: pickStr('length'),
+              beam: pickStr('beam'),
+              draft: pickStr('draft'),
+              displacement: pickStr('displacement'),
+              engineType: pickStr('engineType'),
+              engineHours: pickStr('engineHours'),
+              surveyAvailable: pickStr('surveyAvailable'),
+              surveyDate: pickStr('surveyDate'),
+              surveyReport: pickStr('surveyReport'),
+              registration: pickStr('registration'),
+              flag: pickStr('flag'),
+              ownershipDocs: pickStr('ownershipDocs'),
+              viewingAvailable: pickStr('viewingAvailable'),
+              viewingLocation: pickStr('viewingLocation'),
+              seaTrialAvailable: pickStr('seaTrialAvailable'),
             });
             return evidenceGroups.length > 0 ? (
               <CategoryEvidence groups={evidenceGroups} />

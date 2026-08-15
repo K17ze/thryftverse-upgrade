@@ -88,10 +88,12 @@ export interface CommerceDetailStateDockProps {
   showProtectionStrip?: boolean;
   /** Detected commerce tier for category-adaptive trust strip copy. When
    *  set to a non-standard tier, the dock shows a tier-appropriate hint
-   *  instead of the default "Buyer protection" strip:
+   *  instead of the default "Buyer protection" strip. The copy is
+   *  descriptive of the tier, not a promise of a specific service that
+   *  may not be backed by real backend capabilities:
    *    - brokered: "Brokered asset — enquire to arrange viewing"
-   *    - authenticated_luxury: "Eligible for authentication"
-   *    - specialist: "Expert review available"
+   *    - authenticated_luxury: "High-value item — authentication may be available"
+   *    - specialist: "Specialist item — enquire for details"
    *  The standard tier falls back to the showProtectionStrip behaviour. */
   commerceTier?: 'standard' | 'authenticated_luxury' | 'specialist' | 'brokered';
   /** Primary action (max 1). Required when no blocked state is shown. */
@@ -177,11 +179,14 @@ export function CommerceDetailStateDock({
           Flattened per AGENTS.md §4 — no separate surface; a hairline
           borderBottom divides it from the action row.
 
-          The strip copy is tier-adaptive:
+          The strip copy is tier-adaptive and descriptive of the tier,
+          not a promise of a specific service that may not be backed by
+          real backend capabilities:
             - brokered: "Brokered asset — enquire to arrange viewing"
-              (no direct buy; the enquiry flow replaces buyer protection)
-            - authenticated_luxury: "Eligible for authentication"
-            - specialist: "Expert review available"
+              (describes the transaction mode, not a service promise)
+            - authenticated_luxury: "High-value item — authentication
+              may be available"
+            - specialist: "Specialist item — enquire for details"
             - standard / unset: "Buyer protection" (only when
               showProtectionStrip is true) */}
       {(() => {
@@ -205,7 +210,7 @@ export function CommerceDetailStateDock({
             >
               <Ionicons name="shield-checkmark" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
               <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
-                Eligible for authentication
+                High-value item — authentication may be available
               </Text>
             </View>
           );
@@ -217,7 +222,7 @@ export function CommerceDetailStateDock({
             >
               <Ionicons name="ribbon-outline" size={CommerceLayout.dockProtectionIcon} color={colors.textSecondary} />
               <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
-                Expert review available
+                Specialist item — enquire for details
               </Text>
             </View>
           );

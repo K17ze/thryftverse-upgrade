@@ -494,6 +494,12 @@ export default function MyProfileScreen() {
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
         accessibilityLabel: 'Browse co-own market',
       },
+      {
+        icon: 'storefront-outline' as const,
+        label: 'Seller Hub',
+        onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
+        accessibilityLabel: 'Seller Hub',
+      },
     ],
     [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation]
   );

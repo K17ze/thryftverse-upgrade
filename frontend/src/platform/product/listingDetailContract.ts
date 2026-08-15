@@ -277,10 +277,13 @@ export type CommerceTier = 'standard' | 'authenticated_luxury' | 'specialist' | 
  * - specialist: art, collectibles — buy enabled but with inspection note
  * - authenticated_luxury: bags, watches, jewellery at high value — buy + offer with authentication note
  * - standard: everything else — current buy + offer behaviour
+ *
+ * Note: priceGbp is in GBP major units (e.g. 20000 = £20,000), matching
+ * `listing.price` which is stored in major units, not minor/pence.
  */
 export function detectCommerceTier(
   category: string,
-  priceMinor: number,
+  priceGbp: number,
   _currency?: string,
 ): CommerceTier {
   const normalized = category.toLowerCase();
@@ -296,9 +299,10 @@ export function detectCommerceTier(
   }
 
   // Tier 2 — authenticated luxury: bags, watches, jewellery at high value
-  const highValueThreshold = 10000_00; // £10,000 in minor units
+  // listing.price is in GBP major units (e.g. 20000 = £20,000)
+  const highValueThresholdGbp = 10_000;
   if (
-    priceMinor >= highValueThreshold &&
+    priceGbp >= highValueThresholdGbp &&
     (normalized.includes('bag') || normalized.includes('watch') || normalized.includes('jewel'))
   ) {
     return 'authenticated_luxury';
@@ -329,8 +333,8 @@ export function buildCapabilities(
 
   // ── Category-adaptive CTA logic (Phase 6 Wave 5) ──
   const category = listing.category ?? '';
-  const priceMinor = listing.price ?? 0;
-  const commerceTier = detectCommerceTier(category, priceMinor);
+  const priceGbp = listing.price ?? 0;
+  const commerceTier = detectCommerceTier(category, priceGbp);
 
   let canBuy = !isOwner && isAvailable;
   let canOffer = !isOwner && isAvailable;

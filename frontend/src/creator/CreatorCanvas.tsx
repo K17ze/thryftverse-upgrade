@@ -829,16 +829,17 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
 
 function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLayer, { type: 'media' }>; width: number; height: number }) {
   const { payload } = layer;
-  const { colors } = useAppTheme();
   const [videoError, setVideoError] = React.useState(false);
-  const [imageLoaded, setImageLoaded] = React.useState(false);
-  const [imageError, setImageError] = React.useState(false);
 
   if (payload.mediaType === 'video' && !videoError) {
     return (
       <>
         {payload.thumbnailUri && (
-          <ExpoImage source={{ uri: payload.thumbnailUri }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" recyclingKey={payload.thumbnailUri} enforceEarlyResizing />
+          <CachedImage
+            uri={payload.thumbnailUri}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
         )}
         <Video
           key={`${layer.id}-${payload.mediaUri}`}
@@ -857,28 +858,16 @@ function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLay
     );
   }
 
-  if (imageError) {
-    return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' }]} accessibilityLabel="Image unavailable" accessibilityRole="image">
-        <Ionicons name="image-outline" size={28} color={colors.textMuted} />
-      </View>
-    );
-  }
-
+  // Image layers use the shared CachedImage system for memory/disk caching,
+  // BlurHash placeholder support, and CDN downscale support — consistent
+  // with the rest of the app. CachedImage handles its own loading shimmer
+  // and error fallback graphic internally.
   return (
-    <>
-      {/* Placeholder while loading */}
-      {!imageLoaded && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt }]} />
-      )}
-      <Reanimated.Image
-        source={{ uri: payload.mediaUri }}
-        style={[StyleSheet.absoluteFill, { opacity: imageLoaded ? 1 : 0 }]}
-        resizeMode={payload.contentFit === 'contain' ? 'contain' : payload.contentFit === 'fill' ? 'stretch' : 'cover'}
-        onLoadEnd={() => setImageLoaded(true)}
-        onError={() => setImageError(true)}
-      />
-    </>
+    <CachedImage
+      uri={payload.mediaUri}
+      style={StyleSheet.absoluteFill}
+      contentFit={payload.contentFit === 'contain' ? 'contain' : payload.contentFit === 'fill' ? 'fill' : 'cover'}
+    />
   );
 }
 
@@ -987,15 +976,17 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       lineHeight: (Type.body.size + 2) * 1.3,
     },
     bubble: {
-      // Pacifico — round, friendly script
-      fontFamily: 'Pacifico_400Regular',
+      // Playfair Display Regular — editorial serif for a restrained,
+      // non-template feel (replaces round script Pacifico)
+      fontFamily: 'PlayfairDisplay_400Regular',
       fontSize: Type.bodyEmphasis.size + 6,
       lineHeight: (Type.bodyEmphasis.size + 6) * 1.2,
       letterSpacing: 0.5,
     },
     deco: {
-      // Lobster — decorative display
-      fontFamily: 'Lobster_400Regular',
+      // Anton — strong display (replaces retro Lobster for a more
+      // cohesive, less template-like feel)
+      fontFamily: 'Anton_400Regular',
       fontSize: Type.bodyEmphasis.size + 2,
       lineHeight: (Type.bodyEmphasis.size + 2) * 1.3,
       letterSpacing: 1.5,
@@ -1015,8 +1006,10 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       letterSpacing: -0.3,
     },
     signature: {
-      // Dancing Script — script/signature font
-      fontFamily: 'DancingScript_400Regular',
+      // Playfair Display Regular italic — refined serif signature
+      // (replaces generic Dancing Script for a more editorial feel)
+      fontFamily: 'PlayfairDisplay_400Regular',
+      fontStyle: 'italic',
       fontSize: Type.bodyEmphasis.size + 2,
       lineHeight: (Type.bodyEmphasis.size + 2) * 1.4,
     },

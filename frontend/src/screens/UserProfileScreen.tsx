@@ -137,8 +137,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     awayBannerSub: { color: MUTED },
     listStateTitle: { color: TEXT },
     listStateSub: { color: MUTED },
-    sellerHubBtn: { borderColor: BORDER, backgroundColor: SURFACE_ALT },
-    sellerHubBtnText: { color: TEXT },
   };
 
 
@@ -531,23 +529,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       {/* Seller reputation metrics — prominent trust display */}
       <SellerReputationCard seller={sellerTrust ?? null} />
 
-      {/* Seller Hub entry — visible only when the viewer is the profile owner */}
-      {viewer?.isSelf ? (
-        <View style={styles.sellerHubWrap}>
-          <AnimatedPressable
-            style={[styles.sellerHubBtn, t.sellerHubBtn]}
-            onPress={() => navigation.navigate('SellerHub')}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Seller Hub"
-            accessibilityHint="Opens the seller management dashboard"
-          >
-            <Ionicons name="storefront-outline" size={18} color={TEXT} />
-            <Text style={[styles.sellerHubBtnText, t.sellerHubBtnText]}>Seller Hub</Text>
-            <Ionicons name="chevron-forward" size={16} color={MUTED} />
-          </AnimatedPressable>
-        </View>
-      ) : null}
 
       {/* Tab rail â€” measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
@@ -960,9 +941,6 @@ const styles = StyleSheet.create({
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
   listStateTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.semibold },
   listStateSub: { fontSize: TypographyV2.meta.size, fontFamily: FontFamily.regular, textAlign: 'center' },
-  sellerHubWrap: { paddingHorizontal: Space.md, marginTop: Space.sm },
-  sellerHubBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md - 2, borderRadius: RadiusRoleValue.sheetDialog, borderWidth: StyleSheet.hairlineWidth },
-  sellerHubBtnText: { flex: 1, fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.semibold },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
 });
