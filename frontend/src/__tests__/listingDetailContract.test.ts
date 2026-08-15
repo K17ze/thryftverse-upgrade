@@ -6,7 +6,7 @@ import {
   buildCapabilities,
   buildListingDetail,
 } from '../platform/product/listingDetailContract';
-import { Listing, ListingSeller } from '../data/mockData';
+import { Listing, ListingSeller } from '../domain/listing';
 
 function makeListing(overrides: Partial<Listing> = {}): Listing {
   return {

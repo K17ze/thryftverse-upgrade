@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Linking,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +41,8 @@ import { parseApiError } from '../lib/apiClient';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import * as ImagePicker from 'expo-image-picker';
+import { uploadMedia } from '../services/mediaUpload';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Verification'>;
 
@@ -78,6 +81,8 @@ export default function VerificationScreen({ navigation }: Props) {
   const [kycPostcode, setKycPostcode] = React.useState('');
   const [kycCountry, setKycCountry] = React.useState('GB');
   const [kycDocumentType, setKycDocumentType] = React.useState<'passport' | 'driving_licence' | 'national_id'>('passport');
+  const [kycDocumentUri, setKycDocumentUri] = React.useState<string | null>(null);
+  const [isUploadingDocument, setIsUploadingDocument] = React.useState(false);
   const [isSubmittingKyc, setIsSubmittingKyc] = React.useState(false);
 
   // DAC7 flow state
@@ -203,6 +208,60 @@ export default function VerificationScreen({ navigation }: Props) {
       show(parsed.message, 'error');
     } finally {
       setIsSubmittingKyc(false);
+    }
+  };
+
+  const handlePickDocument = async () => {
+    if (isUploadingDocument) return;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        show('Allow photo access to upload your ID document.', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      await uploadKycDocument(result.assets[0].uri);
+    } catch {
+      show('Could not open photo library.', 'error');
+    }
+  };
+
+  const handleTakeDocumentPhoto = async () => {
+    if (isUploadingDocument) return;
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        show('Allow camera access to photograph your ID document.', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      await uploadKycDocument(result.assets[0].uri);
+    } catch {
+      show('Could not open camera.', 'error');
+    }
+  };
+
+  const uploadKycDocument = async (uri: string) => {
+    setIsUploadingDocument(true);
+    try {
+      const uploaded = await uploadMedia(uri, 'kyc');
+      setKycDocumentUri(uploaded.publicUrl);
+      show('Document uploaded successfully.', 'success');
+    } catch (uploadErr) {
+      const isNetworkError = isOffline || (uploadErr instanceof Error && /network|fetch|timeout/i.test(uploadErr.message));
+      const parsed = parseApiError(uploadErr, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Could not upload document.');
+      show(parsed.message, 'error');
+    } finally {
+      setIsUploadingDocument(false);
     }
   };
 
@@ -446,19 +505,81 @@ export default function VerificationScreen({ navigation }: Props) {
                   ) : null}
                 </Pressable>
               ))}
-              <View style={styles.uploadPlaceholder}>
-                <Ionicons name="cloud-upload-outline" size={32} color={colors.textMuted} />
-                <Text style={[styles.uploadText, { color: colors.textMuted }]}>
-                  Upload a clear photo of your {kycDocumentType === 'driving_licence' ? 'licence' : kycDocumentType === 'national_id' ? 'ID card' : 'passport'}
-                </Text>
-                <AnimatedPressable
-                  style={styles.uploadBtn}
-                  onPress={() => show('Document upload will be available in the next step', 'info')}
-                  hapticFeedback="light"
-                >
-                  <Text style={styles.uploadBtnText}>Choose file</Text>
-                </AnimatedPressable>
-              </View>
+              {kycDocumentUri ? (
+                <View style={styles.uploadPreview}>
+                  <Image
+                    source={{ uri: kycDocumentUri }}
+                    style={styles.previewImage}
+                    resizeMode="cover"
+                    accessibilityLabel="Uploaded ID document preview"
+                  />
+                  <View style={styles.previewActions}>
+                    <Pressable
+                      onPress={handlePickDocument}
+                      disabled={isUploadingDocument}
+                      accessibilityRole="button"
+                      accessibilityLabel="Replace document"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.previewActionText, { color: colors.brand }]}>
+                        {isUploadingDocument ? 'Uploading...' : 'Replace'}
+                      </Text>
+                    </Pressable>
+                    <View style={[styles.previewActionDivider, { backgroundColor: colors.border }]} />
+                    <Pressable
+                      onPress={() => { setKycDocumentUri(null); }}
+                      disabled={isUploadingDocument}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove document"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.previewActionText, { color: colors.textSecondary }]}>
+                        Remove
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.uploadPlaceholder}>
+                  {isUploadingDocument ? (
+                    <>
+                      <ActivityIndicator size="large" color={colors.brand} />
+                      <Text style={[styles.uploadText, { color: colors.textMuted }]}>
+                        Uploading your document...
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={32} color={colors.textMuted} />
+                      <Text style={[styles.uploadText, { color: colors.textMuted }]}>
+                        Upload a clear photo of your {kycDocumentType === 'driving_licence' ? 'licence' : kycDocumentType === 'national_id' ? 'ID card' : 'passport'}
+                      </Text>
+                      <View style={styles.uploadBtnRow}>
+                        <AnimatedPressable
+                          style={styles.uploadBtn}
+                          onPress={handlePickDocument}
+                          hapticFeedback="light"
+                          accessibilityRole="button"
+                          accessibilityLabel="Choose photo from library"
+                        >
+                          <Ionicons name="images-outline" size={16} color={colors.textPrimary} style={{ marginRight: Space.xs }} />
+                          <Text style={styles.uploadBtnText}>Choose photo</Text>
+                        </AnimatedPressable>
+                        <AnimatedPressable
+                          style={styles.uploadBtn}
+                          onPress={handleTakeDocumentPhoto}
+                          hapticFeedback="light"
+                          accessibilityRole="button"
+                          accessibilityLabel="Take photo with camera"
+                        >
+                          <Ionicons name="camera-outline" size={16} color={colors.textPrimary} style={{ marginRight: Space.xs }} />
+                          <Text style={styles.uploadBtnText}>Take photo</Text>
+                        </AnimatedPressable>
+                      </View>
+                    </>
+                  )}
+                </View>
+              )}
               <View style={styles.flowNavRow}>
                 <AnimatedPressable
                   style={styles.flowBackBtn}
@@ -504,6 +625,22 @@ export default function VerificationScreen({ navigation }: Props) {
                   {kycDocumentType === 'passport' ? 'Passport' : kycDocumentType === 'driving_licence' ? 'Driving licence' : 'National ID'}
                 </Text>
               </View>
+              {kycDocumentUri ? (
+                <View style={styles.reviewDocumentPreview}>
+                  <Image
+                    source={{ uri: kycDocumentUri }}
+                    style={styles.reviewDocumentImage}
+                    resizeMode="cover"
+                    accessibilityLabel="Uploaded document preview"
+                  />
+                  <View style={styles.reviewDocumentInfo}>
+                    <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                    <Text style={[styles.reviewDocumentText, { color: colors.textSecondary }]}>
+                      Document photo attached
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
               <SettingsInfoBanner
                 icon="lock-closed-outline"
                 text="Your data is encrypted and used only for identity verification. It is deleted after review."
@@ -784,6 +921,8 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   uploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
@@ -792,10 +931,63 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     marginTop: Space.xs,
   },
+  uploadBtnRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.xs,
+  },
   uploadBtnText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
+  },
+  uploadPreview: {
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  previewImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: colors.surfaceAlt,
+  },
+  previewActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+  },
+  previewActionText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+  },
+  previewActionDivider: {
+    width: 1,
+    height: 16,
+  },
+  reviewDocumentPreview: {
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginTop: Space.xs,
+  },
+  reviewDocumentImage: {
+    width: '100%',
+    height: 120,
+    backgroundColor: colors.surfaceAlt,
+  },
+  reviewDocumentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    padding: Space.sm,
+  },
+  reviewDocumentText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
   },
   flowNavRow: {
     flexDirection: 'row',

@@ -163,3 +163,24 @@ jobs:
       - name: Production residue check
         run: npm run check:residue
         working-directory: frontend
+
+  mockdata-import-gate:
+    name: MockData import boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Domain type import gate
+        run: npm run check:domain-imports
+        working-directory: frontend
+      - name: MockData boundary gate
+        run: npm run check:mockdata-boundary
+        working-directory: frontend

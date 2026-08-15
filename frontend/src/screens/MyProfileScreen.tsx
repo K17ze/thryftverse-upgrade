@@ -147,6 +147,7 @@ export default function MyProfileScreen() {
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
   const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'saved' | 'about'>('listings');
+  const tabContentY = React.useRef(0);
 
   const { show } = useToast();
   const haptic = useHaptic();
@@ -651,7 +652,7 @@ export default function MyProfileScreen() {
             onEditProfile={() => navigation.navigate('EditProfile', {})}
             onShare={handleShare}
             onPressListings={() => { haptic.light(); navigation.navigate('MyListings'); }}
-            onPressLooks={() => { haptic.light(); }}
+            onPressLooks={() => { haptic.light(); setActiveTab('looks'); scrollRef.current?.scrollTo({ y: tabContentY.current, animated: true }); }}
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
             onPressFollowers={() => { haptic.light(); navigation.navigate('Followers', { userId: currentUser!.id }); }}
             onPressFollowing={() => { haptic.light(); navigation.navigate('Following', { userId: currentUser!.id }); }}
@@ -693,6 +694,9 @@ export default function MyProfileScreen() {
         </Reanimated.View>
 
         {/* ── 10. ACTIVE TAB CONTENT ── */}
+        <View
+          onLayout={(e) => { tabContentY.current = e.nativeEvent.layout.y; }}
+        >
 
         {/* LISTINGS TAB — two-column portfolio grid */}
         {activeTab === 'listings' && (
@@ -967,6 +971,7 @@ export default function MyProfileScreen() {
             )}
           </View>
         )}
+        </View>
 
         {/* ── COMPLETION & GROWTH PROMPTS — below the fold, not competing with identity ── */}
         {/* These are optional onboarding prompts that recede below the tab

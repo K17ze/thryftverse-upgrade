@@ -32,8 +32,8 @@ interface ChatComposerBarProps {
   value: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
-  onAttachmentPress: () => void;
-  onCameraPress: () => void;
+  onAttachmentPress?: () => void;
+  onCameraPress?: () => void;
   onRemoveAttachment?: (index: number) => void;
   placeholder?: string;
   isSending?: boolean;
@@ -184,18 +184,20 @@ export function ChatComposerBar({
       ) : null}
 
       <View style={styles.inputRow}>
-        <AnimatedPressable
-          onPress={onAttachmentPress}
-          style={styles.actionBtn}
-          activeOpacity={0.7}
-          scaleValue={0.9}
-          hapticFeedback="light"
-          accessibilityLabel="Add attachment"
-          accessibilityRole="button"
-          disabled={disabled || isSending || isVoiceRecording}
-        >
-          <Ionicons name="add-outline" size={24} color={colors.textSecondary} />
-        </AnimatedPressable>
+        {onAttachmentPress ? (
+          <AnimatedPressable
+            onPress={onAttachmentPress}
+            style={styles.actionBtn}
+            activeOpacity={0.7}
+            scaleValue={0.9}
+            hapticFeedback="light"
+            accessibilityLabel="Add attachment"
+            accessibilityRole="button"
+            disabled={disabled || isSending || isVoiceRecording}
+          >
+            <Ionicons name="add-outline" size={24} color={colors.textSecondary} />
+          </AnimatedPressable>
+        ) : null}
 
         {isVoiceRecording ? (
           <VoiceRecordingIndicator />
@@ -265,7 +267,7 @@ export function ChatComposerBar({
             }}
             disabled={disabled || isSending}
           />
-        ) : (
+        ) : onCameraPress ? (
           <AnimatedPressable
             onPress={onCameraPress}
             style={styles.actionBtn}
@@ -278,7 +280,7 @@ export function ChatComposerBar({
           >
             <Ionicons name="camera-outline" size={24} color={colors.textSecondary} />
           </AnimatedPressable>
-        )}
+        ) : null}
       </View>
     </View>
   );

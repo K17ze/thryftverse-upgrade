@@ -32,13 +32,17 @@ import {
   LayoutAnimation,
   Platform,
   KeyboardAvoidingView,
+  Share,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import type { RootStackParamList } from '../navigation/types';
+import type { RootStackParamList, NativeStackNavigationProp } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useToast } from '../context/ToastContext';
+import { useFollowMutation } from '../platform/server';
 import { Space, Radius, Type, Elevation, Control, Typography, Stroke, FontFamily } from '../theme/designTokens';
 import {
   LiveSession,
@@ -102,11 +106,12 @@ const DEMO_CHAT_RESPONSES = [
 type LiveStreamViewerRoute = RouteProp<RootStackParamList, 'LiveStreamViewer'>;
 
 export function LiveStreamViewerScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<LiveStreamViewerRoute>();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
+  const { show } = useToast();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [session, setSession] = useState<LiveSession>(DEMO_SESSION);
@@ -118,9 +123,16 @@ export function LiveStreamViewerScreen() {
   const [viewerCount, setViewerCount] = useState(DEMO_SESSION.viewerCount);
   const [hasLiked, setHasLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(DEMO_SESSION.likeCount);
+  const [isFollowing, setIsFollowing] = useState(DEMO_SESSION.isFollowing);
 
   const chatListRef = useRef<FlatList<LiveChatMessage>>(null);
   const isDemo = session.isDemo || LIVE_SHOPPING_DEMO_MODE;
+
+  // Follow / unfollow — wired to the real profile social API. In demo mode the
+  // session carries a placeholder sellerId ('seller_demo'), not a real user, so
+  // we truthfully surface that the action is unavailable rather than firing a
+  // request against a non-existent user.
+  const followMutation = useFollowMutation(session.sellerId);
 
   // Timer for auction countdown
   useEffect(() => {
@@ -209,8 +221,42 @@ export function LiveStreamViewerScreen() {
 
   const handleBuyNow = useCallback(() => {
     haptic.medium();
-    // Navigate to checkout (future)
-  }, [haptic]);
+    if (session.currentItemId) {
+      navigation.navigate('Checkout', { itemId: session.currentItemId });
+    } else {
+      show('No item available to purchase', 'info');
+    }
+  }, [haptic, session.currentItemId, navigation, show]);
+
+  const handleShare = useCallback(async () => {
+    haptic.light();
+    try {
+      await Share.share({
+        message: `Watch ${session.sellerName}'s live stream on ThryftVerse`,
+      });
+    } catch {
+      // User cancelled the share sheet — no error toast needed.
+    }
+  }, [haptic, session.sellerName]);
+
+  const handleFollowToggle = useCallback(() => {
+    haptic.light();
+    if (isDemo) {
+      // Demo session uses a placeholder sellerId, not a real user record.
+      // Following would call the API against a non-existent user; be truthful.
+      show('Follow unavailable in demo mode', 'info');
+      return;
+    }
+    followMutation.mutate(!isFollowing, {
+      onSuccess: () => {
+        setIsFollowing((prev) => !prev);
+        show(isFollowing ? 'Unfollowed' : 'Following', 'success');
+      },
+      onError: () => {
+        show('Could not update follow status', 'error');
+      },
+    });
+  }, [haptic, isDemo, followMutation, isFollowing, show]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -289,6 +335,7 @@ export function LiveStreamViewerScreen() {
                 <Ionicons name={hasLiked ? 'heart' : 'heart-outline'} size={22} color={hasLiked ? colors.danger : colors.textPrimary} />
               </Pressable>
               <Pressable
+                onPress={handleShare}
                 style={({ pressed }) => [styles.overlayBtn, pressed && { opacity: 0.7 }]}
                 accessibilityRole="button"
                 accessibilityLabel="Share stream"
@@ -320,11 +367,22 @@ export function LiveStreamViewerScreen() {
             <Text style={styles.streamTitle} numberOfLines={1}>{session.title}</Text>
           </View>
           <Pressable
-            style={({ pressed }) => [styles.followBtn, pressed && { opacity: 0.7 }]}
+            onPress={handleFollowToggle}
+            disabled={followMutation.isPending}
+            style={({ pressed }) => [
+              styles.followBtn,
+              pressed && { opacity: 0.7 },
+              followMutation.isPending && { opacity: 0.6 },
+            ]}
             accessibilityRole="button"
-            accessibilityLabel="Follow seller"
+            accessibilityLabel={isFollowing ? 'Unfollow seller' : 'Follow seller'}
+            accessibilityState={{ busy: followMutation.isPending }}
           >
-            <Text style={styles.followBtnText}>Follow</Text>
+            {followMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.followBtnText}>{isFollowing ? 'Following' : 'Follow'}</Text>
+            )}
           </Pressable>
         </View>
       </View>

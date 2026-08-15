@@ -22,6 +22,7 @@ import { CachedImage } from '../components/CachedImage';
 import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
 import { createGroupConversationOnApi } from '../services/chatApi';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
+import { uploadMedia } from '../services/mediaUpload';
 import { parseApiError } from '../lib/apiClient';
 import { createStableId } from '../utils/createStableId';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -76,6 +77,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const idempotencyKeyRef = useRef<string>(createStableId('group'));
@@ -162,6 +164,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   }, [selectedIds, selectedUsers]);
 
   const handlePickGroupPhoto = useCallback(async () => {
+    if (isUploadingPhoto) return;
     haptic.light();
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -175,14 +178,27 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         quality: 0.85,
         aspect: [1, 1],
       });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        setGroupPhoto(result.assets[0].uri);
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      const pickedUri = result.assets[0].uri;
+      setIsUploadingPhoto(true);
+      try {
+        const uploaded = await uploadMedia(pickedUri, 'avatars');
+        setGroupPhoto(uploaded.publicUrl);
         haptic.success();
+        show('Group photo uploaded.', 'success');
+      } catch (uploadErr) {
+        const parsed = parseApiError(uploadErr, 'Could not upload group photo.');
+        show(parsed.message, 'error');
+        // Do not set the avatar — leave the previous photo (or none) so the
+        // user can retry or proceed without a photo.
+      } finally {
+        setIsUploadingPhoto(false);
       }
     } catch {
       show('Could not open photo library.', 'error');
     }
-  }, [haptic, show]);
+  }, [haptic, show, isUploadingPhoto]);
 
   const toggleMember = (user: SelectableUser) => {
     haptic.light();
@@ -381,13 +397,13 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               ) : null}
               <View style={[styles.stickyAction, { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 }]}>
                 <AppButton
-                  style={[styles.createBtn, (!title.trim() || isCreating) && styles.createBtnDisabled]}
+                  style={[styles.createBtn, (!title.trim() || isCreating || isUploadingPhoto) && styles.createBtnDisabled]}
                   variant="primary"
                   size="md"
                   align="center"
-                  title={isCreating ? 'Creating...' : 'Create Group'}
+                  title={isCreating ? 'Creating...' : isUploadingPhoto ? 'Uploading photo...' : 'Create Group'}
                   onPress={() => void handleCreateGroup()}
-                  disabled={!title.trim() || isCreating}
+                  disabled={!title.trim() || isCreating || isUploadingPhoto}
                   accessibilityLabel={isCreating ? 'Creating group chat' : 'Create group chat'}
                   accessibilityRole="button"
                 />
@@ -398,6 +414,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           <View style={styles.avatarSelectorWrap}>
             <Pressable
               onPress={handlePickGroupPhoto}
+              disabled={isUploadingPhoto}
               style={({ pressed }) => [
                 styles.avatarSelectorPressable,
                 pressed && styles.avatarSelectorPressed,
@@ -412,12 +429,22 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                 fallbackInitials={title.trim() || 'G'}
                 size={Space.xxl + Space.xl}
               />
-              <View style={styles.cameraBadge}>
-                <Ionicons name="camera" size={14} color={colors.textInverse} />
-              </View>
+              {isUploadingPhoto ? (
+                <View style={styles.avatarUploadingOverlay}>
+                  <ActivityIndicator size="small" color={colors.textInverse} />
+                </View>
+              ) : (
+                <View style={styles.cameraBadge}>
+                  <Ionicons name="camera" size={14} color={colors.textInverse} />
+                </View>
+              )}
             </Pressable>
             <Caption color={colors.textMuted} style={styles.avatarHint}>
-              {groupPhoto ? 'Tap to change photo' : 'Tap to add photo · mosaic auto-generated'}
+              {isUploadingPhoto
+                ? 'Uploading photo...'
+                : groupPhoto
+                  ? 'Tap to change photo'
+                  : 'Tap to add photo · mosaic auto-generated'}
             </Caption>
           </View>
 
@@ -862,6 +889,17 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     borderWidth: 2,
     borderColor: colors.surface,
+  },
+  avatarUploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatarHint: {
     fontSize: Type.caption.size,

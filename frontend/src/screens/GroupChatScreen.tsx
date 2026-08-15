@@ -22,6 +22,7 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { FlashList, type ListRenderItem, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,7 +55,7 @@ import {
   type ChatAgent,
   type SuggestedReply,
 } from '../services/chatAgentsApi';
-import { deleteConversationOnApi } from '../services/chatApi';
+import { deleteConversationOnApi, leaveGroupOnApi } from '../services/chatApi';
 import type { Message as ConversationMessage } from '../domain';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
@@ -390,16 +391,6 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                 value={input}
                 onChangeText={setInput}
                 onSend={handleSend}
-                onAttachmentPress={() => {
-                  haptic.light();
-                  // Media sharing in group chats is not yet available —
-                  // truthful per AGENTS.md §11. The attachment glyph stays
-                  // as a transparent 44pt target but does not fabricate
-                  // functionality.
-                }}
-                onCameraPress={() => {
-                  haptic.light();
-                }}
                 placeholder="Message the group…"
                 isSending={sending}
               />
@@ -443,11 +434,38 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           memberProfiles={memberProfiles}
           memberCount={memberCount}
           deployedAgents={deployedAgents}
+          isLeaving={isLeaving}
           onLeaveGroup={() => {
-            setInfoVisible(false);
-            haptic.warning();
-            show('Left group', 'info');
-            navigation.goBack();
+            Alert.alert(
+              'Leave group?',
+              "You'll no longer receive messages from this group.",
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Leave group',
+                  style: 'destructive',
+                  onPress: async () => {
+                    if (!currentUser?.id) {
+                      show('Could not leave group. Try again.', 'error');
+                      return;
+                    }
+                    haptic.warning();
+                    setIsLeaving(true);
+                    try {
+                      await leaveGroupOnApi(groupId, currentUser.id);
+                      deleteConversation(groupId);
+                      setInfoVisible(false);
+                      show('Left group', 'info');
+                      navigation.goBack();
+                    } catch {
+                      show('Could not leave group. Try again.', 'error');
+                    } finally {
+                      setIsLeaving(false);
+                    }
+                  },
+                },
+              ],
+            );
           }}
           onManageAgents={() => {
             setInfoVisible(false);
@@ -469,6 +487,7 @@ function GroupInfoModal({
   memberProfiles,
   memberCount,
   deployedAgents,
+  isLeaving,
   onLeaveGroup,
   onManageAgents,
 }: {
@@ -478,6 +497,7 @@ function GroupInfoModal({
   memberProfiles: Array<{ id: string; username: string; displayName?: string | null; avatar?: string | null }>;
   memberCount: number;
   deployedAgents: ChatAgent[];
+  isLeaving: boolean;
   onLeaveGroup: () => void;
   onManageAgents: () => void;
 }) {
@@ -561,13 +581,19 @@ function GroupInfoModal({
           </ScrollView>
 
           <Pressable
-            style={[styles.leaveBtn, { borderColor: colors.danger }]}
+            style={[styles.leaveBtn, { borderColor: colors.danger }, isLeaving && styles.leaveBtnDisabled]}
             onPress={onLeaveGroup}
+            disabled={isLeaving}
             accessibilityRole="button"
             accessibilityLabel="Leave group"
             accessibilityHint="Removes you from this group conversation"
+            accessibilityState={{ disabled: isLeaving }}
           >
-            <Text style={[styles.leaveBtnText, { color: colors.danger }]}>Leave group</Text>
+            {isLeaving ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <Text style={[styles.leaveBtnText, { color: colors.danger }]}>Leave group</Text>
+            )}
           </Pressable>
 
           <Pressable
@@ -767,6 +793,9 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: StyleSheet.hairlineWidth,
       minHeight: Control.hit,
       justifyContent: 'center',
+    },
+    leaveBtnDisabled: {
+      opacity: 0.6,
     },
     leaveBtnText: {
       fontSize: Type.body.size,

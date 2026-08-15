@@ -583,3 +583,19 @@ export async function removeConversationMemberOnApi(
     participantIds: payload.participantIds,
   };
 }
+
+/**
+ * Leave a group conversation by removing the current user's own membership.
+ * Uses the same member-removal endpoint as `removeConversationMemberOnApi`
+ * but is semantically named for the "leave group" user action and returns
+ * void — callers only need to know whether the leave succeeded.
+ */
+export async function leaveGroupOnApi(
+  conversationId: string,
+  memberUserId: string
+): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(memberUserId)}`,
+    { method: 'DELETE' }
+  );
+}

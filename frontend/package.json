@@ -25,6 +25,7 @@
     "check:visual-gates": "node scripts/check-visual-release-gates.mjs",
     "check:residue": "node scripts/check-production-residue.mjs",
     "check:domain-imports": "node scripts/check-mockdata-imports.mjs",
+    "check:mockdata-boundary": "node scripts/check-mockdata-boundary.mjs",
     "check:golden-parity": "node scripts/check-golden-parity.mjs",
     "doctor": "npx expo-doctor",
     "test": "vitest run --dir src",

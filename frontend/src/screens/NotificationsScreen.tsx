@@ -29,6 +29,7 @@ import {
   NotificationEventType,
   NotificationEventV2,
   NotificationObjectRef,
+  NotificationAttentionLevel,
   listNotificationEvents,
   markNotificationRead,
   markAllNotificationsRead,
@@ -70,6 +71,10 @@ type NotificationCard = {
   requiresAction: boolean;
   /** Structured aggregation key from the V2 registry (e.g. "social.look_liked:look123"). */
   aggregationKey: string | null;
+  /** V2 attention priority — critical/action/important/info. */
+  attention: NotificationAttentionLevel;
+  /** Structured object reference from the V2 registry (label used for aggregation text). */
+  objectRef?: NotificationObjectRef;
   /** Aggregated notification count — when >1, this card represents N similar events. */
   aggregatedCount?: number;
   /** Actor names for aggregated notifications (first few). */
@@ -78,20 +83,22 @@ type NotificationCard = {
 
 type NotificationFilter = 'all' | 'unread' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
 
-// Primary visible scopes — only 2 tabs shown in the first viewport.
-const PRIMARY_SCOPES: { key: NotificationFilter; label: string }[] = [
+// All filters live behind a single overflow funnel icon — no primary tab row.
+// This keeps the screen's information hierarchy attention-first (Needs attention,
+// Today, Yesterday, Earlier) rather than split across pseudo-tabs.
+const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
-];
-
-// Additional filters moved behind overflow menu.
-const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'order', label: 'Orders' },
   { key: 'new_item', label: 'Items' },
   { key: 'review', label: 'Reviews' },
   { key: 'price', label: 'Prices' },
   { key: 'auction', label: 'Auctions' },
 ];
+
+function filterLabelForKey(key: NotificationFilter): string {
+  return OVERFLOW_FILTERS.find((f) => f.key === key)?.label ?? 'All';
+}
 
 function getPayloadString(payload: Record<string, unknown>, keys: string[]): string | null {
   for (const key of keys) {
@@ -222,6 +229,8 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     route: event.route,
     requiresAction: v2.requiresAction,
     aggregationKey: v2.aggregationKey,
+    attention: v2.attention,
+    objectRef: v2.objectRef,
   };
 }
 
@@ -288,9 +297,8 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
     };
     const action = actionVerbByType[primary.type] ?? 'interacted with';
 
-    // Extract the object from the original text — try to find "your X" or "a X"
-    const objectMatch = primary.text.match(/(?:your|a)\s+(.+)/i);
-    const object = objectMatch ? objectMatch[1].trim() : 'your item';
+    // Use the V2 registry's structured object label — never regex-parse body text.
+    const object = primary.objectRef?.label ?? 'your item';
 
     const aggregatedText = `${firstActor} and ${othersCount} other${othersCount === 1 ? '' : 's'} ${action} ${object}`;
 
@@ -621,8 +629,17 @@ export default function NotificationsScreen() {
           overshootRight={false}
           overshootLeft={false}
         >
-        <View style={[styles.notifCard, !item.read && styles.notifCardUnread]}>
-          {!item.read ? <View style={styles.unreadDot} /> : null}
+        <View
+          style={[
+            styles.notifCard,
+            !item.read && styles.notifCardUnread,
+            item.attention === 'critical' && styles.notifCardCritical,
+            item.attention === 'action' && !item.read && styles.notifCardAction,
+          ]}
+        >
+          {item.attention === 'critical' ? <View style={styles.notifAccentCritical} /> : null}
+          {item.attention === 'action' && !item.read ? <View style={styles.notifAccentAction} /> : null}
+          {!item.read && item.attention !== 'critical' && item.attention !== 'action' ? <View style={styles.unreadDot} /> : null}
           <AnimatedPressable
             style={styles.notifMainTap}
             activeOpacity={0.8}
@@ -743,6 +760,19 @@ export default function NotificationsScreen() {
             <View style={styles.headerActions}>
               <AnimatedPressable
                 style={styles.headerAction}
+                onPress={() => { haptics.tap(); setOverflowVisible(true); }}
+                accessibilityLabel="Filter notifications"
+                accessibilityRole="button"
+                hapticFeedback="light"
+              >
+                <Ionicons
+                  name={activeFilter !== 'all' ? 'filter' : 'filter-outline'}
+                  size={20}
+                  color={activeFilter !== 'all' ? colors.brand : colors.textSecondary}
+                />
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.headerAction}
                 onPress={() => navigation.navigate('NotificationPreferences')}
                 accessibilityLabel="Manage notification preferences"
                 accessibilityRole="button"
@@ -755,7 +785,7 @@ export default function NotificationsScreen() {
                   style={styles.headerAction}
                   onPress={handleMarkAllAsRead}
                   accessibilityRole="button"
-                  accessibilityLabel="Mark all notifications as read"
+                  accessibilityLabel={`Mark all ${unreadCount} notifications as read`}
                   hapticFeedback="light"
                 >
                   <Ionicons name="checkmark-done-outline" size={22} color={colors.textPrimary} />
@@ -769,76 +799,22 @@ export default function NotificationsScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
 
-      {/* Primary scopes: All + Unread, plus overflow for additional filters */}
-      <View style={styles.filterTabsRow}>
-        <View style={styles.filterTabsContent}>
-          {PRIMARY_SCOPES.map((tab) => {
-            const isActive = activeFilter === tab.key;
-            const count = filterCounts[tab.key] ?? 0;
-            return (
-              <Pressable
-                key={tab.key}
-                style={[styles.filterTab, isActive && styles.filterTabActive]}
-                onPress={() => {
-                  haptics.tap();
-                  setActiveFilter(tab.key);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Filter: ${tab.label}${count > 0 ? `, ${count} items` : ''}`}
-                accessibilityState={{ selected: isActive }}
-              >
-                <View style={styles.filterTabContent}>
-                  <Text
-                    style={[styles.filterTabText, isActive && styles.filterTabTextActive]}
-                    numberOfLines={1}
-                  >
-                    {tab.label}
-                  </Text>
-                  {count > 0 ? (
-                    <View style={[styles.filterTabCount, isActive && styles.filterTabCountActive]}>
-                      <Text style={[styles.filterTabCountText, isActive && styles.filterTabCountTextActive]}>
-                        {count}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                {isActive ? <View style={styles.filterTabIndicator} /> : null}
-              </Pressable>
-            );
-          })}
-
-          {/* Overflow button — shows active overflow filter label if selected */}
-          {OVERFLOW_FILTERS.some((f) => f.key === activeFilter) ? (
-            <Pressable
-              style={[styles.filterTab, styles.filterTabActive]}
-              onPress={() => { haptics.tap(); setOverflowVisible(true); }}
-              accessibilityRole="button"
-              accessibilityLabel="Change filter"
-              accessibilityState={{ selected: true }}
-            >
-              <View style={styles.filterTabContent}>
-                <Text style={[styles.filterTabText, styles.filterTabTextActive]} numberOfLines={1}>
-                  {OVERFLOW_FILTERS.find((f) => f.key === activeFilter)?.label}
-                </Text>
-                <Ionicons name="chevron-down" size={14} color={colors.textPrimary} />
-              </View>
-              <View style={styles.filterTabIndicator} />
-            </Pressable>
-          ) : (
-            <Pressable
-              style={styles.filterTab}
-              onPress={() => { haptics.tap(); setOverflowVisible(true); }}
-              accessibilityRole="button"
-              accessibilityLabel="More filters"
-            >
-              <View style={styles.filterTabContent}>
-                <Ionicons name="filter-outline" size={16} color={colors.textMuted} />
-                <Text style={styles.filterTabText} numberOfLines={1}>More</Text>
-              </View>
-            </Pressable>
-          )}
+      {/* Active filter chip — shown only when a filter is applied (attention-first hierarchy) */}
+      {activeFilter !== 'all' ? (
+        <View style={styles.activeFilterChipRow}>
+          <Pressable
+            style={styles.activeFilterChip}
+            onPress={() => { haptics.tap(); setActiveFilter('all'); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Clear filter: ${filterLabelForKey(activeFilter)}`}
+          >
+            <Text style={styles.activeFilterChipText} numberOfLines={1}>
+              {filterLabelForKey(activeFilter)}
+            </Text>
+            <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+          </Pressable>
         </View>
-      </View>
+      ) : null}
 
       {/* Unread summary + quiet hours indicator */}
       {unreadCount > 0 || quietActive ? (
@@ -933,7 +909,7 @@ export default function NotificationsScreen() {
             <EmptyState
               density="compact"
               icon="notifications-outline"
-              title={`No ${[...PRIMARY_SCOPES, ...OVERFLOW_FILTERS].find((t) => t.key === activeFilter)?.label.toLowerCase() ?? 'notifications'} yet`}
+              title={`No ${filterLabelForKey(activeFilter).toLowerCase()} yet`}
               subtitle="Switch to 'All' to see everything."
               iconColor={colors.textMuted}
             />
@@ -965,14 +941,14 @@ export default function NotificationsScreen() {
         }
       />
 
-      {/* Overflow filter sheet — additional filters behind overflow */}
+      {/* Filter sheet — all filters behind a single overflow funnel icon */}
       <BottomSheet
         visible={overflowVisible}
         onDismiss={() => setOverflowVisible(false)}
-        snapPoint={0.45}
+        snapPoint={0.5}
       >
         <View style={styles.overflowSheetContent}>
-          <Text style={styles.overflowSheetTitle}>Filter by type</Text>
+          <Text style={styles.overflowSheetTitle}>Filter notifications</Text>
           {OVERFLOW_FILTERS.map((filter) => {
             const isActive = activeFilter === filter.key;
             const count = filterCounts[filter.key] ?? 0;
@@ -1103,6 +1079,30 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
   },
 
+  activeFilterChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm + 2,
+    paddingBottom: Space.xs,
+  },
+  activeFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.xs + 1,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  activeFilterChipText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+  },
+
   swipeActionContainer: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -1227,6 +1227,28 @@ function createStyles(colors: ThemeColors) {
   },
   notifCardUnread: {
     backgroundColor: colors.surfaceAlt,
+  },
+  notifCardCritical: {
+    backgroundColor: `${colors.danger}0A`,
+  },
+  notifCardAction: {
+    backgroundColor: colors.surfaceAlt,
+  },
+  notifAccentCritical: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: Stroke.emphasis,
+    backgroundColor: colors.danger,
+  },
+  notifAccentAction: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: Stroke.emphasis,
+    backgroundColor: colors.brand,
   },
   notifMainTap: {
     padding: Space.md,

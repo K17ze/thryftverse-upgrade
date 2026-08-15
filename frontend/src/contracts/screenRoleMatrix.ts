@@ -127,6 +127,60 @@ export const SCREEN_ROLE_MATRIX: ScreenRoleEntry[] = [
   { screen: 'ManageListingScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'ListingPreviewScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 1, hasStickyActionDock: true, mediaMeetsEdges: true, tabularFigures: true },
   { screen: 'InventoryManagementScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+
+  // ── Seller hub (liveMarket + denseUtilityList) ──
+  { screen: 'SellerHubScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'SellerAnalyticsScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'SellerEarningsScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'SellerFulfilmentScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'SellerAuctionCentreScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'MyListingsScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'MyOrdersScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'MyBidsScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+
+  // ── Profile & social (personalCollection + denseUtilityList) ──
+  { screen: 'MyProfileScreen', role: 'personalCollection', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
+  { screen: 'UserProfileScreen', role: 'personalCollection', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
+  { screen: 'EditProfileScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'FollowersScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'FollowingScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+
+  // ── Group management (denseUtilityList) ──
+  { screen: 'CreateGroupChatScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: true, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'GroupChatInfoScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'GroupMembersScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'EditGroupScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'NewMessageScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+
+  // ── Notifications & preferences (denseUtilityList) ──
+  { screen: 'NotificationPreferencesScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'PushNotificationsScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'EmailNotificationsScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+
+  // ── Trade & syndicate (transactionDecision + liveMarket) ──
+  { screen: 'TradeHubScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'TradeScreen', role: 'transactionDecision', layoutFamily: 'transactionDecision', maxDominantPanelsAboveFold: 1, hasStickyActionDock: true, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'SyndicateHubScreen', role: 'liveMarket', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
+  { screen: 'CreateSyndicateScreen', role: 'transactionDecision', layoutFamily: 'transactionDecision', maxDominantPanelsAboveFold: 1, hasStickyActionDock: true, mediaMeetsEdges: false, tabularFigures: true },
+
+  // ── Auth & onboarding (denseUtilityList) ──
+  { screen: 'LoginScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'SignUpScreen', role: 'denseUtilityList', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: false },
+  { screen: 'OnboardingScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
+  { screen: 'AuthLandingScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
+
+  // ── Look & poster detail (mediaLed) ──
+  { screen: 'LookDetailScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 1, hasStickyActionDock: true, mediaMeetsEdges: true, tabularFigures: false },
+  { screen: 'PosterArchiveScreen', role: 'personalCollection', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
+  { screen: 'PosterHighlightViewerScreen', role: 'creatorCanvas', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
+
+  // ── Live shopping (liveMarket + mediaLed) ──
+  { screen: 'LiveShoppingHomeScreen', role: 'liveMarket', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
+  { screen: 'LiveStreamViewerScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: true, mediaMeetsEdges: true, tabularFigures: false },
+  { screen: 'LiveStreamSellerScreen', role: 'creatorCanvas', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: true, mediaMeetsEdges: true, tabularFigures: false },
+
+  // ── Creator analytics (evidence) ──
+  { screen: 'CreatorAnalyticsDashboardScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
 ];
 
 /**
