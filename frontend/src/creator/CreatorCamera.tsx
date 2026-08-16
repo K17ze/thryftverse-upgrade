@@ -45,6 +45,7 @@ import { ControlsRail } from './camera/ControlsRail';
 import { GalleryCarousel } from './camera/GalleryCarousel';
 import { PermissionState } from './camera/PermissionState';
 import { GreenScreenSheet, type GreenScreenSettings } from './camera/GreenScreenSheet';
+import { CameraEffectBar, type CameraEffectId } from './camera/CameraEffectBar';
 import { CreatorSegmentControl } from './controls/CreatorSegmentControl';
 import { CreatorAnalytics } from './creatorAnalytics';
 import type { CreatorInitialMedia } from '../navigation/types';
@@ -192,6 +193,14 @@ export default function CreatorCamera({
   // Stored as a string for CreatorSegmentControl; converted to number
   // when building CreatorInitialMedia metadata.
   const [speedMode, setSpeedMode] = useState<string>(DEFAULT_SPEED);
+
+  // ── Camera effect (post-capture filter) ──
+  // expo-camera does not support real-time color matrix filters (no
+  // frame-processor API), so the selected effect is stored and applied
+  // post-capture. The CameraEffectBar shows the user what effect will
+  // be applied. The effect ID is preserved in CreatorInitialMedia so
+  // the composer can apply it as a filter node when seeding the media.
+  const [cameraEffect, setCameraEffect] = useState<CameraEffectId>('none');
 
   // ── Green screen (post-capture) ──
   // Real-time chroma keying is not feasible with expo-camera alone (no
@@ -759,8 +768,14 @@ export default function CreatorCamera({
         feather: greenScreenSettings.feather,
       };
     }
+    // Attach camera effect if a non-'none' effect is selected. The
+    // effect ID is stored so the composer can apply it as a filter node
+    // when seeding the media layer (post-capture application).
+    if (cameraEffect !== 'none') {
+      media.cameraEffect = cameraEffect;
+    }
     return media;
-  }, [speedMode, greenScreenSettings]);
+  }, [speedMode, greenScreenSettings, cameraEffect]);
 
   const handleConfirmCapture = useCallback(() => {
     if (!capturedUri) return;
@@ -1071,6 +1086,22 @@ export default function CreatorCamera({
             {Math.floor(recordingElapsed / 1000)}s
             {speedMode !== DEFAULT_SPEED && `  ${speedMode}×`}
           </Text>
+        </View>
+      )}
+
+      {/* ── Camera effect bar ─────────────────────────────────────────── */}
+      {/* Horizontal scrollable bar of camera effect buttons. The selected
+          effect is stored and applied post-capture (expo-camera does not
+          support real-time color matrix filters). Shown above the bottom
+          area when not recording, not in visual search, and no active
+          countdown. Disabled during recording. */}
+      {!isVisualSearch && handsFreeCountdown === null && countdown === null && (
+        <View style={[styles.cameraEffectBarWrap, { bottom: Math.max(insets.bottom, 16) + 56 }]}>
+          <CameraEffectBar
+            activeEffect={cameraEffect}
+            onSelectEffect={setCameraEffect}
+            disabled={isRecording}
+          />
         </View>
       )}
 
@@ -1771,6 +1802,16 @@ const styles = StyleSheet.create({
     right: Space.lg,
     alignSelf: 'center',
     maxWidth: 320,
+  },
+  // ── Camera effect bar wrapper ──
+  // Positioned above the bottom area (mode switcher + shutter). The
+  // CameraEffectBar is a transparent horizontal scroll — no card, no
+  // background — so it reads as an overlay on the camera preview.
+  cameraEffectBarWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   // ── Hands-free mode badge ──
   // Subtle indicator that hands-free is armed. Positioned at top-left

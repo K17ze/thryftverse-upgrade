@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, FontSize, Control } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { makeStableId } from '../../utils/createStableId';
@@ -51,10 +51,13 @@ import {
   type ToolGroup,
 } from '../core/toolRegistry';
 import { EffectPreviewRail, AdjustPanel, FILTER_PRESETS, AutoAdjustButton, computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
+import { AIEffectBrowserSheet } from '../tools/effects/AIEffectBrowserSheet';
 import type { AdjustNode } from '../tools/effects';
 import { LayoutPreviewRail } from './layout/LayoutPreviewRail';
 import { autoCompose } from './layout/autoCompose';
 import type { AssetTransform, LayoutPreview, LayoutId } from './layout/layoutTypes';
+import { LookAutoLayoutBar } from './LookAutoLayoutBar';
+import { autoLayout, type LayoutStyle } from './LookAutoLayout';
 import { useHaptic } from '../../hooks/useHaptic';
 import { fetchLookByIdFromApi } from '../../services/looksApi';
 import { lookToDocument } from '../viewerAdapters';
@@ -180,6 +183,8 @@ function LookComposerInner() {
   // ── Commerce source tray (spec 10: pull in items from closet/listings/search) ──
   const [showSourceTray, setShowSourceTray] = useState(false);
   const [showEffects, setShowEffects] = useState(false);
+  const [showAIEffects, setShowAIEffects] = useState(false);
+  const [autoLayoutId, setAutoLayoutId] = useState<LayoutStyle | null>(null);
   const [showA11yMove, setShowA11yMove] = useState(false);
   const [showA11yZOrder, setShowA11yZOrder] = useState(false);
 
@@ -328,6 +333,7 @@ function LookComposerInner() {
       } else if (e.key === 'Escape') {
         if (showHelp) setShowHelp(false);
         else if (showEffects) setShowEffects(false);
+        else if (showAIEffects) setShowAIEffects(false);
         else if (showA11yMove) setShowA11yMove(false);
         else if (showA11yZOrder) setShowA11yZOrder(false);
         else if (cropMode) setCropMode(false);
@@ -357,7 +363,7 @@ function LookComposerInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, showHelp, showEffects, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, selectedLayerIds, exitMultiSelect, handleMultiDelete, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, showHelp, showEffects, showAIEffects, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, selectedLayerIds, exitMultiSelect, handleMultiDelete, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // Hardware back button — intercept to close sheets first
   useFocusEffect(
@@ -365,6 +371,7 @@ function LookComposerInner() {
       const onBackPress = () => {
         if (showHelp) { setShowHelp(false); return true; }
         if (showEffects) { setShowEffects(false); return true; }
+        if (showAIEffects) { setShowAIEffects(false); return true; }
         if (showA11yMove) { setShowA11yMove(false); return true; }
         if (showA11yZOrder) { setShowA11yZOrder(false); return true; }
         if (cropMode) { setCropMode(false); return true; }
@@ -386,7 +393,7 @@ function LookComposerInner() {
         return false;
       };
       return onBackPress;
-    }, [showHelp, showEffects, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, exitMultiSelect, selectedLayerId, selectLayer])
+    }, [showHelp, showEffects, showAIEffects, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, exitMultiSelect, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
@@ -454,6 +461,12 @@ function LookComposerInner() {
         contentFit: 'cover' as const,
         videoDurationMs: asset.kind === 'video' ? asset.durationMs : undefined,
         opacity: 1,
+        // Apply camera effect post-capture: store as a filter node in
+        // the effect stack so the renderer applies the color matrix.
+        // The effect ID matches the filter system's ImageFilter names.
+        ...(asset.cameraEffect ? {
+          effects: [{ type: 'filter' as const, id: asset.cameraEffect, amount: 1 }],
+        } : {}),
       },
     }));
     const arranged = computeLookLayout(mediaLayers);
@@ -653,6 +666,15 @@ function LookComposerInner() {
     return filterNode?.type === 'filter' ? filterNode.id : null;
   }, [currentEffects]);
 
+  // Derive the active AI effect ID from the current effect stack. AI
+  // effects are stored as filter nodes with IDs prefixed `ai:`.
+  const activeAIEffectId = useMemo(() => {
+    const aiNode = currentEffects.find(
+      (n) => n.type === 'filter' && n.id.startsWith('ai:'),
+    );
+    return aiNode?.type === 'filter' ? aiNode.id.slice(3) : null;
+  }, [currentEffects]);
+
   const currentAdjustments = useMemo<Partial<Omit<AdjustNode, 'type'>>>(() => {
     const adjustNode = currentEffects.find((n) => n.type === 'adjust');
     if (adjustNode?.type !== 'adjust') return {};
@@ -730,6 +752,55 @@ function LookComposerInner() {
       payload: { ...selectedMediaLayer.payload, effects: newEffects },
     }, 'Apply auto-adjust');
   }, [selectedMediaLayer, currentEffects, updateLayer, effectsSourceUri]);
+
+  // ── AI Effects browser ──────────────────────────────────────────────
+  // Opens the AIEffectBrowserSheet for the selected media layer. When
+  // an AI effect is applied, its render stack (EffectNode[]) is converted
+  // to a composition-schema filter node and added to the layer's effect
+  // stack. The filter node stores the AI effect ID so the renderer can
+  // resolve the full render graph at draw time.
+  const handleAIEffectAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'media') {
+      haptic.light();
+      return;
+    }
+    haptic.medium();
+    setShowAIEffects(true);
+  }, [selectedLayer, haptic]);
+
+  const handleAIEffectApply = useCallback((effectId: string, intensity: number) => {
+    if (!selectedMediaLayer) return;
+    // Store the AI effect as a composition-schema filter node with a
+    // namespaced ID (`ai:<effectId>`) so the renderer can resolve it
+    // via the AIEffectRegistry at draw time. The `amount` field carries
+    // the user-chosen intensity (0..1) so the renderer can scale the
+    // effect's render stack. This preserves the existing effect stack
+    // semantics (filter + adjust nodes) while enabling rich multi-node
+    // AI effect graphs.
+    const newEffects: EffectNode[] = [
+      ...currentEffects.filter((n) => n.type !== 'filter' || !n.id.startsWith('ai:')),
+      { type: 'filter', id: `ai:${effectId}`, amount: intensity },
+    ];
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    }, `Apply AI effect`);
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  const handleAIEffectRemove = useCallback((effectId: string) => {
+    if (!selectedMediaLayer) return;
+    const newEffects = currentEffects.filter(
+      (n) => !(n.type === 'filter' && n.id === `ai:${effectId}`),
+    );
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    }, 'Remove AI effect');
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  // ── Auto layout bar (LookAutoLayoutBar) ─────────────────────────────
+  // handleAutoLayoutSelect is declared below, after `mediaLayers` is
+  // defined (it depends on mediaLayers in its body + dependency array).
 
   // ── Text editing actions ────────────────────────────────────────────
   const handleTextEditAction = useCallback(() => {
@@ -1111,6 +1182,15 @@ function LookComposerInner() {
       ],
       overflow: [
         {
+          id: 'look-media-ai-effects',
+          label: 'AI Effects',
+          icon: 'sparkles-outline',
+          onPress: handleAIEffectAction,
+          accessibilityLabel: 'AI Effects',
+          accessibilityHint: 'Opens the AI effects browser for the selected media',
+          hapticFeedback: 'medium',
+        },
+        {
           id: 'look-media-front',
           label: 'Front',
           icon: 'arrow-up',
@@ -1387,6 +1467,30 @@ function LookComposerInner() {
     () => page?.layers.filter((l) => l.type === 'media') ?? [],
     [page],
   );
+
+  // ── Auto layout bar (LookAutoLayoutBar) ─────────────────────────────
+  // When a layout is selected from the LookAutoLayoutBar, call autoLayout
+  // with the current media layers and canvas size, then commit the new
+  // transforms to the composition. Each layout application is a single
+  // history entry per layer (matching the LayoutPreviewRail behavior).
+  // Declared here (after mediaLayers) to avoid use-before-declaration.
+  const handleAutoLayoutSelect = useCallback((layoutId: LayoutStyle) => {
+    if (mediaLayers.length === 0) return;
+    const arranged = autoLayout(mediaLayers, { width: canvasWidth, height: canvasHeight }, layoutId);
+    arranged.forEach((layer) => {
+      commitLayerTransform(layer.id, {
+        x: layer.x,
+        y: layer.y,
+        width: layer.width,
+        height: layer.height,
+        rotation: layer.rotation,
+        zIndex: layer.zIndex,
+        scale: layer.scale,
+      }, `Apply ${layoutId} layout`);
+    });
+    setAutoLayoutId(layoutId);
+  }, [mediaLayers, canvasWidth, canvasHeight, commitLayerTransform]);
+
   const mediaAssetUris = useMemo(
     () => mediaLayers.map((l) => l.type === 'media' ? l.payload.mediaUri : '').filter(Boolean),
     [mediaLayers],
@@ -1704,14 +1808,29 @@ function LookComposerInner() {
         </View>
       </View>
 
+      {/* ── Auto layout bar (LookAutoLayoutBar) ─────────────────────────── */}
+      {/* Compact quick-access layout switching. Always visible when there
+          are media layers on the canvas and no layer is selected. Sits
+          just above the bottom ContextToolRail. Complements the
+          LayoutPreviewRail (detailed previews) with instant one-tap
+          layout switching via autoLayout. */}
+      {mediaLayers.length > 0 && !selectedLayer && !multiSelectMode && (
+        <View style={[styles.autoLayoutBarContainer, { bottom: insets.bottom + 56 }]}>
+          <LookAutoLayoutBar
+            activeStyle={autoLayoutId}
+            onSelect={handleAutoLayoutSelect}
+          />
+        </View>
+      )}
+
       {/* ── Layout preview rail (autoCompose) ──────────────────────────── */}
       {/* Replaces the blind "Try arrangement" cycling button. When the user
           has 2+ media assets on the canvas, the LayoutPreviewRail shows
           real preview thumbnails computed by autoCompose. Sits above the
-          bottom ContextToolRail. Only shown when no layer is selected so
+          LookAutoLayoutBar. Only shown when no layer is selected so
           the selection context toolbar is not obscured. */}
       {hasMultipleMedia && !selectedLayer && !multiSelectMode && (
-        <View style={[styles.layoutRailContainer, { bottom: insets.bottom + 56 }]}>
+        <View style={[styles.layoutRailContainer, { bottom: insets.bottom + 108 }]}>
           <LayoutPreviewRail
             assetUris={mediaAssetUris}
             layouts={allLayouts}
@@ -1729,7 +1848,7 @@ function LookComposerInner() {
           bar. Collapsible so the canvas remains dominant. Only shown when
           no layer is selected (the context toolbar takes over on selection). */}
       {!selectedLayer && (
-        <View style={[styles.sourceTrayContainer, { bottom: insets.bottom + (hasMultipleMedia ? 132 : 56) }]}>
+        <View style={[styles.sourceTrayContainer, { bottom: insets.bottom + (hasMultipleMedia ? 184 : 108) }]}>
           <LookSourceTray
             expanded={showSourceTray}
             onToggle={handleToggleSourceTray}
@@ -1846,6 +1965,19 @@ function LookComposerInner() {
           setShowBackground(false);
         }}
         onClose={() => setShowBackground(false)}
+      />
+      {/* ── AI Effects browser sheet ──────────────────────────────────── */}
+      {/* Bottom sheet for browsing and applying AI-powered effects from
+          the AIEffectRegistry. Each effect is a composed stack of real
+          Skia render nodes. When applied, the effect is stored as a
+          filter node in the selected media layer's effect stack. */}
+      <AIEffectBrowserSheet
+        visible={showAIEffects}
+        initialEffectId={activeAIEffectId}
+        sourceImageUri={effectsSourceUri}
+        onApply={handleAIEffectApply}
+        onRemove={handleAIEffectRemove}
+        onClose={() => setShowAIEffects(false)}
       />
       {/* ── Accessibility sheets (drag alternatives) ─────────────────── */}
       {/* Per spec 09: keyboard/button-based alternatives for users who
@@ -2047,6 +2179,25 @@ function LookComposerInner() {
                 selectedId={selectedFilterId}
                 onSelect={handleEffectFilterSelect}
               />
+              {/* ── AI Effects entry point ── */}
+              {/* A compact button that opens the AIEffectBrowserSheet, where
+                  the user can browse and apply AI-powered effects from the
+                  AIEffectRegistry. Each AI effect is a composed stack of
+                  real Skia render nodes (color matrices, blur, grain, etc.)
+                  — not CSS filter strings (AGENTS.md §11). */}
+              <PressScale
+                onPress={() => { haptic.medium(); setShowAIEffects(true); }}
+                style={[styles.aiEffectsBtn, { backgroundColor: colors.brandSubtle, borderColor: colors.brand }]}
+                accessibilityLabel="AI Effects"
+                accessibilityHint="Opens the AI effects browser to browse and apply AI-powered effects"
+                scale={0.97}
+              >
+                <Ionicons name="sparkles" size={18} color={colors.brand} />
+                <Text style={[styles.aiEffectsBtnText, { color: colors.brand }]}>
+                  AI Effects
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+              </PressScale>
               <View style={[styles.effectsAdjustWrap, { borderTopColor: colors.border }]}>
                 <View style={styles.effectsAutoRow}>
                   <AutoAdjustButton
@@ -2365,6 +2516,32 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 98,
+  },
+  // ── Auto layout bar container ──
+  // Sits just above the bottom ContextToolRail. The LookAutoLayoutBar
+  // is a compact horizontal scroll of layout preset buttons.
+  autoLayoutBarContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 97,
+  },
+  // ── AI Effects button (inside the effects sheet) ──
+  aiEffectsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.sm,
+    minHeight: Control.hit,
+  },
+  aiEffectsBtnText: {
+    flex: 1,
+    fontSize: FontSize.body,
+    fontFamily: FontFamily.semibold,
   },
   // ── Bottom ContextToolRail container ──
   bottomBarContainer: {

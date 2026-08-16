@@ -67,6 +67,14 @@ export type CreatorInitialMedia = {
     /** Edge feather 0–1 (softness of the mask boundary). */
     feather: number;
   };
+  /**
+   * Camera effect selected at capture time. expo-camera does not support
+   * real-time color matrix filters, so the effect is applied post-capture
+   * by the composer when seeding the media layer. Values match the
+   * CameraEffectId type: 'vintage', 'noir', 'vivid', 'warm', 'cool',
+   * 'fade'. Absent when 'none' (no effect).
+   */
+  cameraEffect?: string;
 };
 
 // ---------------------------------------------------------------------------

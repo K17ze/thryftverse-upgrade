@@ -61,6 +61,7 @@ import { MarketplaceChatCard } from "../components/chat/MarketplaceChatCard";
 import { ChatTopBar } from "../components/chat/ChatTopBar";
 
 import { ChatListingContextBar } from "../components/chat/ChatListingContextBar";
+import { ChatTransactionStrip } from "../components/chat/ChatTransactionStrip";
 
 import {
   ChatActionSheet,
@@ -1523,6 +1524,11 @@ export default function ChatScreen({ navigation, route }: Props) {
             }
             defaultCollapsed
           />
+        )}
+
+        {/* Transaction strip — shows order milestone + deadline + CTA */}
+        {!isGroup && linkedListing && linkedListing.isSold && (
+          <ChatTransactionStrip listingId={linkedListing.id} />
         )}
 
         {selectionMode ? (

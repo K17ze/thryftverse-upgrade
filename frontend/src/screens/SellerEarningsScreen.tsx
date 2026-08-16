@@ -233,8 +233,10 @@ export default function SellerEarningsScreen({ navigation }: Props) {
                         )
                       )
                     : null;
+                  const isException = item.orderStatus === 'cancelled' || item.orderStatus === 'refunded' || item.orderStatus === 'returned' || item.orderStatus === 'delivery_failed';
+                  const isDisputed = item.orderStatus === 'disputed' || item.orderStatus === 'under_review';
                   return (
-                    <View key={item.orderId} style={[styles.scheduleItem, { borderColor: colors.border }]}>
+                    <View key={item.orderId} style={[styles.scheduleItem, { borderColor: isException ? `${colors.danger}30` : isDisputed ? `${colors.warning}30` : colors.border }]}>
                       <View style={styles.scheduleItemInfo}>
                         <Text
                           style={[styles.scheduleItemTitle, { color: colors.textPrimary }]}
@@ -242,15 +244,19 @@ export default function SellerEarningsScreen({ navigation }: Props) {
                         >
                           {item.listingTitle ?? 'Order'}
                         </Text>
-                        <Text style={[styles.scheduleItemMeta, { color: colors.textMuted }]}>
-                          {item.orderStatus === 'delivered'
-                            ? releaseIn !== null && releaseIn > 0
-                              ? `Releases in ${releaseIn}d`
-                              : 'Releasing soon'
-                            : `Awaiting ${item.orderStatus === 'shipped' ? 'delivery' : 'shipment'}`}
+                        <Text style={[styles.scheduleItemMeta, { color: isException ? colors.danger : isDisputed ? colors.warning : colors.textMuted }]}>
+                          {isException
+                            ? 'Exception — funds on hold pending resolution'
+                            : isDisputed
+                              ? 'Under review — release paused during dispute'
+                              : item.orderStatus === 'delivered'
+                                ? releaseIn !== null && releaseIn > 0
+                                  ? `Releases in ${releaseIn}d`
+                                  : 'Releasing soon'
+                                : `Awaiting ${item.orderStatus === 'shipped' || item.orderStatus === 'in transit' || item.orderStatus === 'out for delivery' ? 'delivery' : 'shipment'}`}
                         </Text>
                       </View>
-                      <Text style={[styles.scheduleItemAmount, { color: colors.textPrimary }]}>
+                      <Text style={[styles.scheduleItemAmount, { color: isException ? colors.danger : colors.textPrimary }]}>
                         {formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}
                       </Text>
                     </View>

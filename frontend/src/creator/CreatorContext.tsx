@@ -8,6 +8,7 @@ import {
   reorderLayerZ,
   duplicateLayerInPage,
   computeLookLayout,
+  POSTER_DEFAULT_ASPECT_RATIO,
 } from './composition';
 import { HistoryStack } from './history';
 import { CreatorDraftService } from './drafts';
@@ -121,6 +122,13 @@ export interface CreatorContextValue {
     contentFit?: 'cover' | 'contain' | 'fill';
   }) => void;
   autoArrangeLook: (layout?: 'hero' | 'pair' | 'dominant' | 'collage') => void;
+
+  // ── Multi-clip capture → poster composition ────────────────────────
+  // Creates a new poster composition from a set of captured clips. Each
+  // clip becomes a sequential timeline media layer on a single page,
+  // with the page duration set to the sum of all clip durations. The
+  // returned document can be used to navigate to the poster composer.
+  createCompositionFromClips: (clips: CreatorInitialMedia[]) => CreatorDocument;
 
   // ── Durable project store integration ──────────────────────────────
   // The ProjectStore persists project packages (document + copied media)
@@ -1308,6 +1316,101 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     haptics.selection();
   }, [document.type, syncHistoryButtons]);
 
+  // ── Multi-clip capture → poster composition ────────────────────────
+  // Creates a new poster composition from a set of captured clips. Each
+  // clip becomes a sequential timeline media layer on a single page.
+  // The page duration is set to the sum of all clip durations. The
+  // composition is set as the current document and returned so the
+  // caller can navigate to the poster composer (e.g. via a draft ID or
+  // by passing the document through route params).
+  //
+  // Per the task spec:
+  //   - Creates a new composition with a single page
+  //   - Adds each clip as a sequential timeline clip (media layer with
+  //     timeRange)
+  //   - Sets the composition duration to the sum of clip durations
+  //   - The caller opens the poster composer with the new composition
+  //
+  // The timeRange on each media layer enables the timeline renderer to
+  // play clips sequentially: clip 0 plays from 0 to its duration, clip 1
+  // from clip 0's end to clip 0's end + clip 1's duration, etc.
+  const createCompositionFromClips = useCallback(
+    (clips: CreatorInitialMedia[]): CreatorDocument => {
+      // Default clip duration: 5s for images, actual duration for video.
+      const IMAGE_CLIP_DURATION_MS = 5000;
+      let cumulativeMs = 0;
+
+      const layers: CreatorLayer[] = clips.map((clip, i) => {
+        const durationMs = clip.kind === 'video'
+          ? (clip.durationMs ?? IMAGE_CLIP_DURATION_MS)
+          : IMAGE_CLIP_DURATION_MS;
+        const startMs = cumulativeMs;
+        const endMs = cumulativeMs + durationMs;
+        cumulativeMs = endMs;
+
+        return {
+          id: createStableId('media'),
+          type: 'media' as const,
+          x: 0.5,
+          y: 0.5,
+          width: 1,
+          height: 1,
+          scale: 1,
+          rotation: 0,
+          zIndex: i,
+          locked: false,
+          hidden: false,
+          opacity: 1,
+          timeRange: { startMs, endMs },
+          payload: {
+            mediaUri: clip.uri,
+            mediaType: clip.kind,
+            contentFit: 'cover' as const,
+            videoDurationMs: clip.kind === 'video' ? clip.durationMs : undefined,
+            opacity: 1,
+            // Preserve speed metadata for video clips
+            ...(clip.speed ? { speed: clip.speed } : {}),
+            // Preserve camera effect as a filter node
+            ...(clip.cameraEffect ? {
+              effects: [{ type: 'filter' as const, id: clip.cameraEffect, amount: 1 }],
+            } : {}),
+          },
+        };
+      });
+
+      const doc: CreatorDocument = {
+        id: makeStableId('doc'),
+        type: 'poster',
+        version: 1,
+        canvas: {
+          aspectRatio: POSTER_DEFAULT_ASPECT_RATIO,
+          background: { type: 'color', value: '#1a1a1a' },
+        },
+        pages: [{
+          id: 'page_1',
+          durationMs: cumulativeMs,
+          layers,
+        }],
+        metadata: {
+          caption: '',
+          title: '',
+          visibility: 'public',
+          allowReplies: true,
+          allowReactions: true,
+          expiresInHours: 24,
+          allowRemix: false,
+        },
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Set the new document as the current composition
+      setDocument(doc);
+      haptics.selection();
+      return doc;
+    },
+    [setDocument],
+  );
+
   // Autosave
   useEffect(() => {
     if (!isDirty) return;
@@ -1420,6 +1523,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     addLookProduct,
     swapLookAsset,
     autoArrangeLook,
+    createCompositionFromClips,
     // ── Durable project store integration ──
     projectStore: projectStoreRef.current,
     assetRegistry: assetRegistryRef.current,

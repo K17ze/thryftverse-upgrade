@@ -393,6 +393,89 @@ function buildTimelineEntries(
 
 // --- Component ---
 
+// ─── InspectionBanner ──────────────────────────────────────────────────────
+// Shown to buyers when status = 'delivered' (not yet 'completed').
+// Presents two clear paths: "Everything is OK" (confirm receipt, releases
+// escrow) or "Report an issue" (opens support with issue categories).
+// Includes a deadline countdown (2-day inspection window from delivery).
+const INSPECTION_WINDOW_DAYS = 2;
+
+function InspectionBanner({
+  deliveredAt,
+  onConfirmReceipt,
+  onReportIssue,
+}: {
+  deliveredAt: string | null;
+  onConfirmReceipt: () => void;
+  onReportIssue: () => void;
+}) {
+  const { colors } = useAppTheme();
+
+  const daysLeft = useMemo(() => {
+    if (!deliveredAt) return null;
+    const delivered = new Date(deliveredAt);
+    if (Number.isNaN(delivered.getTime())) return null;
+    const deadline = new Date(delivered.getTime() + INSPECTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    return Math.ceil((deadline.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  }, [deliveredAt]);
+
+  const expired = daysLeft != null && daysLeft <= 0;
+
+  return (
+    <View style={[styles.inspectionBanner, { borderColor: `${colors.brand}25`, backgroundColor: `${colors.brand}08` }]}>
+      <View style={styles.inspectionHeader}>
+        <View style={[styles.inspectionIcon, { backgroundColor: `${colors.brand}15` }]}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} />
+        </View>
+        <View style={styles.inspectionHeaderText}>
+          <Text style={[styles.inspectionTitle, { color: colors.textPrimary }]}>
+            Check your item
+          </Text>
+          <Text style={[styles.inspectionSub, { color: colors.textSecondary }]}>
+            {expired
+              ? 'Your inspection window has passed. Confirm receipt or report an issue.'
+              : daysLeft === 0
+                ? 'Last day to report an issue — confirm receipt or open a case today.'
+                : daysLeft === 1
+                  ? '1 day left to report an issue if something is wrong.'
+                  : `${daysLeft} days left to report an issue if something is wrong.`}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.inspectionActions}>
+        <Pressable
+          style={[styles.inspectionPrimaryBtn, { backgroundColor: colors.brand }]}
+          onPress={onConfirmReceipt}
+          accessibilityRole="button"
+          accessibilityLabel="Confirm receipt — everything is OK"
+        >
+          <Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />
+          <Text style={[styles.inspectionPrimaryBtnText, { color: colors.textInverse }]}>
+            Everything is OK
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.inspectionSecondaryBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          onPress={onReportIssue}
+          accessibilityRole="button"
+          accessibilityLabel="Report an issue with this order"
+        >
+          <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+          <Text style={[styles.inspectionSecondaryBtnText, { color: colors.danger }]}>
+            Report an issue
+          </Text>
+        </Pressable>
+      </View>
+
+      <Text style={[styles.inspectionFootnote, { color: colors.textMuted }]}>
+        Funds are held in escrow until you confirm. Reporting an issue pauses the auto-release.
+      </Text>
+    </View>
+  );
+}
+
 export default function OrderDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -1479,6 +1562,28 @@ export default function OrderDetailScreen() {
           </View>
         ) : null}
 
+        {/* 4d. Buyer inspection window — shown when delivered but not yet completed */}
+        {isBuyer && normalisedStatus === 'delivered' ? (
+          <InspectionBanner
+            deliveredAt={backendOrder?.deliveredAt ?? null}
+            onConfirmReceipt={() => {
+              haptics.heavyPress();
+              Alert.alert(
+                'Everything is OK?',
+                'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. This action cannot be undone.',
+                [
+                  { text: 'Not yet', style: 'cancel' },
+                  { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
+                ]
+              );
+            }}
+            onReportIssue={() => {
+              haptics.tap();
+              navigation.navigate('OrderSupport', { orderId });
+            }}
+          />
+        ) : null}
+
         <View style={[styles.sectionDivider, t.sectionDivider]} />
 
         {/* 5. Tracking or order timeline */}
@@ -2020,6 +2125,73 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     opacity: 0.7,
+  },
+  // ─── Inspection banner ───
+  inspectionBanner: {
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.sm,
+  },
+  inspectionHeader: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    alignItems: 'flex-start',
+  },
+  inspectionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inspectionHeaderText: {
+    flex: 1,
+    gap: 2,
+  },
+  inspectionTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+  },
+  inspectionSub: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.size + 4,
+  },
+  inspectionActions: {
+    gap: Space.xs + 2,
+  },
+  inspectionPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    minHeight: 44,
+  },
+  inspectionPrimaryBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  inspectionSecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
+  },
+  inspectionSecondaryBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  inspectionFootnote: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.size + 4,
   },
   escrowBanner: {
     flexDirection: 'row',
