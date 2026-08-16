@@ -1,41 +1,24 @@
-feat(creator): wave 3 — timeline ops, voiceover, sticker pin, LUT grading, folders, perf+a11y
+feat(creator): wave 3 completion — timeline ops, voiceover UI, LUT browser, a11y, integration
 
-Wave 3 flagship upgrades addressing remaining zero-gap ledger rows:
+Completed missing wave 3 files and integrated all modules into composer surfaces:
 
-Timeline operations:
-- TimelineOperations.ts: trim, split, duplicate, replace, reorder, speed, crop, rotate
-- SpeedCurveEvaluator.ts: speed curve interpolation (Meta Edits Aug 2026 benchmark)
-- TransitionEvaluator.ts: cut/fade/dissolve/slide/wipe transitions
-- TimelineTypes.ts: speed curves, transitions, crop, rotation types
+New modules:
+- TimelineOperations.ts: 12 pure-functional timeline ops (trim, split, duplicate, replace, reorder, speed, speed curve, crop, rotate, transitions)
+- TransitionEvaluator.ts: cut/fade/dissolve/slide/wipe transition rendering
+- LUTPreviewThumb.tsx: native Skia RuntimeEffect LUT preview (WYSIWYG)
+- LUTBrowserSheet.tsx: 3-column LUT browser with intensity slider
+- VoiceoverRecorderSheet.tsx: real-time recording with waveform viz, mic permissions
+- AudioMixPanel.tsx: multi-track mixing with ducking, mute/solo, fades
+- TimelineAccessibility.ts: clip/transition/playhead a11y labels + actions
+- ColorAccessibility.ts: color/gradient/eyedropper a11y + throttled announcements
 
-Voiceover & audio mixing:
-- VoiceoverRecorder.ts: real-time recording with metering
-- WaveformExtractor.ts: real waveform sample extraction
-- AudioMixer.ts: multi-track mixing with ducking
-
-Sticker pin tracking & drawing palettes:
-- StickerPinTracker.ts: motion-tracked sticker pinning to media layers
-- StickerPinOverlay.tsx: visual crosshair + drag handle
-- DrawingPaletteSystem.ts: 7 palettes including inclusive skin tones
-- DrawingPaletteBar.tsx: palette switching UI
-
-LUT color grading (CapCut/VN Aug 2026 benchmark):
-- LUTEffect.ts: Skia RuntimeEffect shader for 3D LUT color grading
-- Trilinear interpolation across blue channel slices
-- 6 built-in LUTs: cinematic, vintage, noir, vivid, matte, film
-- Identity LUT fallback for missing assets
-
-Project folders & adjustment layers (Meta Edits Aug 2026 benchmark):
-- ProjectFolderTypes.ts + ProjectFolderStore.ts: folder organization
-- ProjectFolderOrganizeMode.tsx: drag-and-drop folder management
-- AdjustmentLayerEvaluator.ts: adjustable effect layers across timeline
-
-Performance & accessibility:
-- FrameProfiler.ts: real frame timing measurement
-- PerformanceOverlay.tsx: dev-mode FPS overlay with Skia graph
-- usePerformanceMonitor.ts: hook with threshold alerts
-- CanvasAccessibilityLabels.ts: comprehensive a11y labels
-- TimelineAccessibility.ts + ColorAccessibility.ts: expanded a11y
+Integration into composer:
+- DrawingWorkspace: wired DrawingPaletteBar (replaced legacy preset swatches)
+- StickerBrowserSheet: added Pin mode with StickerPinOverlay
+- CreatorCanvas: adjustment layer evaluation with effect stack merging
+- PosterComposerScreen: dev-mode PerformanceOverlay with FPS monitoring
+- CreatorCanvas + TimelineToolbar: comprehensive accessibility labels
+- CreatorDraftListScreen: folder tabs with project counts
 
 Generated with [Devin](https://devin.ai)
 

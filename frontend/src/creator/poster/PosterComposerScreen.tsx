@@ -80,6 +80,9 @@ import { ReverseToggle, FreezeFramePicker, AudioFadeControls } from './tools';
 // Playback pipeline — single clock + timeline projector (Z5 timeline engine)
 import { PlaybackClock, projectTimeline, findVisibleOverlays } from '../core/playback';
 import type { PlaybackState } from '../core/playback';
+// Performance monitoring — dev-only overlay + frame profiler hook
+import { PerformanceOverlay } from '../core/performance/PerformanceOverlay';
+import { usePerformanceMonitor } from '../core/performance/usePerformanceMonitor';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Poster Composer V3 — Frame-Native Composer (spec 09)
@@ -136,6 +139,12 @@ function PosterComposerInner() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { show } = useToast();
+
+  // ── Performance monitoring (dev-only) ──────────────────────────────
+  // Starts the FrameProfiler on mount and renders the PerformanceOverlay
+  // so developers can see real FPS / frame-time / jank metrics while
+  // editing. The hook and overlay are no-ops in production builds.
+  usePerformanceMonitor({ enabled: __DEV__ });
   const {
     document,
     activePageIndex,
@@ -169,8 +178,7 @@ function PosterComposerInner() {
   } = useCreator();
 
   // ── Sheet / overlay state ──────────────────────────────────────────
-  const [showLayers, setShowLayers] = useState(false);
-  const [showPublish, setShowPublish] = useState(false);
+  const [showLayers, setShowLayers] = useState(false);  const [showPublish, setShowPublish] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
   const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
@@ -1403,6 +1411,14 @@ function PosterComposerInner() {
           )}
         </View>
       </GestureDetector>
+
+      {/* ── Performance overlay (dev-only) ────────────────────────────── */}
+      {/* Renders a semi-transparent FPS / frame-time / jank panel at the
+          top-right corner. The overlay is gated on __DEV__ both here and
+          inside PerformanceOverlay itself, so it never appears in
+          production. pointerEvents="box-none" ensures it does not
+          intercept canvas gestures except on its own toggle button. */}
+      {__DEV__ && <PerformanceOverlay />}
 
       {/* ── Top bar — BlurView + gradient scrim (Stories pattern) ────── */}
       <View style={[styles.topBarContainer, { paddingTop: insets.top }]}>

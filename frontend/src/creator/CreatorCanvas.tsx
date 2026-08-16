@@ -37,7 +37,16 @@ import { getVisibleLayersSorted } from './composition';
 // Playback pipeline — single clock, keyframe evaluator, effect evaluator
 import type { PlaybackClock } from './core/playback/PlaybackClock';
 import { evaluateKeyframes } from './core/playback/KeyframeEvaluator';
-import { evaluateCompositionEffectStack } from './core/playback/EffectEvaluator';
+import {
+  evaluateCompositionEffectStack,
+  multiplyMatrix,
+  type EvaluatedEffect,
+} from './core/playback/EffectEvaluator';
+import {
+  getActiveAdjustmentLayers,
+  applyAdjustmentLayersToClip,
+} from './core/playback/AdjustmentLayerEvaluator';
+import { getCanvasLabel, CANVAS_ACCESSIBILITY_ACTIONS } from './core/a11y/CanvasAccessibilityLabels';
 // Shared layer primitives — single source of truth for accent colours,
 // context menus, and gesture handling across poster + creator surfaces.
 import {
@@ -222,6 +231,25 @@ export function CreatorCanvas({
           borderRadius: canvasRadius,
         },
       ]}
+      accessibilityLabel={getCanvasLabel(visibleLayers.length, mode)}
+      accessibilityRole="image"
+      accessibilityActions={CANVAS_ACCESSIBILITY_ACTIONS}
+      onAccessibilityAction={(event) => {
+        const actionName = (event as { actionName?: string }).actionName;
+        if (actionName === 'selectNextLayer' && onLayerPress) {
+          const next = visibleLayers.find((l) => l.id !== selectedLayerId);
+          if (next) onLayerPress(next.id);
+        } else if (actionName === 'selectPreviousLayer' && onLayerPress) {
+          const prev = [...visibleLayers].reverse().find((l) => l.id !== selectedLayerId);
+          if (prev) onLayerPress(prev.id);
+        } else if (actionName === 'selectTopLayer' && onLayerPress) {
+          const top = visibleLayers[visibleLayers.length - 1];
+          if (top) onLayerPress(top.id);
+        } else if (actionName === 'selectBottomLayer' && onLayerPress) {
+          const bottom = visibleLayers[0];
+          if (bottom) onLayerPress(bottom.id);
+        }
+      }}
     >
       {renderBackground()}
 
@@ -741,7 +769,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
     return opacity;
   }, [layer.opacity, keyframeValues, hasPlaybackClock, isTemporallyVisible]);
 
-  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs);
+  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, siblingLayers);
 
   // Smart alignment guides: while dragging, detect when this layer's
   // left/right/centre aligns with a sibling's left/right/centre (vertical
@@ -962,10 +990,11 @@ function renderLayerContent(
   height: number,
   playbackClock?: PlaybackClock | null,
   currentTimeMs?: number,
+  siblingLayers?: CreatorLayer[],
 ): React.ReactNode {
   switch (layer.type) {
     case 'media':
-      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} />;
+      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} siblingLayers={siblingLayers} />;
     case 'text':
       return <TextLayerContent layer={layer} />;
     case 'product':
@@ -1013,24 +1042,88 @@ function MediaLayerContent({
   height,
   playbackClock,
   currentTimeMs,
+  siblingLayers,
 }: {
   layer: Extract<CreatorLayer, { type: 'media' }>;
   width: number;
   height: number;
   playbackClock?: PlaybackClock | null;
   currentTimeMs?: number;
+  siblingLayers?: CreatorLayer[];
 }) {
   const { payload } = layer;
   const [videoError, setVideoError] = React.useState(false);
   const hasPlaybackClock = !!playbackClock;
+  const timeMs = currentTimeMs ?? 0;
 
   // ── Effect evaluation ───────────────────────────────────────────
-  // Evaluate the effect stack into renderable parameters (color matrix,
-  // blur, vignette, grain). Applied to images via Skia ColorMatrix.
-  const evaluatedEffect = useMemo(() => {
-    if (!payload.effects || payload.effects.length === 0) return null;
-    return evaluateCompositionEffectStack(payload.effects, 1);
-  }, [payload.effects]);
+  // Evaluate the clip's own effect stack, then merge any active adjustment
+  // layers (Meta Edits August 2026). Adjustment layers apply a global grade
+  // on top of per-clip adjustments; their opacity blends the contribution.
+  // Each segment is evaluated independently with its intensity (the
+  // EffectEvaluator interpolates color matrices toward identity for
+  // intensity < 1), then the per-segment EvaluatedEffects are combined:
+  //   - color matrices are multiplied (composes the grades)
+  //   - blur radii take the maximum
+  //   - vignette / grain amounts are summed (clamped to 0..1)
+  const evaluatedEffect = useMemo<EvaluatedEffect>(() => {
+    const clipEffects = payload.effects ?? [];
+    // Resolve active adjustment layers from the sibling set at the current
+    // time. siblingLayers excludes this clip but includes adjustment layers
+    // (they are separate layers). getActiveAdjustmentLayers filters by
+    // type, enabled, hidden, and temporal range.
+    const adjustmentLayers = siblingLayers
+      ? getActiveAdjustmentLayers(siblingLayers, timeMs)
+      : [];
+
+    // No adjustment layers -> evaluate the clip's own effects directly
+    // (preserves the original fast path).
+    if (adjustmentLayers.length === 0) {
+      if (clipEffects.length === 0) return {};
+      return evaluateCompositionEffectStack(clipEffects, 1);
+    }
+
+    // Build the combined segment stack: clip effects first, then each
+    // applicable adjustment layer's effects scaled by its opacity.
+    const combined = applyAdjustmentLayersToClip(
+      { id: layer.id, effects: clipEffects },
+      adjustmentLayers,
+      timeMs,
+    );
+
+    // Evaluate each segment with its own intensity and merge.
+    let colorMatrix: number[] | undefined;
+    let blurRadius = 0;
+    let vignetteAmount = 0;
+    let hasBlur = false;
+    let hasVignette = false;
+
+    for (const segment of combined.segments) {
+      const segResult = evaluateCompositionEffectStack(segment.effects, segment.intensity);
+      if (segResult.colorMatrix) {
+        if (colorMatrix) {
+          // Multiply matrices to compose the grades.
+          colorMatrix = multiplyMatrix(colorMatrix, segResult.colorMatrix);
+        } else {
+          colorMatrix = [...segResult.colorMatrix];
+        }
+      }
+      if (segResult.blurRadius !== undefined && segResult.blurRadius > 0) {
+        blurRadius = Math.max(blurRadius, segResult.blurRadius);
+        hasBlur = true;
+      }
+      if (segResult.vignetteAmount !== undefined && segResult.vignetteAmount > 0) {
+        vignetteAmount += segResult.vignetteAmount;
+        hasVignette = true;
+      }
+    }
+
+    const result: EvaluatedEffect = {};
+    if (colorMatrix) result.colorMatrix = colorMatrix;
+    if (hasBlur && blurRadius > 0) result.blurRadius = blurRadius;
+    if (hasVignette && vignetteAmount > 0) result.vignetteAmount = Math.min(1, vignetteAmount);
+    return result;
+  }, [payload.effects, siblingLayers, timeMs, layer.id]);
 
   const hasColorMatrix = !!evaluatedEffect?.colorMatrix && evaluatedEffect.colorMatrix.length === 20;
 

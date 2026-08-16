@@ -10,6 +10,7 @@ import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { PressScale } from '../../CreatorAnimations';
 import { formatTimecode, type PosterClip } from './TimelineTypes';
+import { getToolLabel, getSliderLabel } from '../../core/a11y/CanvasAccessibilityLabels';
 
 // ───────────────────────────────────────────────────────────────────────────
 // TimelineToolbar — context-sensitive toolbar for the selected clip.
@@ -75,9 +76,10 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
           <PressScale
             onPress={() => { haptic.light(); onPlayPause!(); }}
             style={toolbarStyles.playBtn}
-            accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+            accessibilityLabel={getToolLabel(isPlaying ? 'pause' : 'play')}
             accessibilityHint="Plays or pauses the timeline"
             accessibilityRole="button"
+            accessibilityState={{ selected: isPlaying }}
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
             <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color={colors.textPrimary} />
@@ -103,9 +105,9 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
       </View>
 
       <View style={toolbarStyles.toolsRow}>
-        <ToolButton icon="cut-outline" label="Split" onPress={onSplit} haptic={haptic} />
-        <ToolButton icon="copy-outline" label="Duplicate" onPress={onDuplicate} haptic={haptic} />
-        <ToolButton icon="swap-horizontal-outline" label="Replace" onPress={onReplace} haptic={haptic} />
+        <ToolButton icon="cut-outline" label="Split" a11yLabel={getToolLabel('split')} onPress={onSplit} haptic={haptic} />
+        <ToolButton icon="copy-outline" label="Duplicate" a11yLabel={getToolLabel('duplicate')} onPress={onDuplicate} haptic={haptic} />
+        <ToolButton icon="swap-horizontal-outline" label="Replace" a11yLabel={getToolLabel('replace')} onPress={onReplace} haptic={haptic} />
       </View>
 
       <View style={toolbarStyles.slidersColumn}>
@@ -141,6 +143,7 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
         <ToolButton
           icon="trash-outline"
           label="Delete"
+          a11yLabel={getToolLabel('delete')}
           onPress={onDelete}
           danger
           haptic={haptic}
@@ -154,6 +157,7 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
 interface ToolButtonProps {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
+  a11yLabel?: string;
   onPress: () => void;
   danger?: boolean;
   haptic: ReturnType<typeof useHaptic>;
@@ -162,6 +166,7 @@ interface ToolButtonProps {
 const ToolButton = React.memo(function ToolButton({
   icon,
   label,
+  a11yLabel,
   onPress,
   danger,
   haptic,
@@ -172,7 +177,7 @@ const ToolButton = React.memo(function ToolButton({
     <PressScale
       onPress={() => { danger ? haptic.heavy() : haptic.light(); onPress(); }}
       style={toolbarStyles.tool}
-      accessibilityLabel={label}
+      accessibilityLabel={a11yLabel ?? label}
       accessibilityRole="button"
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
     >
@@ -249,7 +254,12 @@ const SliderRow = React.memo(function SliderRow({
       <Ionicons name={icon} size={16} color={colors.textSecondary} />
       <Text style={[toolbarStyles.sliderLabel, { color: colors.textSecondary }]}>{label}</Text>
       <GestureDetector gesture={panGesture}>
-        <View style={toolbarStyles.sliderTrack} onLayout={handleLayout}>
+        <View
+          style={toolbarStyles.sliderTrack}
+          onLayout={handleLayout}
+          accessibilityLabel={getSliderLabel(label, value, min, max, formatValue)}
+          accessibilityRole="adjustable"
+        >
           <View style={[toolbarStyles.sliderTrackBg, { backgroundColor: colors.border }]} />
           <View style={[toolbarStyles.sliderFill, { width: `${pct}%`, backgroundColor: color }]} />
           <View style={[toolbarStyles.sliderThumb, { left: `${pct}%`, backgroundColor: color }]} />

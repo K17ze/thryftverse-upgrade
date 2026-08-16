@@ -60,7 +60,6 @@ import {
   type SegmentOption,
 } from '../../controls';
 import {
-  CreatorColorPicker,
   useCreatorColorHistory,
   toHexString,
   fromHexString,
@@ -68,6 +67,7 @@ import {
 } from '../../color/';
 import type { CreatorColor } from '../../color/';
 import type { BrushType, DrawingDocument, EmojiBrushConfig, Stroke } from './DrawingTypes';
+import { DrawingPaletteBar } from './DrawingPaletteBar';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Skia availability guard
@@ -99,11 +99,6 @@ const BRUSH_SEGMENTS: SegmentOption[] = [
   { label: 'Neon', value: 'neon', icon: 'bulb-outline' },
   { label: 'Eraser', value: 'eraser', icon: 'backspace-outline' },
   { label: 'Emoji', value: 'emoji', icon: 'happy-outline' },
-];
-
-const PRESET_COLORS = [
-  '#000000', '#FFFFFF', '#E53935', '#FB8C00',
-  '#FDD835', '#43A047', '#1E88E5', '#8E24AA',
 ];
 
 // ── Emoji picker catalog (Snapchat emoji-brush parity) ────────────────────
@@ -403,7 +398,6 @@ export function DrawingWorkspace({
   const [brushSize, setBrushSize] = useState<number>(8);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [redoStack, setRedoStack] = useState<Stroke[]>([]);
-  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // ── Emoji brush state ──
   const [emojiBrush, setEmojiBrush] = useState<EmojiBrushConfig>({
@@ -619,14 +613,6 @@ export function DrawingWorkspace({
     if (brushType === 'eraser') setBrushType('pen');
   }, [brushType, commitRecentColor]);
 
-  // Preset swatch selection — converts hex string to CreatorColor.
-  const handleSelectColor = useCallback((c: string) => {
-    const parsed = fromHexString(c);
-    if (parsed) {
-      handleColorCommit(parsed);
-    }
-  }, [handleColorCommit]);
-
   const handleSelectBrush = useCallback((t: BrushType) => {
     setBrushType(t);
   }, []);
@@ -751,61 +737,20 @@ export function DrawingWorkspace({
             onChange={(v) => handleSelectBrush(v as BrushType)}
           />
 
-          {/* Color picker row — preset swatches + shared CreatorColorPicker */}
+          {/* DrawingPaletteBar — curated palettes, custom colors, palette switcher.
+              Replaces the legacy preset-swatch row with a richer, authored palette
+              surface (spec 07_MEDIA_TOOLCHAIN §Drawing). The bar manages its own
+              custom-color picker and palette sheet; the selected color flows into
+              the stroke creation logic via onColorChange/onColorCommit. */}
           {brushType !== 'emoji' && (
-          <View style={styles.colorRow}>
-            {PRESET_COLORS.map((c) => {
-              const selected = brushColor === c && brushType !== 'eraser';
-              return (
-                <Pressable
-                  key={c}
-                  onPress={() => handleSelectColor(c)}
-                  accessibilityLabel={`Color ${c}`}
-                  accessibilityRole="button"
-                  hitSlop={4}
-                  style={[
-                    styles.swatch,
-                    { backgroundColor: c, borderColor: selected ? colors.brand : colors.border },
-                  ]}
-                />
-              );
-            })}
-            {/* Expand/collapse color picker button */}
-            <PressScale
-              onPress={() => setShowColorPicker((v) => !v)}
-              style={[
-                styles.expandColorBtn,
-                {
-                  backgroundColor: showColorPicker ? colors.brandSubtle : colors.surfaceAlt,
-                  borderColor: showColorPicker ? colors.brand : colors.border,
-                },
-              ]}
-              accessibilityLabel="Custom color picker"
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showColorPicker }}
-            >
-              <Ionicons
-                name="color-palette-outline"
-                size={18}
-                color={showColorPicker ? colors.brand : colors.textSecondary}
-              />
-            </PressScale>
-          </View>
-          )}
-
-          {/* Shared CreatorColorPicker — compact row with HEX, eyedropper, recents */}
-          {showColorPicker && brushType !== 'emoji' && (
-            <View style={styles.colorPickerSection}>
-              <CreatorColorPicker
-                color={brushColorObj}
-                onChange={handleColorChange}
-                onCommit={handleColorCommit}
-                mode="compact"
-                recents={recents}
-                onCommitRecent={commitRecentColor}
-                accessibilityLabel="Drawing stroke color"
-              />
-            </View>
+            <DrawingPaletteBar
+              color={brushColorObj}
+              onColorChange={handleColorChange}
+              onColorCommit={handleColorCommit}
+              recents={recents}
+              onCommitRecent={commitRecentColor}
+              accessibilityLabel="Drawing stroke color palette"
+            />
           )}
 
           {/* ── Emoji brush panel (replaces color/size when emoji mode active) ── */}

@@ -36,6 +36,10 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import type { CreatorDocument } from './composition';
 import { CreatorFolderOrganizeSheet } from './CreatorFolderOrganizeSheet';
+import {
+  useProjectFolderStore,
+  getFolderProjectCount,
+} from './core/projectStore/ProjectFolderStore';
 
 type FolderFilter = 'all' | 'unfiled' | { folderId: string };
 type SortBy = 'recent' | 'name' | 'type';
@@ -65,6 +69,13 @@ export function CreatorDraftListScreen() {
   const [folderFilter, setFolderFilter] = useState<FolderFilter>('all');
   const [organizeVisible, setOrganizeVisible] = useState(false);
 
+  // ── ProjectFolderStore integration (Meta Edits August 2026) ────────
+  // The Zustand store is the reactive source of truth for folders. We
+  // sync service-loaded folders into the store on load, and use the
+  // store's folder list to compute project counts for the filter chips.
+  const storeFolders = useProjectFolderStore((s) => s.folders);
+  const storeCreateFolder = useProjectFolderStore((s) => s.createFolder);
+
   const toastTranslateY = useSharedValue(100);
   const toastOpacity = useSharedValue(0);
 
@@ -88,9 +99,19 @@ export function CreatorDraftListScreen() {
     setDraftDocs(docs);
     const loadedFolders = await CreatorDraftService.getFolders();
     setFolders(loadedFolders);
+    // Sync service folders into the ProjectFolderStore so the store is
+    // the reactive source of truth. We only create store entries for
+    // service folders that don't already exist in the store (by name,
+    // since IDs may differ between the two systems).
+    for (const sf of loadedFolders) {
+      const exists = storeFolders.some((pf) => pf.id === sf.id || pf.name === sf.name);
+      if (!exists) {
+        storeCreateFolder(sf.name);
+      }
+    }
     setLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [storeFolders, storeCreateFolder]);
 
   useEffect(() => {
     loadDrafts();
@@ -312,7 +333,7 @@ export function CreatorDraftListScreen() {
         </Pressable>
       </View>
 
-      {/* Folder filter chips */}
+      {/* Folder filter chips — with project counts from ProjectFolderStore */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -334,7 +355,7 @@ export function CreatorDraftListScreen() {
               folderFilter === 'all' ? styles.folderChipTextActive : styles.folderChipTextInactive,
             ]}
           >
-            All Projects
+            All Projects ({drafts.length})
           </Text>
         </Pressable>
         <Pressable
@@ -353,12 +374,18 @@ export function CreatorDraftListScreen() {
               folderFilter === 'unfiled' ? styles.folderChipTextActive : styles.folderChipTextInactive,
             ]}
           >
-            Unfiled
+            Unfiled ({getFolderProjectCount(storeFolders, null, drafts.length)})
           </Text>
         </Pressable>
         {folders.map((folder) => {
           const isActive =
             typeof folderFilter !== 'string' && folderFilter.folderId === folder.id;
+          // Use ProjectFolderStore count when available, fall back to
+          // counting drafts with matching folderId.
+          const storeFolder = storeFolders.find((pf) => pf.id === folder.id || pf.name === folder.name);
+          const count = storeFolder
+            ? getFolderProjectCount(storeFolders, storeFolder.id, drafts.length)
+            : drafts.filter((d) => d.folderId === folder.id).length;
           return (
             <Pressable
               key={folder.id}
@@ -368,7 +395,7 @@ export function CreatorDraftListScreen() {
                 isActive ? styles.folderChipActive : styles.folderChipInactive,
                 pressed && { opacity: 0.7 },
               ]}
-              accessibilityLabel={`Filter by folder ${folder.name}`}
+              accessibilityLabel={`Filter by folder ${folder.name}, ${count} projects`}
               accessibilityRole="button"
             >
               <Ionicons
@@ -384,7 +411,7 @@ export function CreatorDraftListScreen() {
                 ]}
                 numberOfLines={1}
               >
-                {folder.name}
+                {folder.name} ({count})
               </Text>
             </Pressable>
           );
