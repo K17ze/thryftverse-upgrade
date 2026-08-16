@@ -492,6 +492,9 @@ export const CreatorBackgroundSchema = z.object({
   // The renderer blurs this image and uses it as the canvas background.
   blurAssetId: z.string().optional(),
   blurRadius: z.number().min(0).max(50).optional(),
+  // For 'image' type — optional blur intensity (0–20) applied to the
+  // background image via expo-image's blurRadius. 0 = no blur.
+  imageBlur: z.number().min(0).max(20).optional(),
 });
 
 export type CreatorBackground = z.infer<typeof CreatorBackgroundSchema>;

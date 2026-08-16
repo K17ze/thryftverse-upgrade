@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, type ViewStyle, type TextStyle } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -25,7 +26,6 @@ import {
   useImage as useSkiaImage,
   Fit as SkiaFit,
 } from '@shopify/react-native-skia';
-import { Image as ExpoImage } from 'expo-image';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -207,10 +207,12 @@ export function CreatorCanvas({
     }
     if (canvas.background.type === 'image' && canvas.background.value) {
       return (
-        <CachedImage
-          uri={canvas.background.value}
+        <ExpoImage
+          source={{ uri: canvas.background.value }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
+          blurRadius={canvas.background.imageBlur ?? 0}
+          cachePolicy="memory-disk"
         />
       );
     }

@@ -6,19 +6,23 @@
  *      resolution for fast analysis).
  *   2. Loads the resized image into Skia and reads raw pixel data via
  *      `SkImage.readPixels()`.
- *   3. Computes a luminance histogram (Rec.709 weights).
- *   4. Detects clipping — crushed shadows (luminance < 5) and blown
+ *   3. Computes a 256-bin luminance histogram (Rec.709 weights).
+ *   4. Detects exposure from the histogram mean vs the 0.5 target.
+ *   5. Detects contrast from the standard deviation of luminance vs a
+ *      target std.
+ *   6. Detects saturation from the average color distance from gray.
+ *   7. Detects white balance from the average RGB channel ratios
+ *      (gray-world assumption).
+ *   8. Detects clipping — crushed shadows (luminance < 5) and blown
  *      highlights (luminance > 250).
- *   5. Estimates white balance using the gray-world assumption (average
- *      R, G, B should be equal under neutral lighting).
- *   6. Computes saturation distribution (mean deviation from luminance).
- *   7. Returns conservative, content-aware adjustments.
+ *   9. Computes conservative, content-aware adjustments from the analysis.
  *
  * Per AGENTS.md §11: this is real analysis, not static constants labeled
  * "intelligent." If the analysis pipeline fails (e.g. readPixels is not
  * available on a platform), it falls back to a conservative curated
  * preset — and the UI honestly labels it "Enhance" in that case (see
- * `isRealAnalysis` flag).
+ * `isRealAnalysis` flag). The fallback is clearly marked via
+ * `isFallbackPreset()`.
  *
  * Per spec 07 §6: the adjustments are deliberately conservative so they
  * improve most photos without looking over-processed.
@@ -29,11 +33,20 @@ import type { AdjustNode } from './EffectTypes';
 
 // ── Analysis result ─────────────────────────────────────────────────────
 
-interface ImageAnalysis {
+/**
+ * The result of real pixel-level image analysis.
+ *
+ * All luminance values use Rec.709 weights (KR=0.2126, KG=0.7152,
+ * KB=0.0722). The histogram is a 256-bin array of normalized frequencies
+ * (each bin is the fraction of pixels in that luminance bucket, 0..1).
+ */
+export interface ImageAnalysis {
   /** Mean luminance 0..255 (Rec.709 weighted). */
   meanLuminance: number;
   /** Standard deviation of luminance — contrast proxy. */
   luminanceStd: number;
+  /** 256-bin luminance histogram, each bin a normalized frequency 0..1. */
+  histogram: number[];
   /** Fraction of pixels with luminance < 5 (crushed shadows). 0..1. */
   shadowClip: number;
   /** Fraction of pixels with luminance > 250 (blown highlights). 0..1. */
@@ -44,8 +57,17 @@ interface ImageAnalysis {
   meanG: number;
   /** Mean blue channel 0..255. */
   meanB: number;
-  /** Mean saturation 0..1 (deviation from luminance, normalized). */
+  /**
+   * Mean saturation 0..1 computed as the average color distance from
+   * gray (maxC - minC) / maxC per pixel. Higher = more colorful.
+   */
   meanSaturation: number;
+  /**
+   * White-balance channel ratios: each channel's mean divided by the
+   * mean luminance. Under neutral (gray-world) lighting all three
+   * approach 1.0. Deviations indicate a color cast.
+   */
+  channelRatios: { r: number; g: number; b: number };
 }
 
 // ── Fallback preset ─────────────────────────────────────────────────────
@@ -54,6 +76,10 @@ interface ImageAnalysis {
  * Conservative curated enhancement preset used as a fallback when real
  * analysis is not available. This is NOT labeled "intelligent" — it is a
  * static, hand-tuned preset (spec 07 §6, AGENTS.md §11).
+ *
+ * The fallback is clearly marked: `isFallbackPreset()` returns true for
+ * an AdjustNode whose values exactly match this preset, so the UI can
+ * label it "Enhance" rather than "Auto" (AGENTS.md §11 truth).
  */
 const ENHANCE_FALLBACK: AdjustNode = {
   type: 'adjust',
@@ -66,6 +92,25 @@ const ENHANCE_FALLBACK: AdjustNode = {
   fade: 0.05,
   vignette: 0.03,
 };
+
+/**
+ * Returns true when the given adjust node exactly matches the fallback
+ * preset. Used by the UI to label the button "Enhance" (curated preset)
+ * rather than "Auto" (real analysis) — AGENTS.md §11 truth.
+ */
+export function isFallbackPreset(node: AdjustNode): boolean {
+  const f = ENHANCE_FALLBACK;
+  return (
+    node.exposure === f.exposure &&
+    node.contrast === f.contrast &&
+    node.highlights === f.highlights &&
+    node.shadows === f.shadows &&
+    node.saturation === f.saturation &&
+    node.temperature === f.temperature &&
+    node.fade === f.fade &&
+    node.vignette === f.vignette
+  );
+}
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -170,6 +215,9 @@ function analyzePixels(
   const KG = 0.7152;
   const KB = 0.0722;
 
+  // 256-bin luminance histogram (counts, normalized to frequencies later).
+  const histogram = new Array<number>(256).fill(0);
+
   let sumLum = 0;
   let sumLumSq = 0;
   let sumR = 0;
@@ -192,10 +240,14 @@ function analyzePixels(
     sumG += g;
     sumB += b;
 
+    // Accumulate the 256-bin histogram.
+    const bin = lum < 0 ? 0 : lum > 255 ? 255 : Math.round(lum);
+    histogram[bin]++;
+
     if (lum < 5) shadowClipCount++;
     if (lum > 250) highlightClipCount++;
 
-    // Saturation: deviation from luminance, normalized to 0..1.
+    // Saturation: distance from gray, normalized to 0..1.
     const maxC = Math.max(r, g, b);
     const minC = Math.min(r, g, b);
     const sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
@@ -209,15 +261,30 @@ function analyzePixels(
   const meanB = sumB / pixelCount;
   const meanSaturation = sumSat / pixelCount;
 
+  // Normalize histogram to frequencies (0..1 per bin).
+  for (let i = 0; i < 256; i++) {
+    histogram[i] /= pixelCount;
+  }
+
+  // White-balance channel ratios (gray-world): each channel mean divided
+  // by the mean luminance. Under neutral lighting all approach 1.0.
+  const channelRatios = {
+    r: meanLuminance > 0 ? meanR / meanLuminance : 1,
+    g: meanLuminance > 0 ? meanG / meanLuminance : 1,
+    b: meanLuminance > 0 ? meanB / meanLuminance : 1,
+  };
+
   return {
     meanLuminance,
     luminanceStd,
+    histogram,
     shadowClip: shadowClipCount / pixelCount,
     highlightClip: highlightClipCount / pixelCount,
     meanR,
     meanG,
     meanB,
     meanSaturation,
+    channelRatios,
   };
 }
 

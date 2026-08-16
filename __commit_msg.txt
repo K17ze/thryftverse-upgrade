@@ -1,24 +1,17 @@
-feat(creator): wave 3 completion — timeline ops, voiceover UI, LUT browser, a11y, integration
-
-Completed missing wave 3 files and integrated all modules into composer surfaces:
+feat(creator): wave 4 — background image, AI effects, auto-enhance, camera effects, motion tracking
 
 New modules:
-- TimelineOperations.ts: 12 pure-functional timeline ops (trim, split, duplicate, replace, reorder, speed, speed curve, crop, rotate, transitions)
-- TransitionEvaluator.ts: cut/fade/dissolve/slide/wipe transition rendering
-- LUTPreviewThumb.tsx: native Skia RuntimeEffect LUT preview (WYSIWYG)
-- LUTBrowserSheet.tsx: 3-column LUT browser with intensity slider
-- VoiceoverRecorderSheet.tsx: real-time recording with waveform viz, mic permissions
-- AudioMixPanel.tsx: multi-track mixing with ducking, mute/solo, fades
-- TimelineAccessibility.ts: clip/transition/playhead a11y labels + actions
-- ColorAccessibility.ts: color/gradient/eyedropper a11y + throttled announcements
+- AIEffectRegistry.ts: 12 AI effects (autoEnhance, skinSmooth, bgBlur, bgRemove, skyReplace, colorPop, vintageFilm, glitch, prism, dreamy, noir, cinematic)
+- CameraEffectBar.tsx: camera preview effect selector
+- MotionTracker.ts: correlation-based point tracking foundation
+- BackgroundSheet: image background tab with expo-image-picker
+- AutoAdjust: upgraded histogram-based content-aware analysis
+- CreatorCanvas: background image rendering support
+- composition.ts: image background schema
 
-Integration into composer:
-- DrawingWorkspace: wired DrawingPaletteBar (replaced legacy preset swatches)
-- StickerBrowserSheet: added Pin mode with StickerPinOverlay
-- CreatorCanvas: adjustment layer evaluation with effect stack merging
-- PosterComposerScreen: dev-mode PerformanceOverlay with FPS monitoring
-- CreatorCanvas + TimelineToolbar: comprehensive accessibility labels
-- CreatorDraftListScreen: folder tabs with project counts
+Fixes:
+- CreatorCanvas: remove duplicate ExpoImage import
+- OrderDetailScreen: add missing etaBanner/staleBanner styles
 
 Generated with [Devin](https://devin.ai)
 

@@ -430,6 +430,12 @@ export default function OrderDetailScreen() {
     escrowTitle: { color: colors.textPrimary },
     escrowSub: { color: colors.textSecondary },
     escrowCountdown: { color: colors.textMuted },
+    etaBanner: { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}25` },
+    etaLabel: { color: colors.textMuted },
+    etaValue: { color: colors.textPrimary },
+    etaService: { color: colors.textSecondary },
+    staleBanner: { backgroundColor: `${colors.warning}08`, borderColor: `${colors.warning}25` },
+    staleText: { color: colors.warning },
     detailLabel: { color: colors.textSecondary },
     detailValue: { color: colors.textPrimary },
     detailValueLink: { color: colors.brand },
@@ -740,6 +746,56 @@ export default function OrderDetailScreen() {
   const shipmentLastUpdated = formatTimelineDate(
     latestParcelEvent?.occurredAt ?? latestParcelEvent?.receivedAt
   );
+
+  // --- ETA from fulfilment snapshot ---
+  const snapshot = backendOrder?.fulfilmentSnapshot ?? null;
+  const etaWindow = snapshot?.etaMinDays != null && snapshot?.etaMaxDays != null
+    ? (snapshot.etaMinDays !== snapshot.etaMaxDays
+        ? `${snapshot.etaMinDays}–${snapshot.etaMaxDays} days`
+        : `${snapshot.etaMinDays} day${snapshot.etaMinDays === 1 ? '' : 's'}`)
+    : null;
+
+  // Compute estimated delivery date from shippedAt + etaMaxDays
+  const estimatedDeliveryDate = useMemo(() => {
+    if (!backendOrder?.shippedAt || !snapshot?.etaMaxDays) return null;
+    const shipped = new Date(backendOrder.shippedAt);
+    if (Number.isNaN(shipped.getTime())) return null;
+    const eta = new Date(shipped.getTime() + snapshot.etaMaxDays * 24 * 60 * 60 * 1000);
+    return eta;
+  }, [backendOrder?.shippedAt, snapshot?.etaMaxDays]);
+
+  const estimatedDeliveryLabel = estimatedDeliveryDate
+    ? estimatedDeliveryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    : null;
+
+  // --- Stale event indicator ---
+  // If the last parcel event is > 48 hours old and the order is still in transit,
+  // show a "tracking may be delayed" warning.
+  const isStaleTracking = useMemo(() => {
+    if (!latestParcelEvent) return false;
+    if (normalisedStatus !== 'shipped' && normalisedStatus !== 'in transit' && normalisedStatus !== 'out for delivery') return false;
+    const lastTime = latestParcelEvent.occurredAt ?? latestParcelEvent.receivedAt;
+    const lastMs = new Date(lastTime).getTime();
+    if (Number.isNaN(lastMs)) return false;
+    const hoursSince = (Date.now() - lastMs) / (60 * 60 * 1000);
+    return hoursSince > 48;
+  }, [latestParcelEvent, normalisedStatus]);
+
+  // --- Package summary from snapshot ---
+  const packageSummary = useMemo(() => {
+    const profile = snapshot?.parcelProfile;
+    if (!profile) return null;
+    const parts: string[] = [];
+    if (profile.maxWeightKg != null) {
+      parts.push(profile.maxWeightKg < 1
+        ? `${Math.round(profile.maxWeightKg * 1000)}g`
+        : `${profile.maxWeightKg}kg`);
+    }
+    if (profile.maxLengthCm != null) {
+      parts.push(`≤${profile.maxLengthCm}cm`);
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
+  }, [snapshot?.parcelProfile]);
 
   const showShipmentDetails = Boolean(
     backendOrder?.shippingProvider
@@ -1431,6 +1487,35 @@ export default function OrderDetailScreen() {
           onLayout={(e) => { timelineYRef.current = e.nativeEvent.layout.y; }}
         >
           <Text style={[styles.sectionLabel, t.sectionLabel]}>Timeline</Text>
+
+          {/* ETA banner — shown when in transit with an ETA window */}
+          {isBuyer && etaWindow && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
+            <View style={[styles.etaBanner, t.etaBanner]}>
+              <View style={styles.etaIconWrap}>
+                <Ionicons name="cube-outline" size={16} color={colors.brand} />
+              </View>
+              <View style={styles.etaContent}>
+                <Text style={[styles.etaLabel, t.etaLabel]}>ESTIMATED DELIVERY</Text>
+                <Text style={[styles.etaValue, t.etaValue]}>
+                  {estimatedDeliveryLabel ? `By ${estimatedDeliveryLabel}` : etaWindow}
+                </Text>
+                {snapshot?.serviceName ? (
+                  <Text style={[styles.etaService, t.etaService]}>{snapshot.serviceName}</Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
+          {/* Stale tracking warning — last event > 48h old while in transit */}
+          {isStaleTracking ? (
+            <View style={[styles.staleBanner, t.staleBanner]}>
+              <Ionicons name="time-outline" size={14} color={colors.warning} />
+              <Text style={[styles.staleText, t.staleText]}>
+                Tracking hasn't updated in over 48 hours. The carrier may be delayed — check their site for the latest.
+              </Text>
+            </View>
+          ) : null}
+
           <OrderTrackingTimeline
             entries={timelineEntries}
             warningText={parcelError ?? undefined}
@@ -1473,6 +1558,12 @@ export default function OrderDetailScreen() {
               ) : null}
               {shipmentLastUpdated ? (
                 <DetailRow label="Last carrier update" value={shipmentLastUpdated} />
+              ) : null}
+              {packageSummary ? (
+                <DetailRow label="Package" value={packageSummary} />
+              ) : null}
+              {snapshot?.destinationSummary ? (
+                <DetailRow label="Destination" value={snapshot.destinationSummary} />
               ) : null}
               {backendOrder.shippingLabelUrl ? (
                 <Pressable
@@ -1871,6 +1962,64 @@ const styles = StyleSheet.create({
   },
   timelineSection: {
     paddingVertical: Space.sm,
+  },
+  etaBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  etaIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  etaContent: {
+    flex: 1,
+    gap: 2,
+  },
+  etaLabel: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    opacity: 0.6,
+  },
+  etaValue: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
+  },
+  etaService: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    opacity: 0.5,
+  },
+  staleBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    marginHorizontal: Space.md,
+    marginBottom: Space.sm,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(255,180,0,0.08)',
+  },
+  staleText: {
+    flex: 1,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    opacity: 0.7,
   },
   escrowBanner: {
     flexDirection: 'row',

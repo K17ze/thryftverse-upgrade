@@ -10,10 +10,8 @@
  *     CreatorColorPicker, angle control, reverse)
  *   - Blurred: blurred version of the first selected media layer's image,
  *     with a blur-radius slider (0–50)
- *
- * The Image background type is not yet implemented (no photo-library
- * integration). Per AGENTS.md §11 (Truthful UI), the Image tab is hidden
- * rather than shown as a disabled placeholder.
+ *   - Image: user-selected photo from the device library, rendered as a
+ *     full-bleed cover background with an optional blur slider (0–20)
  *
  * The sheet maintains a local draft of the background. Each control
  * mutates the draft in real time (AGENTS.md §11). Confirm commits the
@@ -33,14 +31,17 @@ import {
   GestureResponderEvent,
   PanResponder,
   PanResponderGestureState,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
+import { CreatorSlider } from '../controls/CreatorSlider';
 import {
   CreatorColorPicker,
   GradientEditor,
@@ -77,10 +78,10 @@ const GRADIENT_PRESETS: { label: string; value: string; secondaryValue: string }
 
 type BgType = CreatorBackground['type'];
 
-// Image tab is hidden — not yet implemented (AGENTS.md §11 Truthful UI).
 const TYPE_CHIPS: { id: BgType; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { id: 'color', label: 'Solid', icon: 'square-outline' },
   { id: 'gradient', label: 'Gradient', icon: 'color-wand-outline' },
+  { id: 'image', label: 'Image', icon: 'image-outline' },
   { id: 'blur', label: 'Blurred', icon: 'aperture-outline' },
 ];
 
@@ -182,6 +183,12 @@ export function BackgroundSheet({
           next.blurRadius = 20;
         }
       }
+      // When switching to image, seed imageBlur if not already set.
+      if (type === 'image') {
+        if (next.imageBlur == null) {
+          next.imageBlur = 0;
+        }
+      }
       return next;
     });
   }, [haptic, firstMediaLayer]);
@@ -261,6 +268,56 @@ export function BackgroundSheet({
     setDraft((prev) => ({ ...prev, type: 'blur', blurRadius: clamped }));
   }, []);
 
+  // ── Image background: pick from photo library ─────────────────────
+  // Uses expo-image-picker to launch the native photo library. The
+  // selected image URI is stored in the draft as { type: 'image', value:
+  // uri }. Permission is requested first; if denied, an alert guides the
+  // user to settings (AGENTS.md §11 — truthful, no fake success).
+  const [isPickingImage, setIsPickingImage] = useState(false);
+
+  const handlePickImage = useCallback(async () => {
+    if (isPickingImage) return;
+    setIsPickingImage(true);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Photo access needed',
+          'Allow photo library access to pick a background image.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => { void ImagePicker.requestMediaLibraryPermissionsAsync(); } },
+          ],
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.92,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        haptic.medium();
+        setDraft((prev) => ({
+          ...prev,
+          type: 'image',
+          value: result.assets[0].uri,
+          imageBlur: prev.imageBlur ?? 0,
+        }));
+      }
+    } catch {
+      Alert.alert('Could not open photo library', 'Please try again.');
+    } finally {
+      setIsPickingImage(false);
+    }
+  }, [isPickingImage, haptic]);
+
+  // ── Image blur slider (0–20) ──────────────────────────────────────
+  const handleImageBlurChange = useCallback((blur: number) => {
+    const clamped = Math.max(0, Math.min(20, Math.round(blur)));
+    setDraft((prev) => ({ ...prev, type: 'image', imageBlur: clamped }));
+  }, []);
+
   // ── Confirm / Cancel ───────────────────────────────────────────────
   const handleConfirm = useCallback(() => {
     haptic.medium();
@@ -275,6 +332,8 @@ export function BackgroundSheet({
   // ── Derived: is a solid swatch active? ─────────────────────────────
   const activeSolidValue = draft.type === 'color' ? draft.value : null;
   const blurRadius = draft.type === 'blur' ? (draft.blurRadius ?? 20) : 20;
+  const imageBlur = draft.type === 'image' ? (draft.imageBlur ?? 0) : 0;
+  const imageUri = draft.type === 'image' ? draft.value : null;
 
   return (
     <SheetContainer visible={visible} onClose={handleCancel} maxHeight={0.8}>
@@ -300,7 +359,6 @@ export function BackgroundSheet({
       >
         {TYPE_CHIPS.map((chip) => {
           const isActive = draft.type === chip.id;
-          const isImageDisabled = chip.id === 'image';
           return (
             <PressScale
               key={chip.id}
@@ -314,8 +372,7 @@ export function BackgroundSheet({
               ]}
               accessibilityLabel={`${chip.label} background type${isActive ? ', selected' : ''}`}
               accessibilityRole="button"
-              accessibilityState={{ disabled: isImageDisabled }}
-              disabled={isImageDisabled && !isActive}
+              accessibilityState={{ selected: isActive }}
             >
               <Ionicons
                 name={chip.icon}
@@ -513,6 +570,64 @@ export function BackgroundSheet({
                 onChange={handleBlurRadiusChange}
               />
             </View>
+          </View>
+        )}
+
+        {/* ── Image ── */}
+        {draft.type === 'image' && (
+          <View>
+            <Text style={styles.sectionLabel}>Background photo</Text>
+            {imageUri ? (
+              <View style={styles.imagePreviewWrap}>
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.imagePreview}
+                  contentFit="cover"
+                  blurRadius={imageBlur}
+                  cachePolicy="memory-disk"
+                />
+                <PressScale
+                  onPress={handlePickImage}
+                  style={[styles.imageChangeBtn, { borderColor: colors.border }]}
+                  accessibilityLabel="Change image"
+                  accessibilityHint="Opens the photo library to pick a different background image"
+                >
+                  <Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />
+                  <Text style={[styles.imageChangeBtnText, { color: colors.textPrimary }]}>
+                    {isPickingImage ? 'Opening…' : 'Change Image'}
+                  </Text>
+                </PressScale>
+              </View>
+            ) : (
+              <PressScale
+                onPress={handlePickImage}
+                style={[styles.imagePickerEmpty, { borderColor: colors.border }]}
+                accessibilityLabel="Pick a background photo"
+                accessibilityHint="Opens the photo library to select a background image"
+              >
+                <Ionicons name="image-outline" size={32} color={colors.textMuted} />
+                <Text style={[styles.imagePickerEmptyTitle, { color: colors.textPrimary }]}>
+                  {isPickingImage ? 'Opening photo library…' : 'Choose from library'}
+                </Text>
+                <Text style={[styles.imagePickerEmptyHint, { color: colors.textMuted }]}>
+                  Tap to browse your photos
+                </Text>
+              </PressScale>
+            )}
+            {imageUri && (
+              <View style={styles.sliderRow}>
+                <CreatorSlider
+                  value={imageBlur}
+                  min={0}
+                  max={20}
+                  step={1}
+                  onValueChange={handleImageBlurChange}
+                  onCommit={handleImageBlurChange}
+                  label="Blur"
+                  accessibilityLabel="Background image blur intensity"
+                />
+              </View>
+            )}
           </View>
         )}
 
@@ -761,6 +876,48 @@ function createStyles(colors: ThemeColors) {
       borderStyle: 'dashed',
     },
     blurEmptyText: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
+    },
+    // ── Image ──
+    imagePreviewWrap: {
+      gap: Space.sm,
+    },
+    imagePreview: {
+      width: '100%',
+      height: 180,
+      borderRadius: Radius.lg,
+    },
+    imageChangeBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.xs,
+      minHeight: 44,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+    },
+    imageChangeBtnText: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
+    },
+    imagePickerEmpty: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xl + Space.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: Radius.lg,
+      borderStyle: 'dashed',
+      minHeight: 44,
+    },
+    imagePickerEmptyTitle: {
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.body.size,
+      marginTop: Space.xs,
+    },
+    imagePickerEmptyHint: {
       fontFamily: Typography.family.regular,
       fontSize: Type.caption.size,
     },
