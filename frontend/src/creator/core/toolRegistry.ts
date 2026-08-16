@@ -23,6 +23,7 @@
 
 import type React from 'react';
 import type { Ionicons } from '@expo/vector-icons';
+import type { CreatorGlyphName } from '../controls/CreatorGlyph';
 
 // ── Context identifiers ─────────────────────────────────────────────
 // A ToolContext encodes both the editor mode and the current selection
@@ -50,8 +51,14 @@ export interface ToolDefinition {
   id: string;
   /** Human-readable label shown beneath the icon. */
   label: string;
-  /** Ionicons glyph name. */
+  /** Ionicons glyph name (for universally understood actions). */
   icon: React.ComponentProps<typeof Ionicons>['name'];
+  /**
+   * Optional creator-specific glyph (custom SVG from CreatorGlyph).
+   * When provided, the rail renders this glyph instead of the Ionicons icon.
+   * Use for ambiguous creative tools (trim, split, cutout, keyframe, etc.).
+   */
+  glyph?: CreatorGlyphName;
   /** Press handler — must perform a truthful action (AGENTS.md §11). */
   onPress: () => void;
   /** VoiceOver / TalkBack label. */
@@ -64,6 +71,18 @@ export interface ToolDefinition {
   badge?: number | string;
   /** When true, the tool renders at 40% opacity and ignores presses. */
   disabled?: boolean;
+  /**
+   * NEW: whether the tool is currently active/selected in the composition.
+   * Drives the selected-state visual treatment via `selectedStyle`.
+   */
+  active?: boolean;
+  /**
+   * NEW: how to visually represent the active/selected state.
+   * - 'fill': filled backplate with accent (default)
+   * - 'accent': accent-colored glyph, no backplate
+   * - 'indicator': small dot indicator below the glyph
+   */
+  selectedStyle?: 'fill' | 'accent' | 'indicator';
 }
 
 // ── Tool group ──────────────────────────────────────────────────────
@@ -129,4 +148,76 @@ export function hasOverflow(
   groups: ToolGroup[],
 ): boolean {
   return getOverflowTools(context, groups).length > 0;
+}
+
+// ── Active-state derivation ──────────────────────────────────────────
+// Determines whether a tool should show its active/selected state based on
+// the current composition context. This is a pure function — the rail calls
+// it to resolve `active` for each tool before rendering.
+
+/**
+ * A snapshot of the current composition state used to derive tool active
+ * states. All fields are optional; missing fields default to inactive.
+ */
+export interface CompositionContext {
+  /** Whether any effect is applied to the current composition (effect stack non-empty). */
+  hasEffects?: boolean;
+  /** Whether a mask/cutout is attached to the current layer. */
+  hasMask?: boolean;
+  /** Current audio volume (0 = muted). */
+  volume?: number;
+  /** Whether the safe-zone overlay is visible. */
+  safeZoneVisible?: boolean;
+  /** Whether the grid overlay is visible. */
+  gridVisible?: boolean;
+  /** Whether the flash/torch is on. */
+  flashOn?: boolean;
+  /** The id of the currently active tool (if any tool is explicitly active). */
+  activeToolId?: string;
+}
+
+/**
+ * Derives whether a tool should show its active/selected state from the
+ * current composition context.
+ *
+ * Mapping:
+ *   - effects  → active when effect stack is non-empty
+ *   - cutout   → active when a mask is attached
+ *   - mute     → active when volume is 0
+ *   - safe-zone → active while visible
+ *   - grid     → active while visible
+ *   - flash    → active while on
+ *   - any tool → active when its id matches `activeToolId`
+ *
+ * Tools that don't match any of the above default to inactive.
+ */
+export function deriveToolActiveState(
+  toolId: string,
+  ctx: CompositionContext,
+): boolean {
+  // Explicit active tool id takes precedence.
+  if (ctx.activeToolId !== undefined && toolId === ctx.activeToolId) {
+    return true;
+  }
+
+  switch (toolId) {
+    case 'effects':
+    case 'effect':
+      return ctx.hasEffects === true;
+    case 'cutout':
+    case 'mask':
+      return ctx.hasMask === true;
+    case 'mute':
+    case 'audio-mute':
+      return ctx.volume === 0;
+    case 'safe-zone':
+      return ctx.safeZoneVisible === true;
+    case 'grid':
+      return ctx.gridVisible === true;
+    case 'flash':
+    case 'torch':
+      return ctx.flashOn === true;
+    default:
+      return false;
+  }
 }

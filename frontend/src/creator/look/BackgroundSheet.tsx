@@ -1,20 +1,26 @@
 /**
  * BackgroundSheet — bottom sheet for picking the Look canvas background.
  *
- * Supports four background types per the composition schema
+ * Supports three background types per the composition schema
  * (CreatorBackgroundSchema):
- *   - Solid: neutral color swatches + custom color picker
- *   - Gradient: 6 preset gradient swatches (value + secondaryValue)
+ *   - Solid: neutral color swatches + shared CreatorColorPicker
+ *     (compact row with HEX, eyedropper, recents, alpha)
+ *   - Gradient: preset gradient swatches (quick-select) + shared
+ *     GradientEditor (2-4 draggable stops, per-stop color via
+ *     CreatorColorPicker, angle control, reverse)
  *   - Blurred: blurred version of the first selected media layer's image,
  *     with a blur-radius slider (0–50)
- *   - Image: placeholder for future media-library integration
+ *
+ * The Image background type is not yet implemented (no photo-library
+ * integration). Per AGENTS.md §11 (Truthful UI), the Image tab is hidden
+ * rather than shown as a disabled placeholder.
  *
  * The sheet maintains a local draft of the background. Each control
  * mutates the draft in real time (AGENTS.md §11). Confirm commits the
  * draft to the document via onConfirm; Cancel discards and closes.
  *
- * Uses SheetContainer from ../CreatorAnimations for consistent motion
- * and chrome. Uses design tokens, useAppTheme, and useHaptic throughout.
+ * Uses the shared creator color system (../color/) — no duplicate
+ * HSL/HEX helpers (spec 04_COLOR_SYSTEM_ZERO_GAP §14).
  */
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
@@ -23,7 +29,6 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  TextInput,
   LayoutChangeEvent,
   GestureResponderEvent,
   PanResponder,
@@ -36,6 +41,16 @@ import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '..
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
+import {
+  CreatorColorPicker,
+  GradientEditor,
+  useCreatorColorHistory,
+  toHexString,
+  fromHexString,
+  normalize,
+} from '../color/';
+import type { CreatorColor, GradientDefinition, GradientStop } from '../color/';
+import { makeStableId } from '../../utils/createStableId';
 import type { CreatorBackground, CreatorLayer } from '../composition';
 
 // ── Presets ───────────────────────────────────────────────────────────
@@ -62,11 +77,11 @@ const GRADIENT_PRESETS: { label: string; value: string; secondaryValue: string }
 
 type BgType = CreatorBackground['type'];
 
+// Image tab is hidden — not yet implemented (AGENTS.md §11 Truthful UI).
 const TYPE_CHIPS: { id: BgType; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { id: 'color', label: 'Solid', icon: 'square-outline' },
   { id: 'gradient', label: 'Gradient', icon: 'color-wand-outline' },
   { id: 'blur', label: 'Blurred', icon: 'aperture-outline' },
-  { id: 'image', label: 'Image', icon: 'images-outline' },
 ];
 
 // ── Props ─────────────────────────────────────────────────────────────
@@ -78,6 +93,33 @@ export interface BackgroundSheetProps {
   mediaLayers: CreatorLayer[];
   onConfirm: (bg: CreatorBackground) => void;
   onClose: () => void;
+}
+
+// ── Helper: convert a CreatorBackground to a GradientDefinition ───────
+// Used to seed the GradientEditor when the sheet opens.
+function backgroundToGradient(bg: CreatorBackground): GradientDefinition {
+  if (bg.type === 'gradient' && bg.gradientStops && bg.gradientStops.length >= 2) {
+    return {
+      type: 'linear',
+      angle: bg.gradientAngle ?? 180,
+      stops: bg.gradientStops.map((s) => ({
+        id: makeStableId('stop'),
+        position: s.position,
+        color: fromHexString(s.color) ?? { space: 'srgb', r: 0, g: 0, b: 0, a: 1 },
+      })),
+    };
+  }
+  // Default: two stops from value/secondaryValue.
+  const startColor = fromHexString(bg.value) ?? { space: 'srgb' as const, r: 0.1, g: 0.1, b: 0.1, a: 1 };
+  const endColor = fromHexString(bg.secondaryValue ?? '#f5f5f5') ?? { space: 'srgb' as const, r: 0.96, g: 0.96, b: 0.96, a: 1 };
+  return {
+    type: 'linear',
+    angle: bg.gradientAngle ?? 180,
+    stops: [
+      { id: makeStableId('stop'), position: 0, color: startColor },
+      { id: makeStableId('stop'), position: 1, color: endColor },
+    ],
+  };
 }
 
 // ── Component ─────────────────────────────────────────────────────────
@@ -93,14 +135,29 @@ export function BackgroundSheet({
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
+  // Recent color history (shared across creator tools, spec §4).
+  const { recents, commitColor: commitRecentColor } = useCreatorColorHistory();
+
   // Local draft — synced from currentBackground each time the sheet opens.
   const [draft, setDraft] = useState<CreatorBackground>(currentBackground);
-  const [customColor, setCustomColor] = useState('#1a1a1a');
+  // CreatorColor for the Solid tab's CreatorColorPicker.
+  const [solidColor, setSolidColor] = useState<CreatorColor>(
+    () => fromHexString(currentBackground.value || '#1a1a1a') ?? { space: 'srgb', r: 0.1, g: 0.1, b: 0.1, a: 1 },
+  );
+  // GradientDefinition for the Gradient tab's GradientEditor.
+  const [gradientDef, setGradientDef] = useState<GradientDefinition>(() => ({
+    type: 'linear',
+    angle: 180,
+    stops: [],
+  }));
 
   useEffect(() => {
     if (visible) {
       setDraft(currentBackground);
-      setCustomColor(currentBackground.value || '#1a1a1a');
+      setSolidColor(fromHexString(currentBackground.value || '#1a1a1a') ?? { space: 'srgb', r: 0.1, g: 0.1, b: 0.1, a: 1 });
+      // Build gradient definition from draft: prefer gradientStops, else
+      // derive from value/secondaryValue (preset), else default.
+      setGradientDef(backgroundToGradient(currentBackground));
     }
   }, [visible, currentBackground]);
 
@@ -129,22 +186,74 @@ export function BackgroundSheet({
     });
   }, [haptic, firstMediaLayer]);
 
-  // ── Solid color selection ──────────────────────────────────────────
+  // ── Solid color selection (preset swatches) ────────────────────────
   const handleSolidSelect = useCallback((value: string) => {
     haptic.selection();
+    const parsed = fromHexString(value);
+    if (parsed) {
+      setSolidColor(parsed);
+      commitRecentColor(parsed);
+    }
     setDraft((prev) => ({ ...prev, type: 'color', value, secondaryValue: undefined }));
-  }, [haptic]);
+  }, [haptic, commitRecentColor]);
 
-  const handleCustomColorChange = useCallback((value: string) => {
-    setCustomColor(value);
-    setDraft((prev) => ({ ...prev, type: 'color', value }));
+  // ── Solid color (CreatorColorPicker) ───────────────────────────────
+  const handleSolidColorChange = useCallback((color: CreatorColor) => {
+    setSolidColor(color);
+    setDraft((prev) => ({ ...prev, type: 'color', value: toHexString(color), secondaryValue: undefined }));
   }, []);
 
-  // ── Gradient selection ─────────────────────────────────────────────
-  const handleGradientSelect = useCallback((value: string, secondaryValue: string) => {
+  const handleSolidColorCommit = useCallback((color: CreatorColor) => {
+    const normalizedColor = normalize(color);
+    setSolidColor(normalizedColor);
+    commitRecentColor(normalizedColor);
+    setDraft((prev) => ({ ...prev, type: 'color', value: toHexString(normalizedColor), secondaryValue: undefined }));
+  }, [commitRecentColor]);
+
+  // ── Gradient preset selection ──────────────────────────────────────
+  const handleGradientPresetSelect = useCallback((value: string, secondaryValue: string) => {
     haptic.selection();
-    setDraft((prev) => ({ ...prev, type: 'gradient', value, secondaryValue }));
+    // Build a GradientDefinition from the preset (two stops at 0 and 1).
+    const stop0Color = fromHexString(value) ?? { space: 'srgb' as const, r: 0, g: 0, b: 0, a: 1 };
+    const stop1Color = fromHexString(secondaryValue) ?? { space: 'srgb' as const, r: 1, g: 1, b: 1, a: 1 };
+    const newGradient: GradientDefinition = {
+      type: 'linear',
+      angle: 180,
+      stops: [
+        { id: makeStableId('stop'), position: 0, color: stop0Color },
+        { id: makeStableId('stop'), position: 1, color: stop1Color },
+      ],
+    };
+    setGradientDef(newGradient);
+    // Clear custom gradientStops — using preset (value/secondaryValue).
+    setDraft((prev) => ({
+      ...prev,
+      type: 'gradient',
+      value,
+      secondaryValue,
+      gradientStops: undefined,
+      gradientAngle: undefined,
+    }));
   }, [haptic]);
+
+  // ── Gradient editor (custom) ───────────────────────────────────────
+  const handleGradientChange = useCallback((g: GradientDefinition) => {
+    setGradientDef(g);
+    // Update draft with custom gradientStops + angle.
+    setDraft((prev) => ({
+      ...prev,
+      type: 'gradient',
+      value: toHexString(g.stops[0]?.color ?? { space: 'srgb', r: 0, g: 0, b: 0, a: 1 }),
+      secondaryValue: toHexString(g.stops[g.stops.length - 1]?.color ?? { space: 'srgb', r: 1, g: 1, b: 1, a: 1 }),
+      gradientStops: g.stops.map((s) => ({ position: s.position, color: toHexString(s.color) })),
+      gradientAngle: g.angle,
+    }));
+  }, []);
+
+  const handleGradientCommit = useCallback((g: GradientDefinition) => {
+    haptic.light();
+    handleGradientChange(g);
+  }, [haptic, handleGradientChange]);
 
   // ── Blur radius slider ─────────────────────────────────────────────
   const handleBlurRadiusChange = useCallback((radius: number) => {
@@ -165,9 +274,6 @@ export function BackgroundSheet({
 
   // ── Derived: is a solid swatch active? ─────────────────────────────
   const activeSolidValue = draft.type === 'color' ? draft.value : null;
-  const activeGradientKey = draft.type === 'gradient'
-    ? `${draft.value}|${draft.secondaryValue ?? ''}`
-    : null;
   const blurRadius = draft.type === 'blur' ? (draft.blurRadius ?? 20) : 20;
 
   return (
@@ -283,52 +389,41 @@ export function BackgroundSheet({
                   </Pressable>
                 );
               })}
-              {/* Custom color picker */}
-              <View style={styles.swatchWrap}>
-                <View
-                  style={[
-                    styles.swatch,
-                    {
-                      borderColor: activeSolidValue === customColor && !SOLID_SWATCHES.some((s) => s.value === customColor)
-                        ? colors.brand
-                        : colors.border,
-                    },
-                  ]}
-                >
-                  <View style={[styles.swatchFill, { backgroundColor: customColor }]} />
-                </View>
-                <TextInput
-                  style={[styles.colorInput, { color: colors.textPrimary, borderColor: colors.border }]}
-                  value={customColor}
-                  onChangeText={handleCustomColorChange}
-                  placeholder="#000000"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  accessibilityLabel="Custom background colour"
-                  accessibilityHint="Enter a hex colour value for the canvas background"
-                />
-              </View>
             </ScrollView>
+
+            {/* Shared CreatorColorPicker — compact row with HEX, eyedropper, recents, alpha */}
+            <View style={styles.colorPickerSection}>
+              <CreatorColorPicker
+                color={solidColor}
+                onChange={handleSolidColorChange}
+                onCommit={handleSolidColorCommit}
+                mode="compact"
+                recents={recents}
+                onCommitRecent={commitRecentColor}
+                accessibilityLabel="Background solid color"
+              />
+            </View>
           </View>
         )}
 
         {/* ── Gradient ── */}
         {draft.type === 'gradient' && (
           <View>
-            <Text style={styles.sectionLabel}>Gradients</Text>
+            <Text style={styles.sectionLabel}>Presets</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.swatchRow}
             >
               {GRADIENT_PRESETS.map((g) => {
-                const key = `${g.value}|${g.secondaryValue}`;
-                const isActive = activeGradientKey === key;
+                // A preset is "active" if the draft matches and no custom stops.
+                const isActive = draft.value === g.value &&
+                  draft.secondaryValue === g.secondaryValue &&
+                  !draft.gradientStops;
                 return (
                   <Pressable
                     key={g.label}
-                    onPress={() => handleGradientSelect(g.value, g.secondaryValue)}
+                    onPress={() => handleGradientPresetSelect(g.value, g.secondaryValue)}
                     style={styles.swatchWrap}
                     accessibilityLabel={`${g.label} gradient${isActive ? ', selected' : ''}`}
                     accessibilityRole="button"
@@ -364,6 +459,13 @@ export function BackgroundSheet({
                 );
               })}
             </ScrollView>
+
+            <Text style={styles.sectionLabel}>Custom</Text>
+            <GradientEditor
+              gradient={gradientDef}
+              onChange={handleGradientChange}
+              onCommit={handleGradientCommit}
+            />
           </View>
         )}
 
@@ -414,32 +516,6 @@ export function BackgroundSheet({
           </View>
         )}
 
-        {/* ── Image ── */}
-        {draft.type === 'image' && (
-          <View style={styles.imageSection}>
-            <View style={[styles.imagePlaceholder, { borderColor: colors.border }]}>
-              <Ionicons name="images-outline" size={32} color={colors.textMuted} />
-              <Text style={[styles.imagePlaceholderText, { color: colors.textSecondary }]}>
-                Choose a photo from your library to use as the canvas background.
-              </Text>
-              <Pressable
-                style={[styles.imageBtn, { backgroundColor: colors.brand, opacity: 0.5 }]}
-                disabled
-                accessibilityLabel="Choose from Photos"
-                accessibilityHint="Photo library integration coming soon"
-                accessibilityState={{ disabled: true }}
-              >
-                <Ionicons name="images-outline" size={18} color={colors.textInverse} />
-                <Text style={[styles.imageBtnText, { color: colors.textInverse }]}>
-                  Choose from Photos
-                </Text>
-              </Pressable>
-              <Text style={[styles.imageNote, { color: colors.textMuted }]}>
-                Photo library integration is not yet available
-              </Text>
-            </View>
-          </View>
-        )}
       </ScrollView>
 
       {/* Footer — Confirm / Cancel */}
@@ -657,16 +733,9 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       letterSpacing: 0.1,
     },
-    // ── Custom color input ──
-    colorInput: {
-      width: 64,
-      borderWidth: 1,
-      borderRadius: Radius.sm,
-      paddingHorizontal: Space.xs,
-      paddingVertical: Space.xxs,
-      fontSize: Type.meta.size,
-      fontFamily: FontFamily.regular,
-      textAlign: 'center',
+    // ── Custom color picker section ──
+    colorPickerSection: {
+      marginTop: Space.md,
     },
     // ── Blurred ──
     blurPreviewWrap: {
@@ -713,43 +782,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.medium,
       fontSize: Type.caption.size,
       fontVariant: ['tabular-nums'],
-    },
-    // ── Image ──
-    imageSection: {
-      paddingVertical: Space.sm,
-    },
-    imagePlaceholder: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.md,
-      paddingVertical: Space.xl,
-      paddingHorizontal: Space.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: Radius.lg,
-      borderStyle: 'dashed',
-    },
-    imagePlaceholderText: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
-      textAlign: 'center',
-      lineHeight: Type.body.lineHeight,
-    },
-    imageBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.sm,
-      paddingHorizontal: Space.lg,
-      paddingVertical: Space.md,
-      borderRadius: Radius.md,
-    },
-    imageBtnText: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
-    imageNote: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.meta.size,
     },
     // ── Footer ──
     footer: {

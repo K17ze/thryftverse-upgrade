@@ -77,6 +77,9 @@ import { SpeedCurveEditor } from './speedcurves/SpeedCurveEditor';
 import type { SpeedCurve } from './speedcurves/SpeedCurveTypes';
 import { DEFAULT_SPEED_CURVE } from './speedcurves/SpeedCurveTypes';
 import { ReverseToggle, FreezeFramePicker, AudioFadeControls } from './tools';
+// Playback pipeline — single clock + timeline projector (Z5 timeline engine)
+import { PlaybackClock, projectTimeline, findVisibleOverlays } from '../core/playback';
+import type { PlaybackState } from '../core/playback';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Poster Composer V3 — Frame-Native Composer (spec 09)
@@ -406,13 +409,101 @@ function PosterComposerInner() {
     [document.pages],
   );
 
+  // ── Playback clock — the single source of truth for timeline time ──
+  // Per AGENTS.md §11 and the Zero-Gap audit, one playback clock drives:
+  // active clip, video seek/play/pause, overlay visibility, text animation,
+  // transitions, and keyframes. The clock owns wall-clock time and emits
+  // snapshots via a subscriber model. UI state (playhead position, play/pause)
+  // is derived from the clock — no separate isPlaying state that can desync.
+  const playbackClock = useMemo(() => new PlaybackClock(), []);
+
+  // Project the document into a canonical timeline (clips + overlays + total
+  // duration). This replaces the legacy page-based derivation with correct
+  // speed-adjusted clip durations and overlay time ranges.
+  const projectedTimeline = useMemo(() => projectTimeline(document), [document]);
+
+  // Set the clock's total duration whenever the projected timeline changes.
+  useEffect(() => {
+    playbackClock.setTotalDurationMs(projectedTimeline.totalDurationMs);
+  }, [projectedTimeline.totalDurationMs, playbackClock]);
+
+  // Subscribe to clock updates to drive UI state (playhead position, play/pause).
+  // The clock emits on every frame during playback (RAF/interval) and on every
+  // transport control call (play/pause/seek/scrub/setRate).
+  const [playbackState, setPlaybackState] = useState<PlaybackState>({
+    isPlaying: false,
+    currentTimeMs: 0,
+    totalDurationMs: 0,
+    playbackRate: 1,
+  });
+  useEffect(() => {
+    const unsubscribe = playbackClock.subscribe((state) => {
+      setPlaybackState(state);
+    });
+    return unsubscribe;
+  }, [playbackClock]);
+
+  // Determine which overlays are visible at the current playback position.
+  // The CreatorCanvas also handles temporal visibility internally via the
+  // currentTimeMs prop (checking layer.timeRange), but this computed set
+  // is available for timeline overlay track highlighting and future
+  // features that need to know which overlays are active.
+  const visibleOverlayIds = useMemo(
+    () => new Set(findVisibleOverlays(projectedTimeline, playbackState.currentTimeMs).map((o) => o.layerId)),
+    [projectedTimeline, playbackState.currentTimeMs],
+  );
+
+  // Register a video adapter so the clock can control video playback.
+  // The CreatorCanvas already reads `playbackClock.isPlaying` to drive the
+  // Video component's `shouldPlay` prop, and `currentTimeMs` drives temporal
+  // visibility + keyframe evaluation. The adapter handles play/pause/seek
+  // commands from the clock — for image-only posters these are no-ops
+  // (backward compatible). The onSeek callback is coalesced by the clock
+  // (max once per ~100ms) to avoid excessive native bridge traffic.
+  useEffect(() => {
+    playbackClock.registerVideoAdapter({
+      onPlay: () => {
+        // Video shouldPlay is driven by playbackClock.isPlaying in CreatorCanvas.
+        // This callback is for any additional play-side effects (e.g. audio).
+      },
+      onPause: () => {
+        // Video shouldPlay is driven by playbackClock.isPlaying in CreatorCanvas.
+        // This callback is for any additional pause-side effects (e.g. audio).
+      },
+      onSeek: (_ms: number) => {
+        // The seek target (ms) is the absolute timeline position. The
+        // CreatorCanvas receives currentTimeMs as a prop and uses it for
+        // temporal visibility and keyframe evaluation. The actual video
+        // source-time seek is handled by the Video component's internal
+        // playback, which follows the clock's isPlaying state. For future
+        // precise frame-seeking, the Video component would need a ref-based
+        // seek API exposed through CreatorCanvas.
+      },
+      onRateChange: (_rate: number) => {
+        // Playback rate changes are handled by the clock's playbackRate.
+        // The Video component's rate would be set via a ref in a future
+        // enhancement.
+      },
+    });
+    return () => {
+      playbackClock.unregisterVideoAdapter();
+    };
+  }, [playbackClock]);
+
+  // Dispose the clock on unmount to stop any running RAF/interval loops.
+  useEffect(() => {
+    return () => {
+      playbackClock.dispose();
+    };
+  }, [playbackClock]);
+
   // ── Timeline state derivation ──────────────────────────────────────
   // Map pages with video media to PosterClip objects, and timed overlays
   // (text, stickers, music with time ranges) to OverlayLayer objects.
   // The timeline is a read-only projection of the document model for now —
   // clip/overlay mutations route through TimelineOperation handlers.
-  const [timelinePlayheadMs, setTimelinePlayheadMs] = useState(0);
-  const [timelineIsPlaying, setTimelineIsPlaying] = useState(false);
+  // Playhead position and play/pause state are driven by the PlaybackClock
+  // (the single authority) — no separate isPlaying state.
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
 
@@ -499,11 +590,11 @@ function PosterComposerInner() {
     () => ({
       clips: timelineClips,
       overlays: timelineOverlays,
-      playheadMs: timelinePlayheadMs,
+      playheadMs: playbackState.currentTimeMs,
       totalDurationMs: timelineTotalDurationMs,
-      isPlaying: timelineIsPlaying,
+      isPlaying: playbackState.isPlaying,
     }),
-    [timelineClips, timelineOverlays, timelinePlayheadMs, timelineTotalDurationMs, timelineIsPlaying],
+    [timelineClips, timelineOverlays, playbackState.currentTimeMs, timelineTotalDurationMs, playbackState.isPlaying],
   );
 
   const selectedClip = useMemo(
@@ -518,14 +609,14 @@ function PosterComposerInner() {
     (op: TimelineOperation) => {
       switch (op.type) {
         case 'seek':
-          setTimelinePlayheadMs(Math.max(0, Math.min(timelineTotalDurationMs, op.ms)));
+          playbackClock.seek(op.ms);
           break;
         case 'play':
-          setTimelineIsPlaying(true);
+          playbackClock.play();
           haptic.light();
           break;
         case 'pause':
-          setTimelineIsPlaying(false);
+          playbackClock.pause();
           haptic.light();
           break;
         case 'trim': {
@@ -660,24 +751,13 @@ function PosterComposerInner() {
           break;
       }
     },
-    [timelineClips, timelineTotalDurationMs, document.pages, updateLayer, duplicateLayer, removeLayer, reorderPages, show, haptic, addLayer],
+    [timelineClips, timelineTotalDurationMs, document.pages, updateLayer, duplicateLayer, removeLayer, reorderPages, show, haptic, addLayer, playbackClock],
   );
 
-  // ── Playback tick — advance playhead when playing ──────────────────
-  useEffect(() => {
-    if (!timelineIsPlaying || timelineTotalDurationMs <= 0) return;
-    const interval = setInterval(() => {
-      setTimelinePlayheadMs((prev) => {
-        const next = prev + 100;
-        if (next >= timelineTotalDurationMs) {
-          setTimelineIsPlaying(false);
-          return 0;
-        }
-        return next;
-      });
-    }, 100);
-    return () => clearInterval(interval);
-  }, [timelineIsPlaying, timelineTotalDurationMs]);
+  // ── Playback tick is now handled by the PlaybackClock ──────────────
+  // The clock uses requestAnimationFrame (or setInterval fallback) to
+  // advance time at 60fps with coalesced seeks. The old 100ms setInterval
+  // tick has been removed — the clock is the single authority for time.
 
   // ── Entry screen media handling ────────────────────────────────────
   // For Poster, each asset becomes its own frame via addPosterFrames.
@@ -1277,6 +1357,8 @@ function PosterComposerInner() {
                 selectLayer(layerId);
                 setShowLayers(true);
               }}
+              playbackClock={playbackClock}
+              currentTimeMs={playbackState.currentTimeMs}
             />
           </View>
 
@@ -1508,23 +1590,23 @@ function PosterComposerInner() {
             <PressScale
               onPress={() => {
                 handleTimelineOperation(
-                  timelineIsPlaying ? { type: 'pause' } : { type: 'play' },
+                  playbackState.isPlaying ? { type: 'pause' } : { type: 'play' },
                 );
               }}
               style={styles.timelinePlayBtn}
-              accessibilityLabel={timelineIsPlaying ? 'Pause' : 'Play'}
+              accessibilityLabel={playbackState.isPlaying ? 'Pause' : 'Play'}
               accessibilityHint="Plays or pauses the timeline"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons
-                name={timelineIsPlaying ? 'pause' : 'play'}
+                name={playbackState.isPlaying ? 'pause' : 'play'}
                 size={20}
                 color="#fff"
               />
             </PressScale>
 
             <Text style={styles.timelineTimecode}>
-              {formatTimecode(timelinePlayheadMs)} / {formatTimecode(timelineTotalDurationMs)}
+              {formatTimecode(playbackState.currentTimeMs)} / {formatTimecode(timelineTotalDurationMs)}
             </Text>
 
             <View style={styles.timelinePlaybackSpacer} />
@@ -1565,7 +1647,7 @@ function PosterComposerInner() {
           <TimelineTrack
             clips={timelineClips}
             selectedClipId={selectedClipId}
-            playheadMs={timelinePlayheadMs}
+            playheadMs={playbackState.currentTimeMs}
             totalDurationMs={timelineTotalDurationMs}
             onSelectClip={(id) => { setSelectedClipId(id); setSelectedOverlayId(null); }}
             onSeek={(ms) => handleTimelineOperation({ type: 'seek', ms })}
@@ -1608,7 +1690,12 @@ function PosterComposerInner() {
           {selectedClip && (
             <TimelineToolbar
               selectedClip={selectedClip}
-              onSplit={() => handleTimelineOperation({ type: 'split', clipId: selectedClip.id, atMs: timelinePlayheadMs })}
+              isPlaying={playbackState.isPlaying}
+              currentTimeMs={playbackState.currentTimeMs}
+              totalDurationMs={timelineTotalDurationMs}
+              onPlayPause={() => handleTimelineOperation(playbackState.isPlaying ? { type: 'pause' } : { type: 'play' })}
+              onSeek={(ms) => handleTimelineOperation({ type: 'seek', ms })}
+              onSplit={() => handleTimelineOperation({ type: 'split', clipId: selectedClip.id, atMs: playbackState.currentTimeMs })}
               onDuplicate={() => handleTimelineOperation({ type: 'duplicate', clipId: selectedClip.id })}
               onDelete={() => handleTimelineOperation({ type: 'delete', clipId: selectedClip.id })}
               onReplace={() => handleTimelineOperation({ type: 'replace', clipId: selectedClip.id, newAssetId: '', newUri: '' })}

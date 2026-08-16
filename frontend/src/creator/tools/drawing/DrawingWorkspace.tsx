@@ -25,7 +25,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -51,6 +50,20 @@ import {
 import { Space, Radius, FontFamily, Type, Elevation } from '../../../theme/designTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { PressScale } from '../../CreatorAnimations';
+import {
+  CreatorSlider,
+  CreatorSegmentControl,
+  CreatorIconButton,
+  type SegmentOption,
+} from '../../controls';
+import {
+  CreatorColorPicker,
+  useCreatorColorHistory,
+  toHexString,
+  fromHexString,
+  normalize,
+} from '../../color/';
+import type { CreatorColor } from '../../color/';
 import type { BrushType, DrawingDocument, Stroke } from './DrawingTypes';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,12 +89,12 @@ interface DrawingWorkspaceProps {
   canvasHeight: number;
 }
 
-const BRUSH_TYPES: { type: BrushType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { type: 'pen', label: 'Pen', icon: 'create-outline' },
-  { type: 'marker', label: 'Marker', icon: 'brush-outline' },
-  { type: 'highlighter', label: 'Highlight', icon: 'color-fill-outline' },
-  { type: 'neon', label: 'Neon', icon: 'bulb-outline' },
-  { type: 'eraser', label: 'Eraser', icon: 'backspace-outline' },
+const BRUSH_SEGMENTS: SegmentOption[] = [
+  { label: 'Pen', value: 'pen', icon: 'create-outline' },
+  { label: 'Marker', value: 'marker', icon: 'brush-outline' },
+  { label: 'Highlight', value: 'highlighter', icon: 'color-fill-outline' },
+  { label: 'Neon', value: 'neon', icon: 'bulb-outline' },
+  { label: 'Eraser', value: 'eraser', icon: 'backspace-outline' },
 ];
 
 const PRESET_COLORS = [
@@ -92,7 +105,6 @@ const PRESET_COLORS = [
 const MIN_SIZE = 4;
 const MAX_SIZE = 40;
 const MAX_UNDO_LEVELS = 50;
-const SIZE_SLIDER_WIDTH = 180;
 
 const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
 
@@ -205,133 +217,6 @@ const StrokePath = React.memo(function StrokePath({ stroke, keyPrefix }: StrokeP
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Size slider — custom PanResponder-based slider (no new deps)
-// ─────────────────────────────────────────────────────────────────────────────
-interface SizeSliderProps {
-  value: number;
-  min: number;
-  max: number;
-  width: number;
-  color: string;
-  trackColor: string;
-  thumbBorderColor: string;
-  onChange: (v: number) => void;
-  onCommit: (v: number) => void;
-}
-
-function SizeSlider({
-  value,
-  min,
-  max,
-  width,
-  color,
-  trackColor,
-  thumbBorderColor,
-  onChange,
-  onCommit,
-}: SizeSliderProps) {
-  const sliderRef = useRef<View>(null);
-  const dragStateRef = useRef(false);
-
-  const handleX = (v: number) => ((v - min) / (max - min)) * width;
-
-  // Animated thumb position follows the controlled value when not dragging.
-  const thumbX = useRef(new Animated.Value(handleX(value))).current;
-
-  useEffect(() => {
-    if (!dragStateRef.current) {
-      Animated.timing(thumbX, {
-        toValue: handleX(value),
-        duration: 0,
-        useNativeDriver: true,
-      }).start();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  const updateFromLocation = (locationX: number) => {
-    const clamped = Math.max(0, Math.min(width, locationX));
-    const v = min + (clamped / width) * (max - min);
-    onChange(Math.round(v));
-  };
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (_, gestureState) => {
-          dragStateRef.current = true;
-          sliderRef.current?.measure((_ox, _oy, _w, _h, px) => {
-            updateFromLocation(gestureState.x0 - px);
-          });
-        },
-        onPanResponderMove: (_, gestureState) => {
-          sliderRef.current?.measure((_ox, _oy, _w, _h, px) => {
-            updateFromLocation(gestureState.x0 + gestureState.dx - px);
-          });
-        },
-        onPanResponderRelease: () => {
-          dragStateRef.current = false;
-          onCommit(value);
-        },
-        onPanResponderTerminate: () => {
-          dragStateRef.current = false;
-        },
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [width, min, max, value],
-  );
-
-  return (
-    <View
-      ref={sliderRef}
-      style={{ width, height: 28, justifyContent: 'center' }}
-      {...panResponder.panHandlers}
-      accessibilityRole="adjustable"
-      accessibilityLabel="Brush size"
-      accessibilityValue={{ min, max, now: value }}
-    >
-      <View style={[sliderStyles.track, { backgroundColor: trackColor }]} />
-      <View
-        style={[sliderStyles.fill, { width: handleX(value), backgroundColor: color }]}
-      />
-      <Animated.View
-        style={[
-          sliderStyles.thumb,
-          { transform: [{ translateX: thumbX }] },
-          { backgroundColor: color, borderColor: thumbBorderColor },
-        ]}
-      />
-    </View>
-  );
-}
-
-const sliderStyles = StyleSheet.create({
-  track: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 4,
-    borderRadius: 2,
-  },
-  fill: {
-    position: 'absolute',
-    left: 0,
-    height: 4,
-    borderRadius: 2,
-  },
-  thumb: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginLeft: -10,
-    borderWidth: 2,
-  },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main DrawingWorkspace
 // ─────────────────────────────────────────────────────────────────────────────
 export function DrawingWorkspace({
@@ -348,11 +233,19 @@ export function DrawingWorkspace({
 
   // ── Tool state ──
   const [brushType, setBrushType] = useState<BrushType>('pen');
-  const [brushColor, setBrushColor] = useState<string>(isDark ? '#FFFFFF' : '#000000');
+  // CreatorColor is the canonical color state (spec 04_COLOR_SYSTEM_ZERO_GAP §1).
+  // brushColorHex is derived from it for the Skia renderer and DrawStrokeSchema.
+  const [brushColorObj, setBrushColorObj] = useState<CreatorColor>(
+    () => fromHexString(isDark ? '#FFFFFF' : '#000000') ?? { space: 'srgb', r: 0, g: 0, b: 0, a: 1 },
+  );
+  const brushColor = useMemo(() => toHexString(brushColorObj), [brushColorObj]);
   const [brushSize, setBrushSize] = useState<number>(8);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [redoStack, setRedoStack] = useState<Stroke[]>([]);
-  const [customColor, setCustomColor] = useState<string>('#1E88E5');
+  const [showColorPicker, setShowColorPicker] = useState(false);
+
+  // Recent color history (persisted via AsyncStorage, spec §4).
+  const { recents, commitColor: commitRecentColor } = useCreatorColorHistory();
 
   // ── Live stroke (UI-thread driven, no per-point React state) ──
   const currentPointsRef = useRef<{ x: number; y: number }[]>([]);
@@ -539,19 +432,28 @@ export function DrawingWorkspace({
     onCommit(doc);
   }, [strokes, canvasWidth, canvasHeight, onCommit]);
 
-  const handleSelectColor = useCallback((c: string) => {
-    setBrushColor(c);
+  // ── Color selection (CreatorColorPicker) ──
+  // Transient change — updates the live color without creating a history entry.
+  const handleColorChange = useCallback((color: CreatorColor) => {
+    setBrushColorObj(color);
     if (brushType === 'eraser') setBrushType('pen');
   }, [brushType]);
 
-  const handleCustomColor = useCallback((c: string) => {
-    const normalized = c.startsWith('#') ? c : `#${c}`;
-    setCustomColor(normalized);
-    if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(normalized)) {
-      setBrushColor(normalized);
-      if (brushType === 'eraser') setBrushType('pen');
+  // Commit — updates color and adds to recent history.
+  const handleColorCommit = useCallback((color: CreatorColor) => {
+    const normalizedColor = normalize(color);
+    setBrushColorObj(normalizedColor);
+    commitRecentColor(normalizedColor);
+    if (brushType === 'eraser') setBrushType('pen');
+  }, [brushType, commitRecentColor]);
+
+  // Preset swatch selection — converts hex string to CreatorColor.
+  const handleSelectColor = useCallback((c: string) => {
+    const parsed = fromHexString(c);
+    if (parsed) {
+      handleColorCommit(parsed);
     }
-  }, [brushType]);
+  }, [handleColorCommit]);
 
   const handleSelectBrush = useCallback((t: BrushType) => {
     setBrushType(t);
@@ -619,48 +521,35 @@ export function DrawingWorkspace({
 
         {/* ── Top bar ── */}
         <View style={[styles.topBar, { paddingTop: insets.top + Space.xs }]}>
-          <PressScale
-            accessibilityLabel="Close drawing workspace"
+          <CreatorIconButton
+            icon="close"
             onPress={onClose}
-            style={[styles.iconButton, { backgroundColor: colors.surface }]}
-          >
-            <Ionicons name="close" size={22} color={colors.textPrimary} />
-          </PressScale>
+            accessibilityLabel="Close drawing workspace"
+            overlay
+          />
 
           <View style={styles.topActions}>
-            <PressScale
-              accessibilityLabel="Undo"
+            <CreatorIconButton
+              icon="arrow-undo"
               disabled={strokes.length === 0}
               onPress={handleUndo}
-              style={[
-                styles.iconButton,
-                { backgroundColor: colors.surface, opacity: strokes.length === 0 ? 0.4 : 1 },
-              ]}
-            >
-              <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
-            </PressScale>
-            <PressScale
-              accessibilityLabel="Redo"
+              accessibilityLabel="Undo"
+              accessibilityHint="Undo the last stroke"
+            />
+            <CreatorIconButton
+              icon="arrow-redo"
               disabled={redoStack.length === 0}
               onPress={handleRedo}
-              style={[
-                styles.iconButton,
-                { backgroundColor: colors.surface, opacity: redoStack.length === 0 ? 0.4 : 1 },
-              ]}
-            >
-              <Ionicons name="arrow-forward" size={20} color={colors.textPrimary} />
-            </PressScale>
-            <PressScale
-              accessibilityLabel="Clear canvas"
+              accessibilityLabel="Redo"
+              accessibilityHint="Redo the last undone stroke"
+            />
+            <CreatorIconButton
+              icon="trash-outline"
               disabled={strokes.length === 0}
               onPress={handleClear}
-              style={[
-                styles.iconButton,
-                { backgroundColor: colors.surface, opacity: strokes.length === 0 ? 0.4 : 1 },
-              ]}
-            >
-              <Ionicons name="trash-outline" size={20} color={colors.danger} />
-            </PressScale>
+              accessibilityLabel="Clear canvas"
+              accessibilityHint="Remove all strokes from the canvas"
+            />
             <PressScale
               accessibilityLabel="Done — commit drawing"
               onPress={handleDone}
@@ -683,46 +572,14 @@ export function DrawingWorkspace({
             panelStyle,
           ]}
         >
-          {/* Brush type selector */}
-          <View style={styles.brushRow}>
-            {BRUSH_TYPES.map((b) => {
-              const selected = brushType === b.type;
-              return (
-                <PressScale
-                  key={b.type}
-                  accessibilityLabel={b.label}
-                  accessibilityRole="button"
-                  onPress={() => handleSelectBrush(b.type)}
-                  style={[
-                    styles.brushChip,
-                    {
-                      backgroundColor: selected ? colors.brandSubtle : colors.surfaceAlt,
-                      borderColor: selected ? colors.brand : 'transparent',
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={b.icon}
-                    size={18}
-                    color={selected ? colors.brand : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.brushLabel,
-                      {
-                        color: selected ? colors.textPrimary : colors.textSecondary,
-                        fontFamily: FontFamily.medium,
-                      },
-                    ]}
-                  >
-                    {b.label}
-                  </Text>
-                </PressScale>
-              );
-            })}
-          </View>
+          {/* Brush type selector — CreatorSegmentControl with sliding indicator */}
+          <CreatorSegmentControl
+            segments={BRUSH_SEGMENTS}
+            value={brushType}
+            onChange={(v) => handleSelectBrush(v as BrushType)}
+          />
 
-          {/* Color picker row */}
+          {/* Color picker row — preset swatches + shared CreatorColorPicker */}
           <View style={styles.colorRow}>
             {PRESET_COLORS.map((c) => {
               const selected = brushColor === c && brushType !== 'eraser';
@@ -740,52 +597,46 @@ export function DrawingWorkspace({
                 />
               );
             })}
-            {/* Custom color input — hex text entry (cross-platform) */}
-            <View style={styles.customColorWrap}>
-              <View
-                style={[
-                  styles.customColorPreview,
-                  { backgroundColor: customColor, borderColor: colors.border },
-                ]}
+            {/* Expand/collapse color picker button */}
+            <PressScale
+              onPress={() => setShowColorPicker((v) => !v)}
+              style={[
+                styles.expandColorBtn,
+                {
+                  backgroundColor: showColorPicker ? colors.brandSubtle : colors.surfaceAlt,
+                  borderColor: showColorPicker ? colors.brand : colors.border,
+                },
+              ]}
+              accessibilityLabel="Custom color picker"
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showColorPicker }}
+            >
+              <Ionicons
+                name="color-palette-outline"
+                size={18}
+                color={showColorPicker ? colors.brand : colors.textSecondary}
               />
-              <TextInput
-                value={customColor}
-                onChangeText={handleCustomColor}
-                placeholder="#RRGGBB"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                maxLength={7}
-                style={[
-                  styles.customColorInput,
-                  {
-                    color: colors.textPrimary,
-                    backgroundColor: colors.surfaceAlt,
-                    borderColor: colors.border,
-                  },
-                ]}
-                accessibilityLabel="Custom hex color"
-              />
-            </View>
+            </PressScale>
           </View>
 
-          {/* Size slider */}
+          {/* Shared CreatorColorPicker — compact row with HEX, eyedropper, recents */}
+          {showColorPicker && (
+            <View style={styles.colorPickerSection}>
+              <CreatorColorPicker
+                color={brushColorObj}
+                onChange={handleColorChange}
+                onCommit={handleColorCommit}
+                mode="compact"
+                recents={recents}
+                onCommitRecent={commitRecentColor}
+                accessibilityLabel="Drawing stroke color"
+              />
+            </View>
+          )}
+
+          {/* Size slider — CreatorSlider (RNGH + Reanimated, 44pt touch target) */}
           <View style={styles.sizeRow}>
-            <Text style={[styles.sizeLabel, { color: colors.textSecondary, fontFamily: FontFamily.medium }]}>
-              Size
-            </Text>
-            <SizeSlider
-              value={brushSize}
-              min={MIN_SIZE}
-              max={MAX_SIZE}
-              width={SIZE_SLIDER_WIDTH}
-              color={colors.brand}
-              trackColor={colors.border}
-              thumbBorderColor={colors.surface}
-              onChange={setBrushSize}
-              onCommit={setBrushSize}
-            />
-            <View style={[styles.sizeDotWrap, { borderColor: colors.border }]}>
+            <View style={styles.sizeDotWrap}>
               <View
                 style={{
                   width: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
@@ -795,9 +646,15 @@ export function DrawingWorkspace({
                 }}
               />
             </View>
-            <Text style={[styles.sizeValue, { color: colors.textPrimary, fontFamily: FontFamily.semibold }]}>
-              {brushSize}
-            </Text>
+            <CreatorSlider
+              value={brushSize}
+              min={MIN_SIZE}
+              max={MAX_SIZE}
+              step={1}
+              onValueChange={setBrushSize}
+              onCommit={setBrushSize}
+              accessibilityLabel="Brush size"
+            />
           </View>
         </Reanimated.View>
       </View>
@@ -845,16 +702,9 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       alignItems: 'center',
       gap: Space.xs,
     },
-    iconButton: {
-      width: 40,
-      height: 40,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     doneButton: {
-      height: 40,
-      paddingHorizontal: Space.md,
+      height: 44,
+      paddingHorizontal: Space.lg,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
@@ -877,24 +727,6 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       gap: Space.sm,
       ...Elevation.modal,
     },
-    brushRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      flexWrap: 'wrap',
-    },
-    brushChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: Space.sm,
-      height: 34,
-      borderRadius: Radius.full,
-      borderWidth: 1,
-    },
-    brushLabel: {
-      fontSize: Type.caption.size,
-    },
     colorRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -902,51 +734,35 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       flexWrap: 'wrap',
     },
     swatch: {
-      width: 28,
-      height: 28,
+      width: 32,
+      height: 32,
       borderRadius: Radius.full,
       borderWidth: 2,
     },
-    customColorWrap: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-    },
-    customColorPreview: {
-      width: 28,
-      height: 28,
+    expandColorBtn: {
+      width: 44,
+      height: 44,
       borderRadius: Radius.full,
-      borderWidth: 2,
-    },
-    customColorInput: {
-      width: 84,
-      height: 28,
-      borderRadius: Radius.sm,
       borderWidth: 1,
-      paddingHorizontal: Space.xs,
-      fontSize: Type.caption.size,
-      fontFamily: FontFamily.regular,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    colorPickerSection: {
+      paddingTop: Space.xs,
     },
     sizeRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
     },
-    sizeLabel: {
-      fontSize: Type.caption.size,
-    },
     sizeDotWrap: {
-      width: 32,
-      height: 32,
+      width: 36,
+      height: 36,
       borderRadius: Radius.full,
       borderWidth: 1,
+      borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    sizeValue: {
-      fontSize: Type.bodyEmphasis.size,
-      minWidth: 24,
-      textAlign: 'right',
     },
   });
 }

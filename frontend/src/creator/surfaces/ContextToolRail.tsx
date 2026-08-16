@@ -29,14 +29,16 @@
  */
 
 import React, { useCallback, useMemo } from 'react';
-import { ScrollView, StyleSheet, Pressable, View, Text, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { ScrollView, StyleSheet, View, Text, type ViewStyle } from 'react-native';
 
 import { Space } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
+import {
+  CreatorToolButton,
+  type SelectedStyle,
+} from '../controls/CreatorToolButton';
 import {
   getPrimaryTools,
   getOverflowTools,
@@ -62,146 +64,123 @@ export interface ContextToolRailProps {
 
 // ── Constants ───────────────────────────────────────────────────────
 
-/** Icon size for primary tool glyphs (per spec: 24pt). */
-const ICON_SIZE = 24;
-/** Icon size for the "More" overflow button. */
-const MORE_ICON_SIZE = 24;
-/** Minimum touch target (per spec: 44pt minimum). */
-const TOUCH_TARGET = 44;
-/** Preferred touch target for high-frequency tools (per spec: 48pt). */
-const PREFERRED_TARGET = 48;
+/** Maximum primary tools visible before overflow. */
+const MAX_PRIMARY = 6;
 /** Badge diameter. */
 const BADGE_SIZE = 16;
 /** Badge text size. */
 const BADGE_FONT_SIZE = 10;
-/** Maximum primary tools visible before overflow. */
-const MAX_PRIMARY = 6;
+
+/**
+ * Tools that use universally understood Ionicons and should NOT show a
+ * permanent label — icon-only is clearer for these familiar actions.
+ */
+const ICON_ONLY_TOOLS = new Set<string>([
+  'close',
+  'back',
+  'play',
+  'pause',
+  'search',
+  'undo',
+  'redo',
+  'more',
+  'settings',
+  'share',
+  'delete',
+]);
 
 // ── Single tool button ──────────────────────────────────────────────
-// Extracted as its own memo component so each tool owns its own press
-// state and haptic without re-rendering siblings.
+// Wraps CreatorToolButton, wiring the tool definition's active state,
+// selectedStyle, glyph/icon, and label. Extracted as a memo component so
+// each tool owns its own press state without re-rendering siblings.
 
 interface RailToolButtonProps {
   tool: ToolDefinition;
-  iconColor: string;
-  labelColor: string;
-  badgeColor: string;
-  badgeTextColor: string;
-  preferred?: boolean;
   /** Called after the tool is pressed — used to record usage for personalization. */
   onToolUsed?: (toolId: string) => void;
 }
 
 const RailToolButton = React.memo(function RailToolButton({
   tool,
-  iconColor,
-  labelColor,
-  badgeColor,
-  badgeTextColor,
-  preferred = false,
   onToolUsed,
 }: RailToolButtonProps) {
-  const haptic = useHaptic();
-
   const handlePress = useCallback(() => {
     if (tool.disabled) return;
-    switch (tool.hapticFeedback) {
-      case 'medium':
-        haptic.medium();
-        break;
-      case 'heavy':
-        haptic.heavy();
-        break;
-      case 'light':
-      default:
-        haptic.light();
-        break;
-    }
     tool.onPress();
     // Record usage for personalization (pinning / recent tools).
     // Fire-and-forget — the hook persists asynchronously.
     if (onToolUsed) onToolUsed(tool.id);
-  }, [tool, haptic, onToolUsed]);
+  }, [tool, onToolUsed]);
 
-  const targetSize = preferred ? PREFERRED_TARGET : TOUCH_TARGET;
+  // Determine whether to show the label. Universally familiar tools
+  // (close, back, play, etc.) are icon-only; ambiguous creative tools
+  // (trim, split, cutout, keyframe, speed-curve) keep their label.
+  const showLabel = !ICON_ONLY_TOOLS.has(tool.id) && tool.label.length > 0;
+
+  // Resolve the selected style — default to 'fill' (backplate) per spec.
+  const selectedStyle: SelectedStyle = tool.selectedStyle ?? 'fill';
 
   return (
-    <Pressable
-      onPress={handlePress}
-      disabled={tool.disabled}
-      style={[styles.toolBtn, { minWidth: targetSize, minHeight: targetSize }]}
-      accessibilityLabel={tool.accessibilityLabel}
-      accessibilityHint={tool.accessibilityHint}
-      accessibilityRole="button"
-      accessibilityState={tool.disabled ? { disabled: true } : undefined}
-      hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
-    >
-      <View style={styles.iconWrap}>
-        <Ionicons
-          name={tool.icon}
-          size={ICON_SIZE}
-          color={iconColor}
-          style={tool.disabled ? styles.iconDisabled : undefined}
-        />
-        {tool.badge !== undefined && tool.badge !== null && !tool.disabled && (
-          <View style={[styles.badge, { backgroundColor: badgeColor }]}>
-            <Text
-              style={[styles.badgeText, { color: badgeTextColor }]}
-              numberOfLines={1}
-            >
-              {tool.badge}
-            </Text>
-          </View>
-        )}
-      </View>
-      <Text
-        style={[styles.toolLabel, { color: labelColor }]}
-        numberOfLines={1}
-      >
-        {tool.label}
-      </Text>
-    </Pressable>
+    <View style={styles.toolBtnWrap}>
+      <CreatorToolButton
+        glyph={tool.glyph}
+        icon={tool.glyph ? undefined : tool.icon}
+        label={showLabel ? tool.label : undefined}
+        active={tool.active}
+        selectedStyle={selectedStyle}
+        disabled={tool.disabled}
+        onPress={handlePress}
+        accessibilityLabel={tool.accessibilityLabel}
+        accessibilityHint={tool.accessibilityHint}
+      />
+      {/* Badge — rendered as an overlay since CreatorToolButton doesn't
+          include badge support (badges are rail-specific). */}
+      {tool.badge !== undefined && tool.badge !== null && !tool.disabled && (
+        <View style={styles.badgeOverlay}>
+          <Badge badge={tool.badge} />
+        </View>
+      )}
+    </View>
   );
 });
+
+// ── Badge (small count overlay) ─────────────────────────────────────
+
+interface BadgeProps {
+  badge: number | string;
+}
+
+function Badge({ badge }: BadgeProps) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={[styles.badge, { backgroundColor: colors.brand }]}>
+      <Text
+        style={[styles.badgeText, { color: colors.textInverse }]}
+        numberOfLines={1}
+      >
+        {badge}
+      </Text>
+    </View>
+  );
+}
 
 // ── "More" overflow button ──────────────────────────────────────────
 
 interface MoreButtonProps {
-  label: string;
-  iconColor: string;
-  labelColor: string;
   onPress: () => void;
 }
 
 const MoreButton = React.memo(function MoreButton({
-  label,
-  iconColor,
-  labelColor,
   onPress,
 }: MoreButtonProps) {
-  const haptic = useHaptic();
-
-  const handlePress = useCallback(() => {
-    haptic.light();
-    onPress();
-  }, [haptic, onPress]);
-
   return (
-    <Pressable
-      onPress={handlePress}
-      style={[styles.toolBtn, { minWidth: TOUCH_TARGET, minHeight: TOUCH_TARGET }]}
-      accessibilityLabel={label}
+    <CreatorToolButton
+      icon="ellipsis-horizontal"
+      label="More"
+      onPress={onPress}
+      accessibilityLabel="More tools"
       accessibilityHint="Opens the overflow menu with additional tools"
-      accessibilityRole="button"
-      hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
-    >
-      <View style={styles.iconWrap}>
-        <Ionicons name="ellipsis-horizontal" size={MORE_ICON_SIZE} color={iconColor} />
-      </View>
-      <Text style={[styles.toolLabel, { color: labelColor }]} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
+    />
   );
 });
 
@@ -213,7 +192,6 @@ export function ContextToolRail({
   onOverflowPress,
   style,
 }: ContextToolRailProps) {
-  const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
   const haptic = useHaptic();
   const { pinned, recordUse } = usePinnedTools();
@@ -278,14 +256,10 @@ export function ContextToolRail({
     }
   }, [context, reduceMotion, haptic]);
 
-  // Colors — icons default to textSecondary (neutral). The "active/selected"
-  // state (icon turns brand color) is driven by the consumer via a future
-  // `active` flag on ToolDefinition; the neutral default keeps the rail
-  // visually restrained per AGENTS.md §4 (hierarchy over decoration).
-  const iconColor = colors.textSecondary;
-  const labelColor = colors.textMuted;
-  const badgeColor = colors.brand;
-  const badgeTextColor = colors.textInverse;
+  // Colors are now resolved inside CreatorToolButton (theme-aware).
+  // The neutral default keeps the rail visually restrained per AGENTS.md §4
+  // (hierarchy over decoration). Active state is driven by `tool.active`
+  // and `tool.selectedStyle` on the ToolDefinition.
 
   const handleOverflow = useCallback(() => {
     if (onOverflowPress) {
@@ -304,20 +278,11 @@ export function ContextToolRail({
         <RailToolButton
           key={tool.id}
           tool={tool}
-          iconColor={iconColor}
-          labelColor={labelColor}
-          badgeColor={badgeColor}
-          badgeTextColor={badgeTextColor}
           onToolUsed={handleToolUsed}
         />
       ))}
       {showMore && (
-        <MoreButton
-          label="More"
-          iconColor={iconColor}
-          labelColor={labelColor}
-          onPress={handleOverflow}
-        />
+        <MoreButton onPress={handleOverflow} />
       )}
     </ScrollView>
   );
@@ -338,35 +303,24 @@ const styles = StyleSheet.create({
     gap: Space.xs, // 4pt between tools
     paddingVertical: Space.xs,
   },
-  // ── Tool button ──
-  toolBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-  },
-  iconWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  // ── Tool button wrapper ──
+  // CreatorToolButton provides its own 48pt hit target; this wrapper
+  // positions the optional badge overlay relative to the button.
+  toolBtnWrap: {
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  // ── Label (11pt, textMuted) ──
-  toolLabel: {
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontSize: TypographyV2.meta.size, // 11pt
-    lineHeight: TypographyV2.meta.lineHeight,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    marginTop: Space.xxs, // 2pt gap between icon and label
-    textAlign: 'center',
-  },
-  // ── Disabled state ──
-  iconDisabled: {
-    opacity: 0.4, // 40% opacity per spec
+  // ── Badge overlay ──
+  // Positioned at the top-right corner of the tool button.
+  badgeOverlay: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    zIndex: 1,
   },
   // ── Badge ──
   badge: {
-    position: 'absolute',
-    top: -2,
-    right: -6,
     minWidth: BADGE_SIZE,
     height: BADGE_SIZE,
     borderRadius: BADGE_SIZE / 2,
@@ -375,7 +329,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: {
-    fontFamily: TypographyV2.meta.fontFamily,
     fontSize: BADGE_FONT_SIZE,
     fontWeight: '600',
     lineHeight: BADGE_FONT_SIZE + 2,

@@ -27,6 +27,16 @@ const SPEED_MAX = 4;
 
 export interface TimelineToolbarProps {
   selectedClip: PosterClip | null;
+  // ── Playback clock integration (optional) ──────────────────────────
+  // When provided, the toolbar shows a play/pause button and current
+  // timecode driven by the PlaybackClock — the single authority for
+  // timeline time. The play/pause button reflects the clock's isPlaying
+  // state, preventing desync between UI and playback.
+  isPlaying?: boolean;
+  currentTimeMs?: number;
+  totalDurationMs?: number;
+  onPlayPause?: () => void;
+  onSeek?: (ms: number) => void;
   onSplit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -37,6 +47,10 @@ export interface TimelineToolbarProps {
 
 export const TimelineToolbar = React.memo(function TimelineToolbar({
   selectedClip,
+  isPlaying,
+  currentTimeMs,
+  totalDurationMs,
+  onPlayPause,
   onSplit,
   onDuplicate,
   onDelete,
@@ -49,8 +63,31 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
 
   if (!selectedClip) return null;
 
+  // Playback row is shown when the clock integration props are provided.
+  const hasPlaybackIntegration = onPlayPause !== undefined && isPlaying !== undefined;
+
   return (
     <View style={toolbarStyles.container}>
+      {/* ── Playback row (clock-driven) ─────────────────────────────── */}
+      {/* Play/pause button + current timecode from the PlaybackClock. */}
+      {hasPlaybackIntegration && (
+        <View style={toolbarStyles.playbackRow}>
+          <PressScale
+            onPress={() => { haptic.light(); onPlayPause!(); }}
+            style={toolbarStyles.playBtn}
+            accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+            accessibilityHint="Plays or pauses the timeline"
+            accessibilityRole="button"
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color={colors.textPrimary} />
+          </PressScale>
+          <Text style={[toolbarStyles.timecode, { color: colors.textSecondary }]}>
+            {formatTimecode(currentTimeMs ?? 0)} / {formatTimecode(totalDurationMs ?? 0)}
+          </Text>
+        </View>
+      )}
+
       <View style={toolbarStyles.metaRow}>
         <Text style={[toolbarStyles.metaText, { color: colors.textSecondary }]}>
           {formatTimecode(selectedClip.durationMs)}
@@ -231,6 +268,25 @@ const toolbarStyles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     gap: Space.xs,
+  },
+  playbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xxs,
+  },
+  playBtn: {
+    width: TOOL_HIT,
+    height: TOOL_HIT,
+    borderRadius: RadiusRoleValue.compactControl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timecode: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontVariant: ['tabular-nums'],
   },
   metaRow: {
     flexDirection: 'row',

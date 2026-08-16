@@ -412,6 +412,16 @@ export const CreatorBackgroundSchema = z.object({
   type: z.enum(['color', 'gradient', 'image', 'blur']).default('color'),
   value: z.string().default('#1a1a1a'),
   secondaryValue: z.string().optional(),
+  // Custom gradient stops — when type='gradient' and the user has edited
+  // stops via the GradientEditor. Each stop has a 0..1 position and a hex
+  // color string (#RRGGBB or #RRGGBBAA). When absent, the renderer falls
+  // back to value/secondaryValue (two-stop preset gradient).
+  gradientStops: z.array(z.object({
+    position: z.number().min(0).max(1),
+    color: z.string(),
+  })).optional(),
+  // Gradient angle in degrees (0..360). Used when type='gradient'.
+  gradientAngle: z.number().min(0).max(360).optional(),
   // For 'blur' type — the asset ID of the source image to blur.
   // The renderer blurs this image and uses it as the canvas background.
   blurAssetId: z.string().optional(),
