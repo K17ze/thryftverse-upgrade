@@ -8,6 +8,37 @@ The native mobile application is the product. Every decision must serve the user
 
 ---
 
+## 0. AGENT SCOPE — MAIN AGENT ONLY
+
+This charter is intended for the **main agent** driving the task — the single orchestrator that plans, implements, verifies, and reports.
+
+It is **not** intended to be loaded verbatim into parallel subagents. Subagents are short-lived, stateless workers that should receive a focused, self-contained prompt describing only the slice of work they need to perform — not the entire charter.
+
+### Do not nest parallel subagents
+
+Parallel subagents must not spawn further parallel subagents. Unbounded nesting produces a fan-out explosion:
+
+```
+main agent
+  └─ N parallel subagents
+       └─ each spawns M parallel subagents
+            └─ each spawns K parallel subagents
+                 └─ ... → OOM loop / context exhaustion
+```
+
+This escalates context and memory usage geometrically and terminates in an **out-of-memory loop error** with no useful output.
+
+### Rules
+
+- The main agent owns this charter and the task plan.
+- Dispatch parallel subagents only for self-contained, leaf-level work (search, read, isolated edits, single-file fixes).
+- Subagent prompts must inline only the specific context they need — do not paste this whole file into a subagent prompt.
+- Subagents must not invoke `run_subagent` themselves. No recursive delegation.
+- If a subagent's task turns out to require broader orchestration, it should return its findings to the main agent, which decides the next step.
+- Keep fan-out shallow: one level of parallelism from the main agent, then stop.
+
+---
+
 ## 1. WORKSPACE VERIFICATION
 
 Work inside the repository currently opened by the user.

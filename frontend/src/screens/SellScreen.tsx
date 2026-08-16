@@ -7,6 +7,7 @@ import {
   Pressable,
   Dimensions,
   Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -15,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, FontFamily, DockConstants, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Type, FontFamily, DockConstants, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AppInput } from '../components/ui/AppInput';
@@ -158,6 +159,7 @@ export default function SellScreen() {
   const [condition, setCondition] = useState('');
   const [shippingMethod, setShippingMethod] = useState<'standard' | 'express' | null>(null);
   const [shippingPayer, setShippingPayer] = useState<'buyer' | 'seller' | null>(null);
+  const [shippingSheetOpen, setShippingSheetOpen] = useState(false);
 
   // ── Transient "Saved" indicator ──
   // Per audit 04: "visible 'Saved' only briefly; never spam toasts on every
@@ -1707,53 +1709,103 @@ export default function SellScreen() {
               </View>
             )}
 
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, t.fieldLabel]}>Shipping method</Text>
-              <View style={styles.toggleRow}>
+            <Pressable
+              onPress={() => { setShippingSheetOpen(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              style={({ pressed }) => [styles.shippingSummaryRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Configure delivery"
+              accessibilityHint="Opens shipping method and payment options"
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.shippingSummaryLabel, { color: colors.textPrimary }]}>Delivery</Text>
+                <Text style={[styles.shippingSummaryValue, { color: shippingMethod ? colors.textSecondary : colors.textMuted }]}>
+                  {shippingMethod && shippingPayer
+                    ? `${shippingMethod === 'standard' ? 'Standard' : 'Express'} · ${shippingPayer === 'buyer' ? 'Buyer pays' : 'Free shipping'}`
+                    : 'Choose shipping & payment'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </Pressable>
+          </View>
+
+          {/* -- SHIPPING BOTTOM SHEET -- */}
+          <Modal
+            visible={shippingSheetOpen}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setShippingSheetOpen(false)}
+          >
+            <Pressable style={styles.shippingSheetBackdrop} onPress={() => setShippingSheetOpen(false)}>
+              <Pressable
+                style={[styles.shippingSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Space.md }]}
+                onPress={(e) => { e.stopPropagation(); }}
+              >
+                {/* Header */}
+                <View style={styles.shippingSheetHeader}>
+                  <View style={[styles.shippingSheetHandle, { backgroundColor: colors.border }]} />
+                  <View style={styles.shippingSheetTitleRow}>
+                    <Text style={[styles.shippingSheetTitle, { color: colors.textPrimary }]}>Delivery</Text>
+                    <Pressable
+                      hitSlop={Control.hit}
+                      onPress={() => { setShippingSheetOpen(false); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Close delivery options"
+                    >
+                      <Ionicons name="close" size={20} color={colors.textMuted} />
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Shipping method section */}
+                <Text style={[styles.shippingSheetSectionLabel, { color: colors.textMuted }]}>Shipping method</Text>
                 {(['standard', 'express'] as const).map((m) => {
                   const active = shippingMethod === m;
                   return (
                     <Pressable
                       key={m}
-                      style={({ pressed }) => [styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive, pressed && { opacity: 0.7 }]}
+                      style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
                       onPress={() => { setShippingMethod(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping method to ${m}`}
+                      accessibilityState={{ selected: active }}
                     >
-                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'rocket-outline'} size={14} color={active ? colors.textInverse : colors.textMuted} style={{ marginRight: Space.xs }} />
-                      <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
+                      <Ionicons name={m === 'standard' ? 'cube-outline' : 'rocket-outline'} size={20} color={colors.textPrimary} style={{ marginRight: Space.md }} />
+                      <Text style={[styles.shippingSheetRowLabel, { color: colors.textPrimary }]}>
                         {m === 'standard' ? 'Standard' : 'Express'}
                       </Text>
+                      <View style={[styles.shippingSheetRadioOuter, { borderColor: active ? colors.brand : colors.border }]}>
+                        {active && <View style={[styles.shippingSheetRadioInner, { backgroundColor: colors.brand }]} />}
+                      </View>
                     </Pressable>
                   );
                 })}
-              </View>
-              <View style={[styles.hairline, t.hairline]} />
-            </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, t.fieldLabel]}>Who pays</Text>
-              <View style={styles.toggleRow}>
+                {/* Who pays section */}
+                <Text style={[styles.shippingSheetSectionLabel, { color: colors.textMuted, marginTop: Space.lg }]}>Who pays</Text>
                 {(['buyer', 'seller'] as const).map((p) => {
                   const active = shippingPayer === p;
                   return (
                     <Pressable
                       key={p}
-                      style={({ pressed }) => [styles.togglePill, t.togglePill, active && styles.togglePillActive, active && t.togglePillActive, pressed && { opacity: 0.7 }]}
+                      style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
                       onPress={() => { setShippingPayer(p); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping payer to ${p}`}
+                      accessibilityState={{ selected: active }}
                     >
-                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={14} color={active ? colors.textInverse : colors.textMuted} style={{ marginRight: Space.xs }} />
-                      <Text style={[styles.toggleText, t.toggleText, active && styles.toggleTextActive, active && t.toggleTextActive]}>
+                      <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={20} color={colors.textPrimary} style={{ marginRight: Space.md }} />
+                      <Text style={[styles.shippingSheetRowLabel, { color: colors.textPrimary }]}>
                         {p === 'buyer' ? 'Buyer pays' : 'I pay (free)'}
                       </Text>
+                      <View style={[styles.shippingSheetRadioOuter, { borderColor: active ? colors.brand : colors.border }]}>
+                        {active && <View style={[styles.shippingSheetRadioInner, { backgroundColor: colors.brand }]} />}
+                      </View>
                     </Pressable>
                   );
                 })}
-              </View>
-            </View>
-          </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
 
           {/* -- CO-OWN AUTHENTICATION MEDIA -- */}
           {listingMode === 'co_own' && (
@@ -2423,5 +2475,96 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+
+  /* -- shipping summary row + bottom sheet -- */
+  shippingSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Space.sm + Space.xs,
+    paddingHorizontal: Space.md,
+    minHeight: Control.hit,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#00000000', // themed inline
+  },
+  shippingSummaryLabel: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    marginBottom: Space.xxs,
+  },
+  shippingSummaryValue: {
+    fontSize: Type.captionElevated.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: Type.captionElevated.lineHeight,
+  },
+  shippingSheetBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  shippingSheet: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingTop: Space.xs,
+    paddingHorizontal: Space.md,
+  },
+  shippingSheetHeader: {
+    alignItems: 'center',
+    paddingBottom: Space.sm,
+  },
+  shippingSheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: '#00000033', // themed inline below
+    marginBottom: Space.sm,
+  },
+  shippingSheetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  shippingSheetTitle: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+  },
+  shippingSheetSectionLabel: {
+    fontSize: Type.meta.size,
+    fontFamily: FontFamily.medium,
+    lineHeight: Type.meta.lineHeight,
+    letterSpacing: Type.meta.letterSpacing,
+    textTransform: 'uppercase',
+    marginBottom: Space.xs,
+  },
+  shippingSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Space.sm + Space.xs,
+    minHeight: Control.hit,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#00000000', // themed inline
+  },
+  shippingSheetRowLabel: {
+    flex: 1,
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+  },
+  shippingSheetRadioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    borderWidth: 2,
+    borderColor: '#00000033', // themed inline below
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shippingSheetRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: Radius.full,
   },
 });

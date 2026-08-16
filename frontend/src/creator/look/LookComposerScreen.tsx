@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { makeStableId } from '../../utils/createStableId';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
-import type { CreatorLayer } from '../composition';
+import type { CreatorLayer, EffectNode } from '../composition';
 import { computeLookLayout, LOOK_DEFAULT_ASPECT_RATIO } from '../composition';
 import { CreatorCanvas } from '../CreatorCanvas';
 import { CreatorLayersSheet } from '../CreatorLayersSheet';
@@ -34,9 +34,27 @@ import { CreatorTemplateBrowser } from '../CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from '../CreatorPreviewOverlay';
 import { CreatorEntryScreen } from '../CreatorEntryScreen';
 import { CreatorCropSheet } from '../CreatorCropSheet';
+import { InCanvasCropOverlay } from '../surfaces/InCanvasCropOverlay';
 import { CreatorCutoutSheet } from '../CreatorCutoutSheet';
+import { CutoutPreviewSheet } from '../surfaces/CutoutPreviewSheet';
+import { AccessibilityMoveSheet } from '../surfaces/AccessibilityMoveSheet';
+import { AccessibilityZOrderSheet, type ZOrderLayer } from '../surfaces/AccessibilityZOrderSheet';
+import { isCutoutSupportedAsync, type CutoutResult } from '../core/cutout/CutoutService';
 import { PressScale } from '../CreatorAnimations';
+import { BackgroundSheet } from './BackgroundSheet';
+import type { CreatorBackground } from '../composition';
 import { LookSourceTray } from './LookSourceTray';
+import { ContextToolRail } from '../surfaces/ContextToolRail';
+import { HelpShortcutsSheet } from '../surfaces/HelpShortcutsSheet';
+import {
+  type ToolContext,
+  type ToolGroup,
+} from '../core/toolRegistry';
+import { EffectPreviewRail, AdjustPanel, FILTER_PRESETS, AutoAdjustButton, computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
+import type { EffectPreset } from '../tools/effects';
+import { LayoutPreviewRail } from './layout/LayoutPreviewRail';
+import { autoCompose } from './layout/autoCompose';
+import type { AssetTransform, LayoutPreview, LayoutId } from './layout/layoutTypes';
 import { useHaptic } from '../../hooks/useHaptic';
 import { fetchLookByIdFromApi } from '../../services/looksApi';
 import { lookToDocument } from '../viewerAdapters';
@@ -55,7 +73,7 @@ import type { CreatorTemplate } from '../templates';
 //   - direct object manipulation via CreatorCanvas
 //
 // Default bottom actions (spec 10):
-//   Add item · Add photo · Cutout · Text · Layout
+//   Add item · Add photo · Crop · Text · Layout
 //
 // Selected object produces a context toolbar (not a permanent dock).
 // Global Layers remains More/Advanced.
@@ -94,7 +112,16 @@ function LookComposerInner() {
   const {
     document,
     selectedLayerId,
+    selectedLayerIds,
     selectLayer,
+    selectLayers,
+    toggleLayerInSelection,
+    clearMultiSelect,
+    deleteMultiSelected,
+    commitMultiLayerTransform,
+    updateLayersLive,
+    bringSelectedToFront,
+    sendSelectedToBack,
     canUndo,
     canRedo,
     undo,
@@ -109,13 +136,17 @@ function LookComposerInner() {
     isLoadingDraft,
     setDocument,
     saveDraft,
-    autoArrangeLook,
     swapLookAsset,
     addLookProduct,
+    updateCanvas,
+    hasPendingRecovery,
+    recoverCrashedProject,
+    dismissRecovery,
   } = useCreator();
 
   // ── Sheet / overlay state ──────────────────────────────────────────
   const [showLayers, setShowLayers] = useState(false);
+  const [showSafeZone, setShowSafeZone] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
@@ -123,13 +154,55 @@ function LookComposerInner() {
   const [showTemplates, setShowTemplates] = useState(Boolean(route.params?.openTemplates));
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showBackground, setShowBackground] = useState(false);
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
   const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
+  const [cropMode, setCropMode] = useState(false);
   const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
+  // ── True cutout (segmentation) state ───────────────────────────────
+  // `cutoutPreviewTarget` holds the media layer being previewed in the
+  // CutoutPreviewSheet (true segmentation). `cutoutSupported` is probed
+  // once on mount so the tool label can honestly say "Cutout" when the
+  // native backend is available, and "Crop" when it is not.
+  const [cutoutPreviewTarget, setCutoutPreviewTarget] = useState<CreatorLayer | null>(null);
+  const [cutoutSupported, setCutoutSupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supported = await isCutoutSupportedAsync();
+      if (!cancelled) setCutoutSupported(supported);
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [editingLookId, setEditingLookId] = useState<string | null>(null);
   const [isLoadingSourceLook, setIsLoadingSourceLook] = useState(false);
   // ── Commerce source tray (spec 10: pull in items from closet/listings/search) ──
   const [showSourceTray, setShowSourceTray] = useState(false);
+  const [showEffects, setShowEffects] = useState(false);
+  const [showA11yMove, setShowA11yMove] = useState(false);
+  const [showA11yZOrder, setShowA11yZOrder] = useState(false);
+
+  // ── Multi-select mode ──────────────────────────────────────────────
+  // Long-press enters multi-select mode. In multi-select, tapping a layer
+  // toggles it in the selection set. Dragging any selected layer moves all
+  // selected layers together. A "Done" button and selection count badge
+  // appear at the top. Tapping empty canvas exits multi-select.
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  // Align sub-menu state — toggles a small horizontal align picker above
+  // the tool rail in multi-select mode.
+  const [showAlignPicker, setShowAlignPicker] = useState(false);
+  // Snapshot of selected layers' start positions at drag begin — used to
+  // apply the drag delta to all peers in real-time and commit on drag end.
+  const multiDragSnapshotRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  // ── Canvas layout ref for drag-to-canvas coordinate conversion ──
+  // Stores the canvas container's screen-space position so drag-to-canvas
+  // drop coordinates can be converted to normalized (0–1) canvas coordinates.
+  const canvasLayoutRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const handleCanvasLayout = useCallback((e: LayoutChangeEvent) => {
+    canvasLayoutRef.current = e.nativeEvent.layout;
+  }, []);
 
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
 
@@ -223,6 +296,22 @@ function LookComposerInner() {
     );
   }, [isDirty, navigation, saveDraft]);
 
+  // ── Multi-select: exit helper ──────────────────────────────────────
+  // Defined early so it's available to the keyboard shortcut handler and
+  // hardware back button handler below.
+  const exitMultiSelect = useCallback(() => {
+    setMultiSelectMode(false);
+    selectLayers(null);
+    haptic.light();
+  }, [selectLayers, haptic]);
+
+  // Multi-select bulk delete — defined early for keyboard shortcut access.
+  const handleMultiDelete = useCallback(() => {
+    haptic.medium();
+    deleteMultiSelected();
+    setMultiSelectMode(false);
+  }, [deleteMultiSelected, haptic]);
+
   // Keyboard shortcuts (web/tablet only)
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
@@ -237,17 +326,30 @@ function LookComposerInner() {
         e.preventDefault();
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
-        if (cropTarget) setCropTarget(null);
+        if (showHelp) setShowHelp(false);
+        else if (showEffects) setShowEffects(false);
+        else if (showA11yMove) setShowA11yMove(false);
+        else if (showA11yZOrder) setShowA11yZOrder(false);
+        else if (cropMode) setCropMode(false);
+        else if (cropTarget) setCropTarget(null);
         else if (cutoutTarget) setCutoutTarget(null);
+        else if (cutoutPreviewTarget) setCutoutPreviewTarget(null);
         else if (showPreview) setShowPreview(false);
+        else if (showBackground) setShowBackground(false);
+        else if (showSafeZone) setShowSafeZone(false);
         else if (showOverflow) setShowOverflow(false);
         else if (showPublish) setShowPublish(false);
         else if (showTemplates) setShowTemplates(false);
         else if (showLayers) setShowLayers(false);
         else if (showSettings) setShowSettings(false);
         else if (pickerMode) { setPickerMode(null); setEditingLayer(null); }
+        else if (showAlignPicker) setShowAlignPicker(false);
+        else if (multiSelectMode) exitMultiSelect();
         else if (selectedLayerId) selectLayer(null);
         else handleBack();
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && multiSelectMode && selectedLayerIds.length > 0) {
+        e.preventDefault();
+        handleMultiDelete();
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedLayerId) {
         e.preventDefault();
         removeLayer(selectedLayerId);
@@ -255,38 +357,65 @@ function LookComposerInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, cropTarget, cutoutTarget, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, showHelp, showEffects, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, selectedLayerIds, exitMultiSelect, handleMultiDelete, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // Hardware back button — intercept to close sheets first
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
+        if (showHelp) { setShowHelp(false); return true; }
+        if (showEffects) { setShowEffects(false); return true; }
+        if (showA11yMove) { setShowA11yMove(false); return true; }
+        if (showA11yZOrder) { setShowA11yZOrder(false); return true; }
+        if (cropMode) { setCropMode(false); return true; }
         if (cropTarget) { setCropTarget(null); return true; }
         if (cutoutTarget) { setCutoutTarget(null); return true; }
+        if (cutoutPreviewTarget) { setCutoutPreviewTarget(null); return true; }
         if (showPreview) { setShowPreview(false); return true; }
+        if (showBackground) { setShowBackground(false); return true; }
+        if (showSafeZone) { setShowSafeZone(false); return true; }
         if (showOverflow) { setShowOverflow(false); return true; }
         if (showPublish) { setShowPublish(false); return true; }
         if (showTemplates) { setShowTemplates(false); return true; }
         if (showLayers) { setShowLayers(false); return true; }
         if (showSettings) { setShowSettings(false); return true; }
         if (pickerMode) { setPickerMode(null); setEditingLayer(null); return true; }
+        if (showAlignPicker) { setShowAlignPicker(false); return true; }
+        if (multiSelectMode) { exitMultiSelect(); return true; }
         if (selectedLayerId) { selectLayer(null); return true; }
         return false;
       };
       return onBackPress;
-    }, [cropTarget, cutoutTarget, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+    }, [showHelp, showEffects, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, exitMultiSelect, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
     Keyboard.dismiss();
+    if (multiSelectMode) {
+      exitMultiSelect();
+      return;
+    }
     selectLayer(null);
     haptic.light();
-  }, [selectLayer, haptic]);
+  }, [multiSelectMode, exitMultiSelect, selectLayer, haptic]);
+
+  // Auto-exit multi-select mode when all layers are toggled off.
+  useEffect(() => {
+    if (multiSelectMode && selectedLayerIds.length === 0) {
+      setMultiSelectMode(false);
+    }
+  }, [multiSelectMode, selectedLayerIds.length]);
 
   const handleLayerPress = useCallback((layerId: string) => {
+    if (multiSelectMode) {
+      // In multi-select mode, tapping a layer toggles it in the selection
+      toggleLayerInSelection(layerId);
+      haptic.selection();
+      return;
+    }
     selectLayer(layerId);
     haptic.light();
-  }, [selectLayer, haptic]);
+  }, [multiSelectMode, toggleLayerInSelection, selectLayer, haptic]);
 
   const handleUndo = useCallback(() => {
     if (!canUndo) return;
@@ -345,27 +474,6 @@ function LookComposerInner() {
     navigation.goBack();
   }, [navigation]);
 
-  // ── "Try arrangement" — reversible AI/layout assistance ────────────
-  // Per spec 10: Vision/AI may propose arrangement or pairings as a
-  // reversible layout. Copy: "Try arrangement" NOT "AI Magic".
-  // This cycles through layout presets (hero → pair → dominant → collage)
-  // using the existing autoArrangeLook from CreatorContext. Each call is
-  // a single history entry, fully reversible via undo.
-  const [arrangementIndex, setArrangementIndex] = useState(0);
-  const arrangements: Array<{ label: string; layout: 'hero' | 'pair' | 'dominant' | 'collage' }> = [
-    { label: 'Hero', layout: 'hero' },
-    { label: 'Pair', layout: 'pair' },
-    { label: 'Dominant', layout: 'dominant' },
-    { label: 'Collage', layout: 'collage' },
-  ];
-
-  const handleTryArrangement = useCallback(() => {
-    const next = (arrangementIndex + 1) % arrangements.length;
-    autoArrangeLook(arrangements[next].layout);
-    setArrangementIndex(next);
-    haptic.selection();
-  }, [arrangementIndex, arrangements, autoArrangeLook, haptic]);
-
   // ── Object action handlers (context toolbar) ───────────────────────
   const handleDeleteLayer = useCallback((id: string) => {
     haptic.medium();
@@ -403,7 +511,7 @@ function LookComposerInner() {
   }, []);
 
   // ── Bottom action handlers (default toolbar) ───────────────────────
-  // Per spec 10: Add item, Add photo, Cutout, Text, Layout
+  // Per spec 10: Add item, Add photo, Crop, Text, Layout
   const handleAddItem = useCallback(() => {
     haptic.light();
     setPickerMode('product');
@@ -427,6 +535,35 @@ function LookComposerInner() {
     });
   }, [addLookProduct]);
 
+  // ── Source tray: drag-to-canvas product drop ──
+  // When the user drags a product from the source tray and releases over
+  // the canvas, the product is placed at the drop position (normalized to
+  // 0–1 canvas coordinates). Falls back to center placement if the canvas
+  // layout hasn't been measured yet.
+  const handleDropProduct = useCallback((item: {
+    listingId: string;
+    snapshotTitle: string;
+    snapshotImageUrl?: string;
+    snapshotPriceGbp?: number;
+  }, dropPosition: { x: number; y: number }) => {
+    const layout = canvasLayoutRef.current;
+    let x = 0.5;
+    let y = 0.5;
+    if (layout && layout.width > 0 && layout.height > 0) {
+      x = Math.max(0, Math.min(1, (dropPosition.x - layout.x) / layout.width));
+      y = Math.max(0, Math.min(1, (dropPosition.y - layout.y) / layout.height));
+    }
+    addLookProduct({
+      listingId: item.listingId,
+      snapshotTitle: item.snapshotTitle,
+      snapshotImageUrl: item.snapshotImageUrl,
+      snapshotPriceGbp: item.snapshotPriceGbp,
+      x,
+      y,
+    });
+    haptic.medium();
+  }, [addLookProduct, haptic]);
+
   const handleToggleSourceTray = useCallback(() => {
     setShowSourceTray((p) => !p);
   }, []);
@@ -446,10 +583,43 @@ function LookComposerInner() {
     setShowTemplates(true);
   }, [haptic]);
 
-  // Cutout from the default toolbar — opens the cutout sheet for the
-  // currently selected media layer. If no media is selected, this is
-  // a no-op (truthful UI — the action requires a media selection).
+  // Cutout from the default toolbar — opens true subject segmentation
+  // (CutoutPreviewSheet) when the native backend is available, or falls
+  // back to the manual crop workflow (CreatorCutoutSheet) when it is not.
+  // Per spec 07 §7: true cutout uses segmentation, not a trace bounding
+  // box. Per AGENTS.md §11: never fake a cutout success.
   const handleCutoutAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'media') {
+      haptic.light();
+      return;
+    }
+    haptic.medium();
+    if (cutoutSupported) {
+      // Native segmentation available — open the true cutout preview.
+      setCutoutPreviewTarget(selectedLayer);
+    } else {
+      // Fallback — manual rectangular crop (truthful label is "Crop").
+      setCutoutTarget(selectedLayer);
+    }
+  }, [selectedLayer, haptic, cutoutSupported]);
+
+  // ── Crop action for selected media ──────────────────────────────────
+  // Enters in-canvas crop mode — crop handles render directly over the
+  // selected layer while the composition stays visible (spec 04 §1).
+  // The old CreatorCropSheet remains as a fallback path.
+  const handleCropAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'media') {
+      haptic.light();
+      return;
+    }
+    haptic.medium();
+    setCropMode(true);
+  }, [selectedLayer, haptic]);
+
+  // ── Adjust (opacity) action for selected media ──────────────────────
+  // Opens the crop sheet which provides manual cropping; the adjust
+  // concept maps to the existing crop/opacity workflow.
+  const handleAdjustAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'media') {
       haptic.light();
       return;
@@ -457,6 +627,828 @@ function LookComposerInner() {
     haptic.medium();
     setCutoutTarget(selectedLayer);
   }, [selectedLayer, haptic]);
+
+  // ── Effects action for selected media ───────────────────────────────
+  // Opens the effects bottom sheet for the selected media layer. The
+  // sheet shows the EffectPreviewRail (filter thumbnails using the
+  // layer's own media as the preview source) and the AdjustPanel
+  // (fine-tuning sliders). Effect changes commit to the layer's
+  // non-destructive `effects` array (EffectNode[]) via updateLayer.
+  const handleEffectsAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'media') {
+      haptic.light();
+      return;
+    }
+    haptic.medium();
+    setShowEffects(true);
+  }, [selectedLayer, haptic]);
+
+  // ── Effects sheet — derived state & handlers ───────────────────────
+  const selectedMediaLayer = selectedLayer?.type === 'media' ? selectedLayer : null;
+  const effectsSourceUri = selectedMediaLayer?.payload.mediaUri ?? '';
+  const currentEffects: EffectNode[] = selectedMediaLayer?.payload.effects ?? [];
+
+  const selectedFilterId = useMemo(() => {
+    const filterNode = currentEffects.find((n) => n.type === 'filter');
+    return filterNode?.type === 'filter' ? filterNode.id : null;
+  }, [currentEffects]);
+
+  const currentAdjustments = useMemo<Partial<EffectPreset['adjustments']>>(() => {
+    const adjustNode = currentEffects.find((n) => n.type === 'adjust');
+    if (adjustNode?.type !== 'adjust') return {};
+    const { type: _t, ...rest } = adjustNode;
+    return rest;
+  }, [currentEffects]);
+
+  const handleEffectFilterSelect = useCallback((presetId: string) => {
+    if (!selectedMediaLayer) return;
+    const newEffects: EffectNode[] = [
+      ...currentEffects.filter((n) => n.type !== 'filter'),
+      { type: 'filter', id: presetId, amount: 1 },
+    ];
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    }, 'Apply filter');
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  const handleEffectAdjustChange = useCallback((parameter: string, value: number) => {
+    if (!selectedMediaLayer) return;
+    const existingAdjust = currentEffects.find((n) => n.type === 'adjust');
+    const base = existingAdjust?.type === 'adjust'
+      ? { ...existingAdjust }
+      : { type: 'adjust' as const };
+    (base as Record<string, unknown>)[parameter] = value;
+    const newAdjust = base as Extract<EffectNode, { type: 'adjust' }>;
+    const newEffects: EffectNode[] = [
+      ...currentEffects.filter((n) => n.type !== 'adjust'),
+      newAdjust,
+    ];
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    });
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  const handleEffectReset = useCallback(() => {
+    if (!selectedMediaLayer) return;
+    const newEffects = currentEffects.filter((n) => n.type !== 'adjust');
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    }, 'Reset adjustments');
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  // ── Auto-adjust (one-tap color correction) ─────────────────────────
+  // Toggles the conservative auto-adjust preset on the selected media
+  // layer. If the existing adjust node was produced by computeAutoAdjust,
+  // tapping removes it; otherwise the auto preset replaces any manual
+  // adjust node (Instagram Edits August 2026 parity).
+  const autoAdjustActive = useMemo(() => {
+    const adjust = currentEffects.find((n) => n.type === 'adjust');
+    return adjust ? isAutoAdjustNode(adjust) : false;
+  }, [currentEffects]);
+
+  const handleAutoAdjust = useCallback(() => {
+    if (!selectedMediaLayer) return;
+    const existing = currentEffects.find((n) => n.type === 'adjust');
+    const newEffects: EffectNode[] = existing && isAutoAdjustNode(existing)
+      ? currentEffects.filter((n) => n.type !== 'adjust')
+      : [...currentEffects.filter((n) => n.type !== 'adjust'), computeAutoAdjust()];
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    }, existing && isAutoAdjustNode(existing) ? 'Remove auto-adjust' : 'Apply auto-adjust');
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  // ── Text editing actions ────────────────────────────────────────────
+  const handleTextEditAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'text') {
+      haptic.light();
+      return;
+    }
+    handleEditLayer(selectedLayer);
+  }, [selectedLayer, handleEditLayer, haptic]);
+
+  const handleTextFontAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'text') {
+      haptic.light();
+      return;
+    }
+    handleEditLayer(selectedLayer);
+  }, [selectedLayer, handleEditLayer, haptic]);
+
+  const handleTextColorAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'text') {
+      haptic.light();
+      return;
+    }
+    handleEditLayer(selectedLayer);
+  }, [selectedLayer, handleEditLayer, haptic]);
+
+  const handleTextAlignAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'text') {
+      haptic.light();
+      return;
+    }
+    handleEditLayer(selectedLayer);
+  }, [selectedLayer, handleEditLayer, haptic]);
+
+  // ── Product tag actions ─────────────────────────────────────────────
+  const handleProductTagStyleAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'product') {
+      haptic.light();
+      return;
+    }
+    handleEditLayer(selectedLayer);
+  }, [selectedLayer, handleEditLayer, haptic]);
+
+  const handleProductPriceAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'product') {
+      haptic.light();
+      return;
+    }
+    handleLinkItem(selectedLayer);
+  }, [selectedLayer, handleLinkItem, haptic]);
+
+  // ── Multi-select drag: move all selected layers together ───────────
+  // On drag start, snapshot all selected layers' positions. During drag,
+  // apply the normalized delta to peers via updateLayersLive (no history).
+  // On drag end, commit all selected layers' new positions in a single
+  // history entry via commitMultiLayerTransform.
+  const handleMultiDragStart = useCallback(() => {
+    const snapshot = new Map<string, { x: number; y: number }>();
+    const layers = page?.layers ?? [];
+    for (const id of selectedLayerIds) {
+      const l = layers.find((x) => x.id === id);
+      if (l) snapshot.set(id, { x: l.x, y: l.y });
+    }
+    multiDragSnapshotRef.current = snapshot;
+  }, [selectedLayerIds, page]);
+
+  const handleMultiDragUpdate = useCallback((deltaXNorm: number, deltaYNorm: number) => {
+    const snapshot = multiDragSnapshotRef.current;
+    if (snapshot.size === 0) return;
+    const updates: Array<{ id: string; x?: number; y?: number }> = [];
+    for (const [id, start] of snapshot) {
+      updates.push({ id, x: start.x + deltaXNorm, y: start.y + deltaYNorm });
+    }
+    updateLayersLive(updates);
+  }, [updateLayersLive]);
+
+  const handleMultiDragCommit = useCallback((deltaXNorm: number, deltaYNorm: number) => {
+    const snapshot = multiDragSnapshotRef.current;
+    if (snapshot.size === 0) return;
+    const layers = page?.layers ?? [];
+    const updates: Array<{ id: string; updates: Partial<CreatorLayer> }> = [];
+    for (const [id, start] of snapshot) {
+      let nx = start.x + deltaXNorm;
+      let ny = start.y + deltaYNorm;
+      // Snap to center
+      if (Math.abs(nx - 0.5) < 0.02) nx = 0.5;
+      if (Math.abs(ny - 0.5) < 0.02) ny = 0.5;
+      // Safe-zone clamping
+      const layer = layers.find((x) => x.id === id);
+      if (layer) {
+        const halfW = (layer.width * layer.scale) / 2;
+        const halfH = (layer.height * layer.scale) / 2;
+        const minX = Math.max(0.05, halfW);
+        const maxX = Math.min(0.95, 1 - halfW);
+        const minY = Math.max(0.05, halfH);
+        const maxY = Math.min(0.95, 1 - halfH);
+        nx = Math.max(minX, Math.min(maxX, nx));
+        ny = Math.max(minY, Math.min(maxY, ny));
+      }
+      updates.push({ id, updates: { x: nx, y: ny } });
+    }
+    commitMultiLayerTransform(updates, 'Move objects');
+    multiDragSnapshotRef.current = new Map();
+    haptic.light();
+  }, [page, commitMultiLayerTransform, haptic]);
+
+  // ── Overlap cycle selection ────────────────────────────────────────
+  // Double-tap in an overlap area cycles to the next layer down in
+  // z-order. We find all layers whose bounding box overlaps the tapped
+  // layer, then select the next one below the current selection.
+  const handleOverlapCycle = useCallback((tappedLayerId: string) => {
+    const layers = page?.layers ?? [];
+    const visible = layers.filter((l) => !l.hidden).sort((a, b) => b.zIndex - a.zIndex);
+    const tapped = visible.find((l) => l.id === tappedLayerId);
+    if (!tapped) return;
+    // Bounding box of the tapped layer (normalized, center-based)
+    const halfW = (tapped.width * tapped.scale) / 2;
+    const halfH = (tapped.height * tapped.scale) / 2;
+    const tLeft = tapped.x - halfW;
+    const tRight = tapped.x + halfW;
+    const tTop = tapped.y - halfH;
+    const tBottom = tapped.y + halfH;
+    // Find overlapping layers (below in z-order = higher index in descending sort)
+    const tappedIdx = visible.findIndex((l) => l.id === tappedLayerId);
+    const overlapping = visible.filter((l, i) => {
+      if (i <= tappedIdx) return false;
+      const lHalfW = (l.width * l.scale) / 2;
+      const lHalfH = (l.height * l.scale) / 2;
+      const lLeft = l.x - lHalfW;
+      const lRight = l.x + lHalfW;
+      const lTop = l.y - lHalfH;
+      const lBottom = l.y + lHalfH;
+      return tLeft < lRight && tRight > lLeft && tTop < lBottom && tBottom > lTop;
+    });
+    if (overlapping.length === 0) {
+      // No overlap below — wrap to the topmost layer
+      if (multiSelectMode) {
+        toggleLayerInSelection(visible[0].id);
+      } else {
+        selectLayer(visible[0].id);
+      }
+    } else {
+      const next = overlapping[0];
+      if (multiSelectMode) {
+        toggleLayerInSelection(next.id);
+      } else {
+        selectLayer(next.id);
+      }
+    }
+    haptic.selection();
+  }, [page, multiSelectMode, toggleLayerInSelection, selectLayer, haptic]);
+
+  // ── Bulk action handlers (multi-select) ────────────────────────────
+  const handleMultiFront = useCallback(() => {
+    haptic.light();
+    bringSelectedToFront();
+  }, [bringSelectedToFront, haptic]);
+
+  const handleMultiBack = useCallback(() => {
+    haptic.light();
+    sendSelectedToBack();
+  }, [sendSelectedToBack, haptic]);
+
+  // Align all selected layers. Computes the bounding box of the selection
+  // set and aligns each layer to the specified edge/center of that box.
+  const handleMultiAlign = useCallback((alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+    const layers = page?.layers ?? [];
+    const selected = selectedLayerIds
+      .map((id) => layers.find((l) => l.id === id))
+      .filter((l): l is CreatorLayer => !!l);
+    if (selected.length === 0) return;
+    // Compute bounding box edges (normalized, center-based coords)
+    const edges = selected.map((l) => {
+      const halfW = (l.width * l.scale) / 2;
+      const halfH = (l.height * l.scale) / 2;
+      return {
+        left: l.x - halfW,
+        right: l.x + halfW,
+        top: l.y - halfH,
+        bottom: l.y + halfH,
+        cx: l.x,
+        cy: l.y,
+      };
+    });
+    const boxLeft = Math.min(...edges.map((e) => e.left));
+    const boxRight = Math.max(...edges.map((e) => e.right));
+    const boxTop = Math.min(...edges.map((e) => e.top));
+    const boxBottom = Math.max(...edges.map((e) => e.bottom));
+    const boxCenterX = (boxLeft + boxRight) / 2;
+    const boxCenterY = (boxTop + boxBottom) / 2;
+    const updates: Array<{ id: string; updates: Partial<CreatorLayer> }> = [];
+    for (const l of selected) {
+      const halfW = (l.width * l.scale) / 2;
+      const halfH = (l.height * l.scale) / 2;
+      let newX = l.x;
+      let newY = l.y;
+      switch (alignment) {
+        case 'left': newX = boxLeft + halfW; break;
+        case 'center': newX = boxCenterX; break;
+        case 'right': newX = boxRight - halfW; break;
+        case 'top': newY = boxTop + halfH; break;
+        case 'middle': newY = boxCenterY; break;
+        case 'bottom': newY = boxBottom - halfH; break;
+      }
+      updates.push({ id: l.id, updates: { x: newX, y: newY } });
+    }
+    commitMultiLayerTransform(updates, `Align ${alignment}`);
+    haptic.light();
+  }, [page, selectedLayerIds, commitMultiLayerTransform, haptic]);
+
+  // ── Context-sensitive tool rail (ContextToolRail) ───────────────────
+  // Replaces the static bottom action bar. The rail adapts its visible
+  // tool set based on the current selection state. Each tool's onPress
+  // calls an EXISTING handler — no new capabilities are fabricated.
+  //
+  // Contexts:
+  //   look-default         → no selection
+  //   look-media-selected  → media layer selected
+  //   look-text-selected   → text layer selected
+  //   look-product-selected → product layer selected
+  //   look-multi-select    → multiple layers selected (future)
+
+  const activeToolContext: ToolContext = useMemo(() => {
+    if (multiSelectMode && selectedLayerIds.length > 0) return 'look-multi-select';
+    if (!selectedLayer) return 'look-default';
+    switch (selectedLayer.type) {
+      case 'media': return 'look-media-selected';
+      case 'text': return 'look-text-selected';
+      case 'product': return 'look-product-selected';
+      default: return 'look-default';
+    }
+  }, [multiSelectMode, selectedLayerIds, selectedLayer]);
+
+  const toolGroups: ToolGroup[] = useMemo(() => {
+    const groups: ToolGroup[] = [];
+
+    // ── look-default: Add, Items, Text, Layout, More ──
+    groups.push({
+      context: 'look-default',
+      primary: [
+        {
+          id: 'look-add-photo',
+          label: 'Add',
+          icon: 'images-outline',
+          onPress: handleAddPhoto,
+          accessibilityLabel: 'Add photo',
+          accessibilityHint: 'Opens the media picker to add a photo to the canvas',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-items',
+          label: 'Items',
+          icon: 'bag-outline',
+          onPress: handleToggleSourceTray,
+          accessibilityLabel: 'Items',
+          accessibilityHint: 'Toggles the commerce source tray to add items from your closet or listings',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-text',
+          label: 'Text',
+          icon: 'text',
+          onPress: handleAddText,
+          accessibilityLabel: 'Add text',
+          accessibilityHint: 'Opens the text picker to add a text layer',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-layout',
+          label: 'Layout',
+          icon: 'grid-outline',
+          onPress: handleOpenLayout,
+          accessibilityLabel: 'Layout',
+          accessibilityHint: 'Opens the template browser for layout presets',
+          hapticFeedback: 'light',
+        },
+      ],
+      overflow: [
+        {
+          id: 'look-cutout',
+          label: cutoutSupported ? 'Cutout' : 'Crop',
+          icon: cutoutSupported ? 'sparkles-outline' : 'crop-outline',
+          onPress: handleCutoutAction,
+          accessibilityLabel: cutoutSupported ? 'Cutout' : 'Crop',
+          accessibilityHint: cutoutSupported
+            ? 'Removes the background using on-device subject segmentation'
+            : 'Crops the selected media to a rectangle',
+          hapticFeedback: 'medium',
+          disabled: !selectedLayer || selectedLayer.type !== 'media',
+        },
+        {
+          id: 'look-layers',
+          label: 'Layers',
+          icon: 'layers-outline',
+          onPress: () => { haptic.light(); setShowLayers(true); },
+          accessibilityLabel: 'Layers',
+          accessibilityHint: 'Opens the layers panel to reorder, lock, or hide objects',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-preview',
+          label: 'Preview',
+          icon: 'eye-outline',
+          onPress: () => { haptic.light(); setShowPreview(true); },
+          accessibilityLabel: 'Preview',
+          accessibilityHint: 'Previews the look as it will appear when published',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-drafts',
+          label: 'Drafts',
+          icon: 'document-outline',
+          onPress: () => { haptic.light(); navigation.navigate('CreatorDraftList'); },
+          accessibilityLabel: 'Drafts',
+          accessibilityHint: 'Opens the drafts list to resume a saved draft',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-settings',
+          label: 'Settings',
+          icon: 'settings-outline',
+          onPress: () => { haptic.light(); setShowSettings(true); },
+          accessibilityLabel: 'Settings',
+          accessibilityHint: 'Opens the look settings sheet',
+          hapticFeedback: 'light',
+        },
+      ],
+    });
+
+    // ── look-media-selected: Replace, Crop, Auto, Adjust, Effects, More ──
+    groups.push({
+      context: 'look-media-selected',
+      primary: [
+        {
+          id: 'look-media-replace',
+          label: 'Replace',
+          icon: 'swap-horizontal-outline',
+          onPress: () => selectedLayer && handleReplaceMedia(selectedLayer),
+          accessibilityLabel: 'Replace media',
+          accessibilityHint: 'Opens the media picker to swap the selected photo',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-media-crop',
+          label: 'Crop',
+          icon: 'crop-outline',
+          onPress: () => selectedLayer && setCropTarget(selectedLayer),
+          accessibilityLabel: 'Crop',
+          accessibilityHint: 'Opens the crop sheet to adjust the aspect ratio',
+          hapticFeedback: 'medium',
+        },
+        {
+          id: 'look-media-auto',
+          label: 'Auto',
+          icon: 'bulb-outline',
+          onPress: handleAutoAdjust,
+          accessibilityLabel: 'Auto',
+          accessibilityHint: 'Applies one-tap intelligent color correction',
+          hapticFeedback: 'medium',
+        },
+        {
+          id: 'look-media-adjust',
+          label: 'Adjust',
+          icon: 'contrast-outline',
+          onPress: handleAdjustAction,
+          accessibilityLabel: 'Adjust',
+          accessibilityHint: 'Opens background removal for the selected media',
+          hapticFeedback: 'medium',
+        },
+        {
+          id: 'look-media-effects',
+          label: 'Effects',
+          icon: 'color-wand-outline',
+          onPress: handleEffectsAction,
+          accessibilityLabel: 'Effects',
+          accessibilityHint: 'Opens the effects panel for the selected media',
+          hapticFeedback: 'medium',
+        },
+      ],
+      overflow: [
+        {
+          id: 'look-media-front',
+          label: 'Front',
+          icon: 'arrow-up',
+          onPress: () => selectedLayer && handleReorderLayer(selectedLayer.id, 'forward'),
+          accessibilityLabel: 'Bring forward',
+          accessibilityHint: 'Moves the selected object forward in the layer stack',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-media-back',
+          label: 'Back',
+          icon: 'arrow-down',
+          onPress: () => selectedLayer && handleReorderLayer(selectedLayer.id, 'backward'),
+          accessibilityLabel: 'Send backward',
+          accessibilityHint: 'Moves the selected object backward in the layer stack',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-media-duplicate',
+          label: 'Duplicate',
+          icon: 'copy-outline',
+          onPress: () => selectedLayer && handleDuplicateLayer(selectedLayer.id),
+          accessibilityLabel: 'Duplicate',
+          accessibilityHint: 'Duplicates the selected object',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-media-delete',
+          label: 'Delete',
+          icon: 'trash-outline',
+          onPress: () => selectedLayer && handleDeleteLayer(selectedLayer.id),
+          accessibilityLabel: 'Delete',
+          accessibilityHint: 'Deletes the selected object',
+          hapticFeedback: 'medium',
+        },
+      ],
+    });
+
+    // ── look-text-selected: Edit, Font, Color, Align, More ──
+    groups.push({
+      context: 'look-text-selected',
+      primary: [
+        {
+          id: 'look-text-edit',
+          label: 'Edit',
+          icon: 'create-outline',
+          onPress: handleTextEditAction,
+          accessibilityLabel: 'Edit text',
+          accessibilityHint: 'Opens the text editor for the selected text layer',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-text-font',
+          label: 'Font',
+          icon: 'text-outline',
+          onPress: handleTextFontAction,
+          accessibilityLabel: 'Font',
+          accessibilityHint: 'Opens the text editor to change the font style',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-text-color',
+          label: 'Color',
+          icon: 'color-palette-outline',
+          onPress: handleTextColorAction,
+          accessibilityLabel: 'Color',
+          accessibilityHint: 'Opens the text editor to change the text color',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-text-align',
+          label: 'Align',
+          icon: 'list-outline',
+          onPress: handleTextAlignAction,
+          accessibilityLabel: 'Align',
+          accessibilityHint: 'Opens the text editor to change the text alignment',
+          hapticFeedback: 'light',
+        },
+      ],
+      overflow: [
+        {
+          id: 'look-text-front',
+          label: 'Front',
+          icon: 'arrow-up',
+          onPress: () => selectedLayer && handleReorderLayer(selectedLayer.id, 'forward'),
+          accessibilityLabel: 'Bring forward',
+          accessibilityHint: 'Moves the selected text forward in the layer stack',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-text-back',
+          label: 'Back',
+          icon: 'arrow-down',
+          onPress: () => selectedLayer && handleReorderLayer(selectedLayer.id, 'backward'),
+          accessibilityLabel: 'Send backward',
+          accessibilityHint: 'Moves the selected text backward in the layer stack',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-text-duplicate',
+          label: 'Duplicate',
+          icon: 'copy-outline',
+          onPress: () => selectedLayer && handleDuplicateLayer(selectedLayer.id),
+          accessibilityLabel: 'Duplicate',
+          accessibilityHint: 'Duplicates the selected text',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-text-delete',
+          label: 'Delete',
+          icon: 'trash-outline',
+          onPress: () => selectedLayer && handleDeleteLayer(selectedLayer.id),
+          accessibilityLabel: 'Delete',
+          accessibilityHint: 'Deletes the selected text',
+          hapticFeedback: 'medium',
+        },
+      ],
+    });
+
+    // ── look-product-selected: Item, Tag Style, Price, Duplicate, More ──
+    groups.push({
+      context: 'look-product-selected',
+      primary: [
+        {
+          id: 'look-product-item',
+          label: 'Item',
+          icon: 'pricetag-outline',
+          onPress: () => selectedLayer && handleLinkItem(selectedLayer),
+          accessibilityLabel: 'Change item',
+          accessibilityHint: 'Opens the product picker to link a different listing',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-product-tag-style',
+          label: 'Tag Style',
+          icon: 'pricetags-outline',
+          onPress: handleProductTagStyleAction,
+          accessibilityLabel: 'Tag style',
+          accessibilityHint: 'Opens the editor to change the product tag style',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-product-price',
+          label: 'Price',
+          icon: 'cash-outline',
+          onPress: handleProductPriceAction,
+          accessibilityLabel: 'Price',
+          accessibilityHint: 'Opens the product picker to update the linked listing price',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-product-duplicate',
+          label: 'Duplicate',
+          icon: 'copy-outline',
+          onPress: () => selectedLayer && handleDuplicateLayer(selectedLayer.id),
+          accessibilityLabel: 'Duplicate',
+          accessibilityHint: 'Duplicates the selected product tag',
+          hapticFeedback: 'light',
+        },
+      ],
+      overflow: [
+        {
+          id: 'look-product-front',
+          label: 'Front',
+          icon: 'arrow-up',
+          onPress: () => selectedLayer && handleReorderLayer(selectedLayer.id, 'forward'),
+          accessibilityLabel: 'Bring forward',
+          accessibilityHint: 'Moves the selected product tag forward in the layer stack',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-product-back',
+          label: 'Back',
+          icon: 'arrow-down',
+          onPress: () => selectedLayer && handleReorderLayer(selectedLayer.id, 'backward'),
+          accessibilityLabel: 'Send backward',
+          accessibilityHint: 'Moves the selected product tag backward in the layer stack',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-product-delete',
+          label: 'Delete',
+          icon: 'trash-outline',
+          onPress: () => selectedLayer && handleDeleteLayer(selectedLayer.id),
+          accessibilityLabel: 'Delete',
+          accessibilityHint: 'Deletes the selected product tag',
+          hapticFeedback: 'medium',
+        },
+      ],
+    });
+
+    // ── look-multi-select: Align, Front, Back, Delete ──
+    groups.push({
+      context: 'look-multi-select',
+      primary: [
+        {
+          id: 'look-multi-align',
+          label: 'Align',
+          icon: 'grid-outline',
+          onPress: () => { haptic.light(); setShowAlignPicker((p) => !p); },
+          accessibilityLabel: 'Align',
+          accessibilityHint: 'Aligns the selected objects — left, center, right, top, middle, bottom',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-multi-front',
+          label: 'Front',
+          icon: 'arrow-up',
+          onPress: handleMultiFront,
+          accessibilityLabel: 'Bring to front',
+          accessibilityHint: 'Brings all selected objects to the front of the layer stack',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-multi-back',
+          label: 'Back',
+          icon: 'arrow-down',
+          onPress: handleMultiBack,
+          accessibilityLabel: 'Send to back',
+          accessibilityHint: 'Sends all selected objects to the back of the layer stack',
+          hapticFeedback: 'light',
+        },
+        {
+          id: 'look-multi-delete',
+          label: 'Delete',
+          icon: 'trash-outline',
+          onPress: handleMultiDelete,
+          accessibilityLabel: 'Delete',
+          accessibilityHint: 'Deletes all selected objects',
+          hapticFeedback: 'medium',
+        },
+      ],
+      overflow: [],
+    });
+
+    return groups;
+  }, [
+    selectedLayer,
+    handleAddPhoto,
+    handleToggleSourceTray,
+    handleAddText,
+    handleOpenLayout,
+    handleCutoutAction,
+    handleReplaceMedia,
+    handleAdjustAction,
+    handleAutoAdjust,
+    handleEffectsAction,
+    handleReorderLayer,
+    handleDuplicateLayer,
+    handleDeleteLayer,
+    handleEditLayer,
+    handleLinkItem,
+    handleTextEditAction,
+    handleTextFontAction,
+    handleTextColorAction,
+    handleTextAlignAction,
+    handleProductTagStyleAction,
+    handleProductPriceAction,
+    handleCropAction,
+    cutoutSupported,
+    handleMultiFront,
+    handleMultiBack,
+    handleMultiDelete,
+    haptic,
+    navigation,
+  ]);
+
+  // ── Layout preview rail (autoCompose) ───────────────────────────────
+  // Replaces the blind "Try arrangement" cycling button. When the user
+  // has 2+ media assets on the canvas, the LayoutPreviewRail shows real
+  // preview thumbnails computed by autoCompose. Selecting a layout
+  // commits the transforms to the current document's media layers.
+  const mediaLayers = useMemo(
+    () => page?.layers.filter((l) => l.type === 'media') ?? [],
+    [page],
+  );
+  const mediaAssetUris = useMemo(
+    () => mediaLayers.map((l) => l.type === 'media' ? l.payload.mediaUri : '').filter(Boolean),
+    [mediaLayers],
+  );
+  const hasMultipleMedia = mediaAssetUris.length >= 2;
+
+  const { defaultLayout, alternatives } = useMemo(
+    () => autoCompose(mediaAssetUris, canvasWidth, canvasHeight),
+    [mediaAssetUris, canvasWidth, canvasHeight],
+  );
+
+  const allLayouts: LayoutPreview[] = useMemo(
+    () => [defaultLayout, ...alternatives],
+    [defaultLayout, alternatives],
+  );
+
+  const [selectedLayoutId, setSelectedLayoutId] = useState<LayoutId | null>(null);
+
+  // Convert an AssetTransform (top-left normalized coords) to the
+  // center-based coordinates used by CreatorLayer.
+  const transformToLayerUpdate = useCallback((t: AssetTransform) => ({
+    x: t.x + t.width / 2,
+    y: t.y + t.height / 2,
+    width: t.width,
+    height: t.height,
+    rotation: t.rotation,
+    zIndex: t.zIndex,
+    scale: 1,
+  }), []);
+
+  const handleLayoutSelect = useCallback((id: LayoutId) => {
+    const layout = allLayouts.find((l) => l.id === id);
+    if (!layout || mediaLayers.length === 0) return;
+
+    // Apply transforms to each media layer. The autoCompose engine
+    // produces transforms in asset order; we map them to the media
+    // layers in their current order. Each update is a committed
+    // transform (single history entry per layout application).
+    const updates = layout.transforms;
+    mediaLayers.forEach((layer, i) => {
+      const t = updates[i];
+      if (!t) return;
+      commitLayerTransform(layer.id, transformToLayerUpdate(t), `Apply ${layout.name} layout`);
+    });
+    setSelectedLayoutId(id);
+    haptic.selection();
+  }, [allLayouts, mediaLayers, commitLayerTransform, transformToLayerUpdate, haptic]);
+
+  // Temporary preview state — long-press shows the layout without
+  // committing. We store the preview layout id and revert on release.
+  const [previewLayoutId, setPreviewLayoutId] = useState<LayoutId | null>(null);
+
+  const handleLayoutPreview = useCallback((id: LayoutId) => {
+    setPreviewLayoutId(id);
+  }, []);
+
+  const handleLayoutPreviewEnd = useCallback(() => {
+    setPreviewLayoutId(null);
+  }, []);
+
+  // Apply preview transforms to the document without committing to
+  // history. Uses updateLayer (no history entry) for a live preview.
+  useEffect(() => {
+    if (previewLayoutId === null) return;
+    const layout = allLayouts.find((l) => l.id === previewLayoutId);
+    if (!layout) return;
+    mediaLayers.forEach((layer, i) => {
+      const t = layout.transforms[i];
+      if (!t) return;
+      updateLayer(layer.id, transformToLayerUpdate(t));
+    });
+  }, [previewLayoutId, allLayouts, mediaLayers, updateLayer, transformToLayerUpdate]);
 
   if (showEntryScreen) {
     return (
@@ -471,11 +1463,37 @@ function LookComposerInner() {
 
   return (
     <View style={styles.container}>
+      {/* ── Crash recovery banner ────────────────────────────────────── */}
+      {/* When a pending crash journal entry is detected, show a recovery
+          prompt at the top of the composer. The user can recover the
+          last saved project or dismiss the prompt. */}
+      {hasPendingRecovery && (
+        <View style={styles.recoveryBanner}>
+          <Ionicons name="alert-circle-outline" size={20} color={colors.textPrimary} />
+          <Text style={styles.recoveryText}>Recover your last unsaved project?</Text>
+          <PressScale
+            onPress={() => { void recoverCrashedProject(); }}
+            style={styles.recoveryBtn}
+            accessibilityLabel="Recover project"
+            accessibilityRole="button"
+          >
+            <Text style={styles.recoveryBtnText}>Recover</Text>
+          </PressScale>
+          <PressScale
+            onPress={dismissRecovery}
+            style={styles.recoveryDismiss}
+            accessibilityLabel="Dismiss recovery prompt"
+            accessibilityRole="button"
+          >
+            <Ionicons name="close" size={18} color={colors.textSecondary} />
+          </PressScale>
+        </View>
+      )}
       {/* ── Neutral workspace canvas ─────────────────────────────────── */}
       {/* Look is spatial. The 4:5 canvas sits in a neutral dark workspace
           with breathing room. Media objects are directly manipulated. */}
       <View style={styles.canvasStage}>
-        <View style={{ position: 'absolute', top: canvasVerticalOffset, left: 0, right: 0 }}>
+        <View style={{ position: 'absolute', top: canvasVerticalOffset, left: 0, right: 0 }} onLayout={handleCanvasLayout}>
           <CreatorCanvas
             document={document}
             page={page}
@@ -483,10 +1501,15 @@ function LookComposerInner() {
             canvasHeight={canvasHeight}
             mode="edit"
             selectedLayerId={selectedLayerId}
+            selectedLayerIds={selectedLayerIds}
             onLayerPress={handleLayerPress}
             onCanvasPress={handleCanvasPress}
             onLayerTransformChange={(layerId, updates) => commitLayerTransform(layerId, updates, 'Transform object')}
             onLayerDoubleTap={(layerId) => {
+              if (multiSelectMode) {
+                handleOverlapCycle(layerId);
+                return;
+              }
               const l = page?.layers.find((x) => x.id === layerId);
               if (l?.type === 'text') {
                 setEditingLayer(l);
@@ -494,9 +1517,17 @@ function LookComposerInner() {
               }
             }}
             onLayerLongPress={(layerId) => {
-              selectLayer(layerId);
-              setShowLayers(true);
+              // Long-press enters multi-select mode and selects the layer.
+              haptic.medium();
+              setMultiSelectMode(true);
+              selectLayers([layerId]);
             }}
+            onMultiDragStart={handleMultiDragStart}
+            onMultiDragUpdate={handleMultiDragUpdate}
+            onMultiDragCommit={handleMultiDragCommit}
+            showSafeZone={showSafeZone}
+            safeZoneTop={insets.top + 56}
+            safeZoneBottom={insets.bottom + 120}
           />
         </View>
 
@@ -520,6 +1551,11 @@ function LookComposerInner() {
             </Text>
           </View>
         )}
+
+        {/* Canvas dim overlay — emphasises selected layers in multi-select */}
+        {multiSelectMode && (
+          <View style={styles.canvasDimOverlay} pointerEvents="none" />
+        )}
       </View>
 
       {/* ── Top bar — minimal, neutral ────────────────────────────────── */}
@@ -529,7 +1565,44 @@ function LookComposerInner() {
       <View style={[styles.topBarContainer, { paddingTop: insets.top }]}>
         <View style={[styles.topBar, { backgroundColor: colors.surface }]}>
           <View style={styles.topBarRow}>
-            {selectedLayer ? (
+            {multiSelectMode ? (
+              <>
+                <PressScale
+                  onPress={exitMultiSelect}
+                  style={styles.topBtn}
+                  accessibilityLabel="Done"
+                  accessibilityHint="Exits multi-select mode"
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text style={[styles.doneText, { color: colors.textPrimary }]}>Done</Text>
+                </PressScale>
+
+                <View style={styles.topCenter}>
+                  <View style={[styles.selectionCountBadge, { backgroundColor: colors.brand }]}>
+                    <Text style={[styles.selectionCountText, { color: colors.textInverse }]}>
+                      {selectedLayerIds.length} selected
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.topRight}>
+                  <PressScale
+                    onPress={() => {
+                      haptic.light();
+                      // Select all visible layers
+                      const visible = (page?.layers ?? []).filter((l) => !l.hidden);
+                      selectLayers(visible.map((l) => l.id));
+                    }}
+                    style={styles.topBtn}
+                    accessibilityLabel="Select all"
+                    accessibilityHint="Selects all objects on the canvas"
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <Ionicons name="checkmark-done-outline" size={24} color={colors.textPrimary} />
+                  </PressScale>
+                </View>
+              </>
+            ) : selectedLayer ? (
               <>
                 <PressScale
                   onPress={() => { haptic.light(); selectLayer(null); }}
@@ -621,90 +1694,22 @@ function LookComposerInner() {
         </View>
       </View>
 
-      {/* ── Context toolbar (selected object only) ────────────────────── */}
-      {/* Per spec 10: "Selected object produces a context toolbar (not a
-          permanent dock)." This appears only when an object is selected
-          and provides object-specific actions: delete, duplicate, replace,
-          front/back, crop, remove background, link/change item. */}
-      {selectedLayer && (
-        <View style={[styles.contextToolbarContainer, { bottom: insets.bottom + 88 }]}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.contextToolbarContent}
-          >
-            {/* Type-specific primary action */}
-            {selectedLayer.type === 'media' && (
-              <>
-                <ContextTool
-                  icon="swap-horizontal-outline"
-                  label="Replace"
-                  onPress={() => handleReplaceMedia(selectedLayer)}
-                  colors={colors}
-                />
-                <ContextTool
-                  icon="cut-outline"
-                  label="Cut out"
-                  onPress={() => { haptic.medium(); setCutoutTarget(selectedLayer); }}
-                  colors={colors}
-                />
-                <ContextTool
-                  icon="crop-outline"
-                  label="Crop"
-                  onPress={() => { haptic.medium(); setCropTarget(selectedLayer); }}
-                  colors={colors}
-                />
-              </>
-            )}
-            {selectedLayer.type === 'text' && (
-              <ContextTool
-                icon="create-outline"
-                label="Edit"
-                onPress={() => handleEditLayer(selectedLayer)}
-                colors={colors}
-              />
-            )}
-            {selectedLayer.type === 'product' && (
-              <ContextTool
-                icon="pricetag-outline"
-                label="Change item"
-                onPress={() => handleLinkItem(selectedLayer)}
-                colors={colors}
-              />
-            )}
-
-            {/* Z-order: front / back */}
-            <ContextTool
-              icon="arrow-up"
-              label="Front"
-              onPress={() => handleReorderLayer(selectedLayer.id, 'forward')}
-              colors={colors}
-            />
-            <ContextTool
-              icon="arrow-down"
-              label="Back"
-              onPress={() => handleReorderLayer(selectedLayer.id, 'backward')}
-              colors={colors}
-            />
-
-            {/* Duplicate */}
-            <ContextTool
-              icon="copy-outline"
-              label="Duplicate"
-              onPress={() => handleDuplicateLayer(selectedLayer.id)}
-              colors={colors}
-            />
-
-            {/* Delete — danger, separated */}
-            <View style={[styles.contextDivider, { backgroundColor: colors.border }]} />
-            <ContextTool
-              icon="trash-outline"
-              label="Delete"
-              onPress={() => handleDeleteLayer(selectedLayer.id)}
-              colors={colors}
-              danger
-            />
-          </ScrollView>
+      {/* ── Layout preview rail (autoCompose) ──────────────────────────── */}
+      {/* Replaces the blind "Try arrangement" cycling button. When the user
+          has 2+ media assets on the canvas, the LayoutPreviewRail shows
+          real preview thumbnails computed by autoCompose. Sits above the
+          bottom ContextToolRail. Only shown when no layer is selected so
+          the selection context toolbar is not obscured. */}
+      {hasMultipleMedia && !selectedLayer && !multiSelectMode && (
+        <View style={[styles.layoutRailContainer, { bottom: insets.bottom + 56 }]}>
+          <LayoutPreviewRail
+            assetUris={mediaAssetUris}
+            layouts={allLayouts}
+            selectedId={selectedLayoutId}
+            onSelect={handleLayoutSelect}
+            onPreview={handleLayoutPreview}
+            onPreviewEnd={handleLayoutPreviewEnd}
+          />
         </View>
       )}
 
@@ -714,92 +1719,33 @@ function LookComposerInner() {
           bar. Collapsible so the canvas remains dominant. Only shown when
           no layer is selected (the context toolbar takes over on selection). */}
       {!selectedLayer && (
-        <View style={[styles.sourceTrayContainer, { bottom: insets.bottom + 56 }]}>
+        <View style={[styles.sourceTrayContainer, { bottom: insets.bottom + (hasMultipleMedia ? 132 : 56) }]}>
           <LookSourceTray
             expanded={showSourceTray}
             onToggle={handleToggleSourceTray}
             onAddItem={handleSourceTrayAddItem}
+            onDropProduct={handleDropProduct}
           />
         </View>
       )}
 
-      {/* ── Bottom action bar (default — no selection) ────────────────── */}
-      {/* Per spec 10 + 2026 HIG: Add item · Add photo · Cutout · Text · Layout
-          These are the five default bottom actions for the collage-native
-          workspace. They are flat, transparent targets — no glass dock,
-          no card-on-card. The "Try arrangement" assistance button sits
-          at the end per spec 10. The "Items" button toggles the source tray
-          for pulling in commerce items (closet/listings/search). */}
-      {!selectedLayer && (
-        <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
-          <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.bottomBarContent}
-            >
-              <BottomAction
-                icon="bag-outline"
-                label="Items"
-                onPress={handleToggleSourceTray}
-                colors={colors}
-                accent={showSourceTray}
-              />
-              <BottomAction
-                icon="images-outline"
-                label="Add photo"
-                onPress={handleAddPhoto}
-                colors={colors}
-              />
-              <BottomAction
-                icon="cut-outline"
-                label="Cutout"
-                onPress={handleCutoutAction}
-                colors={colors}
-                disabled={!selectedLayer}
-              />
-              <BottomAction
-                icon="text"
-                label="Text"
-                onPress={handleAddText}
-                colors={colors}
-              />
-              <BottomAction
-                icon="grid-outline"
-                label="Layout"
-                onPress={handleOpenLayout}
-                colors={colors}
-              />
-              {/* "Try arrangement" — reversible layout assistance per spec 10 */}
-              {hasContent && (
-                <>
-                  <View style={[styles.bottomDivider, { backgroundColor: colors.border }]} />
-                  <BottomAction
-                    icon="shuffle-outline"
-                    label="Try arrangement"
-                    onPress={handleTryArrangement}
-                    colors={colors}
-                    accent
-                  />
-                </>
-              )}
-            </ScrollView>
-
-            {/* More — opens overflow with Layers, Preview, Drafts, Settings */}
-            <View style={[styles.bottomActions, { borderLeftColor: colors.border }]}>
-              <PressScale
-                onPress={() => { haptic.selection(); setShowOverflow(true); }}
-                style={styles.bottomActionBtn}
-                accessibilityLabel="More options"
-                accessibilityHint="Opens layers, preview, drafts and settings"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons name="ellipsis-horizontal" size={24} color={colors.textSecondary} />
-              </PressScale>
-            </View>
-          </View>
+      {/* ── ContextToolRail (replaces static bottom bar + context toolbar) ── */}
+      {/* The rail adapts its visible tool set based on the current selection
+          state. No selection → look-default (Add, Items, Text, Layout, More).
+          Media selected → look-media-selected (Replace, Crop, Adjust, Effects).
+          Text selected → look-text-selected (Edit, Font, Color, Align).
+          Product selected → look-product-selected (Item, Tag Style, Price, Duplicate).
+          Each tool's onPress calls an EXISTING handler — no new capabilities. */}
+      <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
+        <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <ContextToolRail
+            context={activeToolContext}
+            groups={toolGroups}
+            onOverflowPress={() => { haptic.selection(); setShowOverflow(true); }}
+            style={styles.toolRail}
+          />
         </View>
-      )}
+      </View>
 
       {/* ── Overflow menu (compact) ───────────────────────────────────── */}
       {showOverflow && (
@@ -809,6 +1755,12 @@ function LookComposerInner() {
               icon="layers-outline"
               label="Layers"
               onPress={() => { setShowLayers(true); setShowOverflow(false); }}
+              colors={colors}
+            />
+            <OverflowItem
+              icon="color-palette-outline"
+              label="Background"
+              onPress={() => { setShowBackground(true); setShowOverflow(false); }}
               colors={colors}
             />
             <OverflowItem
@@ -824,9 +1776,33 @@ function LookComposerInner() {
               colors={colors}
             />
             <OverflowItem
+              icon="accessibility-outline"
+              label="Accessibility Move"
+              onPress={() => { setShowA11yMove(true); setShowOverflow(false); }}
+              colors={colors}
+            />
+            <OverflowItem
+              icon="accessibility-outline"
+              label="Accessibility Arrange"
+              onPress={() => { setShowA11yZOrder(true); setShowOverflow(false); }}
+              colors={colors}
+            />
+            <OverflowItem
+              icon={showSafeZone ? 'shield-checkmark-outline' : 'shield-outline'}
+              label={showSafeZone ? 'Safe Zone On' : 'Safe Zone'}
+              onPress={() => { setShowSafeZone(!showSafeZone); setShowOverflow(false); haptic.light(); }}
+              colors={colors}
+            />
+            <OverflowItem
               icon="settings-outline"
               label="Settings"
               onPress={() => { setShowSettings(true); setShowOverflow(false); }}
+              colors={colors}
+            />
+            <OverflowItem
+              icon="help-circle-outline"
+              label="Help & Shortcuts"
+              onPress={() => { setShowHelp(true); setShowOverflow(false); }}
               colors={colors}
             />
           </View>
@@ -846,6 +1822,45 @@ function LookComposerInner() {
       <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
       <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} editingLookId={editingLookId ?? undefined} />
       <CreatorSettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
+      <HelpShortcutsSheet visible={showHelp} onClose={() => setShowHelp(false)} />
+      {/* ── Background picker sheet ─────────────────────────────────── */}
+      {/* Bottom sheet for picking the canvas background (solid, gradient,
+          blurred photo, or image). On confirm, commits the selected
+          background to document.canvas.background via updateCanvas. */}
+      <BackgroundSheet
+        visible={showBackground}
+        currentBackground={document.canvas.background}
+        mediaLayers={mediaLayers}
+        onConfirm={(bg: CreatorBackground) => {
+          updateCanvas({ background: bg });
+          setShowBackground(false);
+        }}
+        onClose={() => setShowBackground(false)}
+      />
+      {/* ── Accessibility sheets (drag alternatives) ─────────────────── */}
+      {/* Per spec 09: keyboard/button-based alternatives for users who
+          cannot perform drag gestures. onMove wires to updateLayer;
+          onReorder wires to reorderLayer. */}
+      <AccessibilityMoveSheet
+        visible={showA11yMove}
+        layerId={selectedLayerId}
+        position={selectedLayer ? { x: selectedLayer.x, y: selectedLayer.y } : null}
+        onClose={() => setShowA11yMove(false)}
+        onMove={(x, y) => {
+          if (selectedLayerId) updateLayer(selectedLayerId, { x, y }, 'Move object');
+        }}
+      />
+      <AccessibilityZOrderSheet
+        visible={showA11yZOrder}
+        layers={(page?.layers ?? []).map((l) => ({
+          id: l.id,
+          label: layerTypeLabel(l.type),
+          zIndex: l.zIndex,
+        })) as ZOrderLayer[]}
+        selectedLayerId={selectedLayerId}
+        onClose={() => setShowA11yZOrder(false)}
+        onReorder={(layerId, direction) => reorderLayer(layerId, direction)}
+      />
       <CreatorTemplateBrowser
         visible={showTemplates}
         documentType="look"
@@ -856,7 +1871,34 @@ function LookComposerInner() {
           setDocument(doc);
         }}
       />
-      {/* Crop sheet — aspect ratio crop for media objects */}
+      {/* In-canvas crop overlay — non-destructive crop handles rendered
+          directly over the canvas (spec 07 §6, spec 04 §1). The
+          composition remains visible while the user adjusts the crop. */}
+      {cropMode && selectedLayer && selectedLayer.type === 'media' && (
+        <InCanvasCropOverlay
+          visible={cropMode}
+          layerBounds={{
+            x: selectedLayer.x,
+            y: selectedLayer.y,
+            width: selectedLayer.width,
+            height: selectedLayer.height,
+          }}
+          onConfirm={(cropRect) => {
+            if (selectedLayer && selectedLayer.type === 'media') {
+              updateLayer(selectedLayer.id, {
+                x: cropRect.x,
+                y: cropRect.y,
+                width: cropRect.width,
+                height: cropRect.height,
+              });
+            }
+            setCropMode(false);
+          }}
+          onCancel={() => setCropMode(false)}
+        />
+      )}
+      {/* Crop sheet — legacy fallback for aspect-ratio crop (kept as
+          fallback per spec — not removed). */}
       {cropTarget && cropTarget.type === 'media' && (
         <CreatorCropSheet
           visible={!!cropTarget}
@@ -873,7 +1915,7 @@ function LookComposerInner() {
           }}
         />
       )}
-      {/* Cutout sheet — background removal as a real visual operation.
+      {/* Crop sheet — manual rectangular cropping as a real visual operation.
           Per spec 10: if high-quality removal is unavailable, keep the
           original media rectangle. NEVER pretend a cutout succeeded.
           The CreatorCutoutSheet handles this truthfully — it only calls
@@ -885,8 +1927,8 @@ function LookComposerInner() {
           onClose={() => setCutoutTarget(null)}
           onCutoutComplete={(newUri) => {
             if (cutoutTarget && cutoutTarget.type === 'media') {
-              // Replace the media layer's URI with the cutout result.
-              // The cutout sheet only calls this with a real processed URI.
+              // Replace the media layer's URI with the crop result.
+              // The crop sheet only calls this with a real processed URI.
               updateLayer(cutoutTarget.id, {
                 type: 'media',
                 payload: {
@@ -897,6 +1939,35 @@ function LookComposerInner() {
               });
             }
             setCutoutTarget(null);
+          }}
+        />
+      )}
+      {/* True cutout preview sheet — native subject segmentation.
+          Opens when the user taps "Cutout" and the native backend is
+          available. Shows a before/after preview over a checkerboard.
+          On confirm, replaces the media URI with the transparent PNG
+          and stores the alpha mask reference on the layer. */}
+      {cutoutPreviewTarget && cutoutPreviewTarget.type === 'media' && (
+        <CutoutPreviewSheet
+          visible={!!cutoutPreviewTarget}
+          imageUri={cutoutPreviewTarget.payload.mediaUri}
+          onClose={() => setCutoutPreviewTarget(null)}
+          onConfirm={(result: CutoutResult) => {
+            if (cutoutPreviewTarget && cutoutPreviewTarget.type === 'media') {
+              // Replace the media layer's URI with the transparent PNG
+              // result. Store the maskRef id on the layer so the render
+              // pipeline can composite with the alpha mask (spec 07 §7).
+              updateLayer(cutoutPreviewTarget.id, {
+                type: 'media',
+                payload: {
+                  ...cutoutPreviewTarget.payload,
+                  mediaUri: result.uri,
+                  contentFit: 'contain',
+                },
+                maskRef: result.maskRef?.uri,
+              } as Partial<CreatorLayer>, 'Apply cutout');
+            }
+            setCutoutPreviewTarget(null);
           }}
         />
       )}
@@ -927,98 +1998,65 @@ function LookComposerInner() {
           }
         }}
       />
+      {/* ── Effects sheet ─────────────────────────────────────────────── */}
+      {/* Bottom sheet showing the EffectPreviewRail (filter thumbnails
+          rendered from the selected media layer's own source URI) and
+          the AdjustPanel (fine-tuning sliders). Filter selection and
+          adjustment changes commit to the layer's non-destructive
+          `effects` array (EffectNode[]) via updateLayer. */}
+      {showEffects && selectedMediaLayer && (
+        <View style={styles.effectsSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowEffects(false)} />
+          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm, backgroundColor: colors.surface }]}>
+            <View style={[styles.effectsSheetHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.effectsSheetTitle, { color: colors.textPrimary }]}>
+                Effects
+              </Text>
+              <PressScale
+                onPress={() => { haptic.light(); setShowEffects(false); }}
+                style={styles.effectsSheetDone}
+                accessibilityLabel="Done"
+                accessibilityHint="Closes the effects panel"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={[styles.effectsSheetDoneText, { color: colors.brand }]}>
+                  Done
+                </Text>
+              </PressScale>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.effectsSheetScroll}
+            >
+              <Text style={[styles.effectsSectionLabel, { color: colors.textMuted }]}>
+                Filters
+              </Text>
+              <EffectPreviewRail
+                sourceUri={effectsSourceUri}
+                presets={FILTER_PRESETS}
+                selectedId={selectedFilterId}
+                onSelect={handleEffectFilterSelect}
+              />
+              <View style={[styles.effectsAdjustWrap, { borderTopColor: colors.border }]}>
+                <View style={styles.effectsAutoRow}>
+                  <AutoAdjustButton
+                    isActive={autoAdjustActive}
+                    onApply={handleAutoAdjust}
+                  />
+                </View>
+                <AdjustPanel
+                  values={currentAdjustments}
+                  onChange={handleEffectAdjustChange}
+                  onReset={handleEffectReset}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
-
-// ── Context toolbar button ───────────────────────────────────────────
-// Flat, transparent 44pt target with a 22pt glyph. No card, no pill.
-// The label sits below the icon. Danger uses the danger color.
-const ContextTool = React.memo(function ContextTool({
-  icon,
-  label,
-  onPress,
-  colors,
-  danger,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  onPress: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  danger?: boolean;
-}) {
-  const haptic = useHaptic();
-  return (
-    <PressScale
-      onPress={() => { haptic.light(); onPress(); }}
-      style={styles.contextTool}
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-    >
-      <Ionicons
-        name={icon}
-        size={22}
-        color={danger ? colors.danger : colors.textPrimary}
-      />
-      <Text
-        style={[
-          styles.contextToolLabel,
-          { color: danger ? colors.danger : colors.textSecondary },
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </PressScale>
-  );
-});
-
-// ── Bottom action button ─────────────────────────────────────────────
-// Flat, transparent 44pt target with a 24pt glyph and label below.
-// Accent uses the brand color for the "Try arrangement" assistance.
-const BottomAction = React.memo(function BottomAction({
-  icon,
-  label,
-  onPress,
-  colors,
-  disabled,
-  accent,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  onPress: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  disabled?: boolean;
-  accent?: boolean;
-}) {
-  return (
-    <PressScale
-      onPress={onPress}
-      disabled={disabled}
-      style={[styles.bottomAction, { opacity: disabled ? 0.3 : 1 }]}
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !!disabled }}
-      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-    >
-      <Ionicons
-        name={icon}
-        size={24}
-        color={accent ? colors.brand : colors.textPrimary}
-      />
-      <Text
-        style={[
-          styles.bottomActionLabel,
-          { color: accent ? colors.brand : colors.textSecondary },
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </PressScale>
-  );
-});
 
 // ── Overflow menu item ───────────────────────────────────────────────
 const OverflowItem = React.memo(function OverflowItem({
@@ -1152,6 +2190,38 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0a0a0a',
   },
+  // ── Crash recovery banner ──
+  recoveryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(201, 164, 106, 0.15)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(201, 164, 106, 0.3)',
+    paddingTop: 50,
+  },
+  recoveryText: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  recoveryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: '#C9A46A',
+    borderRadius: 8,
+  },
+  recoveryBtnText: {
+    color: '#0a0a0a',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  recoveryDismiss: {
+    padding: 8,
+    marginLeft: 4,
+  },
   // ── Canvas stage ──
   canvasStage: {
     ...StyleSheet.absoluteFill,
@@ -1277,36 +2347,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.25)',
     textAlign: 'center',
   },
-  // ── Context toolbar (selection mode) ──
-  contextToolbarContainer: {
+  // ── Layout preview rail container ──
+  // Sits above the bottom ContextToolRail and source tray. Only visible
+  // when there are 2+ media assets and no layer is selected.
+  layoutRailContainer: {
     position: 'absolute',
     left: 0,
     right: 0,
-    zIndex: 95,
+    zIndex: 98,
   },
-  contextToolbarContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.sm,
-    gap: Space.sm,
-  },
-  contextTool: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 56,
-    paddingHorizontal: Space.xs,
-  },
-  contextToolLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    marginTop: 2,
-  },
-  contextDivider: {
-    width: 1,
-    height: 28,
-    marginHorizontal: Space.xs,
-  },
-  // ── Bottom action bar (default mode) ──
+  // ── Bottom ContextToolRail container ──
   bottomBarContainer: {
     position: 'absolute',
     bottom: 0,
@@ -1324,47 +2374,11 @@ const styles = StyleSheet.create({
     zIndex: 99,
   },
   bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
   },
-  bottomBarContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.sm,
-    gap: Space.md,
-  },
-  bottomAction: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 60,
-    paddingHorizontal: Space.xs,
-  },
-  bottomActionLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    marginTop: 2,
-  },
-  bottomDivider: {
-    width: 1,
-    height: 28,
-    marginHorizontal: Space.xs,
-  },
-  bottomActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginLeft: 'auto',
-    paddingLeft: Space.sm,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-  },
-  bottomActionBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm,
+  toolRail: {
+    flex: 1,
   },
   // ── Overflow menu ──
   overflowContainer: {
@@ -1433,5 +2447,103 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     minWidth: 36,
     textAlign: 'right',
+  },
+  // ── Effects sheet ──
+  effectsSheetBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 200,
+    justifyContent: 'flex-end',
+  },
+  effectsSheet: {
+    borderTopLeftRadius: Radius.md,
+    borderTopRightRadius: Radius.md,
+    maxHeight: '85%',
+  },
+  effectsSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  effectsSheetTitle: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.bodyEmphasis.size,
+  },
+  effectsSheetDone: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  effectsSheetDoneText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+  },
+  effectsSheetScroll: {
+    paddingVertical: Space.sm,
+  },
+  effectsSectionLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
+    paddingHorizontal: Space.md,
+    marginBottom: Space.xs,
+    marginTop: Space.xs,
+  },
+  effectsAdjustWrap: {
+    marginTop: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.xs,
+  },
+  effectsAutoRow: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+  },
+  // ── Multi-select ──
+  selectionCountBadge: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    borderRadius: RadiusRoleValue.pillAvatar,
+  },
+  selectionCountText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+  },
+  canvasDimOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    zIndex: 35,
+  },
+  // ── Align picker ──
+  alignPickerContainer: {
+    position: 'absolute',
+    left: Space.sm,
+    right: Space.sm,
+    zIndex: 101,
+    alignItems: 'center',
+  },
+  alignPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  alignPickerItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    minWidth: 48,
+    minHeight: 48,
+    gap: 2,
+  },
+  alignPickerLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.meta.size,
   },
 });

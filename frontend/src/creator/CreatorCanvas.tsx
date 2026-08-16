@@ -32,6 +32,7 @@ import {
   getLayerCategoryLabel,
 } from '../components/poster/shared/layerAccents';
 import { ContextMenu, type ContextMenuAction } from '../components/poster/shared/ContextMenu';
+import { SafeZoneOverlay } from './surfaces/SafeZoneOverlay';
 
 const RAD_TO_DEG = 180 / Math.PI;
 
@@ -54,18 +55,34 @@ export interface CreatorCanvasProps {
   canvasHeight: number;
   mode: 'edit' | 'preview' | 'view';
   selectedLayerId?: string | null;
+  /** Full multi-select set. When non-empty, all listed layers show selection. */
+  selectedLayerIds?: string[];
   onLayerPress?: (layerId: string) => void;
   onCanvasPress?: () => void;
   onLayerPositionChange?: (layerId: string, x: number, y: number) => void;
   onLayerTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
   onLayerDoubleTap?: (layerId: string) => void;
   onLayerLongPress?: (layerId: string) => void;
+  // Multi-select drag callbacks. When a selected layer is dragged and
+  // multiple layers are selected, these fire so the parent can move all
+  // selected layers together. Deltas are in normalized (0–1) canvas coords.
+  onMultiDragStart?: () => void;
+  onMultiDragUpdate?: (deltaXNorm: number, deltaYNorm: number) => void;
+  onMultiDragCommit?: (deltaXNorm: number, deltaYNorm: number) => void;
   // Context menu actions (long-press). Optional — when omitted the context
   // menu shows only the actions that can be served by onLayerTransformChange.
   onLayerDuplicate?: (layerId: string) => void;
   onLayerDelete?: (layerId: string) => void;
   onLayerReorder?: (layerId: string, direction: 'front' | 'back') => void;
   onLayerToggleLock?: (layerId: string) => void;
+  /** When true, renders the shared SafeZoneOverlay inside the canvas.
+   *  Parent composers manage when to show it (manual toggle under More,
+   *  or auto-while-dragging near reserved top/bottom UI areas). */
+  showSafeZone?: boolean;
+  /** Height (px) of the top reserved chrome region for the safe zone. */
+  safeZoneTop?: number;
+  /** Height (px) of the bottom reserved tool dock for the safe zone. */
+  safeZoneBottom?: number;
 }
 
 export function CreatorCanvas({
@@ -75,15 +92,22 @@ export function CreatorCanvas({
   canvasHeight,
   mode,
   selectedLayerId,
+  selectedLayerIds,
   onLayerPress,
   onCanvasPress,
   onLayerTransformChange,
   onLayerDoubleTap,
   onLayerLongPress,
+  onMultiDragStart,
+  onMultiDragUpdate,
+  onMultiDragCommit,
   onLayerDuplicate,
   onLayerDelete,
   onLayerReorder,
   onLayerToggleLock,
+  showSafeZone,
+  safeZoneTop = 0,
+  safeZoneBottom = 0,
 }: CreatorCanvasProps) {
   const { canvas } = document;
   const visibleLayers = getVisibleLayersSorted(page);
@@ -181,7 +205,15 @@ export function CreatorCanvas({
         <Pressable style={styles.backgroundPressLayer} onPress={onCanvasPress} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Canvas background, tap to deselect" accessibilityHint="Taps the canvas to deselect the current layer" accessibilityRole="button" />
       )}
 
-      {visibleLayers.map((layer) => (
+      {visibleLayers.map((layer) => {
+        const isInMultiSelect = !!(selectedLayerIds && selectedLayerIds.length > 0);
+        const isSelected = isInMultiSelect
+          ? selectedLayerIds.includes(layer.id)
+          : selectedLayerId === layer.id;
+        const isPrimarySelected = isInMultiSelect
+          ? selectedLayerIds[0] === layer.id
+          : false;
+        return (
         <LayerRenderer
           key={layer.id}
           layer={layer}
@@ -189,18 +221,24 @@ export function CreatorCanvas({
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
           mode={mode}
-          isSelected={selectedLayerId === layer.id}
+          isSelected={isSelected}
+          isPrimarySelected={isPrimarySelected}
+          isMultiSelectActive={isInMultiSelect && isSelected && (selectedLayerIds?.length ?? 0) > 1}
           onPress={onLayerPress}
           onTransformChange={onLayerTransformChange}
           onDoubleTap={onLayerDoubleTap}
           onLongPress={onLayerLongPress}
+          onMultiDragStart={onMultiDragStart}
+          onMultiDragUpdate={onMultiDragUpdate}
+          onMultiDragCommit={onMultiDragCommit}
           onContextMenu={(l) => setContextMenuLayer(l)}
           onDuplicate={onLayerDuplicate}
           onDelete={onLayerDelete}
           onReorder={onLayerReorder}
           onToggleLock={onLayerToggleLock}
         />
-      ))}
+        );
+      })}
 
       {/* Empty canvas state — guides the user to start creating */}
       {mode === 'edit' && isEmpty && (
@@ -224,6 +262,17 @@ export function CreatorCanvas({
         >
           <View />
         </ContextMenu>
+      )}
+
+      {/* Safe zone overlay — shared visual guide for reserved top/bottom
+          UI areas. Rendered when the parent passes showSafeZone (manual
+          toggle under More, or auto-while-dragging). pointerEvents none. */}
+      {mode === 'edit' && showSafeZone && (
+        <SafeZoneOverlay
+          visible={showSafeZone}
+          topHeight={safeZoneTop}
+          bottomHeight={safeZoneBottom}
+        />
       )}
     </GestureHandlerRootView>
   );
@@ -279,10 +328,17 @@ interface LayerRendererProps {
   canvasHeight: number;
   mode: 'edit' | 'preview' | 'view';
   isSelected: boolean;
+  /** True for the first (primary) layer in a multi-select set. */
+  isPrimarySelected?: boolean;
+  /** True when this layer is selected AND multiple layers are selected. */
+  isMultiSelectActive?: boolean;
   onPress?: (layerId: string) => void;
   onTransformChange?: (layerId: string, updates: Partial<CreatorLayer>) => void;
   onDoubleTap?: (layerId: string) => void;
   onLongPress?: (layerId: string) => void;
+  onMultiDragStart?: () => void;
+  onMultiDragUpdate?: (deltaXNorm: number, deltaYNorm: number) => void;
+  onMultiDragCommit?: (deltaXNorm: number, deltaYNorm: number) => void;
   onContextMenu?: (layer: CreatorLayer) => void;
   onDuplicate?: (layerId: string) => void;
   onDelete?: (layerId: string) => void;
@@ -301,10 +357,15 @@ const LayerRenderer = React.memo(function LayerRenderer({
   canvasHeight,
   mode,
   isSelected,
+  isPrimarySelected,
+  isMultiSelectActive,
   onPress,
   onTransformChange,
   onDoubleTap,
   onLongPress,
+  onMultiDragStart,
+  onMultiDragUpdate,
+  onMultiDragCommit,
   onContextMenu,
 }: LayerRendererProps) {
   const { colors } = useAppTheme();
@@ -388,11 +449,14 @@ const LayerRenderer = React.memo(function LayerRenderer({
 
   const handleLongPress = useCallback(() => {
     if (mode === 'edit') {
-      if (onContextMenu) {
-        onContextMenu(layer);
-      }
+      // When onLongPress is provided, long-press enters multi-select mode
+      // (the parent's onLongPress handler) and the context menu is suppressed
+      // to avoid a conflicting double-sheet. When onLongPress is absent,
+      // long-press falls back to the context menu.
       if (onLongPress) {
         onLongPress(layer.id);
+      } else if (onContextMenu) {
+        onContextMenu(layer);
       }
     }
   }, [mode, onLongPress, onContextMenu, layer]);
@@ -457,17 +521,32 @@ const LayerRenderer = React.memo(function LayerRenderer({
           startY.value = translateY.value;
           runOnJS(handlePress)();
           runOnJS(setShowGuides)(true);
+          if (isMultiSelectActive && onMultiDragStart) {
+            runOnJS(onMultiDragStart)();
+          }
         })
         .onUpdate((e) => {
           translateX.value = startX.value + e.translationX;
           translateY.value = startY.value + e.translationY;
+          if (isMultiSelectActive && onMultiDragUpdate) {
+            runOnJS(onMultiDragUpdate)(e.translationX / canvasWidth, e.translationY / canvasHeight);
+          }
         })
         .onEnd((e) => {
-          const finalX = startX.value + e.translationX;
-          const finalY = startY.value + e.translationY;
-          runOnJS(handlePositionCommit)(finalX, finalY);
+          if (isMultiSelectActive && onMultiDragCommit) {
+            // Multi-select: the parent commits positions for ALL selected
+            // layers (including this one) in a single history entry.
+            runOnJS(onMultiDragCommit)(e.translationX / canvasWidth, e.translationY / canvasHeight);
+            runOnJS(setShowGuides)(false);
+            runOnJS(setSmartGuides)({ vertical: [], horizontal: [] });
+            runOnJS(setCenterGuideVisible)(false);
+          } else {
+            const finalX = startX.value + e.translationX;
+            const finalY = startY.value + e.translationY;
+            runOnJS(handlePositionCommit)(finalX, finalY);
+          }
         }),
-    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit]
+    [mode, layer.locked, layer.id, translateX, translateY, startX, startY, onPress, handlePositionCommit, isMultiSelectActive, onMultiDragStart, onMultiDragUpdate, onMultiDragCommit, canvasWidth, canvasHeight]
   );
 
   const pinchGesture = useMemo(
@@ -653,9 +732,11 @@ const LayerRenderer = React.memo(function LayerRenderer({
   // product/mention/look/vote = 8px (pill content), decorative = 0
   const layerRadius = getLayerRadius(layer);
 
-  // Animated selection border style
+  // Animated selection border style. The primary selection in a
+  // multi-select set uses a thicker (3pt) outline; secondary selections
+  // use the standard 2pt. Both use the brand colour.
   const selectionBorderStyle = useAnimatedStyle(() => ({
-    borderWidth: 2,
+    borderWidth: isPrimarySelected ? 3 : 2,
     borderColor: layer.locked
       ? colors.warning
       : colors.brand,
@@ -680,8 +761,9 @@ const LayerRenderer = React.memo(function LayerRenderer({
           {isSelected && (
             <Reanimated.View style={[StyleSheet.absoluteFill, selectionBorderStyle]} pointerEvents="none" />
           )}
-          {/* Selection handles — draggable corner + rotation handles */}
-          {isSelected && (
+          {/* Selection handles — draggable corner + rotation handles.
+              Hidden in multi-select mode; only the primary shows handles. */}
+          {isSelected && !isMultiSelectActive && (
             <SelectionHandles
               handleScaleSV={handleScale}
               colors={colors}

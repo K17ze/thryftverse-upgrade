@@ -13,6 +13,8 @@ import {
 import { Radius, Stroke, Typography, Type } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 
+export type AppInputAppearance = 'filled' | 'outline' | 'underline';
+
 interface AppInputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
   helperText?: string;
@@ -25,6 +27,13 @@ interface AppInputProps extends Omit<TextInputProps, 'style'> {
   prefix?: React.ReactNode;
   suffix?: React.ReactNode;
   keyboardType?: KeyboardTypeOptions;
+  /**
+   * Visual appearance of the input boundary.
+   * - filled: subtle background fill (default). Settings/utility.
+   * - outline: 1px border, transparent background. Auth/standalone.
+   * - underline: bottom border only. Dense authoring.
+   */
+  appearance?: AppInputAppearance;
 }
 
 export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
@@ -47,6 +56,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
     editable = true,
     onFocus,
     onBlur,
+    appearance = 'filled',
     ...rest
   },
   ref
@@ -55,15 +65,47 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
   const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(errorText);
 
+  // Resolve appearance-specific styling
+  const appearanceStyle = (() => {
+    switch (appearance) {
+      case 'outline':
+        return {
+          backgroundColor: 'transparent',
+          borderWidth: Stroke.standard,
+          borderRadius: Radius.lg,
+        };
+      case 'underline':
+        return {
+          backgroundColor: 'transparent',
+          borderWidth: 0,
+          borderBottomWidth: isFocused ? Stroke.emphasis : Stroke.standard,
+          borderRadius: 0,
+          paddingHorizontal: 0,
+        };
+      case 'filled':
+      default:
+        return {
+          backgroundColor: colors.input,
+          borderWidth: isFocused ? Stroke.emphasis : Stroke.standard,
+          borderRadius: Radius.lg,
+        };
+    }
+  })();
+
+  const appearanceBorderColor = hasError
+    ? colors.danger
+    : isFocused
+      ? colors.brand
+      : colors.border;
+
   return (
     <View style={containerStyle}>
       {label ? <Text style={[styles.label, { color: colors.textSecondary }, labelStyle]}>{label}</Text> : null}
       <View
         style={[
           styles.inputWrap,
-          { backgroundColor: colors.input, borderColor: colors.border },
-          isFocused && !hasError && { backgroundColor: colors.background, borderColor: colors.brand, borderWidth: Stroke.emphasis },
-          hasError && { backgroundColor: colors.background, borderColor: colors.danger },
+          appearanceStyle,
+          { borderColor: appearanceBorderColor },
           !editable && styles.inputWrapDisabled,
           inputContainerStyle,
         ]}
@@ -100,8 +142,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   inputWrap: {
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
     paddingHorizontal: 14,
     minHeight: 48,
     flexDirection: 'row',

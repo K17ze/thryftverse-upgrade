@@ -157,6 +157,10 @@ export default function AssetDetailScreen() {
   const [alertTargetPrice, setAlertTargetPrice] = React.useState('');
   const [alertCondition, setAlertCondition] = React.useState<'above' | 'below'>('above');
   const [alertSubmitting, setAlertSubmitting] = React.useState(false);
+  // Progressive disclosure — expert sections collapsed by default so the
+  // first viewport shows identity, story, trust, and holder position.
+  const [marketSectionExpanded, setMarketSectionExpanded] = React.useState(false);
+  const [diligenceSectionExpanded, setDiligenceSectionExpanded] = React.useState(false);
 
   const handleCreatePriceAlert = React.useCallback(async () => {
     if (!assetId) return;
@@ -829,15 +833,27 @@ export default function AssetDetailScreen() {
         ) : null}
 
         {/* ════════════════════════════════════════════════════════════
-            Market details — deferred microstructure
-            Spec 14 V3: last settled price, bid/ask, spread, depth,
-            chart, volume, NAV comparison, price alert. This is NOT
-            in the first viewport.
+            Market details — progressive disclosure. First viewport shows
+            a summary; expert microstructure (chart, order book, bid/ask,
+            price alert) is revealed on demand. Spec 14 V3: last settled
+            price, bid/ask, spread, depth, chart, volume, NAV comparison,
+            price alert. This is NOT in the first viewport.
             ════════════════════════════════════════════════════════════ */}
+        <CommerceDetailDisclosureRow
+          label={marketSectionExpanded ? 'Hide market details' : 'Market details'}
+          summary={
+            marketSnapshot?.lastExecutionPriceGbp != null
+              ? `Last ${formatCoOwnIze(marketSnapshot.lastExecutionPriceGbp)}${spreadGbp != null ? ` · Spread ${formatCoOwnIze(spreadGbp)}` : ''}`
+              : 'Price · chart · depth'
+          }
+          onPress={() => setMarketSectionExpanded((prev) => !prev)}
+          leadingIcon="trending-up-outline"
+          accessibilityLabel="Toggle market details"
+        />
+        {marketSectionExpanded ? (
         <CommerceDetailSection
           label="Market details"
-          divider
-          variant="editorial"
+          variant="continuation"
         >
           {/* Last settled / reference price */}
           <CommerceDetailTransactionSurface
@@ -1043,8 +1059,24 @@ export default function AssetDetailScreen() {
             accessibilityLabel="Create price alert"
           />
         </CommerceDetailSection>
+        ) : null}
 
-        <CommerceDetailSection label="Due diligence" divider variant="editorial">
+        {/* ════════════════════════════════════════════════════════════
+            Due diligence — progressive disclosure. One canonical route
+            for provenance, custody, valuation, rights, risk, audit docs.
+            ════════════════════════════════════════════════════════════ */}
+        <CommerceDetailDisclosureRow
+          label={diligenceSectionExpanded ? 'Hide due diligence' : 'Due diligence'}
+          summary="Provenance · custody · valuation · rights · risks"
+          onPress={() => setDiligenceSectionExpanded((prev) => !prev)}
+          leadingIcon="document-text-outline"
+          accessibilityLabel="Toggle due diligence"
+        />
+        {diligenceSectionExpanded ? (
+        <CommerceDetailSection
+          label="Due diligence"
+          variant="continuation"
+        >
           {/* Stale market mark — show when no public market events have
               been logged in >7 days. Fail closed (omit when null). */}
           {asset.staleMarkDays != null && asset.staleMarkDays > 7 && (
@@ -1110,6 +1142,7 @@ export default function AssetDetailScreen() {
             } : undefined}
           />
         </CommerceDetailSection>
+        ) : null}
 
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
           <View style={styles.recommendationSection}>

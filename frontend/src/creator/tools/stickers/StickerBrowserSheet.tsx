@@ -1,0 +1,482 @@
+/**
+ * StickerBrowserSheet — bottom sheet for sticker selection.
+ *
+ * Extracted from CreatorAssetPicker's monolithic StickerTray (spec
+ * 07_MEDIA_TOOLCHAIN). Provides a categorized, searchable sticker picker
+ * rendered inside the shared SheetContainer.
+ *
+ * Features:
+ *   - Category tabs at top (horizontal scroll, all STICKER_CATEGORIES)
+ *   - Search bar that filters stickers by name (across all categories)
+ *   - 4-column grid of square cells
+ *   - Emoji stickers rendered as 32pt text glyphs
+ *   - Icon-based stickers rendered as 28pt Ionicons
+ *   - Interactive stickers (poll/quiz/question/mention/location/hashtag/link)
+ *     show a description below the icon
+ *   - Tap to select → onStickerSelect + close
+ *   - Selected category highlighted with brand color
+ *   - 44pt touch targets
+ *   - Light haptic on select
+ *   - Reduced-motion aware
+ *
+ * Visual design:
+ *   - SheetContainer provides the slide-up sheet + backdrop + grabber
+ *   - Header: title + close button
+ *   - Search field below header
+ *   - Horizontal category tab strip
+ *   - Grid fills remaining space (FlashList virtualized)
+ */
+import React, { useState, useCallback, useMemo, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  ScrollView,
+  Pressable,
+  FlatList,
+  Dimensions,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  Space,
+  Radius,
+  Type,
+  FontFamily,
+  Control,
+  Stroke,
+} from '../../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
+import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { useHaptic } from '../../../hooks/useHaptic';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import {
+  STICKER_CATEGORIES,
+  type StickerDef,
+  type StickerCategory,
+} from './StickerCategories';
+
+// ── Props ────────────────────────────────────────────────────────────
+
+export interface StickerBrowserSheetProps {
+  visible: boolean;
+  onClose: () => void;
+  onStickerSelect: (sticker: StickerDef) => void;
+  /** Override the category list. Defaults to STICKER_CATEGORIES. */
+  categories?: StickerCategory[];
+}
+
+// ── Geometry ─────────────────────────────────────────────────────────
+
+const GRID_COLUMNS = 4;
+const { width: SCREEN_W } = Dimensions.get('window');
+/** Square cell side: screen width minus sheet padding and inter-cell gaps. */
+const CELL_SIZE = Math.floor(
+  (SCREEN_W - Space.md * 2 - Space.sm * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
+);
+/** 44pt minimum touch target, but never smaller than the visible cell. */
+const CELL_TOUCH = Math.max(CELL_SIZE, Control.hit);
+
+// ── Sheet ────────────────────────────────────────────────────────────
+
+export function StickerBrowserSheet({
+  visible,
+  onClose,
+  onStickerSelect,
+  categories = STICKER_CATEGORIES,
+}: StickerBrowserSheetProps) {
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const reduceMotion = useReducedMotion();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const [activeCategoryId, setActiveCategoryId] = useState<string>(
+    categories[0]?.id ?? 'emoji',
+  );
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<TextInput>(null);
+
+  // ── Search results (cross-category) ────────────────────────────────
+  const searchResults = useMemo<StickerDef[]>(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return categories.flatMap((c) =>
+      c.stickers.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          (s.description?.toLowerCase().includes(q) ?? false),
+      ),
+    );
+  }, [categories, query]);
+
+  const isSearching = query.trim().length > 0;
+
+  // ── Active category stickers ───────────────────────────────────────
+  const activeCategory = useMemo<StickerCategory | undefined>(
+    () => categories.find((c) => c.id === activeCategoryId),
+    [categories, activeCategoryId],
+  );
+
+  const gridData = useMemo<StickerDef[]>(
+    () => (isSearching ? searchResults : activeCategory?.stickers ?? []),
+    [isSearching, searchResults, activeCategory],
+  );
+
+  // ── Handlers ───────────────────────────────────────────────────────
+  const handleSelect = useCallback(
+    (sticker: StickerDef) => {
+      haptic.light();
+      onStickerSelect(sticker);
+      onClose();
+    },
+    [haptic, onStickerSelect, onClose],
+  );
+
+  const handleCategoryTap = useCallback(
+    (id: string) => {
+      haptic.selection();
+      setActiveCategoryId(id);
+      // Exit search mode when a category is explicitly tapped.
+      if (query.trim().length > 0) {
+        setQuery('');
+        searchRef.current?.blur();
+      }
+    },
+    [haptic, query],
+  );
+
+  const handleClose = useCallback(() => {
+    setQuery('');
+    onClose();
+  }, [onClose]);
+
+  // ── Grid item renderer ─────────────────────────────────────────────
+  const renderItem = useCallback<ListRenderItem<StickerDef>>(
+    ({ item }) => (
+      <StickerCell
+        sticker={item}
+        onPress={handleSelect}
+        colors={colors}
+        styles={styles}
+        reduceMotion={reduceMotion}
+      />
+    ),
+    [handleSelect, colors, styles, reduceMotion],
+  );
+
+  const keyExtractor = useCallback((item: StickerDef) => item.id, []);
+
+  return (
+    <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title} numberOfLines={1}>
+            Stickers
+          </Text>
+          <PressScale
+            accessibilityLabel="Close stickers"
+            accessibilityRole="button"
+            onPress={handleClose}
+            style={styles.closeButton}
+          >
+            <Ionicons name="close" size={Control.icon} color={colors.textPrimary} />
+          </PressScale>
+        </View>
+
+        {/* Search */}
+        <View style={styles.searchRow}>
+          <Ionicons
+            name="search-outline"
+            size={Control.iconCompact}
+            color={colors.textMuted}
+            style={styles.searchIcon}
+          />
+          <TextInput
+            ref={searchRef}
+            style={styles.searchInput}
+            placeholder="Search stickers"
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
+            underlineColorAndroid="transparent"
+            accessibilityLabel="Search stickers"
+          />
+          {query.trim().length > 0 ? (
+            <PressScale
+              accessibilityLabel="Clear search"
+              accessibilityRole="button"
+              onPress={() => setQuery('')}
+              style={styles.clearButton}
+            >
+              <Ionicons
+                name="close-circle"
+                size={Control.iconCompact}
+                color={colors.textMuted}
+              />
+            </PressScale>
+          ) : null}
+        </View>
+
+        {/* Category tabs (hidden while searching) */}
+        {isSearching ? null : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsContent}
+            style={styles.tabs}
+          >
+            {categories.map((cat) => {
+              const active = cat.id === activeCategoryId;
+              return (
+                <PressScale
+                  key={cat.id}
+                  accessibilityLabel={`${cat.name} category`}
+                  accessibilityRole="button"
+                  onPress={() => handleCategoryTap(cat.id)}
+                  style={active ? [styles.tab, styles.tabActive] : styles.tab}
+                >
+                  <Ionicons
+                    name={cat.icon}
+                    size={Control.iconCompact}
+                    color={active ? colors.textInverse : colors.textSecondary}
+                    style={styles.tabIcon}
+                  />
+                  <Text
+                    style={active ? [styles.tabLabel, styles.tabLabelActive] : styles.tabLabel}
+                    numberOfLines={1}
+                  >
+                    {cat.name}
+                  </Text>
+                </PressScale>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* Grid */}
+        <View style={styles.gridWrap}>
+          {gridData.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons
+                name="search-outline"
+                size={28}
+                color={colors.textMuted}
+              />
+              <Text style={styles.emptyText}>
+                {isSearching ? 'No stickers match your search' : 'No stickers here'}
+              </Text>
+            </View>
+          ) : (
+            <FlashList
+              data={gridData}
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              numColumns={GRID_COLUMNS}
+              contentContainerStyle={styles.gridContent}
+              ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+        </View>
+      </View>
+    </SheetContainer>
+  );
+}
+
+// ── StickerCell ──────────────────────────────────────────────────────
+
+interface StickerCellProps {
+  sticker: StickerDef;
+  onPress: (sticker: StickerDef) => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  reduceMotion: boolean;
+}
+
+const StickerCell = React.memo(function StickerCell({
+  sticker,
+  onPress,
+  colors,
+  styles,
+}: StickerCellProps) {
+  const isInteractive = sticker.interactive === true;
+  const label = sticker.description ?? sticker.name;
+
+  return (
+    <PressScale
+      accessibilityLabel={`${sticker.name}${sticker.description ? `, ${sticker.description}` : ''}`}
+      accessibilityRole="button"
+      onPress={() => onPress(sticker)}
+      style={styles.cell}
+    >
+      <View style={styles.cellInner}>
+        {sticker.emoji ? (
+          <Text style={styles.emoji}>{sticker.emoji}</Text>
+        ) : sticker.iconRef ? (
+          <Ionicons
+            name={sticker.iconRef}
+            size={28}
+            color={isInteractive ? colors.brand : colors.textPrimary}
+          />
+        ) : null}
+        {isInteractive ? (
+          <Text style={styles.cellDescription} numberOfLines={1}>
+            {label}
+          </Text>
+        ) : null}
+      </View>
+    </PressScale>
+  );
+});
+
+// ── Styles ───────────────────────────────────────────────────────────
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      paddingHorizontal: Space.md,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Space.sm,
+    } as ViewStyle,
+    title: {
+      fontFamily: FontFamily.semibold,
+      fontSize: Type.subtitle.size,
+      lineHeight: Type.subtitle.lineHeight,
+      letterSpacing: Type.subtitle.letterSpacing,
+      color: colors.textPrimary,
+    } as TextStyle,
+    closeButton: {
+      width: Control.hit,
+      height: Control.hit,
+      alignItems: 'center',
+      justifyContent: 'center',
+    } as ViewStyle,
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.input,
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.sm,
+      height: 40,
+      borderWidth: Stroke.hairline,
+      borderColor: colors.borderSubtle,
+    } as ViewStyle,
+    searchIcon: {
+      marginRight: Space.xs,
+    } as TextStyle,
+    searchInput: {
+      flex: 1,
+      fontFamily: FontFamily.regular,
+      fontSize: Type.body.size,
+      lineHeight: Type.body.lineHeight,
+      color: colors.inputText,
+      padding: 0,
+    } as TextStyle,
+    clearButton: {
+      width: Control.hit,
+      height: Control.hit,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: -Space.xs,
+    } as ViewStyle,
+    tabs: {
+      flexGrow: 0,
+      marginVertical: Space.sm,
+    } as ViewStyle,
+    tabsContent: {
+      paddingRight: Space.md,
+      gap: Space.sm,
+    } as ViewStyle,
+    tab: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      height: 36,
+      paddingHorizontal: Space.smMd,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: Stroke.hairline,
+      borderColor: colors.borderSubtle,
+    } as ViewStyle,
+    tabActive: {
+      backgroundColor: colors.brand,
+      borderColor: colors.brand,
+    } as ViewStyle,
+    tabIcon: {
+      marginRight: Space.xs,
+    } as TextStyle,
+    tabLabel: {
+      fontFamily: FontFamily.medium,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
+      color: colors.textSecondary,
+    } as TextStyle,
+    tabLabelActive: {
+      color: colors.textInverse,
+    } as TextStyle,
+    gridWrap: {
+      flex: 1,
+    } as ViewStyle,
+    gridContent: {
+      paddingVertical: Space.sm,
+    } as ViewStyle,
+    rowSeparator: {
+      height: Space.sm,
+    } as ViewStyle,
+    cell: {
+      width: CELL_SIZE,
+      height: CELL_TOUCH,
+      alignItems: 'center',
+      justifyContent: 'center',
+    } as ViewStyle,
+    cellInner: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: 1,
+    } as ViewStyle,
+    emoji: {
+      fontSize: 32,
+      lineHeight: 38,
+      color: colors.textPrimary,
+    } as TextStyle,
+    cellDescription: {
+      marginTop: Space.xxs,
+      fontFamily: FontFamily.regular,
+      fontSize: Type.meta.size,
+      lineHeight: Type.meta.lineHeight,
+      letterSpacing: Type.meta.letterSpacing,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    } as TextStyle,
+    emptyState: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: Space.xl,
+    } as ViewStyle,
+    emptyText: {
+      marginTop: Space.sm,
+      fontFamily: FontFamily.regular,
+      fontSize: Type.body.size,
+      lineHeight: Type.body.lineHeight,
+      color: colors.textMuted,
+      textAlign: 'center',
+    } as TextStyle,
+  });
+}
+
+// FlatList fallback export for environments without FlashList.
+// Kept for API compatibility — not used by the sheet itself.
+export const StickerGridFallback = FlatList;

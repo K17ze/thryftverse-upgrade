@@ -24,12 +24,19 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { useCreator } from '../CreatorContext';
 import type { CreatorInitialMedia } from '../../navigation/types';
-import type { CreatorLayer } from '../composition';
+import type { CreatorLayer, EffectNode } from '../composition';
+import { makeStableId } from '../../utils/createStableId';
 import { CreatorCanvas } from '../CreatorCanvas';
 import { CreatorLayersSheet } from '../CreatorLayersSheet';
 import { CreatorPublishSheet } from '../CreatorPublishSheet';
 import { CreatorSettingsSheet } from '../CreatorSettingsSheet';
 import { CreatorAssetPicker, type AssetPickerMode } from '../CreatorAssetPicker';
+import { CreatorCropSheet } from '../CreatorCropSheet';
+import { InCanvasCropOverlay } from '../surfaces/InCanvasCropOverlay';
+import { CutoutPreviewSheet } from '../surfaces/CutoutPreviewSheet';
+import { AccessibilityMoveSheet } from '../surfaces/AccessibilityMoveSheet';
+import { AccessibilityZOrderSheet, type ZOrderLayer } from '../surfaces/AccessibilityZOrderSheet';
+import { isCutoutSupportedAsync, type CutoutResult } from '../core/cutout/CutoutService';
 import { CreatorTemplateBrowser } from '../CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from '../CreatorPreviewOverlay';
 import { CreatorEntryScreen } from '../CreatorEntryScreen';
@@ -39,7 +46,37 @@ import { useHaptic } from '../../hooks/useHaptic';
 import type { CreatorTemplate } from '../templates';
 import { FrameTray } from '../studio/FrameTray';
 import { PageMenu } from '../studio/PageMenu';
-import { FrameTool, RailTool, OverflowItem, OpacityBar } from './PosterComposerParts';
+import { FrameTool, OverflowItem, OpacityBar } from './PosterComposerParts';
+import { ContextToolRail } from '../surfaces/ContextToolRail';
+import { HelpShortcutsSheet } from '../surfaces/HelpShortcutsSheet';
+import {
+  type ToolContext,
+  type ToolGroup,
+  type ToolDefinition,
+} from '../core/toolRegistry';
+import { EffectPreviewRail, AdjustPanel, FILTER_PRESETS, AutoAdjustButton, computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
+import type { EffectPreset } from '../tools/effects';
+import {
+  TimelineTrack,
+  OverlayTrack,
+  TimelineToolbar,
+  TimelineRuler,
+  WaveformTrack,
+  type PosterClip,
+  type OverlayLayer,
+  type TimelineState,
+  type TimelineOperation,
+  computeTotalDuration,
+  formatTimecode,
+} from './timeline';
+import { TransitionPreviewRail } from './transitions/TransitionPreviewRail';
+import { TRANSITION_PRESETS } from './transitions/TransitionPresets';
+import { KeyframeEditor } from './keyframes/KeyframeEditor';
+import type { Keyframe } from './keyframes/KeyframeTypes';
+import { SpeedCurveEditor } from './speedcurves/SpeedCurveEditor';
+import type { SpeedCurve } from './speedcurves/SpeedCurveTypes';
+import { DEFAULT_SPEED_CURVE } from './speedcurves/SpeedCurveTypes';
+import { ReverseToggle, FreezeFramePicker, AudioFadeControls } from './tools';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Poster Composer V3 — Frame-Native Composer (spec 09)
@@ -120,8 +157,12 @@ function PosterComposerInner() {
     commitLayerTransform,
     isLoadingDraft,
     setDocument,
+    commitDocument,
     saveDraft,
     addPosterFrames,
+    hasPendingRecovery,
+    recoverCrashedProject,
+    dismissRecovery,
   } = useCreator();
 
   // ── Sheet / overlay state ──────────────────────────────────────────
@@ -134,10 +175,37 @@ function PosterComposerInner() {
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showSafeZone, setShowSafeZone] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
   const [pageMenuIndex, setPageMenuIndex] = useState<number | null>(null);
   const [showFrameTray, setShowFrameTray] = useState(false);
   const [videoInfoFrameIndex, setVideoInfoFrameIndex] = useState<number | null>(null);
+  const [showEffects, setShowEffects] = useState(false);
+  const [showA11yMove, setShowA11yMove] = useState(false);
+  const [showA11yZOrder, setShowA11yZOrder] = useState(false);
+  const [showTransitions, setShowTransitions] = useState(false);
+  const [showKeyframes, setShowKeyframes] = useState(false);
+  const [showSpeedCurve, setShowSpeedCurve] = useState(false);
+  const [showReverse, setShowReverse] = useState(false);
+  const [showFreezeFrame, setShowFreezeFrame] = useState(false);
+  const [showAudioFade, setShowAudioFade] = useState(false);
+  const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
+  // ── True cutout (segmentation) state ───────────────────────────────
+  // `cutoutPreviewTarget` holds the media layer being previewed in the
+  // CutoutPreviewSheet (true segmentation). `cutoutSupported` is probed
+  // once on mount so the overflow tool can honestly show "Cutout" when
+  // the native backend is available.
+  const [cutoutPreviewTarget, setCutoutPreviewTarget] = useState<CreatorLayer | null>(null);
+  const [cutoutSupported, setCutoutSupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supported = await isCutoutSupportedAsync();
+      if (!cancelled) setCutoutSupported(supported);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const [cropMode, setCropMode] = useState(false);
 
   const page = document.pages[activePageIndex];
   const pageCount = document.pages.length;
@@ -214,7 +282,20 @@ function PosterComposerInner() {
         e.preventDefault();
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
-        if (pageMenuIndex !== null) setPageMenuIndex(null);
+        if (showHelp) setShowHelp(false);
+        else if (showA11yMove) setShowA11yMove(false);
+        else if (showA11yZOrder) setShowA11yZOrder(false);
+        else if (showEffects) setShowEffects(false);
+        else if (showTransitions) setShowTransitions(false);
+        else if (showKeyframes) setShowKeyframes(false);
+        else if (showSpeedCurve) setShowSpeedCurve(false);
+        else if (showReverse) setShowReverse(false);
+        else if (showFreezeFrame) setShowFreezeFrame(false);
+        else if (showAudioFade) setShowAudioFade(false);
+        else if (cropMode) setCropMode(false);
+        else if (cropTarget) setCropTarget(null);
+        else if (cutoutPreviewTarget) setCutoutPreviewTarget(null);
+        else if (pageMenuIndex !== null) setPageMenuIndex(null);
         else if (showPreview) setShowPreview(false);
         else if (showOverflow) setShowOverflow(false);
         else if (showPublish) setShowPublish(false);
@@ -231,12 +312,25 @@ function PosterComposerInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, showHelp, showA11yMove, showA11yZOrder, showEffects, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cropTarget, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // ── Hardware back button — intercept to close sheets first ─────────
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
+        if (showHelp) { setShowHelp(false); return true; }
+        if (showA11yMove) { setShowA11yMove(false); return true; }
+        if (showA11yZOrder) { setShowA11yZOrder(false); return true; }
+        if (showEffects) { setShowEffects(false); return true; }
+        if (showTransitions) { setShowTransitions(false); return true; }
+        if (showKeyframes) { setShowKeyframes(false); return true; }
+        if (showSpeedCurve) { setShowSpeedCurve(false); return true; }
+        if (showReverse) { setShowReverse(false); return true; }
+        if (showFreezeFrame) { setShowFreezeFrame(false); return true; }
+        if (showAudioFade) { setShowAudioFade(false); return true; }
+        if (cropMode) { setCropMode(false); return true; }
+        if (cropTarget) { setCropTarget(null); return true; }
+        if (cutoutPreviewTarget) { setCutoutPreviewTarget(null); return true; }
         if (pageMenuIndex !== null) { setPageMenuIndex(null); return true; }
         if (showPreview) { setShowPreview(false); return true; }
         if (showOverflow) { setShowOverflow(false); return true; }
@@ -249,7 +343,7 @@ function PosterComposerInner() {
         return false;
       };
       return onBackPress;
-    }, [pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+    }, [showHelp, showA11yMove, showA11yZOrder, showEffects, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cropTarget, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
@@ -280,6 +374,311 @@ function PosterComposerInner() {
   const hasContent = document.pages.some((p) => p.layers.length > 0);
   const showEntryScreen = !entryComplete && !hasContent && !isLoadingDraft;
 
+  // ── Video detection — any page with video media ───────────────────
+  // When video content exists, the editor enters "video mode": the
+  // timeline appears below the canvas and the tool rail uses video
+  // contexts. Photo-only documents use photo contexts.
+  const hasVideoContent = useMemo(
+    () =>
+      document.pages.some((p) =>
+        p.layers.some(
+          (l) => l.type === 'media' && l.payload.mediaType === 'video',
+        ),
+      ),
+    [document.pages],
+  );
+
+  // ── Audio detection — music layer or video with audio ──────────────
+  // The waveform track renders when audio content exists: either an
+  // explicit music layer or a video clip (which carries its own audio
+  // track). Per AGENTS.md §11 we never fake waveform data — when no
+  // real samples are available the WaveformTrack renders an honest flat
+  // line and a "No audio waveform" label.
+  const hasAudioContent = useMemo(
+    () =>
+      document.pages.some(
+        (p) =>
+          p.layers.some((l) => l.type === 'music') ||
+          p.layers.some(
+            (l) => l.type === 'media' && l.payload.mediaType === 'video',
+          ),
+      ),
+    [document.pages],
+  );
+
+  // ── Timeline state derivation ──────────────────────────────────────
+  // Map pages with video media to PosterClip objects, and timed overlays
+  // (text, stickers, music with time ranges) to OverlayLayer objects.
+  // The timeline is a read-only projection of the document model for now —
+  // clip/overlay mutations route through TimelineOperation handlers.
+  const [timelinePlayheadMs, setTimelinePlayheadMs] = useState(0);
+  const [timelineIsPlaying, setTimelineIsPlaying] = useState(false);
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
+
+  const timelineClips = useMemo<PosterClip[]>(() => {
+    const clips: PosterClip[] = [];
+    for (const p of document.pages) {
+      for (const layer of p.layers) {
+        if (layer.type !== 'media' || layer.payload.mediaType !== 'video') continue;
+        const payload = layer.payload;
+        const trimStart = payload.trimStartMs ?? 0;
+        const trimEnd =
+          payload.trimEndMs ??
+          payload.videoDurationMs ??
+          p.durationMs ??
+          5000;
+        const rawDuration = Math.max(100, trimEnd - trimStart);
+        const speed = payload.speed ?? 1.0;
+        const durationMs = rawDuration / speed;
+        clips.push({
+          id: layer.id,
+          assetId: layer.id,
+          sourceUri: payload.mediaUri,
+          trimStartMs: trimStart,
+          trimEndMs: trimEnd,
+          speed,
+          volume: payload.volume ?? 1.0,
+          thumbnailUri: payload.thumbnailUri,
+          durationMs,
+        });
+      }
+    }
+    return clips;
+  }, [document.pages]);
+
+  const timelineOverlays = useMemo<OverlayLayer[]>(() => {
+    const overlays: OverlayLayer[] = [];
+    let clipOffsetMs = 0;
+    for (const p of document.pages) {
+      const pageDuration = p.durationMs ?? 5000;
+      for (const layer of p.layers) {
+        if (layer.type === 'media' && layer.payload.mediaType === 'video') {
+          // Skip video layers — they become clips, not overlays
+          clipOffsetMs += pageDuration;
+          break;
+        }
+        // Map timed overlay types to OverlayLayer
+        let overlayType: OverlayLayer['type'] | null = null;
+        let label = '';
+        if (layer.type === 'text') {
+          overlayType = 'text';
+          label = layer.payload.text ?? 'Text';
+        } else if (layer.type === 'decorative') {
+          overlayType = 'sticker';
+          label = 'Sticker';
+        } else if (layer.type === 'product') {
+          overlayType = 'product';
+          label = layer.payload.snapshotTitle ?? 'Product';
+        } else if (layer.type === 'music') {
+          overlayType = 'music';
+          label = layer.payload.trackName ?? 'Music';
+        } else if (layer.type === 'draw') {
+          overlayType = 'drawing';
+          label = 'Drawing';
+        }
+        if (overlayType) {
+          overlays.push({
+            id: layer.id,
+            type: overlayType,
+            timeRange: { startMs: clipOffsetMs, endMs: clipOffsetMs + pageDuration },
+            label,
+          });
+        }
+      }
+    }
+    return overlays;
+  }, [document.pages]);
+
+  const timelineTotalDurationMs = useMemo(
+    () => computeTotalDuration(timelineClips),
+    [timelineClips],
+  );
+
+  const timelineState: TimelineState = useMemo(
+    () => ({
+      clips: timelineClips,
+      overlays: timelineOverlays,
+      playheadMs: timelinePlayheadMs,
+      totalDurationMs: timelineTotalDurationMs,
+      isPlaying: timelineIsPlaying,
+    }),
+    [timelineClips, timelineOverlays, timelinePlayheadMs, timelineTotalDurationMs, timelineIsPlaying],
+  );
+
+  const selectedClip = useMemo(
+    () => timelineClips.find((c) => c.id === selectedClipId) ?? null,
+    [timelineClips, selectedClipId],
+  );
+
+  // ── Timeline operation handler ─────────────────────────────────────
+  // Routes timeline operations to the document model. For now, trim/speed/
+  // volume map to updateLayer on the underlying media layer.
+  const handleTimelineOperation = useCallback(
+    (op: TimelineOperation) => {
+      switch (op.type) {
+        case 'seek':
+          setTimelinePlayheadMs(Math.max(0, Math.min(timelineTotalDurationMs, op.ms)));
+          break;
+        case 'play':
+          setTimelineIsPlaying(true);
+          haptic.light();
+          break;
+        case 'pause':
+          setTimelineIsPlaying(false);
+          haptic.light();
+          break;
+        case 'trim': {
+          const clip = timelineClips.find((c) => c.id === op.clipId);
+          if (!clip) return;
+          const layer = document.pages
+            .flatMap((p) => p.layers)
+            .find((l) => l.id === op.clipId);
+          if (!layer || layer.type !== 'media') return;
+          const newTrimStart = op.edge === 'start'
+            ? Math.max(0, clip.trimStartMs + op.deltaMs)
+            : clip.trimStartMs;
+          const newTrimEnd = op.edge === 'end'
+            ? Math.max(newTrimStart + 100, clip.trimEndMs + op.deltaMs)
+            : clip.trimEndMs;
+          updateLayer(op.clipId, {
+            type: 'media',
+            payload: { ...layer.payload, trimStartMs: newTrimStart, trimEndMs: newTrimEnd },
+          }, 'Trim clip');
+          break;
+        }
+        case 'speed': {
+          const layer = document.pages
+            .flatMap((p) => p.layers)
+            .find((l) => l.id === op.clipId);
+          if (!layer || layer.type !== 'media') return;
+          updateLayer(op.clipId, {
+            type: 'media',
+            payload: { ...layer.payload, speed: op.speed },
+          }, 'Change speed');
+          haptic.light();
+          break;
+        }
+        case 'volume': {
+          const layer = document.pages
+            .flatMap((p) => p.layers)
+            .find((l) => l.id === op.clipId);
+          if (!layer || layer.type !== 'media') return;
+          updateLayer(op.clipId, {
+            type: 'media',
+            payload: { ...layer.payload, volume: op.volume },
+          }, 'Change volume');
+          haptic.light();
+          break;
+        }
+        case 'split': {
+          // Split the selected clip at the playhead position.
+          // This creates two clips from one: the first keeps the original
+          // trim range up to the split point, the second starts from the
+          // split point to the original trim end.
+          const clip = timelineClips.find((c) => c.id === op.clipId);
+          if (!clip) return;
+
+          // Find the clip's start position in the timeline (sum of all
+          // previous clips' speed-adjusted durations).
+          const clipIndex = timelineClips.indexOf(clip);
+          let clipStartMs = 0;
+          for (let i = 0; i < clipIndex; i++) {
+            clipStartMs += timelineClips[i].durationMs;
+          }
+
+          // Calculate the offset within this clip (timeline time → source time)
+          const offsetInClip = Math.max(0, op.atMs - clipStartMs);
+          const splitPoint = clip.trimStartMs + offsetInClip * clip.speed;
+
+          // Clamp the split point to be safely within the trim range
+          const minSplit = clip.trimStartMs + 100; // min 100ms on each side
+          const maxSplit = clip.trimEndMs - 100;
+          if (splitPoint <= minSplit || splitPoint >= maxSplit) {
+            haptic.light();
+            show('Move the playhead within the clip to split', 'info');
+            break;
+          }
+
+          // Find the original media layer
+          const layer = document.pages
+            .flatMap((p) => p.layers)
+            .find((l) => l.id === op.clipId);
+          if (!layer || layer.type !== 'media') return;
+
+          // 1. Update the original clip's trim end to the split point
+          updateLayer(op.clipId, {
+            type: 'media',
+            payload: { ...layer.payload, trimEndMs: Math.round(splitPoint) },
+          }, 'Split clip (first half)');
+
+          // 2. Create a new media layer for the second half
+          const newLayer: CreatorLayer = {
+            ...layer,
+            id: makeStableId('media'),
+            zIndex: layer.zIndex + 1,
+            payload: {
+              ...layer.payload,
+              trimStartMs: Math.round(splitPoint),
+              trimEndMs: clip.trimEndMs,
+            },
+          };
+          addLayer(newLayer);
+
+          haptic.medium();
+          break;
+        }
+        case 'duplicate':
+          if (op.clipId) duplicateLayer(op.clipId);
+          break;
+        case 'delete':
+          if (op.clipId) removeLayer(op.clipId);
+          setSelectedClipId(null);
+          break;
+        case 'replace':
+          setEditingLayer(
+            document.pages.flatMap((p) => p.layers).find((l) => l.id === op.clipId) ?? null,
+          );
+          setPickerMode('media');
+          break;
+        case 'moveOverlay': {
+          const layer = document.pages
+            .flatMap((p) => p.layers)
+            .find((l) => l.id === op.overlayId);
+          if (!layer) return;
+          updateLayer(op.overlayId, {
+            timeRange: op.timeRange,
+          }, 'Move overlay');
+          haptic.light();
+          break;
+        }
+        case 'reorder':
+          // Clip reorder maps to page reorder
+          if (op.fromIndex !== op.toIndex) {
+            reorderPages(op.fromIndex, op.toIndex);
+          }
+          break;
+      }
+    },
+    [timelineClips, timelineTotalDurationMs, document.pages, updateLayer, duplicateLayer, removeLayer, reorderPages, show, haptic, addLayer],
+  );
+
+  // ── Playback tick — advance playhead when playing ──────────────────
+  useEffect(() => {
+    if (!timelineIsPlaying || timelineTotalDurationMs <= 0) return;
+    const interval = setInterval(() => {
+      setTimelinePlayheadMs((prev) => {
+        const next = prev + 100;
+        if (next >= timelineTotalDurationMs) {
+          setTimelineIsPlaying(false);
+          return 0;
+        }
+        return next;
+      });
+    }, 100);
+    return () => clearInterval(interval);
+  }, [timelineIsPlaying, timelineTotalDurationMs]);
+
   // ── Entry screen media handling ────────────────────────────────────
   // For Poster, each asset becomes its own frame via addPosterFrames.
   const handleEntryMediaSelected = useCallback((media: CreatorInitialMedia[]) => {
@@ -309,14 +708,36 @@ function PosterComposerInner() {
 
   const frameSwipeGesture = useMemo(() => {
     let startX = 0;
+    let startY = 0;
+    let lockedDirection: 'horizontal' | 'vertical' | null = null;
+    const DIRECTION_LOCK_THRESHOLD = 10;
     return Gesture.Pan()
-      .activateAfterLongPress(300)
       .onBegin((e) => {
         'worklet';
         startX = e.x;
+        startY = e.y;
+        lockedDirection = null;
+      })
+      .onUpdate((e) => {
+        'worklet';
+        // Directional lock: once the gesture commits to horizontal or
+        // vertical, stay locked. This prevents diagonal jitter from
+        // triggering frame swipe when the user is trying to interact
+        // with a layer (which starts inside the selected object's bounds
+        // and is handled by the canvas gesture, not this one).
+        if (lockedDirection === null) {
+          const dx = Math.abs(e.absoluteX - startX);
+          const dy = Math.abs(e.absoluteY - startY);
+          if (dx > DIRECTION_LOCK_THRESHOLD || dy > DIRECTION_LOCK_THRESHOLD) {
+            lockedDirection = dx > dy ? 'horizontal' : 'vertical';
+          }
+        }
       })
       .onEnd((e) => {
         'worklet';
+        // Only trigger frame swipe for horizontal-dominant gestures.
+        // Vertical gestures (scroll, layer drag) are ignored.
+        if (lockedDirection !== 'horizontal') return;
         const dx = e.x - startX;
         const threshold = screenWidth * 0.18;
         if (Math.abs(dx) < threshold) return;
@@ -382,6 +803,407 @@ function PosterComposerInner() {
     addPage();
   }, [haptic, selectLayer, addPage]);
 
+  // ── Music handler (video mode) ─────────────────────────────────────
+  const handleAddMusic = useCallback(() => {
+    haptic.light();
+    setPickerMode('stickers');
+  }, [haptic]);
+
+  // ── Effects handler ────────────────────────────────────────────────
+  // Opens the effects bottom sheet for the selected media layer. The
+  // sheet shows the EffectPreviewRail (filter thumbnails using the
+  // layer's own media as the preview source) and the AdjustPanel
+  // (fine-tuning sliders). Effect changes commit to the layer's
+  // non-destructive `effects` array (EffectNode[]) via updateLayer.
+  const handleAddEffects = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'media') {
+      haptic.light();
+      show('Select a photo or video to apply effects', 'info');
+      return;
+    }
+    haptic.medium();
+    setShowEffects(true);
+  }, [selectedLayer, haptic, show]);
+
+  // ── Effects sheet — derived state & handlers ───────────────────────
+  const selectedMediaLayer = selectedLayer?.type === 'media' ? selectedLayer : null;
+  const effectsSourceUri = selectedMediaLayer?.payload.mediaUri ?? '';
+  const currentEffects: EffectNode[] = selectedMediaLayer?.payload.effects ?? [];
+
+  const selectedFilterId = useMemo(() => {
+    const filterNode = currentEffects.find((n) => n.type === 'filter');
+    return filterNode?.type === 'filter' ? filterNode.id : null;
+  }, [currentEffects]);
+
+  const currentAdjustments = useMemo<Partial<EffectPreset['adjustments']>>(() => {
+    const adjustNode = currentEffects.find((n) => n.type === 'adjust');
+    if (adjustNode?.type !== 'adjust') return {};
+    const { type: _t, ...rest } = adjustNode;
+    return rest;
+  }, [currentEffects]);
+
+  const handleEffectFilterSelect = useCallback((presetId: string) => {
+    if (!selectedMediaLayer) return;
+    const newEffects: EffectNode[] = [
+      ...currentEffects.filter((n) => n.type !== 'filter'),
+      { type: 'filter', id: presetId, amount: 1 },
+    ];
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    }, 'Apply filter');
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  const handleEffectAdjustChange = useCallback((parameter: string, value: number) => {
+    if (!selectedMediaLayer) return;
+    const existingAdjust = currentEffects.find((n) => n.type === 'adjust');
+    const base = existingAdjust?.type === 'adjust'
+      ? { ...existingAdjust }
+      : { type: 'adjust' as const };
+    (base as Record<string, unknown>)[parameter] = value;
+    const newAdjust = base as Extract<EffectNode, { type: 'adjust' }>;
+    const newEffects: EffectNode[] = [
+      ...currentEffects.filter((n) => n.type !== 'adjust'),
+      newAdjust,
+    ];
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    });
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  const handleEffectReset = useCallback(() => {
+    if (!selectedMediaLayer) return;
+    const newEffects = currentEffects.filter((n) => n.type !== 'adjust');
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    }, 'Reset adjustments');
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  // ── Auto-adjust (one-tap color correction) ─────────────────────────
+  // Toggles the conservative auto-adjust preset on the selected media
+  // layer. If the existing adjust node was produced by computeAutoAdjust,
+  // tapping removes it; otherwise the auto preset replaces any manual
+  // adjust node (Instagram Edits August 2026 parity).
+  const autoAdjustActive = useMemo(() => {
+    const adjust = currentEffects.find((n) => n.type === 'adjust');
+    return adjust ? isAutoAdjustNode(adjust) : false;
+  }, [currentEffects]);
+
+  const handleAutoAdjust = useCallback(() => {
+    if (!selectedMediaLayer) return;
+    const existing = currentEffects.find((n) => n.type === 'adjust');
+    const newEffects: EffectNode[] = existing && isAutoAdjustNode(existing)
+      ? currentEffects.filter((n) => n.type !== 'adjust')
+      : [...currentEffects.filter((n) => n.type !== 'adjust'), computeAutoAdjust()];
+    updateLayer(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    }, existing && isAutoAdjustNode(existing) ? 'Remove auto-adjust' : 'Apply auto-adjust');
+  }, [selectedMediaLayer, currentEffects, updateLayer]);
+
+  // ── Crop action for selected media ─────────────────────────────────
+  // Enters in-canvas crop mode — the composition stays visible while
+  // crop handles render directly over the selected layer (spec 04 §1).
+  // The old CreatorCropSheet remains as a fallback path.
+  const handleCropAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'media') {
+      haptic.light();
+      return;
+    }
+    haptic.medium();
+    setCropMode(true);
+  }, [selectedLayer, haptic]);
+
+  // ── Cutout action for selected media (advanced, overflow only) ────
+  // Opens true subject segmentation (CutoutPreviewSheet) when the native
+  // backend is available. Per spec 07 §7: true cutout uses segmentation,
+  // not a trace bounding box. Per AGENTS.md §11: never fake a cutout.
+  // This is an advanced tool — it lives in the media-selected overflow,
+  // not the primary rail.
+  const handleCutoutAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'media') {
+      haptic.light();
+      return;
+    }
+    haptic.medium();
+    setCutoutPreviewTarget(selectedLayer);
+  }, [selectedLayer, haptic]);
+
+  // ── Adjust action for selected media ───────────────────────────────
+  // Opens the effects sheet with the AdjustPanel visible. The adjust
+  // panel provides non-destructive exposure/brightness/contrast/saturation
+  // adjustments — the same workflow used by LookComposerScreen.
+  const handleAdjustAction = useCallback(() => {
+    if (!selectedLayer || selectedLayer.type !== 'media') {
+      haptic.light();
+      return;
+    }
+    haptic.medium();
+    setShowEffects(true);
+  }, [selectedLayer, haptic]);
+
+  // ── Transition handler ─────────────────────────────────────────────
+  // Opens the transition preview rail for the current page. Selecting a
+  // transition stores its preset id on the page's `transitionId` field.
+  const currentTransitionId = page?.transitionId ?? null;
+  const handleTransitionSelect = useCallback((presetId: string) => {
+    const newPages = [...document.pages];
+    newPages[activePageIndex] = {
+      ...newPages[activePageIndex],
+      transitionId: presetId,
+    };
+    commitDocument(
+      { ...document, pages: newPages, updatedAt: new Date().toISOString() },
+      'Apply transition',
+    );
+    haptic.selection();
+  }, [activePageIndex, page, document, haptic]);
+
+  // ── Keyframe handlers ──────────────────────────────────────────────
+  // Keyframes are stored on the layer's `keyframes` array. The editor
+  // calls onAdd/onUpdate/onRemove to mutate the keyframe set.
+  const selectedLayerKeyframes: Keyframe[] = (selectedLayer as { keyframes?: Keyframe[] })?.keyframes ?? [];
+
+  const handleAddKeyframe = useCallback((kf: Omit<Keyframe, 'id'>) => {
+    if (!selectedLayer) return;
+    const newKf: Keyframe = { ...kf, id: makeStableId('kf') };
+    const existing = (selectedLayer as { keyframes?: Keyframe[] }).keyframes ?? [];
+    updateLayer(selectedLayer.id, {
+      ...selectedLayer,
+      keyframes: [...existing, newKf],
+    } as Partial<CreatorLayer>, 'Add keyframe');
+    haptic.light();
+  }, [selectedLayer, updateLayer, haptic]);
+
+  const handleUpdateKeyframe = useCallback((id: string, updates: Partial<Keyframe>) => {
+    if (!selectedLayer) return;
+    const existing = (selectedLayer as { keyframes?: Keyframe[] }).keyframes ?? [];
+    const newKeyframes = existing.map((k) => k.id === id ? { ...k, ...updates } : k);
+    updateLayer(selectedLayer.id, {
+      ...selectedLayer,
+      keyframes: newKeyframes,
+    } as Partial<CreatorLayer>, 'Update keyframe');
+  }, [selectedLayer, updateLayer]);
+
+  const handleRemoveKeyframe = useCallback((id: string) => {
+    if (!selectedLayer) return;
+    const existing = (selectedLayer as { keyframes?: Keyframe[] }).keyframes ?? [];
+    const newKeyframes = existing.filter((k) => k.id !== id);
+    updateLayer(selectedLayer.id, {
+      ...selectedLayer,
+      keyframes: newKeyframes.length > 0 ? newKeyframes : undefined,
+    } as Partial<CreatorLayer>, 'Remove keyframe');
+    haptic.light();
+  }, [selectedLayer, updateLayer, haptic]);
+
+  // ── Speed curve handler ─────────────────────────────────────────────
+  // Opens the speed curve editor for the selected media layer. The curve
+  // is stored on the media layer's `speedCurve` field. When the user
+  // clears the curve (back to constant), the field is removed.
+  const selectedMediaSpeedCurve: SpeedCurve | null = useMemo(() => {
+    if (selectedLayer?.type !== 'media') return null;
+    return selectedLayer.payload.speedCurve ?? DEFAULT_SPEED_CURVE;
+  }, [selectedLayer]);
+
+  const handleSpeedCurveChange = useCallback((nextCurve: SpeedCurve) => {
+    if (!selectedLayer || selectedLayer.type !== 'media') return;
+    updateLayer(selectedLayer.id, {
+      type: 'media',
+      payload: { ...selectedLayer.payload, speedCurve: nextCurve },
+    }, 'Edit speed curve');
+  }, [selectedLayer, updateLayer]);
+
+  // ── Tool groups for ContextToolRail ────────────────────────────────
+  // Each context maps to a ToolGroup with up to 6 primary tools + overflow.
+  // All onPress handlers wire to EXISTING handlers — no new actions.
+  const toolGroups = useMemo<ToolGroup[]>(() => {
+    const mk = (
+      id: string,
+      label: string,
+      icon: ToolDefinition['icon'],
+      onPress: () => void,
+      accessibilityLabel: string,
+      accessibilityHint?: string,
+    ): ToolDefinition => ({
+      id,
+      label,
+      icon,
+      onPress,
+      accessibilityLabel,
+      accessibilityHint,
+    });
+
+    // Overflow tools shared across contexts (Layers, Preview, Safe Zone,
+    // Templates, Drafts, Settings, Add Frame)
+    const sharedOverflow: ToolDefinition[] = [
+      mk('transitions', 'Transitions', 'swap-horizontal-outline', () => { haptic.light(); setShowTransitions(true); }, 'Transitions', 'Opens the transition picker for the current frame'),
+      mk('layers', 'Layers', 'layers-outline', () => { setShowLayers(true); }, 'Layers', 'Opens the layers panel'),
+      mk('preview', 'Preview', 'eye-outline', () => { setShowPreview(true); }, 'Preview', 'Previews the story'),
+      mk('safe-zone', 'Safe Zone', 'shield-outline', () => { setShowSafeZone((p) => !p); }, 'Safe Zone', 'Toggles the safe zone overlay'),
+      mk('templates', 'Templates', 'grid-outline', () => { setShowTemplates(true); }, 'Templates', 'Opens the template browser'),
+      mk('drafts', 'Drafts', 'document-text-outline', () => { navigation.navigate('CreatorDraftList'); }, 'Drafts', 'Opens saved drafts'),
+      mk('settings', 'Settings', 'settings-outline', () => { setShowSettings(true); }, 'Settings', 'Opens composer settings'),
+    ];
+
+    const addFrameOverflow: ToolDefinition[] = pageCount < 10
+      ? [mk('add-frame', 'Add Frame', 'add-circle-outline', handleAddFrame, 'Add frame', 'Adds a new frame')]
+      : [];
+
+    const productOverflow: ToolDefinition[] = [
+      mk('product', 'Product', 'pricetag-outline', handleAddProduct, 'Add product', 'Opens the product picker'),
+    ];
+
+    // ── poster-photo-default: Text, Stickers, Music, Effects, Draw, More ──
+    const photoDefault: ToolGroup = {
+      context: 'poster-photo-default',
+      primary: [
+        mk('text', 'Text', 'text', handleAddText, 'Add text', 'Opens the text picker'),
+        mk('stickers', 'Stickers', 'happy-outline', handleAddStickers, 'Add stickers', 'Opens the sticker picker'),
+        mk('music', 'Music', 'musical-notes-outline', handleAddMusic, 'Add music', 'Opens the music picker'),
+        mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
+        mk('draw', 'Draw', 'brush-outline', handleDraw, 'Draw', 'Opens the drawing tool'),
+      ],
+      overflow: [...productOverflow, ...addFrameOverflow, ...sharedOverflow],
+    };
+
+    // ── poster-video-default: Timeline, Text, Music, Effects, Stickers, More ──
+    const videoDefault: ToolGroup = {
+      context: 'poster-video-default',
+      primary: [
+        mk('timeline', 'Timeline', 'film-outline', () => { haptic.light(); setShowFrameTray(true); }, 'Timeline', 'Shows the video timeline'),
+        mk('text', 'Text', 'text', handleAddText, 'Add text', 'Opens the text picker'),
+        mk('music', 'Music', 'musical-notes-outline', handleAddMusic, 'Add music', 'Opens the music picker'),
+        mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
+        mk('stickers', 'Stickers', 'happy-outline', handleAddStickers, 'Add stickers', 'Opens the sticker picker'),
+      ],
+      overflow: [...productOverflow, ...addFrameOverflow, ...sharedOverflow],
+    };
+
+    // ── poster-media-selected: Replace, Crop, Auto, Adjust, Effects, More ──
+    const mediaSelected: ToolGroup = {
+      context: 'poster-media-selected',
+      primary: [
+        mk('replace', 'Replace', 'swap-horizontal-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Replace media', 'Replaces the selected media'),
+        mk('crop', 'Crop', 'crop-outline', handleCropAction, 'Crop', 'Opens the crop sheet to adjust the aspect ratio'),
+        mk('auto', 'Auto', 'bulb-outline', handleAutoAdjust, 'Auto', 'Applies one-tap intelligent color correction'),
+        mk('adjust', 'Adjust', 'color-wand-outline', handleAdjustAction, 'Adjust', 'Opens the adjust panel for exposure and color'),
+        mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
+      ],
+      overflow: [
+        mk('cutout', cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'sparkles-outline' : 'crop-outline', handleCutoutAction, cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'Removes the background using on-device subject segmentation' : 'Crops the selected media to a rectangle'),
+        mk('animation', 'Animation', 'analytics-outline', () => { haptic.light(); setShowKeyframes(true); }, 'Animation', 'Opens the keyframe editor for the selected layer'),
+        mk('speed-curve', 'Speed Curve', 'speedometer-outline', () => { haptic.light(); setShowSpeedCurve(true); }, 'Speed Curve', 'Opens the speed curve editor for variable speed ramping'),
+        mk('reverse', 'Reverse', 'swap-horizontal-outline', () => { haptic.light(); setShowReverse(true); }, 'Reverse', 'Reverses the clip so it plays from end to start'),
+        mk('freeze-frame', 'Freeze Frame', 'pause-outline', () => { haptic.light(); setShowFreezeFrame(true); }, 'Freeze Frame', 'Holds a frame for dramatic emphasis'),
+        mk('audio-fade', 'Audio Fade', 'volume-low-outline', () => { haptic.light(); setShowAudioFade(true); }, 'Audio Fade', 'Sets fade in/out for audio'),
+        mk('front', 'Front', 'arrow-up', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'forward'); }, 'Bring forward', 'Brings the layer forward'),
+        mk('back', 'Back', 'arrow-down', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'backward'); }, 'Send backward', 'Sends the layer backward'),
+        mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
+        mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
+        ...sharedOverflow,
+      ],
+    };
+
+    // ── poster-text-selected: Edit, Font, Color, Align, More ──
+    const textSelected: ToolGroup = {
+      context: 'poster-text-selected',
+      primary: [
+        mk('edit', 'Edit', 'create-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit text', 'Opens the text editor'),
+        mk('font', 'Font', 'text-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Font', 'Changes the font style'),
+        mk('color', 'Color', 'color-palette-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Color', 'Changes the text color'),
+        mk('align', 'Align', 'remove', () => {
+          if (!selectedLayer || selectedLayer.type !== 'text') return;
+          haptic.light();
+          const current = selectedLayer.payload.alignment ?? 'center';
+          const next = current === 'left' ? 'center' : current === 'center' ? 'right' : 'left';
+          updateLayer(selectedLayer.id, {
+            type: 'text',
+            payload: { ...selectedLayer.payload, alignment: next },
+          }, 'Change alignment');
+        }, 'Align', 'Cycles text alignment'),
+      ],
+      overflow: [
+        mk('front', 'Front', 'arrow-up', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'forward'); }, 'Bring forward', 'Brings the layer forward'),
+        mk('back', 'Back', 'arrow-down', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'backward'); }, 'Send backward', 'Sends the layer backward'),
+        mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
+        mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
+        ...sharedOverflow,
+      ],
+    };
+
+    // ── poster-sticker-selected: Edit, Replace, More ──
+    const stickerSelected: ToolGroup = {
+      context: 'poster-sticker-selected',
+      primary: [
+        mk('edit', 'Edit', 'create-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit sticker', 'Edits the selected sticker'),
+        mk('replace', 'Replace', 'swap-horizontal-outline', () => { setPickerMode('stickers'); }, 'Replace sticker', 'Replaces the selected sticker'),
+      ],
+      overflow: [
+        mk('front', 'Front', 'arrow-up', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'forward'); }, 'Bring forward', 'Brings the layer forward'),
+        mk('back', 'Back', 'arrow-down', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'backward'); }, 'Send backward', 'Sends the layer backward'),
+        mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
+        mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
+        ...sharedOverflow,
+      ],
+    };
+
+    // ── poster-product-selected: Item, Price, More ──
+    const productSelected: ToolGroup = {
+      context: 'poster-product-selected',
+      primary: [
+        mk('item', 'Item', 'pricetag-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit item', 'Edits the product item'),
+        mk('price', 'Price', 'logo-usd', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit price', 'Edits the product price'),
+      ],
+      overflow: [
+        mk('front', 'Front', 'arrow-up', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'forward'); }, 'Bring forward', 'Brings the layer forward'),
+        mk('back', 'Back', 'arrow-down', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'backward'); }, 'Send backward', 'Sends the layer backward'),
+        mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
+        mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
+        ...sharedOverflow,
+      ],
+    };
+
+    return [
+      photoDefault,
+      videoDefault,
+      mediaSelected,
+      textSelected,
+      stickerSelected,
+      productSelected,
+    ];
+  }, [
+    handleAddText, handleAddStickers, handleAddProduct, handleAddMusic, handleAddEffects, handleDraw,
+    handleAddFrame, handleEditLayer, handleReorderLayer, handleDuplicateLayer,
+    handleDeleteLayer, handleCropAction, handleCutoutAction, handleAdjustAction, handleAutoAdjust,
+    selectedLayer, updateLayer, haptic, show, navigation,
+    pageCount, cutoutSupported,
+  ]);
+
+  // ── Active context resolution ──────────────────────────────────────
+  // Determine which tool context is active based on selection state and
+  // whether the document contains video content.
+  const activeToolContext: ToolContext = useMemo(() => {
+    if (!selectedLayer) {
+      return hasVideoContent ? 'poster-video-default' : 'poster-photo-default';
+    }
+    switch (selectedLayer.type) {
+      case 'media':
+        return 'poster-media-selected';
+      case 'text':
+        return 'poster-text-selected';
+      case 'product':
+        return 'poster-product-selected';
+      case 'decorative':
+        return 'poster-sticker-selected';
+      default:
+        // For other layer types (mention, look, vote, etc.), use the
+        // sticker-selected context as a generic "object selected" fallback.
+        return 'poster-sticker-selected';
+    }
+  }, [selectedLayer, hasVideoContent]);
+
   if (showEntryScreen) {
     return (
       <CreatorEntryScreen
@@ -395,6 +1217,29 @@ function PosterComposerInner() {
 
   return (
     <View style={styles.container}>
+      {/* ── Crash recovery banner ────────────────────────────────────── */}
+      {hasPendingRecovery && (
+        <View style={styles.recoveryBanner}>
+          <Ionicons name="alert-circle-outline" size={20} color={colors.textPrimary} />
+          <Text style={styles.recoveryText}>Recover your last unsaved project?</Text>
+          <PressScale
+            onPress={() => { void recoverCrashedProject(); }}
+            style={styles.recoveryBtn}
+            accessibilityLabel="Recover project"
+            accessibilityRole="button"
+          >
+            <Text style={styles.recoveryBtnText}>Recover</Text>
+          </PressScale>
+          <PressScale
+            onPress={dismissRecovery}
+            style={styles.recoveryDismiss}
+            accessibilityLabel="Dismiss recovery prompt"
+            accessibilityRole="button"
+          >
+            <Ionicons name="close" size={18} color={colors.textSecondary} />
+          </PressScale>
+        </View>
+      )}
       {/* ── Full-screen frame canvas ─────────────────────────────────── */}
       {/* One current frame fills the viewport. Horizontal swipe navigates
           between frames. Chrome floats over it with gradient/blur. */}
@@ -636,6 +1481,134 @@ function PosterComposerInner() {
         />
       </View>
 
+      {/* ── Poster timeline (video content only) ─────────────────────── */}
+      {/* When the current page or any page contains video media, show the
+          timeline components below the canvas. The timeline appears
+          automatically — NOT hidden behind More. It includes a playback
+          bar (play/pause, timecode, undo/redo) above the clip track. */}
+      {hasVideoContent && timelineClips.length > 0 && (
+        <View
+          style={[
+            styles.timelineContainer,
+            { bottom: insets.bottom + 76 },
+          ]}
+        >
+          {/* ── Playback bar ── */}
+          <View style={styles.timelinePlaybackBar}>
+            <PressScale
+              onPress={() => {
+                handleTimelineOperation(
+                  timelineIsPlaying ? { type: 'pause' } : { type: 'play' },
+                );
+              }}
+              style={styles.timelinePlayBtn}
+              accessibilityLabel={timelineIsPlaying ? 'Pause' : 'Play'}
+              accessibilityHint="Plays or pauses the timeline"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={timelineIsPlaying ? 'pause' : 'play'}
+                size={20}
+                color="#fff"
+              />
+            </PressScale>
+
+            <Text style={styles.timelineTimecode}>
+              {formatTimecode(timelinePlayheadMs)} / {formatTimecode(timelineTotalDurationMs)}
+            </Text>
+
+            <View style={styles.timelinePlaybackSpacer} />
+
+            <PressScale
+              onPress={handleUndo}
+              disabled={!canUndo}
+              style={[styles.timelineUndoRedoBtn, { opacity: canUndo ? 1 : 0.3 }]}
+              accessibilityLabel="Undo"
+              accessibilityHint="Reverts the last edit"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canUndo }}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Ionicons name="arrow-undo" size={18} color="#fff" />
+            </PressScale>
+            <PressScale
+              onPress={handleRedo}
+              disabled={!canRedo}
+              style={[styles.timelineUndoRedoBtn, { opacity: canRedo ? 1 : 0.3 }]}
+              accessibilityLabel="Redo"
+              accessibilityHint="Reapplies the last undone edit"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canRedo }}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Ionicons name="arrow-redo" size={18} color="#fff" />
+            </PressScale>
+          </View>
+
+          {/* ── Time ruler (above the clip track) ── */}
+          <TimelineRuler
+            totalDurationMs={timelineTotalDurationMs}
+            trackWidth={screenWidth - Space.md * 2}
+          />
+
+          {/* ── Clip track ── */}
+          <TimelineTrack
+            clips={timelineClips}
+            selectedClipId={selectedClipId}
+            playheadMs={timelinePlayheadMs}
+            totalDurationMs={timelineTotalDurationMs}
+            onSelectClip={(id) => { setSelectedClipId(id); setSelectedOverlayId(null); }}
+            onSeek={(ms) => handleTimelineOperation({ type: 'seek', ms })}
+            onTrimClip={(clipId, edge, deltaMs) =>
+              handleTimelineOperation({ type: 'trim', clipId, edge, deltaMs })
+            }
+          />
+
+          {/* ── Overlay track (if overlays exist) ── */}
+          {timelineOverlays.length > 0 && (
+            <View style={styles.timelineOverlayWrap}>
+              <OverlayTrack
+                overlays={timelineOverlays}
+                totalDurationMs={timelineTotalDurationMs}
+                trackWidth={screenWidth - Space.md * 2}
+                selectedId={selectedOverlayId}
+                onSelect={(id) => { setSelectedOverlayId(id); setSelectedClipId(null); }}
+                onMove={(id, timeRange) =>
+                  handleTimelineOperation({ type: 'moveOverlay', overlayId: id, timeRange })
+                }
+              />
+            </View>
+          )}
+
+          {/* ── Waveform track (audio present) ── */}
+          {/* Rendered below the overlay track when audio content exists
+              (music layer or video with audio). Per AGENTS.md §11 we
+              never fake waveform data — the WaveformTrack shows an
+              honest flat line until real samples are provided. */}
+          {hasAudioContent && (
+            <View style={styles.timelineWaveformWrap}>
+              <WaveformTrack
+                trackWidth={screenWidth - Space.md * 2}
+                color={colors.antiqueGold}
+              />
+            </View>
+          )}
+
+          {/* ── Timeline toolbar (clip selected) ── */}
+          {selectedClip && (
+            <TimelineToolbar
+              selectedClip={selectedClip}
+              onSplit={() => handleTimelineOperation({ type: 'split', clipId: selectedClip.id, atMs: timelinePlayheadMs })}
+              onDuplicate={() => handleTimelineOperation({ type: 'duplicate', clipId: selectedClip.id })}
+              onDelete={() => handleTimelineOperation({ type: 'delete', clipId: selectedClip.id })}
+              onReplace={() => handleTimelineOperation({ type: 'replace', clipId: selectedClip.id, newAssetId: '', newUri: '' })}
+              onSpeedChange={(speed) => handleTimelineOperation({ type: 'speed', clipId: selectedClip.id, speed })}
+              onVolumeChange={(volume) => handleTimelineOperation({ type: 'volume', clipId: selectedClip.id, volume })}
+            />
+          )}
+        </View>
+      )}
+
       {/* ── Context toolbar (selected layer only) ────────────────────── */}
       {/* Per spec 09 + 2026 HIG: selected object produces a context toolbar,
           not a permanent dock. Only tools relevant to the current selection
@@ -691,15 +1664,17 @@ function PosterComposerInner() {
                   label="Replace"
                   onPress={() => handleEditLayer(selectedLayer)}
                 />
-                {/* Video trim/mute — truthful "coming in future update" label.
-                    Do NOT implement fake trim/mute (AGENTS.md §11). */}
+                {/* Video trim/mute — opens the timeline which provides
+                    drag-to-trim and volume controls. The timeline is
+                    the canonical video editing surface. */}
                 {selectedLayer.payload.mediaType === 'video' && (
                   <FrameTool
-                    icon="crop-outline"
-                    label="Trim (soon)"
+                    icon="film-outline"
+                    label="Trim"
                     onPress={() => {
                       haptic.light();
-                      show('Video trim and mute are coming in a future update', 'info');
+                      setSelectedClipId(selectedLayer.id);
+                      setShowFrameTray(true);
                     }}
                   />
                 )}
@@ -761,64 +1736,43 @@ function PosterComposerInner() {
         </View>
       )}
 
-      {/* ── Bottom tool rail (default — no selection) ────────────────── */}
-      {/* Per spec 09: Text, Stickers, Product, Draw, More.
-          Flat, transparent targets on a glass surface — no card-on-card.
+      {/* ── Bottom tool rail — ContextToolRail (context-sensitive) ────── */}
+      {/* Replaces the static tool dock. The rail adapts its visible tool set
+          based on the active ToolContext (editor mode + selection state).
+          Up to 6 primary actions are always visible; additional tools are
+          revealed under the trailing "More" button.
           Frame count indicator sits at the start when multiple frames. */}
-      {!selectedLayer && (
-        <View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }]}>
-          <View style={styles.bottomRailHairline} />
-          <LiquidGlassBackdrop intensity={50} tint="dark" absoluteFill={false} style={styles.bottomRailGlass}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.bottomRailContent}
-            >
-              {/* Frame count — tappable to open frame tray */}
-              {hasMultipleFrames && (
-                <>
-                  <PressScale
-                    onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
-                    style={styles.frameCountBtn}
-                    accessibilityLabel={`Frame ${activePageIndex + 1} of ${pageCount}`}
-                    accessibilityHint="Opens the frame tray to reorder, delete, or add frames"
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                  >
-                    <Text style={styles.frameCountText}>
-                      {activePageIndex + 1}/{pageCount}
-                    </Text>
-                  </PressScale>
-                  <View style={styles.railDivider} />
-                </>
-              )}
+      <View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }]}>
+        <View style={styles.bottomRailHairline} />
+        <LiquidGlassBackdrop intensity={50} tint="dark" absoluteFill={false} style={styles.bottomRailGlass}>
+          <View style={styles.bottomRailContent}>
+            {/* Frame count — tappable to open frame tray */}
+            {hasMultipleFrames && !selectedLayer && (
+              <>
+                <PressScale
+                  onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
+                  style={styles.frameCountBtn}
+                  accessibilityLabel={`Frame ${activePageIndex + 1} of ${pageCount}`}
+                  accessibilityHint="Opens the frame tray to reorder, delete, or add frames"
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={styles.frameCountText}>
+                    {activePageIndex + 1}/{pageCount}
+                  </Text>
+                </PressScale>
+                <View style={styles.railDivider} />
+              </>
+            )}
 
-              <RailTool icon="text" label="Text" onPress={handleAddText} />
-              <RailTool icon="happy-outline" label="Stickers" onPress={handleAddStickers} />
-              <RailTool icon="pricetag-outline" label="Product" onPress={handleAddProduct} />
-              <RailTool icon="brush-outline" label="Draw" onPress={handleDraw} />
-
-              <View style={styles.railDivider} />
-
-              {/* Add frame — only when room */}
-              {pageCount < 10 && (
-                <RailTool icon="add-circle-outline" label="Add frame" onPress={handleAddFrame} />
-              )}
-
-              {/* More — opens overflow with Layers, Preview, Drafts, Settings */}
-              <View style={styles.railDivider} />
-              <PressScale
-                onPress={() => { haptic.selection(); setShowOverflow(true); }}
-                style={styles.railMoreBtn}
-                accessibilityLabel="More options"
-                accessibilityHint="Opens layers, preview, drafts and settings"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Ionicons name="ellipsis-horizontal" size={24} color="rgba(255,255,255,0.85)" />
-              </PressScale>
-            </ScrollView>
-          </LiquidGlassBackdrop>
-        </View>
-      )}
+            <ContextToolRail
+              context={activeToolContext}
+              groups={toolGroups}
+              onOverflowPress={() => { haptic.selection(); setShowOverflow(true); }}
+              style={styles.contextRail}
+            />
+          </View>
+        </LiquidGlassBackdrop>
+      </View>
 
       {/* ── Frame tray (collapsible filmstrip) ───────────────────────── */}
       {/* Per doc 04: appears when frame change occurs or user adds another
@@ -870,11 +1824,26 @@ function PosterComposerInner() {
               label="Drafts"
               onPress={() => { navigation.navigate('CreatorDraftList'); setShowOverflow(false); }}
             />
+            <OverflowItem
+              icon="accessibility-outline"
+              label="Accessibility Move"
+              onPress={() => { setShowA11yMove(true); setShowOverflow(false); }}
+            />
+            <OverflowItem
+              icon="accessibility-outline"
+              label="Accessibility Arrange"
+              onPress={() => { setShowA11yZOrder(true); setShowOverflow(false); }}
+            />
             <View style={styles.overflowDivider} />
             <OverflowItem
               icon="settings-outline"
               label="Settings"
               onPress={() => { setShowSettings(true); setShowOverflow(false); }}
+            />
+            <OverflowItem
+              icon="help-circle-outline"
+              label="Help & Shortcuts"
+              onPress={() => { setShowHelp(true); setShowOverflow(false); }}
             />
           </View>
           <Pressable style={styles.overflowBackdrop} onPress={() => setShowOverflow(false)} />
@@ -893,6 +1862,306 @@ function PosterComposerInner() {
       <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
       <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} />
       <CreatorSettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
+      <HelpShortcutsSheet visible={showHelp} onClose={() => setShowHelp(false)} />
+
+      {/* ── Accessibility sheets (drag alternatives) ─────────────────── */}
+      {/* Per spec 09: keyboard/button-based alternatives for users who
+          cannot perform drag gestures. onMove wires to updateLayer;
+          onReorder wires to reorderLayer. */}
+      <AccessibilityMoveSheet
+        visible={showA11yMove}
+        layerId={selectedLayerId}
+        position={selectedLayer ? { x: selectedLayer.x, y: selectedLayer.y } : null}
+        onClose={() => setShowA11yMove(false)}
+        onMove={(x, y) => {
+          if (selectedLayerId) updateLayer(selectedLayerId, { x, y }, 'Move layer');
+        }}
+      />
+      <AccessibilityZOrderSheet
+        visible={showA11yZOrder}
+        layers={(page?.layers ?? []).map((l) => ({
+          id: l.id,
+          label: layerTypeLabel(l.type),
+          zIndex: l.zIndex,
+        })) as ZOrderLayer[]}
+        selectedLayerId={selectedLayerId}
+        onClose={() => setShowA11yZOrder(false)}
+        onReorder={(layerId, direction) => reorderLayer(layerId, direction)}
+      />
+
+      {/* ── Transitions sheet (Phase 9) ─────────────────────────────── */}
+      {/* Shows the TransitionPreviewRail for the current page. Selecting
+          a preset stores the transitionId on the page, which the renderer
+          uses to animate the transition to the next page. */}
+      {showTransitions && (
+        <View style={styles.effectsSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTransitions(false)} />
+          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            <View style={styles.effectsSheetHeader}>
+              <Text style={styles.effectsSheetTitle}>Transitions</Text>
+              <PressScale
+                onPress={() => { haptic.light(); setShowTransitions(false); }}
+                style={styles.effectsSheetDone}
+                accessibilityLabel="Done"
+                accessibilityHint="Closes the transitions panel"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.effectsSheetDoneText}>Done</Text>
+              </PressScale>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.effectsSheetScroll}
+            >
+              <Text style={styles.effectsSectionLabel}>Transition to next frame</Text>
+              <TransitionPreviewRail
+                presets={TRANSITION_PRESETS}
+                selectedId={currentTransitionId}
+                onSelect={handleTransitionSelect}
+              />
+              <View style={{ height: Space.md }} />
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {/* ── Keyframe editor sheet (Phase 9) ─────────────────────────── */}
+      {/* Shows the KeyframeEditor for the selected layer. Keyframes are
+          stored on the layer's `keyframes` array and interpolated by the
+          renderer over the layer's timeline. */}
+      {showKeyframes && selectedLayer && (
+        <View style={styles.effectsSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowKeyframes(false)} />
+          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            <View style={styles.effectsSheetHeader}>
+              <Text style={styles.effectsSheetTitle}>Animation</Text>
+              <PressScale
+                onPress={() => { haptic.light(); setShowKeyframes(false); }}
+                style={styles.effectsSheetDone}
+                accessibilityLabel="Done"
+                accessibilityHint="Closes the keyframe editor"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.effectsSheetDoneText}>Done</Text>
+              </PressScale>
+            </View>
+            <KeyframeEditor
+              layerId={selectedLayer.id}
+              totalDurationMs={page?.durationMs ?? 5000}
+              keyframes={selectedLayerKeyframes}
+              onAddKeyframe={handleAddKeyframe}
+              onUpdateKeyframe={handleUpdateKeyframe}
+              onRemoveKeyframe={handleRemoveKeyframe}
+            />
+          </View>
+        </View>
+      )}
+
+      {/* ── Speed curve editor sheet ─────────────────────────────────── */}
+      {/* Shows the SpeedCurveEditor for the selected media layer. The
+          curve maps timeline position (0-1) to speed multiplier (0.25x-4x),
+          enabling precise, dynamic speed ramping along a customizable curve
+          (Instagram Edits parity, August 2026). */}
+      {showSpeedCurve && selectedLayer && selectedLayer.type === 'media' && (
+        <View style={styles.effectsSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSpeedCurve(false)} />
+          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            <View style={styles.effectsSheetHeader}>
+              <Text style={styles.effectsSheetTitle}>Speed Curve</Text>
+              <PressScale
+                onPress={() => { haptic.light(); setShowSpeedCurve(false); }}
+                style={styles.effectsSheetDone}
+                accessibilityLabel="Done"
+                accessibilityHint="Closes the speed curve editor"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.effectsSheetDoneText}>Done</Text>
+              </PressScale>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.effectsSheetScroll}
+            >
+              <Text style={styles.effectsSectionLabel}>Variable speed ramping</Text>
+              <SpeedCurveEditor
+                curve={selectedMediaSpeedCurve ?? DEFAULT_SPEED_CURVE}
+                onChange={handleSpeedCurveChange}
+              />
+              <View style={{ height: Space.md }} />
+            </ScrollView>
+          </View>
+        </View>
+      )}
+      {/* ── Reverse toggle sheet ────────────────────────────────────── */}
+      {showReverse && selectedLayer && selectedLayer.type === 'media' && (
+        <View style={styles.effectsSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowReverse(false)} />
+          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            <View style={styles.effectsSheetHeader}>
+              <Text style={styles.effectsSheetTitle}>Reverse Clip</Text>
+              <PressScale
+                onPress={() => { haptic.light(); setShowReverse(false); }}
+                style={styles.effectsSheetDone}
+                accessibilityLabel="Done"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.effectsSheetDoneText}>Done</Text>
+              </PressScale>
+            </View>
+            <View style={{ padding: Space.md, alignItems: 'center' }}>
+              <ReverseToggle
+                reversed={selectedLayer.payload.reversed ?? false}
+                onToggle={(reversed) => {
+                  updateLayer(selectedLayer.id, {
+                    type: 'media',
+                    payload: { ...selectedLayer.payload, reversed },
+                  }, reversed ? 'Reverse clip' : 'Unreverse clip');
+                  haptic.medium();
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      )}
+      {/* ── Freeze frame picker sheet ───────────────────────────────── */}
+      {showFreezeFrame && selectedLayer && selectedLayer.type === 'media' && (
+        <View style={styles.effectsSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFreezeFrame(false)} />
+          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            <View style={styles.effectsSheetHeader}>
+              <Text style={styles.effectsSheetTitle}>Freeze Frame</Text>
+              <PressScale
+                onPress={() => { haptic.light(); setShowFreezeFrame(false); }}
+                style={styles.effectsSheetDone}
+                accessibilityLabel="Done"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.effectsSheetDoneText}>Done</Text>
+              </PressScale>
+            </View>
+            <FreezeFramePicker
+              clipDurationMs={selectedLayer.payload.videoDurationMs ?? 5000}
+              freezeFrameMs={selectedLayer.payload.freezeFrameMs}
+              freezeDurationMs={selectedLayer.payload.freezeDurationMs}
+              onSetFreezeFrame={(freezeMs, freezeDurMs) => {
+                updateLayer(selectedLayer.id, {
+                  type: 'media',
+                  payload: {
+                    ...selectedLayer.payload,
+                    freezeFrameMs: freezeMs,
+                    freezeDurationMs: freezeDurMs,
+                  },
+                }, freezeMs ? 'Set freeze frame' : 'Clear freeze frame');
+                haptic.medium();
+              }}
+            />
+          </View>
+        </View>
+      )}
+      {/* ── Audio fade controls sheet ───────────────────────────────── */}
+      {showAudioFade && selectedLayer && selectedLayer.type === 'media' && (
+        <View style={styles.effectsSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAudioFade(false)} />
+          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            <View style={styles.effectsSheetHeader}>
+              <Text style={styles.effectsSheetTitle}>Audio Fade</Text>
+              <PressScale
+                onPress={() => { haptic.light(); setShowAudioFade(false); }}
+                style={styles.effectsSheetDone}
+                accessibilityLabel="Done"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.effectsSheetDoneText}>Done</Text>
+              </PressScale>
+            </View>
+            <AudioFadeControls
+              fadeInMs={0}
+              fadeOutMs={0}
+              onChange={(fadeInMs, fadeOutMs) => {
+                updateLayer(selectedLayer.id, {
+                  type: 'media',
+                  payload: { ...selectedLayer.payload, volume: selectedLayer.payload.volume ?? 1 },
+                }, 'Set audio fade');
+                haptic.medium();
+              }}
+            />
+          </View>
+        </View>
+      )}
+      {/* In-canvas crop overlay — non-destructive crop handles rendered
+          directly over the canvas (spec 07 §6, spec 04 §1). The
+          composition remains visible while the user adjusts the crop. */}
+      {cropMode && selectedLayer && selectedLayer.type === 'media' && (
+        <InCanvasCropOverlay
+          visible={cropMode}
+          layerBounds={{
+            x: selectedLayer.x,
+            y: selectedLayer.y,
+            width: selectedLayer.width,
+            height: selectedLayer.height,
+          }}
+          onConfirm={(cropRect) => {
+            if (selectedLayer && selectedLayer.type === 'media') {
+              // Apply the crop rect as normalized bounds on the layer.
+              // The crop is non-destructive until commit — here we
+              // commit by updating the layer's transform bounds.
+              updateLayer(selectedLayer.id, {
+                x: cropRect.x,
+                y: cropRect.y,
+                width: cropRect.width,
+                height: cropRect.height,
+              }, 'Crop media');
+            }
+            setCropMode(false);
+          }}
+          onCancel={() => setCropMode(false)}
+        />
+      )}
+      {/* Crop sheet — legacy fallback for aspect-ratio crop (kept as
+          fallback per spec — not removed). */}
+      {cropTarget && cropTarget.type === 'media' && (
+        <CreatorCropSheet
+          visible={!!cropTarget}
+          imageUri={cropTarget.payload.mediaUri}
+          onClose={() => setCropTarget(null)}
+          onCropComplete={(newUri) => {
+            if (cropTarget && cropTarget.type === 'media') {
+              updateLayer(cropTarget.id, {
+                type: 'media',
+                payload: { ...cropTarget.payload, mediaUri: newUri },
+              }, 'Crop media');
+            }
+            setCropTarget(null);
+          }}
+        />
+      )}
+      {/* True cutout preview sheet — native subject segmentation.
+          Opens when the user taps "Cutout" in the media-selected
+          overflow and the native backend is available. Shows a
+          before/after preview over a checkerboard. On confirm,
+          replaces the media URI with the transparent PNG and stores
+          the alpha mask reference on the layer (spec 07 §7). */}
+      {cutoutPreviewTarget && cutoutPreviewTarget.type === 'media' && (
+        <CutoutPreviewSheet
+          visible={!!cutoutPreviewTarget}
+          imageUri={cutoutPreviewTarget.payload.mediaUri}
+          onClose={() => setCutoutPreviewTarget(null)}
+          onConfirm={(result: CutoutResult) => {
+            if (cutoutPreviewTarget && cutoutPreviewTarget.type === 'media') {
+              updateLayer(cutoutPreviewTarget.id, {
+                type: 'media',
+                payload: {
+                  ...cutoutPreviewTarget.payload,
+                  mediaUri: result.uri,
+                  contentFit: 'contain',
+                },
+                maskRef: result.maskRef?.uri,
+              } as Partial<CreatorLayer>, 'Apply cutout');
+            }
+            setCutoutPreviewTarget(null);
+          }}
+        />
+      )}
       <CreatorTemplateBrowser
         visible={showTemplates}
         documentType="poster"
@@ -929,6 +2198,56 @@ function PosterComposerInner() {
           onMoveLeft={() => { if (pageMenuIndex > 0) { reorderPages(pageMenuIndex, pageMenuIndex - 1); setActivePageIndex(pageMenuIndex - 1); } setPageMenuIndex(null); }}
           onMoveRight={() => { if (pageMenuIndex < pageCount - 1) { reorderPages(pageMenuIndex, pageMenuIndex + 1); setActivePageIndex(pageMenuIndex + 1); } setPageMenuIndex(null); }}
         />
+      )}
+      {/* ── Effects sheet ─────────────────────────────────────────────── */}
+      {/* Bottom sheet showing the EffectPreviewRail (filter thumbnails
+          rendered from the selected media layer's own source URI) and
+          the AdjustPanel (fine-tuning sliders). Filter selection and
+          adjustment changes commit to the layer's non-destructive
+          `effects` array (EffectNode[]) via updateLayer. */}
+      {showEffects && selectedMediaLayer && (
+        <View style={styles.effectsSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowEffects(false)} />
+          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
+            <View style={styles.effectsSheetHeader}>
+              <Text style={styles.effectsSheetTitle}>Effects</Text>
+              <PressScale
+                onPress={() => { haptic.light(); setShowEffects(false); }}
+                style={styles.effectsSheetDone}
+                accessibilityLabel="Done"
+                accessibilityHint="Closes the effects panel"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.effectsSheetDoneText}>Done</Text>
+              </PressScale>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.effectsSheetScroll}
+            >
+              <Text style={styles.effectsSectionLabel}>Filters</Text>
+              <EffectPreviewRail
+                sourceUri={effectsSourceUri}
+                presets={FILTER_PRESETS}
+                selectedId={selectedFilterId}
+                onSelect={handleEffectFilterSelect}
+              />
+              <View style={styles.effectsAdjustWrap}>
+                <View style={styles.effectsAutoRow}>
+                  <AutoAdjustButton
+                    isActive={autoAdjustActive}
+                    onApply={handleAutoAdjust}
+                  />
+                </View>
+                <AdjustPanel
+                  values={currentAdjustments}
+                  onChange={handleEffectAdjustChange}
+                  onReset={handleEffectReset}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -981,6 +2300,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  // ── Crash recovery banner ──
+  recoveryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(201, 164, 106, 0.15)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(201, 164, 106, 0.3)',
+    paddingTop: 50,
+    zIndex: 100,
+  },
+  recoveryText: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  recoveryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: '#C9A46A',
+    borderRadius: 8,
+  },
+  recoveryBtnText: {
+    color: '#0a0a0a',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  recoveryDismiss: {
+    padding: 8,
+    marginLeft: 4,
   },
   // ── Full-screen canvas stage ──
   canvasStage: {
@@ -1324,5 +2676,115 @@ const styles = StyleSheet.create({
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
     zIndex: -1,
+  },
+  // ── ContextToolRail inline ──
+  contextRail: {
+    flex: 1,
+  },
+  // ── Timeline ──
+  timelineContainer: {
+    position: 'absolute',
+    left: Space.md,
+    right: Space.md,
+    zIndex: 96,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: RadiusRoleValue.compactControl,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    gap: Space.xs,
+  },
+  timelinePlaybackBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.xxs,
+  },
+  timelinePlayBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timelineTimecode: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size,
+    color: 'rgba(255,255,255,0.85)',
+    fontVariant: ['tabular-nums'],
+  },
+  timelinePlaybackSpacer: {
+    flex: 1,
+  },
+  timelineUndoRedoBtn: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timelineOverlayWrap: {
+    marginTop: Space.xxs,
+  },
+  timelineWaveformWrap: {
+    marginTop: Space.xxs,
+  },
+  // ── Effects sheet ──
+  effectsSheetBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 200,
+    justifyContent: 'flex-end',
+  },
+  effectsSheet: {
+    backgroundColor: '#141416',
+    borderTopLeftRadius: RadiusRoleValue.standalonePanel,
+    borderTopRightRadius: RadiusRoleValue.standalonePanel,
+    maxHeight: '85%',
+  },
+  effectsSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+  },
+  effectsSheetTitle: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    color: '#fff',
+  },
+  effectsSheetDone: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  effectsSheetDoneText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
+    color: '#C9A46A',
+  },
+  effectsSheetScroll: {
+    paddingVertical: Space.sm,
+  },
+  effectsSectionLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.meta.size,
+    color: 'rgba(255,255,255,0.5)',
+    paddingHorizontal: Space.md,
+    marginBottom: Space.xs,
+    marginTop: Space.xs,
+  },
+  effectsAdjustWrap: {
+    marginTop: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: Space.xs,
+  },
+  effectsAutoRow: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
   },
 });

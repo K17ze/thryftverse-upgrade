@@ -16,6 +16,8 @@ import { getTemplateById } from './templates';
 import { createStableId, makeStableId } from '../utils/createStableId';
 import { haptics } from '../utils/haptics';
 import type { CreatorInitialMedia } from '../navigation/types';
+import { ProjectStore, AssetRegistry, CrashJournal } from './core/projectStore';
+import type { ProjectPackage, ProjectType } from './core/projectStore';
 
 export interface CreatorContextValue {
   document: CreatorDocument;
@@ -30,6 +32,8 @@ export interface CreatorContextValue {
   isLoadingDraft: boolean;
 
   setDocument: (doc: CreatorDocument) => void;
+  /** Commit a document update through the history stack (undo/redo). */
+  commitDocument: (doc: CreatorDocument, label: string) => void;
   setActivePageIndex: (index: number) => void;
   selectLayer: (id: string | null) => void;
 
@@ -65,6 +69,18 @@ export interface CreatorContextValue {
   toggleMultiSelect: (layerId: string) => void;
   clearMultiSelect: () => void;
   deleteMultiSelected: () => void;
+  /** Replace the entire multi-select set. null/empty clears selection. */
+  selectLayers: (ids: string[] | null) => void;
+  /** Add/remove a single layer from the multi-select set. */
+  toggleLayerInSelection: (id: string) => void;
+  /** Commit transforms to multiple layers in a single history entry. */
+  commitMultiLayerTransform: (updates: Array<{ id: string; updates: Partial<CreatorLayer> }>, label: string) => void;
+  /** Live (no-history) position update for multiple layers — used during drag. */
+  updateLayersLive: (updates: Array<{ id: string; x?: number; y?: number }>) => void;
+  /** Reorder all selected layers to the front (top of z-stack) in one entry. */
+  bringSelectedToFront: () => void;
+  /** Reorder all selected layers to the back (bottom of z-stack) in one entry. */
+  sendSelectedToBack: () => void;
 
   alignLayerToCenter: (layerId: string) => void;
   alignLayerToHorizontalCenter: (layerId: string) => void;
@@ -105,6 +121,19 @@ export interface CreatorContextValue {
     contentFit?: 'cover' | 'contain' | 'fill';
   }) => void;
   autoArrangeLook: (layout?: 'hero' | 'pair' | 'dominant' | 'collage') => void;
+
+  // ── Durable project store integration ──────────────────────────────
+  // The ProjectStore persists project packages (document + copied media)
+  // to the file system so drafts survive gallery media deletion.
+  // These are ADDITIVE to the existing AsyncStorage draft system.
+  projectStore: ProjectStore | null;
+  assetRegistry: AssetRegistry | null;
+  hasPendingRecovery: boolean;
+  /** Recover the crashed project by loading the last journal checkpoint. */
+  recoverCrashedProject: () => Promise<void>;
+  /** Dismiss the recovery prompt without recovering. */
+  dismissRecovery: () => void;
+  importAsset: (sourceUri: string, mediaType: 'image' | 'video') => Promise<string | null>;
 }
 
 const CreatorContext = createContext<CreatorContextValue | null>(null);
@@ -263,6 +292,88 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
   const lastSavedDocRef = useRef(JSON.stringify(initialDoc));
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Durable project store refs ─────────────────────────────────────
+  // Lazy-initialized singletons. The ProjectStore persists project packages
+  // (document + copied media) to the file system so drafts survive gallery
+  // media deletion. Additive to the existing AsyncStorage draft system.
+  const projectStoreRef = useRef<ProjectStore | null>(null);
+  const assetRegistryRef = useRef<AssetRegistry | null>(null);
+  const crashJournalRef = useRef<CrashJournal | null>(null);
+  const projectIdRef = useRef<string | null>(null);
+  const [hasPendingRecovery, setHasPendingRecovery] = useState(false);
+
+  // Initialize project store on mount
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const baseDir = 'creator_projects';
+        const store = new ProjectStore(baseDir);
+        await store.init();
+        const registry = new AssetRegistry(store);
+        const journal = new CrashJournal(baseDir);
+        if (!mounted) return;
+        projectStoreRef.current = store;
+        assetRegistryRef.current = registry;
+        crashJournalRef.current = journal;
+        const pending = await journal.hasPending();
+        if (pending) {
+          setHasPendingRecovery(true);
+        }
+      } catch {
+        // Project store is optional — AsyncStorage drafts remain the fallback.
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // ── Crash recovery ─────────────────────────────────────────────────
+  // When a pending crash journal entry is detected, the composer shows
+  // a recovery prompt. If the user accepts, we load the last saved
+  // project package from the ProjectStore and restore it as the current
+  // document. If the user declines, we checkpoint the journal to clear
+  // the pending state.
+  const recoverCrashedProject = useCallback(async () => {
+    const store = projectStoreRef.current;
+    const journal = crashJournalRef.current;
+    if (!store || !journal) {
+      setHasPendingRecovery(false);
+      return;
+    }
+    try {
+      const projects = await store.listProjects();
+      if (projects.length === 0) {
+        await journal.checkpoint();
+        setHasPendingRecovery(false);
+        return;
+      }
+      // Load the most recently updated project
+      const latest = projects.sort((a, b) =>
+        (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''),
+      )[0];
+      const pkg = await store.loadProject(latest.id);
+      if (pkg?.document) {
+        // ProjectPackage.document is typed as `unknown` to avoid a hard
+        // dependency on the composition schema. Cast through unknown to
+        // the CreatorDocument type for the setDocument call.
+        setDocument(pkg.document as CreatorDocument);
+        setIsDirty(true);
+      }
+      await journal.checkpoint();
+      setHasPendingRecovery(false);
+    } catch {
+      setHasPendingRecovery(false);
+    }
+  }, []);
+
+  const dismissRecovery = useCallback(() => {
+    const journal = crashJournalRef.current;
+    if (journal) {
+      void journal.checkpoint();
+    }
+    setHasPendingRecovery(false);
+  }, []);
+
   const syncHistoryButtons = useCallback(() => {
     const h = historyRef.current;
     setCanUndo(h.canUndo());
@@ -282,6 +393,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     historyRef.current.reset(doc);
     setDocumentState(doc);
     setSelectedLayerId(null);
+    setSelectedLayerIds([]);
     setActivePageIndex(0);
     setIsDirty(false);
     lastSavedDocRef.current = JSON.stringify(doc);
@@ -348,8 +460,12 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     return () => { cancelled = true; };
   }, [sourceDocumentId, draftId, templateId, setDocument]);
 
+  // selectLayer keeps the singular `selectedLayerId` and the multi-select
+  // array `selectedLayerIds` in sync. A non-null id selects exactly that
+  // layer (single-select); null clears both — including multi-select.
   const selectLayer = useCallback((id: string | null) => {
     setSelectedLayerId(id);
+    setSelectedLayerIds(id ? [id] : []);
   }, []);
 
   const addLayer = useCallback((layer: CreatorLayer) => {
@@ -565,6 +681,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (doc) {
       setDocumentState(doc);
       setSelectedLayerId(null);
+      setSelectedLayerIds([]);
       syncHistoryButtons();
       CreatorAnalytics.undo(document.type);
     }
@@ -575,6 +692,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (doc) {
       setDocumentState(doc);
       setSelectedLayerId(null);
+      setSelectedLayerIds([]);
       syncHistoryButtons();
       CreatorAnalytics.redo(document.type);
     }
@@ -583,11 +701,48 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
   const saveDraft = useCallback(async () => {
     setAutosaveStatus('saving');
     try {
+      // 1. Legacy AsyncStorage save (backward compatibility + web fallback)
       await CreatorDraftService.saveDraft(document);
       lastSavedDocRef.current = JSON.stringify(document);
       setIsDirty(false);
       setAutosaveStatus('saved');
       CreatorAnalytics.draftSave(document.type);
+
+      // 2. Durable ProjectStore save (atomic write — survives gallery deletion)
+      // Per spec 08 §5: write temp, rename to project.json. This is the
+      // primary durable path; AsyncStorage is the fallback for platforms
+      // where expo-file-system is unavailable.
+      const store = projectStoreRef.current;
+      const journal = crashJournalRef.current;
+      if (store) {
+        try {
+          // Ensure a project ID exists for this document
+          if (!projectIdRef.current) {
+            const pkg = await store.createProject(document.type);
+            projectIdRef.current = pkg.id;
+          }
+          const projectPkg: ProjectPackage = {
+            id: projectIdRef.current,
+            version: 1,
+            type: document.type,
+            title: document.metadata.title || undefined,
+            document,
+            assets: {},
+            createdAt: document.updatedAt,
+            updatedAt: new Date().toISOString(),
+            renderVersion: '2',
+          };
+          await store.saveProject(projectPkg);
+          // Checkpoint the crash journal after a successful atomic save
+          if (journal) {
+            await journal.checkpoint();
+          }
+        } catch {
+          // ProjectStore save failed — the legacy AsyncStorage save above
+          // already succeeded, so the draft is not lost. The crash journal
+          // (if any) will still trigger recovery on next launch.
+        }
+      }
     } catch {
       setAutosaveStatus('failed');
     }
@@ -602,10 +757,72 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       lastSavedDocRef.current = JSON.stringify(current);
       setIsDirty(false);
       setAutosaveStatus('saved');
+
+      // Durable ProjectStore save (atomic write)
+      const store = projectStoreRef.current;
+      const journal = crashJournalRef.current;
+      if (store) {
+        try {
+          if (!projectIdRef.current) {
+            const pkg = await store.createProject(current.type);
+            projectIdRef.current = pkg.id;
+          }
+          const projectPkg: ProjectPackage = {
+            id: projectIdRef.current,
+            version: 1,
+            type: current.type,
+            title: current.metadata.title || undefined,
+            document: current,
+            assets: {},
+            createdAt: current.updatedAt,
+            updatedAt: new Date().toISOString(),
+            renderVersion: '2',
+          };
+          await store.saveProject(projectPkg);
+          if (journal) {
+            await journal.checkpoint();
+          }
+        } catch {
+          // ProjectStore failed — legacy save already succeeded
+        }
+      }
     } catch {
       setAutosaveStatus('failed');
     }
   }, [isDirty]);
+
+  // ── Asset import via durable AssetRegistry ─────────────────────────
+  // Copies a media file into project storage so it survives gallery deletion.
+  // Returns the AssetRef ID, or null if the registry isn't initialized.
+  const importAsset = useCallback(async (
+    sourceUri: string,
+    mediaType: 'image' | 'video',
+  ): Promise<string | null> => {
+    const registry = assetRegistryRef.current;
+    const store = projectStoreRef.current;
+    if (!registry || !store) return null;
+
+    // Ensure a project exists
+    if (!projectIdRef.current) {
+      try {
+        const pkg = await store.createProject(initialType);
+        projectIdRef.current = pkg.id;
+      } catch {
+        return null;
+      }
+    }
+
+    try {
+      const ref = await registry.importAsset(
+        projectIdRef.current,
+        sourceUri,
+        mediaType,
+      );
+      return ref.id;
+    } catch {
+      return null;
+    }
+  }, [initialType]);
 
   const loadDraft = useCallback(async (id: string): Promise<boolean> => {
     const doc = await CreatorDraftService.loadDraft(id);
@@ -641,25 +858,135 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
   }, [clipboard, addLayer]);
 
   // ─── Multi-Select ────────────────────────────────────────────────────────
+  // `selectedLayerIds` holds the full multi-select set. `selectedLayerId`
+  // (singular, above) is always kept in sync as the primary (first) element
+  // for backward compatibility with single-select consumers.
   const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>([]);
 
+  // Replace the entire selection set. null/[] clears both states.
+  const selectLayers = useCallback((ids: string[] | null) => {
+    const arr = ids ?? [];
+    setSelectedLayerIds(arr);
+    setSelectedLayerId(arr.length > 0 ? arr[0] : null);
+  }, []);
+
+  // Add/remove a single layer from the multi-select set. The primary
+  // (first) selection becomes the new head of the array.
+  const toggleLayerInSelection = useCallback((id: string) => {
+    setSelectedLayerIds((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id];
+      setSelectedLayerId(next.length > 0 ? next[0] : null);
+      return next;
+    });
+  }, []);
+
+  // Legacy alias — delegates to toggleLayerInSelection so existing
+  // consumers keep working with the synced primary selection.
   const toggleMultiSelect = useCallback((layerId: string) => {
     setSelectedLayerIds((prev) => {
-      if (prev.includes(layerId)) {
-        return prev.filter((id) => id !== layerId);
-      }
-      return [...prev, layerId];
+      const next = prev.includes(layerId)
+        ? prev.filter((x) => x !== layerId)
+        : [...prev, layerId];
+      setSelectedLayerId(next.length > 0 ? next[0] : null);
+      return next;
     });
   }, []);
 
   const clearMultiSelect = useCallback(() => {
     setSelectedLayerIds([]);
+    setSelectedLayerId(null);
   }, []);
 
   const deleteMultiSelected = useCallback(() => {
     selectedLayerIds.forEach((id) => removeLayer(id));
     setSelectedLayerIds([]);
+    setSelectedLayerId(null);
   }, [selectedLayerIds, removeLayer]);
+
+  // Commit transforms to multiple layers in a single history entry.
+  // Used by bulk align, bulk move (drag end), and distribute operations.
+  const commitMultiLayerTransform = useCallback((
+    updates: Array<{ id: string; updates: Partial<CreatorLayer> }>,
+    label: string,
+  ) => {
+    if (updates.length === 0) return;
+    setDocumentState((prev) => {
+      let doc = prev;
+      for (const { id, updates: layerUpdates } of updates) {
+        doc = updateLayerInPage(doc, activePageIndex, id, layerUpdates);
+      }
+      doc.updatedAt = new Date().toISOString();
+      historyRef.current.push(doc, label);
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+  }, [activePageIndex, syncHistoryButtons]);
+
+  // Live (no-history) position update for multiple layers. Used during
+  // multi-select drag so peer layers move together in real-time without
+  // spamming the history stack. The final committed state is written via
+  // commitMultiLayerTransform on drag end.
+  const updateLayersLive = useCallback((
+    updates: Array<{ id: string; x?: number; y?: number }>,
+  ) => {
+    if (updates.length === 0) return;
+    setDocumentState((prev) => {
+      let doc = prev;
+      for (const { id, x, y } of updates) {
+        const layerUpdates: Partial<CreatorLayer> = {};
+        if (x !== undefined) layerUpdates.x = x;
+        if (y !== undefined) layerUpdates.y = y;
+        doc = updateLayerInPage(doc, activePageIndex, id, layerUpdates);
+      }
+      doc.updatedAt = new Date().toISOString();
+      return doc;
+    });
+  }, [activePageIndex]);
+
+  // Reorder all selected layers to the front (top of z-stack) in one
+  // history entry, preserving the relative order of the selected set.
+  const bringSelectedToFront = useCallback(() => {
+    if (selectedLayerIds.length === 0) return;
+    setDocumentState((prev) => {
+      const pages = [...prev.pages];
+      const page = { ...pages[activePageIndex] };
+      const sorted = [...page.layers].sort((a, b) => a.zIndex - b.zIndex);
+      const selectedSet = new Set(selectedLayerIds);
+      const selected = sorted.filter((l) => selectedSet.has(l.id));
+      const unselected = sorted.filter((l) => !selectedSet.has(l.id));
+      page.layers = [...unselected, ...selected].map((l, i) => ({ ...l, zIndex: i }));
+      pages[activePageIndex] = page;
+      const doc = { ...prev, pages, updatedAt: new Date().toISOString() };
+      historyRef.current.push(doc, 'Bring to front');
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+  }, [activePageIndex, syncHistoryButtons, selectedLayerIds]);
+
+  // Reorder all selected layers to the back (bottom of z-stack) in one
+  // history entry, preserving the relative order of the selected set.
+  const sendSelectedToBack = useCallback(() => {
+    if (selectedLayerIds.length === 0) return;
+    setDocumentState((prev) => {
+      const pages = [...prev.pages];
+      const page = { ...pages[activePageIndex] };
+      const sorted = [...page.layers].sort((a, b) => a.zIndex - b.zIndex);
+      const selectedSet = new Set(selectedLayerIds);
+      const selected = sorted.filter((l) => selectedSet.has(l.id));
+      const unselected = sorted.filter((l) => !selectedSet.has(l.id));
+      page.layers = [...selected, ...unselected].map((l, i) => ({ ...l, zIndex: i }));
+      pages[activePageIndex] = page;
+      const doc = { ...prev, pages, updatedAt: new Date().toISOString() };
+      historyRef.current.push(doc, 'Send to back');
+      setIsDirty(true);
+      syncHistoryButtons();
+      return doc;
+    });
+  }, [activePageIndex, syncHistoryButtons, selectedLayerIds]);
 
   // ─── Alignment Tools ─────────────────────────────────────────────────────
   const alignLayerToCenter = useCallback((layerId: string) => {
@@ -1002,6 +1329,35 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
           lastSavedDocRef.current = currentStr;
           setIsDirty(false);
           setAutosaveStatus('saved');
+
+          // Durable ProjectStore save (atomic write)
+          const store = projectStoreRef.current;
+          const journal = crashJournalRef.current;
+          if (store) {
+            try {
+              if (!projectIdRef.current) {
+                const pkg = await store.createProject(current.type);
+                projectIdRef.current = pkg.id;
+              }
+              const projectPkg: ProjectPackage = {
+                id: projectIdRef.current,
+                version: 1,
+                type: current.type,
+                title: current.metadata.title || undefined,
+                document: current,
+                assets: {},
+                createdAt: current.updatedAt,
+                updatedAt: new Date().toISOString(),
+                renderVersion: '2',
+              };
+              await store.saveProject(projectPkg);
+              if (journal) {
+                await journal.checkpoint();
+              }
+            } catch {
+              // ProjectStore failed — legacy save already succeeded
+            }
+          }
         } catch {
           setAutosaveStatus('failed');
         }
@@ -1026,6 +1382,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     autosaveStatus,
     isLoadingDraft,
     setDocument,
+    commitDocument: commit,
     setActivePageIndex,
     selectLayer,
     addLayer,
@@ -1055,6 +1412,12 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     toggleMultiSelect,
     clearMultiSelect,
     deleteMultiSelected,
+    selectLayers,
+    toggleLayerInSelection,
+    commitMultiLayerTransform,
+    updateLayersLive,
+    bringSelectedToFront,
+    sendSelectedToBack,
     alignLayerToCenter,
     alignLayerToHorizontalCenter,
     alignLayerToVerticalCenter,
@@ -1066,6 +1429,13 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     addLookProduct,
     swapLookAsset,
     autoArrangeLook,
+    // ── Durable project store integration ──
+    projectStore: projectStoreRef.current,
+    assetRegistry: assetRegistryRef.current,
+    hasPendingRecovery,
+    recoverCrashedProject,
+    dismissRecovery,
+    importAsset,
   };
 
   return <CreatorContext.Provider value={value}>{children}</CreatorContext.Provider>;

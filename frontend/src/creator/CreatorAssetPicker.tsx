@@ -53,6 +53,19 @@ import Reanimated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 
+// ── Extracted sheet components (Phase 2: Asset Picker Decomposition) ──
+// These replace the monolithic inline pickers with dedicated, reusable
+// sheet components. Each adapter wraps the new sheet to match the
+// AssetPickerContent onAddLayer interface.
+import { TextEditorSheet } from './tools/text/TextEditorSheet';
+import type { TextStyleConfig as NewTextStyleConfig } from './tools/text/textStylePresets';
+import { StickerBrowserSheet } from './tools/stickers/StickerBrowserSheet';
+import type { StickerDef as NewStickerDef } from './tools/stickers/StickerCategories';
+import { DrawingWorkspace } from './tools/drawing/DrawingWorkspace';
+import type { DrawingDocument } from './tools/drawing/DrawingTypes';
+import { AudioBrowserSheet } from './tools/audio/AudioBrowserSheet';
+import type { AudioConfig as NewAudioConfig } from './tools/audio/AudioTypes';
+
 export type AssetPickerMode = 'media' | 'product' | 'mention' | 'look' | 'text' | 'shape' | 'vote' | 'draw' | 'gif' | 'music' | 'quiz' | 'question' | 'emojiSlider' | 'countdown' | 'stickers' | 'link' | 'location' | 'hashtag' | 'time' | 'weather';
 
 export interface CreatorAssetPickerProps {
@@ -72,6 +85,190 @@ export function CreatorAssetPicker({ visible, mode, onClose, onAddLayer, editing
   );
 }
 
+// ── Phase 2 Adapters: wrap extracted sheets to match onAddLayer interface ──
+
+/** Adapter for TextEditorSheet — converts (text, style) → text layer. */
+function TextEditorAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const isEditing = editingLayer?.type === 'text';
+  const existingPayload = editingLayer?.type === 'text' ? editingLayer.payload : null;
+  const handleConfirm = useCallback((text: string, style: NewTextStyleConfig) => {
+    // The TextStyleConfig fields mirror the text layer payload, but
+    // `textStyle` is typed as `string` in TextStyleConfig while the
+    // composition schema expects a specific union. Cast through unknown
+    // to satisfy the schema — the values are always valid preset IDs.
+    const payload = style as unknown as Record<string, unknown>;
+    if (isEditing && editingLayer) {
+      onAddLayer({
+        ...editingLayer,
+        payload: { ...editingLayer.payload, ...payload } as typeof editingLayer.payload,
+      } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('text'), 10),
+        type: 'text' as const,
+        width: 0.6,
+        height: 0.1,
+        payload: payload as never,
+      });
+    }
+    onClose();
+  }, [isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <TextEditorSheet
+      visible={true}
+      onClose={onClose}
+      initialText={existingPayload?.text ?? ''}
+      initialStyle={existingPayload ? {
+        text: existingPayload.text,
+        textStyle: existingPayload.textStyle,
+        textColor: existingPayload.textColor,
+        backgroundColor: existingPayload.backgroundColor,
+        alignment: existingPayload.alignment,
+        opacity: 1,
+        textEffect: existingPayload.textEffect,
+        textAnimation: existingPayload.textAnimation,
+      } : undefined}
+      onConfirm={handleConfirm}
+    />
+  );
+}
+
+/** Adapter for StickerBrowserSheet — converts sticker selection → layer. */
+function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const [subMode, setSubMode] = useState<AssetPickerMode | null>(null);
+
+  // If an interactive sticker was selected, route to its configuration picker.
+  if (subMode) {
+    return (
+      <AssetPickerContent
+        mode={subMode}
+        onClose={() => setSubMode(null)}
+        onAddLayer={onAddLayer}
+        editingLayer={null}
+      />
+    );
+  }
+
+  const handleStickerSelect = useCallback((sticker: NewStickerDef) => {
+    if (sticker.interactive && sticker.pickerMode) {
+      // Route to the interactive sticker's configuration picker
+      setSubMode(sticker.pickerMode as AssetPickerMode);
+      return;
+    }
+    // Non-interactive sticker: create a layer directly
+    if (sticker.emoji) {
+      // Emoji sticker → text layer with emoji as content
+      onAddLayer({
+        ...baseLayer(createStableId('text'), 10),
+        type: 'text',
+        width: 0.15,
+        height: 0.15,
+        payload: {
+          text: sticker.emoji,
+          textStyle: 'clean',
+          textColor: '#ffffff',
+          alignment: 'center',
+          opacity: 1,
+          textEffect: 'none',
+          textAnimation: 'none',
+        },
+      });
+    } else if (sticker.iconRef) {
+      // Icon-based sticker → decorative layer
+      onAddLayer({
+        ...baseLayer(createStableId('shape'), 5),
+        type: 'decorative',
+        width: 0.15,
+        height: 0.15,
+        payload: { shape: 'star', color: '#ffffff', opacity: 1 },
+      });
+    }
+    onClose();
+  }, [onAddLayer, onClose]);
+
+  return (
+    <StickerBrowserSheet
+      visible={true}
+      onClose={onClose}
+      onStickerSelect={handleStickerSelect}
+    />
+  );
+}
+
+/** Adapter for DrawingWorkspace — converts drawing commit → draw layer. */
+function DrawingWorkspaceAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+  const isEditing = editingLayer?.type === 'draw';
+  const existingStrokes = editingLayer?.type === 'draw' ? editingLayer.payload.strokes ?? [] : [];
+
+  const handleCommit = useCallback((drawing: DrawingDocument) => {
+    // Convert DrawingDocument strokes to composition DrawStroke format
+    const strokes = drawing.strokes.map((s) => ({
+      points: s.points,
+      color: s.color,
+      width: s.size,
+      tool: s.brushType,
+    }));
+    if (isEditing && editingLayer) {
+      onAddLayer({
+        ...editingLayer,
+        payload: { ...editingLayer.payload, strokes },
+      } as CreatorLayer);
+    } else {
+      onAddLayer({
+        ...baseLayer(createStableId('draw'), 10),
+        type: 'draw',
+        width: 0.8,
+        height: 0.8,
+        payload: { strokes, opacity: 1 },
+      });
+    }
+    onClose();
+  }, [isEditing, editingLayer, onAddLayer, onClose]);
+
+  return (
+    <DrawingWorkspace
+      visible={true}
+      onClose={onClose}
+      onCommit={handleCommit}
+      canvasWidth={320}
+      canvasHeight={400}
+    />
+  );
+}
+
+/** Adapter for AudioBrowserSheet — converts audio config → music layer. */
+function AudioBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+  const handleConfirm = useCallback((config: NewAudioConfig) => {
+    // Create a music layer from the audio config.
+    // When no track is selected (trackId is null), this represents
+    // original-audio-only configuration — we still create the layer so
+    // the volume/offset settings are preserved.
+    onAddLayer({
+      ...baseLayer(createStableId('music'), 10),
+      type: 'music',
+      width: 0.3,
+      height: 0.08,
+      payload: {
+        trackName: config.trackId ? 'Selected track' : 'Original audio',
+        artistName: '',
+        startOffsetMs: config.startOffsetMs,
+        opacity: 1,
+      },
+    });
+    onClose();
+  }, [onAddLayer, onClose]);
+
+  return (
+    <AudioBrowserSheet
+      visible={true}
+      onClose={onClose}
+      onConfirm={handleConfirm}
+      hasOriginalAudio={true}
+    />
+  );
+}
+
 function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode: AssetPickerMode; onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   switch (mode) {
     case 'media':
@@ -83,17 +280,17 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
     case 'look':
       return <LookPicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'text':
-      return <TextPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+      return <TextEditorAdapter onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'shape':
       return <ShapePicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'vote':
       return <VotePicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'draw':
-      return <DrawPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
+      return <DrawingWorkspaceAdapter onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'gif':
       return <GifPicker onClose={onClose} onAddLayer={onAddLayer} />;
     case 'music':
-      return <MusicPicker onClose={onClose} onAddLayer={onAddLayer} />;
+      return <AudioBrowserAdapter onClose={onClose} onAddLayer={onAddLayer} />;
     case 'quiz':
       return <QuizPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'question':
@@ -103,7 +300,7 @@ function AssetPickerContent({ mode, onClose, onAddLayer, editingLayer }: { mode:
     case 'countdown':
       return <CountdownPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'stickers':
-      return <StickerTray onClose={onClose} onAddLayer={onAddLayer} />;
+      return <StickerBrowserAdapter onClose={onClose} onAddLayer={onAddLayer} />;
     case 'link':
       return <LinkPicker onClose={onClose} onAddLayer={onAddLayer} editingLayer={editingLayer} />;
     case 'location':

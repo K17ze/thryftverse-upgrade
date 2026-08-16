@@ -146,6 +146,10 @@ export default function MyProfileScreen() {
   const reducedMotionEnabled = useReducedMotion();
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
+  // 'saved' is retained in the union so a stale value (e.g. from a previous
+  // session) can be guarded against in render, even though the Saved tab is no
+  // longer offered in the identity rail. Saved remains reachable via the
+  // utility rail / Closet navigation.
   const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'saved' | 'about'>('listings');
   const tabContentY = React.useRef(0);
 
@@ -691,11 +695,10 @@ export default function MyProfileScreen() {
             tabs={[
               { key: 'listings', label: 'Listings', count: allOwnedListings.length },
               { key: 'looks', label: 'Looks', count: myLooks.length },
-              { key: 'saved', label: 'Saved', count: savedCount + wishlistCount },
               { key: 'about', label: 'About' },
             ]}
-            activeKey={activeTab}
-            onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'saved' | 'about')}
+            activeKey={activeTab === 'saved' ? 'listings' : activeTab}
+            onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
           />
         </Reanimated.View>
 
@@ -810,67 +813,6 @@ export default function MyProfileScreen() {
                   />
                 ))}
               </View>
-            )}
-          </View>
-        )}
-
-        {/* SAVED TAB — saved items and wishlist */}
-        {activeTab === 'saved' && (
-          <View style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}>
-            {savedCount + wishlistCount === 0 ? (
-              <EmptyState
-                density="compact"
-                icon="bookmark-outline"
-                title="Nothing saved yet"
-                subtitle="Tap the bookmark on any listing to save it for later."
-                ctaLabel="Browse listings"
-                onCtaPress={() => navigation.navigate('MainTabs')}
-              />
-            ) : (
-              <>
-                <View style={styles.gridHeader}>
-                  <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>
-                    {savedCount + wishlistCount} saved
-                  </Text>
-                  <Pressable
-                    onPress={() => navigation.navigate('Closet')}
-                    accessibilityRole="button"
-                    accessibilityLabel="View all saved items"
-                    hitSlop={13}
-                  >
-                    <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>View All</Text>
-                  </Pressable>
-                </View>
-                <View style={styles.grid}>
-                  {savedListings.slice(0, 9).map((item) => (
-                    <AnimatedPressable
-                      key={item.id}
-                      style={[styles.gridCard, { width: CARD_WIDTH }]}
-                      onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`View ${item.title}`}
-                    >
-                      <SharedTransitionView
-                        style={[styles.gridImageWrap, { width: CARD_WIDTH, height: CARD_HEIGHT }]}
-                        sharedTransitionTag={`image-${item.id}-saved`}
-                      >
-                        <CachedImage
-                          uri={item.images?.[0] ?? ''}
-                          style={styles.gridImage}
-                          containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
-                          contentFit="cover"
-                        />
-                      </SharedTransitionView>
-                      <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
-                        {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
-                      </Text>
-                      {item.brand ? (
-                        <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
-                      ) : null}
-                    </AnimatedPressable>
-                  ))}
-                </View>
-              </>
             )}
           </View>
         )}

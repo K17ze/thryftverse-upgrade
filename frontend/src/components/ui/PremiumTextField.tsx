@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
+
+export type PremiumTextFieldAppearance = 'filled' | 'outline' | 'underline';
 
 interface PremiumTextFieldProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -21,6 +23,13 @@ interface PremiumTextFieldProps extends Omit<TextInputProps, 'style'> {
   multiline?: boolean;
   minHeight?: number;
   containerStyle?: import('react-native').ViewStyle;
+  /**
+   * Visual appearance of the input boundary.
+   * - filled: subtle background fill, no border (default). Settings/utility.
+   * - outline: 1px border, transparent background. Auth/standalone.
+   * - underline: bottom border only. Dense authoring.
+   */
+  appearance?: PremiumTextFieldAppearance;
 }
 
 export const PremiumTextField = forwardRef<TextInput, PremiumTextFieldProps>(
@@ -42,6 +51,7 @@ export const PremiumTextField = forwardRef<TextInput, PremiumTextFieldProps>(
       multiline = false,
       minHeight,
       containerStyle,
+      appearance = 'filled',
       ...rest
     },
     ref
@@ -68,6 +78,39 @@ export const PremiumTextField = forwardRef<TextInput, PremiumTextFieldProps>(
       ? colors.brand
       : colors.border;
 
+    // Resolve appearance-specific input row styling
+    const appearanceStyle = (() => {
+      switch (appearance) {
+        case 'outline':
+          return {
+            backgroundColor: 'transparent',
+            borderWidth: Stroke.standard,
+            borderRadius: Radius.lg,
+          };
+        case 'underline':
+          return {
+            backgroundColor: 'transparent',
+            borderWidth: 0,
+            borderBottomWidth: isFocused ? Stroke.emphasis : Stroke.standard,
+            borderRadius: 0,
+            paddingHorizontal: 0,
+          };
+        case 'filled':
+        default:
+          return {
+            backgroundColor: colors.surfaceAlt,
+            borderWidth: isFocused ? Stroke.standard : 0,
+            borderRadius: Radius.lg,
+          };
+      }
+    })();
+
+    const appearanceBorderColor = hasError
+      ? colors.danger
+      : isFocused
+        ? colors.brand
+        : colors.border;
+
     return (
       <View style={[styles.container, containerStyle]}>
         {label ? (
@@ -85,8 +128,9 @@ export const PremiumTextField = forwardRef<TextInput, PremiumTextFieldProps>(
         <View
           style={[
             styles.inputRow,
+            appearanceStyle,
             {
-              borderColor,
+              borderColor: appearanceBorderColor,
               minHeight: minHeight ?? (multiline ? 120 : 52),
             },
             !editable && styles.inputRowDisabled,
@@ -154,9 +198,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.md,
     gap: Space.sm,
   },

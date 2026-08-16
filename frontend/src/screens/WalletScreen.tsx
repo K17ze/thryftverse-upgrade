@@ -33,7 +33,7 @@ import {
   CoOwnReconciliationBanner,
   type CoOwn1ZeBalance,
 } from '../components/coown';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow, FlagshipFormSection } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -190,6 +190,12 @@ export default function WalletScreen({ navigation }: Props) {
   // ── Balance formatting (tabular-nums, 2dp) ──
   const formatBalance = (value: number) =>
     value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // ── Pending attention summary text (spec 17 viewport 1) ──
+  const pendingAttentionTitle = [
+    balance.pendingDeposit > 0 ? `${formatBalance(balance.pendingDeposit)} 1ZE deposit pending` : null,
+    balance.unsettledSaleProceeds > 0 ? `${formatBalance(balance.unsettledSaleProceeds)} 1ZE proceeds unsettled` : null,
+  ].filter(Boolean).join(' · ');
 
   // ── Local-fiat indication for spendable hero ──
   const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
@@ -469,7 +475,7 @@ export default function WalletScreen({ navigation }: Props) {
             style={({ pressed }) => [
               styles.actionBtn,
               styles.actionBtnSecondary,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              { borderColor: colors.border },
               pressed && { opacity: 0.7 },
               !isWalletOperational && { opacity: 0.5 },
             ]}
@@ -486,7 +492,7 @@ export default function WalletScreen({ navigation }: Props) {
             style={({ pressed }) => [
               styles.actionBtn,
               styles.actionBtnSecondary,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              { borderColor: colors.border },
               pressed && { opacity: 0.7 },
               (balance.available <= 0 || !isWalletOperational) && { opacity: 0.5 },
             ]}
@@ -503,55 +509,28 @@ export default function WalletScreen({ navigation }: Props) {
 
         {/* ── Pending attention — if real (spec 17 viewport 1) ── */}
         {hasPendingAttention && !balanceHidden && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.pendingRow,
-              { borderBottomColor: colors.border },
-              pressed && { opacity: 0.7 },
-            ]}
+          <FlagshipNavigationRow
+            icon="time-outline"
+            iconColor={colors.warning}
+            title={pendingAttentionTitle}
             onPress={handleViewEarnings}
-            accessibilityRole="button"
+            style={{ marginTop: Space.md }}
             accessibilityLabel={`Pending attention: ${formatBalance(balance.pendingDeposit)} 1ZE deposit, ${formatBalance(balance.unsettledSaleProceeds)} 1ZE unsettled proceeds`}
             accessibilityHint="View seller earnings and release schedule"
-          >
-            <Ionicons name="time-outline" size={16} color={colors.warning} />
-            <Text style={[styles.pendingText, { color: colors.textPrimary }]} numberOfLines={1}>
-              {balance.pendingDeposit > 0 && `${formatBalance(balance.pendingDeposit)} 1ZE deposit pending`}
-              {balance.pendingDeposit > 0 && balance.unsettledSaleProceeds > 0 && ' · '}
-              {balance.unsettledSaleProceeds > 0 && `${formatBalance(balance.unsettledSaleProceeds)} 1ZE proceeds unsettled`}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
-          </Pressable>
+          />
         )}
 
         {/* ── Seller earnings summary (spec 17: "Seller earnings · £X available · £Y pending") ── */}
         {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.earningsSummaryRow,
-              { borderBottomColor: colors.border },
-              pressed && { opacity: 0.7 },
-            ]}
+          <FlagshipNavigationRow
+            icon="pricetag-outline"
+            iconColor={colors.brand}
+            title="Seller earnings"
+            subtitle={`${formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available · ${formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending`}
             onPress={handleViewEarnings}
-            accessibilityRole="button"
             accessibilityLabel={`Seller earnings, ${formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available, ${formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending`}
             accessibilityHint="View seller earnings and release schedule"
-          >
-            <View style={styles.earningsSummaryInfo}>
-              <Ionicons name="pricetag-outline" size={16} color={colors.brand} />
-              <Text style={[styles.earningsSummaryText, { color: colors.textPrimary }]} numberOfLines={1}>
-                Seller earnings ·{' '}
-                <Text style={{ fontFamily: Typography.family.semibold }}>
-                  {formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' })} available
-                </Text>
-                {' · '}
-                <Text>
-                  {formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' })} pending
-                </Text>
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-          </Pressable>
+          />
         )}
 
         {/* ── Sub-balances — flat rows, below the fold (spec 17 viewport 2) ── */}
@@ -622,54 +601,56 @@ export default function WalletScreen({ navigation }: Props) {
         </View>
 
         {/* ── Safeguarding & 1ZE disclosure — lower down, not competing with balance (spec 17) ── */}
-        <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.infoHeader}>
-            <Ionicons name="shield-checkmark-outline" size={15} color={colors.brand} />
-            <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
-          </View>
-          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-            {balance.safeguarded
-              ? `Customer 1ZE is safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}. Redemption to ${currencyCode} settlement details are confirmed at the time of each request.`
-              : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once safeguarding is confirmed.`}
-          </Text>
-          {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
-          {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
-            <View style={styles.safeguardingLinksRow}>
-              {balance.safeguardingEvidenceUrl ? (
-                <Pressable
-                  onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
-                  accessibilityRole="link"
-                  accessibilityLabel="View safeguarding evidence"
-                  accessibilityHint="Opens in external browser"
-                >
-                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
-                </Pressable>
-              ) : null}
-              {balance.safeguardingTermsUrl ? (
-                <Pressable
-                  onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
-                  accessibilityRole="link"
-                  accessibilityLabel="View safeguarding terms"
-                  accessibilityHint="Opens in external browser"
-                >
-                  <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
-                </Pressable>
-              ) : null}
+        <FlagshipFormSection variant="flat" style={{ marginTop: Space.lg }}>
+          <View style={styles.infoContent}>
+            <View style={styles.infoHeader}>
+              <Ionicons name="shield-checkmark-outline" size={15} color={colors.brand} />
+              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
             </View>
-          ) : null}
+            <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+              {balance.safeguarded
+                ? `Customer 1ZE is safeguarded${balance.safeguardingPartner ? ` at ${balance.safeguardingPartner}` : ''}. Redemption to ${currencyCode} settlement details are confirmed at the time of each request.`
+                : `Customer 1ZE safeguarding is being finalised. Redemption to ${currencyCode} will be available once safeguarding is confirmed.`}
+            </Text>
+            {/* WS4: substantiate the safeguarding badge with evidence/terms links. */}
+            {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
+              <View style={styles.safeguardingLinksRow}>
+                {balance.safeguardingEvidenceUrl ? (
+                  <Pressable
+                    onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
+                    style={({ pressed }) => pressed && { opacity: 0.6 }}
+                    accessibilityRole="link"
+                    accessibilityLabel="View safeguarding evidence"
+                    accessibilityHint="Opens in external browser"
+                  >
+                    <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Evidence</Text>
+                  </Pressable>
+                ) : null}
+                {balance.safeguardingTermsUrl ? (
+                  <Pressable
+                    onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
+                    style={({ pressed }) => pressed && { opacity: 0.6 }}
+                    accessibilityRole="link"
+                    accessibilityLabel="View safeguarding terms"
+                    accessibilityHint="Opens in external browser"
+                  >
+                    <Text style={[styles.safeguardingLink, { color: colors.brand }]}>Terms</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
 
-          <View style={[styles.infoDivider, { borderColor: colors.border }]} />
+            <View style={[styles.infoDivider, { borderColor: colors.border }]} />
 
-          <View style={styles.infoHeader}>
-            <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
-            <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
+            <View style={styles.infoHeader}>
+              <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
+              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
+            </View>
+            <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+              1ZE is the platform's single settlement unit for Co-Own transactions. For the UK market, 1ZE is maintained at a £1.00 reference par before disclosed fees. It is the medium through which Co-Own units are priced, traded and settled.
+            </Text>
           </View>
-          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
-            1ZE is the platform's single settlement unit for Co-Own transactions. For the UK market, 1ZE is maintained at a £1.00 reference par before disclosed fees. It is the medium through which Co-Own units are priced, traded and settled.
-          </Text>
-        </View>
+        </FlagshipFormSection>
 
       </ScrollView>
 
@@ -825,45 +806,9 @@ const styles = StyleSheet.create({
     letterSpacing: Type.captionElevated.letterSpacing,
   },
 
-  // ── Pending attention row ──
-  pendingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginTop: Space.md,
-  },
-  pendingText: {
-    flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+  // ── Pending attention row (now FlagshipNavigationRow) ──
 
-  // ── Seller earnings summary row (flat, not carded) ──
-  earningsSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  earningsSummaryInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    flex: 1,
-  },
-  earningsSummaryText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-    flexShrink: 1,
-  },
+  // ── Seller earnings summary row (now FlagshipNavigationRow) ──
 
   // ── Sub-balance flat rows ──
   subBalanceSection: {
@@ -991,13 +936,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
   },
 
-  // ── Safeguarding info ──
-  infoCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+  // ── Safeguarding info (flat canvas, hairline divider — no card) ──
+  infoContent: {
     padding: Space.md,
     gap: Space.xs,
-    marginTop: Space.lg,
   },
   infoHeader: {
     flexDirection: 'row',

@@ -422,7 +422,7 @@ function buildDefaultTools(
     return [
       { icon: 'images', label: 'Media', action: () => onToolPress('media'), primary: true },
       { icon: 'text', label: 'Text', action: () => onToolPress('text'), primary: true },
-      { icon: 'cut-outline', label: 'Cutout', action: () => onToolPress('media') },
+      { icon: 'crop-outline', label: 'Crop', action: () => onToolPress('media') },
       { icon: 'pricetag-outline', label: 'Product', action: () => onToolPress('product') },
       { icon: 'color-fill-outline', label: 'Background', action: () => onToolPress('shape') },
       { icon: 'brush-outline', label: 'Draw', action: () => onToolPress('draw') },
@@ -495,8 +495,8 @@ function buildSelectionTools(
         action: () => onEditLayer(layer),
       });
       tools.push({
-        icon: 'cut-outline',
-        label: 'Cut out',
+        icon: 'crop-outline',
+        label: 'Crop',
         action: () => (onCutoutLayer ? onCutoutLayer(layer) : onEditLayer(layer)),
       });
       tools.push({

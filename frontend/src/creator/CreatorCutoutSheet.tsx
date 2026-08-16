@@ -1,3 +1,8 @@
+// NOTE: This component performs manual rectangular cropping, NOT transparent
+// subject extraction. The user-facing label is "Crop" until true segmentation
+// (alpha mask) is implemented. See THRYFTVERSE_CREATOR_FLAGSHIP_RECONSTRUCTION
+// Phase 8 for the true cutout contract.
+//
 // Manual trace-and-crop tool. The user traces around a subject with
 // their finger and the tool crops to the bounding box of the traced
 // region. This is NOT background removal/subject segmentation — it

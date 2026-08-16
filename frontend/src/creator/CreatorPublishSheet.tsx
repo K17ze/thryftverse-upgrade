@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   LayoutAnimation,
   Platform,
+  AppState,
+  type AppStateStatus,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -33,6 +35,9 @@ import { createLookOnApi, updateLookOnApi } from '../services/looksApi';
 import { createPosterStory, scheduleCreatorDocument } from '../services/postersApi';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
+import { useUploadManager } from './core/upload';
+import type { UploadJob, UploadJobState } from './core/upload';
+import type { CreatorDocument, CreatorLayer } from './composition';
 import {
   validateForPublish,
   serialiseToLookPayload,
@@ -40,10 +45,120 @@ import {
   PublishGuard,
 } from './compositionContract';
 
+// ── Feature flag ───────────────────────────────────────────────────
+// When true, uploads flow through the durable UploadManager (resumable,
+// persisted, auto-retry). When false, falls back to the sequential
+// foreground `mediaUploadPipeline`.
+const USE_UPLOAD_MANAGER = true;
+
 export interface CreatorPublishSheetProps {
   visible: boolean;
   onClose: () => void;
   editingLookId?: string;
+}
+
+// ── Local URI scanning (mirrors mediaUploadPipeline for UploadManager path) ──
+const LOCAL_URI_PREFIXES = [
+  'file://',
+  'ph://',
+  'asset://',
+  'data:',
+  'content://',
+  'assets-library://',
+];
+
+function isLocalUri(uri: string): boolean {
+  return LOCAL_URI_PREFIXES.some((prefix) => uri.startsWith(prefix));
+}
+
+interface LocalMediaRef {
+  layerId: string;
+  field: string;
+  currentUri: string;
+}
+
+function scanDocumentForLocalUris(doc: CreatorDocument): LocalMediaRef[] {
+  const refs: LocalMediaRef[] = [];
+  for (const page of doc.pages) {
+    for (const layer of page.layers) {
+      if (layer.type === 'media') {
+        if (layer.payload.mediaUri && isLocalUri(layer.payload.mediaUri)) {
+          refs.push({ layerId: layer.id, field: 'mediaUri', currentUri: layer.payload.mediaUri });
+        }
+        if (layer.payload.thumbnailUri && isLocalUri(layer.payload.thumbnailUri)) {
+          refs.push({ layerId: layer.id, field: 'thumbnailUri', currentUri: layer.payload.thumbnailUri });
+        }
+      }
+      if (layer.type === 'product' && layer.payload.snapshotImageUrl) {
+        if (isLocalUri(layer.payload.snapshotImageUrl)) {
+          refs.push({ layerId: layer.id, field: 'snapshotImageUrl', currentUri: layer.payload.snapshotImageUrl });
+        }
+      }
+      if (layer.type === 'look' && layer.payload.snapshotImageUrl) {
+        if (isLocalUri(layer.payload.snapshotImageUrl)) {
+          refs.push({ layerId: layer.id, field: 'snapshotImageUrl', currentUri: layer.payload.snapshotImageUrl });
+        }
+      }
+    }
+  }
+  return refs;
+}
+
+function replaceUriInDoc(doc: CreatorDocument, layerId: string, field: string, newUri: string): CreatorDocument {
+  return {
+    ...doc,
+    pages: doc.pages.map((page) => ({
+      ...page,
+      layers: page.layers.map((layer): CreatorLayer => {
+        if (layer.id !== layerId) return layer;
+        if (layer.type === 'media' && (field === 'mediaUri' || field === 'thumbnailUri')) {
+          return { ...layer, payload: { ...layer.payload, [field]: newUri } };
+        }
+        if (layer.type === 'product' && field === 'snapshotImageUrl') {
+          return { ...layer, payload: { ...layer.payload, snapshotImageUrl: newUri } };
+        }
+        if (layer.type === 'look' && field === 'snapshotImageUrl') {
+          return { ...layer, payload: { ...layer.payload, snapshotImageUrl: newUri } };
+        }
+        return layer;
+      }),
+    })),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+// ── Upload UI helpers ──────────────────────────────────────────────
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function jobStateLabel(state: UploadJobState, attempt: number): string {
+  switch (state) {
+    case 'queued': return 'Queued';
+    case 'uploading': return attempt > 0 ? `Retrying (${attempt + 1})` : 'Uploading';
+    case 'paused': return 'Paused';
+    case 'failed': return 'Failed';
+    case 'complete': return 'Done';
+  }
+}
+
+function jobStateIcon(state: UploadJobState): string {
+  switch (state) {
+    case 'queued': return 'time-outline';
+    case 'uploading': return 'cloud-upload-outline';
+    case 'paused': return 'pause-outline';
+    case 'failed': return 'alert-circle-outline';
+    case 'complete': return 'checkmark-circle-outline';
+  }
+}
+
+function isNetworkError(error: string | undefined): boolean {
+  if (!error) return false;
+  const lower = error.toLowerCase();
+  return lower.includes('network') || lower.includes('fetch') || lower.includes('abort') || lower.includes('timeout') || lower.includes('connection');
 }
 
 // ── Publish sheet ──────────────────────────────────────────────────
@@ -60,6 +175,11 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
   const { spring } = useMotionConfig();
+  // UploadManager hook — provides durable, resumable uploads with real
+  // byte-level progress. When USE_UPLOAD_MANAGER is true, the publish flow
+  // queues local media through this manager instead of the legacy
+  // foreground pipeline.
+  const uploadManager = useUploadManager(document.id);
   const [stage, setStage] = useState<'review' | 'uploading' | 'publishing' | 'success' | 'error'>('review');
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
@@ -122,14 +242,66 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
         const prepFraction = 0.15;
         progressWidth.value = reduceMotion ? prepFraction : withSpring(prepFraction, spring.entrance);
 
-        workingDoc = await uploadAllLocalMedia(document, (progress) => {
-          if (progress.total > 0) {
-            const fraction = (progress.completed + 1) / progress.total;
-            // Map upload fraction into the 0.3–0.7 range
-            const mappedFraction = 0.3 + fraction * 0.4;
-            progressWidth.value = reduceMotion ? mappedFraction : withSpring(mappedFraction, spring.entrance);
+        if (USE_UPLOAD_MANAGER) {
+          // ── Durable UploadManager path ──
+          // Queue each local URI as a persistent upload job, then wait
+          // for all jobs to reach a terminal state. This path survives
+          // network interruptions — jobs persist to AsyncStorage and
+          // resume automatically on reconnect.
+          const localRefs = scanDocumentForLocalUris(document);
+          const projectId = document.id;
+
+          for (const ref of localRefs) {
+            const assetId = `${ref.layerId}_${ref.field}`;
+            await uploadManager.queueUpload({
+              projectId,
+              assetId,
+              localUri: ref.currentUri,
+              bytesTotal: 0,
+              maxAttempts: 5,
+              contentType: ref.field === 'mediaUri' ? 'image/*' : 'image/*',
+              folder: document.type === 'look' ? 'looks' : 'posters',
+            });
           }
-        });
+
+          // Wait for all jobs to complete (or fail). Real progress is
+          // reflected via uploadManager.progress (0–1).
+          const finalJobs = await uploadManager.waitForCompletion();
+
+          // Check for failures
+          const failedJobs = finalJobs.filter((j) => j.state === 'failed');
+          if (failedJobs.length > 0) {
+            throw new Error(
+              `Upload failed: ${failedJobs[0].lastError ?? 'Unknown error'}`,
+            );
+          }
+
+          // Replace local URIs in the document with remote URLs
+          workingDoc = document;
+          for (const job of finalJobs) {
+            if (job.state === 'complete' && job.remoteUrl) {
+              // Parse layerId and field from assetId
+              const sepIdx = job.assetId.lastIndexOf('_');
+              const layerId = job.assetId.substring(0, sepIdx);
+              const field = job.assetId.substring(sepIdx + 1);
+              workingDoc = replaceUriInDoc(workingDoc, layerId, field, job.remoteUrl);
+            }
+          }
+
+          // Animate progress to 0.7 (upload complete)
+          const uploadDoneFraction = 0.7;
+          progressWidth.value = reduceMotion ? uploadDoneFraction : withSpring(uploadDoneFraction, spring.entrance);
+        } else {
+          // ── Legacy foreground pipeline path ──
+          workingDoc = await uploadAllLocalMedia(document, (progress) => {
+            if (progress.total > 0) {
+              const fraction = (progress.completed + 1) / progress.total;
+              // Map upload fraction into the 0.3–0.7 range
+              const mappedFraction = 0.3 + fraction * 0.4;
+              progressWidth.value = reduceMotion ? mappedFraction : withSpring(mappedFraction, spring.entrance);
+            }
+          });
+        }
       }
 
       // 3. Re-validate after upload to ensure no local URIs remain
@@ -198,7 +370,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
       setStage('error');
       CreatorAnalytics.publishError(document.type, err instanceof Error ? err.message : 'Unknown error');
     }
-  }, [document, editingLookId, reduceMotion, spring.entrance, spring.success]);
+  }, [document, editingLookId, reduceMotion, spring.entrance, spring.success, uploadManager]);
 
   const handleRetry = useCallback(() => {
     haptic.medium();

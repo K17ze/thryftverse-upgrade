@@ -2,13 +2,12 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipMetricLine, FlagshipNavigationRow, FlagshipFormSection } from '../components/flagship';
 import { View,
   Text,
   StyleSheet,
   TextInput,
   ScrollView,
-  Pressable,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,7 +33,7 @@ import {
   PayoutAccountPayload,
 } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
-import { Typography, Space, Radius, Elevation, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import {
@@ -564,10 +563,10 @@ export default function WithdrawScreen() {
       >
         <ScrollView
           style={styles.content}
-          contentContainerStyle={{ paddingHorizontal: Space.md + Space.xs, paddingTop: Space.xxl, paddingBottom: Space.xxl }}
+          contentContainerStyle={{ paddingTop: Space.xxl, paddingBottom: Space.xxl }}
           showsVerticalScrollIndicator={false}
         >
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ alignItems: 'center' }}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ alignItems: 'center', paddingHorizontal: Space.md }}>
             <View style={[styles.successIconCircle, { backgroundColor: `${colors.success}22` }]}>
               <Ionicons name="checkmark-circle" size={40} color={colors.success} />
             </View>
@@ -580,40 +579,19 @@ export default function WithdrawScreen() {
           </Reanimated.View>
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
-            <View style={[styles.confirmCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Reference</Text>
-                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>{shortRef}</Text>
-              </View>
-              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Amount</Text>
-                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Currency</Text>
-                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>{successData.payoutCurrency}</Text>
-              </View>
-              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Requested</Text>
-                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>{formattedDate}</Text>
-              </View>
-              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Estimated arrival</Text>
-                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>3–5 working days</Text>
-              </View>
-            </View>
+            <FlagshipFormSection variant="flat" title="Withdrawal details">
+              <FlagshipMetricLine label="Reference" value={shortRef} />
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="Currency" value={successData.payoutCurrency} separated />
+              <FlagshipMetricLine label="Requested" value={formattedDate} separated />
+              <FlagshipMetricLine label="Estimated arrival" value="3–5 working days" separated />
+            </FlagshipFormSection>
           </Reanimated.View>
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-            <View style={[styles.successNote, { borderColor: colors.border }]}>
+            <View style={styles.flatNote}>
               <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-              <Text style={[styles.successNoteText, { color: colors.textMuted }]}>
+              <Text style={[styles.flatNoteText, { color: colors.textMuted }]}>
                 We'll notify you when the payout is processed. You can track the status in your wallet activity.
               </Text>
             </View>
@@ -670,56 +648,23 @@ export default function WithdrawScreen() {
       >
         <ScrollView
           style={styles.content}
-          contentContainerStyle={{ paddingHorizontal: Space.md + Space.xs, paddingTop: Space.lg, paddingBottom: 120 }}
+          contentContainerStyle={{ paddingTop: Space.lg, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
         >
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-            <View style={[styles.confirmCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.confirmHeader}>
-                <Ionicons name="arrow-up-circle" size={20} color={colors.brand} />
-                <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>
-                  Withdrawal summary
-                </Text>
-              </View>
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Amount</Text>
-                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Fee</Text>
-                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(0, 'GBP', { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>You receive</Text>
-                <Text style={[styles.confirmValueBold, { color: colors.textPrimary }]}>
-                  {formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}
-                </Text>
-              </View>
-              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Destination</Text>
-                <Text style={[styles.confirmValue, { color: colors.textPrimary }]} numberOfLines={2}>
-                  {destinationLabel}
-                </Text>
-              </View>
-              <View style={[styles.confirmDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.confirmRow}>
-                <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Estimated arrival</Text>
-                <Text style={[styles.confirmValue, { color: colors.textPrimary }]}>3–5 working days</Text>
-              </View>
-            </View>
+            <FlagshipFormSection variant="flat" title="Withdrawal summary">
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })} />
+              <FlagshipMetricLine label="Fee" value={formatFromFiat(0, 'GBP', { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="You receive" value={formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })} emphasis separated />
+              <FlagshipMetricLine label="Destination" value={destinationLabel} separated />
+              <FlagshipMetricLine label="Estimated arrival" value="3–5 working days" separated />
+            </FlagshipFormSection>
           </Reanimated.View>
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
-            <View style={[styles.successNote, { borderColor: colors.border }]}>
+            <View style={styles.flatNote}>
               <Ionicons name="lock-closed" size={16} color={colors.textMuted} />
-              <Text style={[styles.successNoteText, { color: colors.textMuted }]}>
+              <Text style={[styles.flatNoteText, { color: colors.textMuted }]}>
                 Withdrawals are processed from completed sale proceeds. This action cannot be undone.
               </Text>
             </View>
@@ -786,23 +731,13 @@ export default function WithdrawScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          {/* Hero summary — available balance */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-            <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.heroRow}>
-                <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                  <Ionicons name="wallet" size={18} color={colors.textInverse} />
-                </View>
-                <View style={styles.heroText}>
-                  <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                    {formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}
-                  </Text>
-                  <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                    Available to withdraw
-                  </Text>
-                </View>
-              </View>
-            </View>
+          {/* Available balance — flat metric line, no card */}
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
+            <FlagshipMetricLine
+              label="Available to withdraw"
+              value={formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}
+              emphasis
+            />
           </Reanimated.View>
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)}>
@@ -827,61 +762,52 @@ export default function WithdrawScreen() {
           </Reanimated.View>
 
           <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
-            <Text style={styles.sectionTitle}>Transfer to</Text>
-            <AnimatedPressable
-              style={styles.bankCard}
-              activeOpacity={0.8}
-              onPress={handleConnectPayout}
-              disabled={!allowBankAccounts || isConnectingPayout}
-            accessibilityRole="button"
-            accessibilityLabel={
-              payoutAccount?.status === 'active'
-                ? 'Refresh verified payout profile'
-                : 'Connect verified payout profile'
-            }
-            accessibilityHint="Opens secure payout onboarding when verification is required"
-          >
-            <View style={styles.bankLeft}>
-              <View style={styles.bankIcon}>
-                <Ionicons name="business" size={24} color={colors.textPrimary} />
-              </View>
-              <View>
-                <Text style={styles.bankName}>{bankCopy.name}</Text>
-                <Text style={styles.bankDetails}>{bankCopy.details}</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </AnimatedPressable>
-
-          {allowBankAccounts ? (
-            <AnimatedPressable
-              style={styles.addBankBtn}
-              onPress={handleConnectPayout}
-              disabled={isConnectingPayout}
-              accessibilityRole="button"
-              accessibilityLabel={
-                payoutAccount?.status === 'active'
-                  ? 'Refresh payout profile'
-                  : 'Connect payout profile'
-              }
-              accessibilityHint="Checks payout verification and opens any required onboarding steps"
-            >
-              <Ionicons
-                name={payoutAccount?.status === 'active' ? 'refresh' : 'open-outline'}
-                size={18}
-                color={colors.brand}
+            <FlagshipFormSection variant="flat" title="Transfer to">
+              <FlagshipNavigationRow
+                title={bankCopy.name}
+                subtitle={bankCopy.details}
+                icon="business"
+                onPress={handleConnectPayout}
+                disabled={!allowBankAccounts || isConnectingPayout}
+                separator={false}
+                accessibilityLabel={
+                  payoutAccount?.status === 'active'
+                    ? 'Refresh verified payout profile'
+                    : 'Connect verified payout profile'
+                }
+                accessibilityHint="Opens secure payout onboarding when verification is required"
               />
-              <Text style={styles.addBankText}>
-                {isConnectingPayout
-                  ? 'Checking payout profile…'
-                  : payoutAccount?.status === 'active'
-                    ? 'Refresh payout profile'
-                    : 'Set up payouts'}
-              </Text>
-            </AnimatedPressable>
-          ) : (
-            <Text style={styles.railHintText}>Bank account setup is currently disabled for this region policy.</Text>
-          )}
+
+              {allowBankAccounts ? (
+                <AnimatedPressable
+                  style={styles.addBankBtn}
+                  onPress={handleConnectPayout}
+                  disabled={isConnectingPayout}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    payoutAccount?.status === 'active'
+                      ? 'Refresh payout profile'
+                      : 'Connect payout profile'
+                  }
+                  accessibilityHint="Checks payout verification and opens any required onboarding steps"
+                >
+                  <Ionicons
+                    name={payoutAccount?.status === 'active' ? 'refresh' : 'open-outline'}
+                    size={18}
+                    color={colors.brand}
+                  />
+                  <Text style={styles.addBankText}>
+                    {isConnectingPayout
+                      ? 'Checking payout profile…'
+                      : payoutAccount?.status === 'active'
+                        ? 'Refresh payout profile'
+                        : 'Set up payouts'}
+                  </Text>
+                </AnimatedPressable>
+              ) : (
+                <Text style={styles.railHintText}>Bank account setup is currently disabled for this region policy.</Text>
+              )}
+            </FlagshipFormSection>
           </Reanimated.View>
       </KeyboardAwareScrollView>
     </FlagshipScreen>
@@ -909,44 +835,14 @@ function createStyles(colors: ThemeColors) {
     lineHeight: Type.caption.lineHeight,
   },
 
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginTop: Space.md,
-    marginBottom: Space.lg,
-  },
-  heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  heroIcon: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
-  heroSubtitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    marginTop: Space.xs / 2,
-  },
+  content: { flex: 1 },
 
-  content: { flex: 1, paddingHorizontal: Space.md + Space.xs },
-
-  amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Space.xl + Space.xl - 8, marginBottom: Space.sm + Space.xs },
+  amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.md, marginTop: Space.xl + Space.xl - 8, marginBottom: Space.sm + Space.xs },
   currencySymbol: { fontSize: Type.priceLarge.size + 16, fontFamily: Typography.family.bold, color: colors.textPrimary, marginRight: Space.sm },
   amountInput: { fontSize: Type.priceLarge.size + 28, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2, fontVariant: ['tabular-nums'] },
   availableText: {
     textAlign: 'center',
+    paddingHorizontal: Space.md,
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
@@ -957,6 +853,7 @@ function createStyles(colors: ThemeColors) {
   },
   policyLabel: {
     textAlign: 'center',
+    paddingHorizontal: Space.md,
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.semibold,
@@ -966,6 +863,7 @@ function createStyles(colors: ThemeColors) {
   },
   policyHint: {
     textAlign: 'center',
+    paddingHorizontal: Space.md,
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
     fontFamily: Typography.family.medium,
@@ -975,6 +873,7 @@ function createStyles(colors: ThemeColors) {
   },
   balanceError: {
     textAlign: 'center',
+    paddingHorizontal: Space.md,
     marginTop: Space.xs,
     marginBottom: Space.md + 4,
     fontSize: Type.captionElevated.size,
@@ -983,36 +882,8 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.danger,
   },
-  sectionTitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: Space.sm + Space.xs,
-  },
 
-  bankCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: Space.md, borderRadius: Radius.lg, marginBottom: Space.smMd, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.subtle },
-  bankLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  bankIcon: { width: Space.xl + Space.xl - 4, height: Space.xl + Space.xl - 4, borderRadius: Radius.xxl, alignItems: 'center', justifyContent: 'center' },
-  bankName: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    color: colors.textPrimary,
-    marginBottom: Space.xs,
-  },
-  bankDetails: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    color: colors.textSecondary,
-  },
-
-  addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + Space.xs },
+  addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm + Space.xs },
   addBankText: {
     fontSize: Type.captionElevated.size,
     lineHeight: Type.captionElevated.lineHeight,
@@ -1026,6 +897,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.medium,
     letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.textMuted,
+    paddingHorizontal: Space.md,
     paddingVertical: Space.sm + Space.xs,
   },
 
@@ -1076,59 +948,13 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
 
-  // ── Confirmation step ──
-  confirmCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.xs,
-    ...Elevation.subtle,
-  },
-  confirmHeader: {
+  // ── Flat note (success + confirm) — no border, no radius ──
+  flatNote: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginBottom: Space.sm,
-  },
-  confirmTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-  },
-  confirmRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Space.xs + 2,
-    gap: Space.md,
-  },
-  confirmLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    flexShrink: 1,
-  },
-  confirmValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'right',
-    flexShrink: 1,
-  },
-  confirmValueBold: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'right',
-  },
-  confirmDivider: {
-    height: StyleSheet.hairlineWidth,
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    marginTop: Space.md,
   },
 
   // ── Success step ──
@@ -1156,16 +982,7 @@ function createStyles(colors: ThemeColors) {
     textAlign: 'center',
     marginBottom: Space.xl,
   },
-  successNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    marginTop: Space.md,
-  },
-  successNoteText: {
+  flatNoteText: {
     flex: 1,
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight + 2,

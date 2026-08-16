@@ -27,6 +27,50 @@ export interface ComposerFrame {
 
 // ── Layer payload schemas ──────────────────────────────────────────
 
+// Effect node — a single adjustment/filter step in a media layer's effect stack.
+// Used by the media layer `effects` field (Phase 8 render pipeline).
+export const EffectNodeSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('filter'),
+    id: z.string(),
+    amount: z.number(),
+  }),
+  z.object({
+    type: z.literal('adjust'),
+    exposure: z.number().optional(),
+    contrast: z.number().optional(),
+    highlights: z.number().optional(),
+    shadows: z.number().optional(),
+    saturation: z.number().optional(),
+    temperature: z.number().optional(),
+    tint: z.number().optional(),
+    fade: z.number().optional(),
+    vignette: z.number().optional(),
+    sharpness: z.number().optional(),
+  }),
+  z.object({
+    type: z.literal('blur'),
+    radius: z.number(),
+  }),
+  z.object({
+    type: z.literal('vignette'),
+    amount: z.number(),
+  }),
+]);
+
+export type EffectNode = z.infer<typeof EffectNodeSchema>;
+
+// Mask ref — alpha mask for true cutout (Phase 8 segmentation).
+// Stored by ID in the document's asset registry; layers reference it via `maskRef`.
+export type MaskRef = {
+  type: 'alpha-mask';
+  uri: string;            // local mask URI
+  sourceAssetId: string;  // original asset
+  modelVersion?: string;  // segmentation model version
+  featherPx?: number;     // edge feathering
+  invert?: boolean;       // invert mask
+};
+
 const TextLayerPayloadSchema = z.object({
   text: z.string().min(1).max(500),
   textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten', 'bubble', 'deco', 'poster', 'squeeze', 'signature']).default('clean'),
@@ -37,6 +81,12 @@ const TextLayerPayloadSchema = z.object({
   opacity: z.number().min(0).max(1).default(1),
   textEffect: z.enum(['none', 'shadow', 'neon', 'outline', 'glow']).optional(),
   textAnimation: z.enum(['none', 'typewriter', 'bounce', 'fade', 'slide']).optional(),
+  // Animation timing for text layer entrance (Phase 8 motion)
+  animation: z.object({
+    type: z.enum(['fade', 'rise', 'type', 'pop', 'slide']),
+    durationMs: z.number().min(0),
+    delayMs: z.number().min(0).optional(),
+  }).optional(),
 });
 
 const MediaLayerPayloadSchema = z.object({
@@ -49,6 +99,30 @@ const MediaLayerPayloadSchema = z.object({
   trimStartMs: z.number().min(0).optional(),
   trimEndMs: z.number().min(0).optional(),
   opacity: z.number().min(0).max(1).default(1),
+  // Timeline operations (speed/volume) — Phase 8 timeline foundation
+  speed: z.number().min(0.25).max(4).optional(),      // playback speed 0.25-4.0, default 1.0
+  volume: z.number().min(0).max(1).optional(),         // audio volume 0.0-1.0, default 1.0
+  // Variable speed curve — precise, dynamic speed ramping along a
+  // customizable curve (Instagram Edits parity, August 2026). When present,
+  // the renderer samples the curve to compute instantaneous speed at each
+  // timeline position. Optional — absent on clips with a single constant speed.
+  speedCurve: z.object({
+    points: z.array(z.object({
+      id: z.string(),
+      position: z.number().min(0).max(1),
+      speed: z.number().min(0.01).max(4),
+    })),
+    easing: z.enum(['linear', 'smooth', 'hold']),
+  }).optional(),
+  // Reverse playback (P1). When true, the clip plays from end to start.
+  reversed: z.boolean().optional(),
+  // Freeze frame (P1). When set, the clip holds on this timestamp (ms from
+  // clip start) for `freezeDurationMs` before continuing playback. Used for
+  // dramatic emphasis (Snapchat/Instagram Edits parity).
+  freezeFrameMs: z.number().min(0).optional(),
+  freezeDurationMs: z.number().min(0).max(10000).optional(),
+  // Effect stack — ordered list of adjustments/filters applied to the media
+  effects: z.array(EffectNodeSchema).optional(),
 });
 
 const ProductLayerPayloadSchema = z.object({
@@ -210,6 +284,26 @@ const BaseLayerSchema = z.object({
   locked: z.boolean().default(false),
   hidden: z.boolean().default(false),
   opacity: z.number().min(0).max(1).default(1),
+  // Timed overlay range for Poster timeline (Phase 8). When present, the layer
+  // is only visible during this time window within the page's clip.
+  timeRange: z.object({
+    startMs: z.number(),
+    endMs: z.number(),
+  }).optional(),
+  // Reference to a MaskRef (alpha mask) stored in the document's asset
+  // registry, enabling true cutout via segmentation (Phase 8).
+  maskRef: z.string().optional(),
+  // Per-layer animation keyframes (Phase 9). When present, the composer
+  // interpolates the keyed properties between keyframes over the layer's
+  // timeline. Optional — absent on layers without keyframe animation.
+  keyframes: z.array(z.object({
+    id: z.string(),
+    layerId: z.string(),
+    property: z.enum(['position', 'scale', 'rotation', 'opacity']),
+    timeMs: z.number().min(0),
+    value: z.number(),
+    easing: z.enum(['linear', 'ease-in', 'ease-out', 'ease-in-out', 'spring']),
+  })).optional(),
 });
 
 // ── Discriminated union of layer types ─────────────────────────────
@@ -246,6 +340,9 @@ export const CreatorPageSchema = z.object({
   id: z.string().min(1),
   durationMs: z.number().int().min(500).max(60000).optional(),
   layers: z.array(CreatorLayerSchema).default([]),
+  // Transition applied between this page and the next (Phase 9).
+  // References a TransitionPreset id from TransitionPresets.ts.
+  transitionId: z.string().optional(),
 });
 
 export type CreatorPage = z.infer<typeof CreatorPageSchema>;
@@ -253,9 +350,13 @@ export type CreatorPage = z.infer<typeof CreatorPageSchema>;
 // ── Background schema ──────────────────────────────────────────────
 
 export const CreatorBackgroundSchema = z.object({
-  type: z.enum(['color', 'gradient', 'image']).default('color'),
+  type: z.enum(['color', 'gradient', 'image', 'blur']).default('color'),
   value: z.string().default('#1a1a1a'),
   secondaryValue: z.string().optional(),
+  // For 'blur' type — the asset ID of the source image to blur.
+  // The renderer blurs this image and uses it as the canvas background.
+  blurAssetId: z.string().optional(),
+  blurRadius: z.number().min(0).max(50).optional(),
 });
 
 export type CreatorBackground = z.infer<typeof CreatorBackgroundSchema>;
@@ -284,6 +385,9 @@ export const CreatorDocumentSchema = z.object({
   id: z.string().min(1),
   type: z.enum(['look', 'poster']),
   version: z.number().int().min(1).default(1),
+  // WYSIWYG render contract version — identifies the render pipeline revision
+  // the authored document targets (Phase 8). Optional; absent on legacy docs.
+  renderVersion: z.string().optional(),
   canvas: z.object({
     aspectRatio: z.number().min(0.3).max(3).default(0.8),
     background: CreatorBackgroundSchema,

@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +26,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { CreatorDraftService, type DraftMeta } from './drafts';
+import { CreatorDraftService, type DraftMeta, type Folder } from './drafts';
 import { createStableId, makeStableId } from '../utils/createStableId';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SwipeableRow } from '../components/SwipeableRow';
@@ -34,7 +35,9 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import type { CreatorDocument } from './composition';
+import { CreatorFolderOrganizeSheet } from './CreatorFolderOrganizeSheet';
 
+type FolderFilter = 'all' | 'unfiled' | { folderId: string };
 type SortBy = 'recent' | 'name' | 'type';
 
 const SORT_OPTIONS: { key: SortBy; label: string }[] = [
@@ -58,6 +61,9 @@ export function CreatorDraftListScreen() {
   const [undoDraft, setUndoDraft] = useState<{ meta: DraftMeta; doc: CreatorDocument | null } | null>(null);
   const [deleteConfirmDraft, setDeleteConfirmDraft] = useState<DraftMeta | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folderFilter, setFolderFilter] = useState<FolderFilter>('all');
+  const [organizeVisible, setOrganizeVisible] = useState(false);
 
   const toastTranslateY = useSharedValue(100);
   const toastOpacity = useSharedValue(0);
@@ -80,6 +86,8 @@ export function CreatorDraftListScreen() {
       docs[item.id] = await CreatorDraftService.loadDraft(item.id);
     }));
     setDraftDocs(docs);
+    const loadedFolders = await CreatorDraftService.getFolders();
+    setFolders(loadedFolders);
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -118,6 +126,32 @@ export function CreatorDraftListScreen() {
     }
     return copy;
   }, [drafts, sortBy]);
+
+  const filteredDrafts = useMemo(() => {
+    if (folderFilter === 'all') return sortedDrafts;
+    if (folderFilter === 'unfiled') {
+      return sortedDrafts.filter((d) => !d.folderId);
+    }
+    return sortedDrafts.filter((d) => d.folderId === folderFilter.folderId);
+  }, [sortedDrafts, folderFilter]);
+
+  const handleOpenOrganize = useCallback(() => {
+    haptic.light();
+    setOrganizeVisible(true);
+  }, [haptic]);
+
+  const handleCloseOrganize = useCallback(() => {
+    haptic.light();
+    setOrganizeVisible(false);
+  }, [haptic]);
+
+  const handleFolderFilterPress = useCallback(
+    (filter: FolderFilter) => {
+      haptic.selection();
+      setFolderFilter(filter);
+    },
+    [haptic],
+  );
 
   const handleOpenDraft = useCallback((draft: DraftMeta) => {
     haptic.light();
@@ -267,8 +301,95 @@ export function CreatorDraftListScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Drafts</Text>
-        <View style={styles.backBtn} />
+        <Pressable
+          onPress={handleOpenOrganize}
+          style={({ pressed }) => [styles.organizeBtn, pressed && { opacity: 0.6 }]}
+          accessibilityLabel="Organize folders"
+          accessibilityRole="button"
+          hitSlop={8}
+        >
+          <Ionicons name="folder-open-outline" size={22} color={colors.textPrimary} />
+        </Pressable>
       </View>
+
+      {/* Folder filter chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.folderChipBar}
+      >
+        <Pressable
+          onPress={() => handleFolderFilterPress('all')}
+          style={({ pressed }) => [
+            styles.folderChip,
+            folderFilter === 'all' ? styles.folderChipActive : styles.folderChipInactive,
+            pressed && { opacity: 0.7 },
+          ]}
+          accessibilityLabel="Show all projects"
+          accessibilityRole="button"
+        >
+          <Text
+            style={[
+              styles.folderChipText,
+              folderFilter === 'all' ? styles.folderChipTextActive : styles.folderChipTextInactive,
+            ]}
+          >
+            All Projects
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => handleFolderFilterPress('unfiled')}
+          style={({ pressed }) => [
+            styles.folderChip,
+            folderFilter === 'unfiled' ? styles.folderChipActive : styles.folderChipInactive,
+            pressed && { opacity: 0.7 },
+          ]}
+          accessibilityLabel="Show unfiled drafts"
+          accessibilityRole="button"
+        >
+          <Text
+            style={[
+              styles.folderChipText,
+              folderFilter === 'unfiled' ? styles.folderChipTextActive : styles.folderChipTextInactive,
+            ]}
+          >
+            Unfiled
+          </Text>
+        </Pressable>
+        {folders.map((folder) => {
+          const isActive =
+            typeof folderFilter !== 'string' && folderFilter.folderId === folder.id;
+          return (
+            <Pressable
+              key={folder.id}
+              onPress={() => handleFolderFilterPress({ folderId: folder.id })}
+              style={({ pressed }) => [
+                styles.folderChip,
+                isActive ? styles.folderChipActive : styles.folderChipInactive,
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityLabel={`Filter by folder ${folder.name}`}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={isActive ? 'folder' : 'folder-outline'}
+                size={14}
+                color={isActive ? colors.textInverse : colors.textSecondary}
+                style={{ marginRight: Space.xxs }}
+              />
+              <Text
+                style={[
+                  styles.folderChipText,
+                  isActive ? styles.folderChipTextActive : styles.folderChipTextInactive,
+                ]}
+                numberOfLines={1}
+              >
+                {folder.name}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {/* Sort toggle pills */}
       <View style={styles.sortBar}>
@@ -295,7 +416,7 @@ export function CreatorDraftListScreen() {
       </View>
 
       <FlashList
-        data={sortedDrafts}
+        data={filteredDrafts}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
@@ -328,6 +449,15 @@ export function CreatorDraftListScreen() {
         reduceMotion={reduceMotion}
         onCancel={handleCancelDelete}
         onConfirm={handleConfirmDelete}
+      />
+
+      <CreatorFolderOrganizeSheet
+        visible={organizeVisible}
+        onClose={handleCloseOrganize}
+        drafts={drafts}
+        folders={folders}
+        onFoldersChanged={loadDrafts}
+        onDraftsChanged={loadDrafts}
       />
     </View>
   );
@@ -773,10 +903,46 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     alignItems: 'center',
   },
+  organizeBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.title.size,
     color: colors.textPrimary,
+  },
+  // ── Folder chip bar ──
+  folderChipBar: {
+    flexDirection: 'row',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    gap: Space.xs,
+  },
+  folderChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+  },
+  folderChipActive: {
+    backgroundColor: colors.brand,
+  },
+  folderChipInactive: {
+    backgroundColor: colors.surfaceAlt,
+  },
+  folderChipText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+  },
+  folderChipTextActive: {
+    color: colors.textInverse,
+  },
+  folderChipTextInactive: {
+    color: colors.textSecondary,
   },
   // ── Sort bar ──
   sortBar: {
