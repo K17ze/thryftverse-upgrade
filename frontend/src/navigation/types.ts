@@ -43,6 +43,30 @@ export type CreatorInitialMedia = {
   /** Video duration in milliseconds (normalized at the boundary). */
   durationMs?: number;
   mimeType?: string;
+  /**
+   * Playback speed multiplier captured with the camera speed-mode selector.
+   * expo-camera 57 does not support native slow/fast-motion recording, so
+   * the video is always recorded at 1× and the speed is applied at playback
+   * time by the timeline/export engine. Values: 0.3 (slow), 1, 2, 3 (fast).
+   * @default 1
+   */
+  speed?: number;
+  /**
+   * Green-screen metadata. When present, the clip was captured with a
+   * background-replacement intent. Real-time chroma keying is not feasible
+   * with expo-camera alone (no frame-processor API), so the effect is
+   * applied in post-production via Skia. The background image URI and key
+   * parameters are preserved so the timeline can re-render the composite.
+   */
+  greenScreen?: {
+    backgroundUri: string;
+    /** Key color as a hex string (e.g. '#00ff00' for green). */
+    keyColor: string;
+    /** Chroma key tolerance 0–1 (how far from the key color to mask). */
+    tolerance: number;
+    /** Edge feather 0–1 (softness of the mask boundary). */
+    feather: number;
+  };
 };
 
 // ---------------------------------------------------------------------------

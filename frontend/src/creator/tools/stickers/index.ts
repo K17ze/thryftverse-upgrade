@@ -7,6 +7,13 @@
 export { StickerBrowserSheet, type StickerBrowserSheetProps } from './StickerBrowserSheet';
 export {
   STICKER_CATEGORIES,
+  AUTO_STICKER_CATEGORY,
   type StickerDef,
   type StickerCategory,
 } from './StickerCategories';
+export { AutoStickerRail, type AutoStickerRailProps } from './AutoStickerRail';
+export {
+  suggestAutoStickers,
+  type AutoStickerInput,
+  type ScoredSticker,
+} from './AutoStickers';

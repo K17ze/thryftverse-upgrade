@@ -229,11 +229,11 @@ export function migrateDocumentToSequence(document: CreatorDocument): PosterSequ
         audioTracks.push({
           id: layer.id,
           trackId: musicPayload.trackId ?? null,
-          volume: 1,
+          volume: musicPayload.volume ?? 1,
           startOffsetMs: musicPayload.startOffsetMs ?? 0,
           originalVolume: 1,
-          fadeInMs: 0,
-          fadeOutMs: 0,
+          fadeInMs: musicPayload.fadeInMs ?? 0,
+          fadeOutMs: musicPayload.fadeOutMs ?? 0,
         });
       }
     }

@@ -1,4 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
+import type { FulfilmentSnapshot } from '../components/orders/orderCapabilities';
 
 export interface CommerceAddress {
   id: number;
@@ -123,6 +124,19 @@ export interface CommerceOrder {
   updatedAt: string;
   buyer: { id: string; username: string; avatar: string | null } | null;
   seller: { id: string; username: string; avatar: string | null } | null;
+  /**
+   * Immutable snapshot of the buyer-selected shipping service, captured at
+   * checkout. When present, the seller's guided dispatch flow shows the exact
+   * service the buyer paid for and suppresses the generic carrier picker.
+   * Backend-provided; optional for backward compatibility with older orders.
+   */
+  fulfilmentSnapshot?: FulfilmentSnapshot | null;
+  /**
+   * Server-derived ship-by deadline (ISO 8601). The seller must dispatch by
+   * this date or risk cancellation / SLA penalties. May be derived from the
+   * fulfilment snapshot or a separate backend field.
+   */
+  shipByDate?: string | null;
 }
 
 export interface ShippingQuoteItem {
@@ -238,6 +252,10 @@ export interface CommerceUserOrder {
   createdAt: string;
   buyerUsername: string | null;
   sellerUsername: string | null;
+  /** Server-derived ship-by deadline (ISO 8601). Optional for older orders. */
+  shipByDate?: string | null;
+  /** Immutable purchased-service snapshot (optional for older orders). */
+  fulfilmentSnapshot?: FulfilmentSnapshot | null;
 }
 
 export interface OrderParcelEvent {

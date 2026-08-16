@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, Text } from 'react-native';
 import Reanimated, {
   SharedValue,
   useSharedValue,
@@ -7,7 +7,7 @@ import Reanimated, {
   withSpring,
   withSequence,
 } from 'react-native-reanimated';
-import { Radius } from '../../theme/designTokens';
+import { Radius, Typography, Type } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -38,6 +38,10 @@ export interface ShutterButtonProps {
   recordingProgress: SharedValue<number>;
   /** Optional ring scale spring (pulse on recording start). */
   recordingRingScale: SharedValue<number>;
+  /** Hands-free mode — changes the shutter visual to indicate tap-to-start. */
+  handsFreeMode?: boolean;
+  /** Current speed mode label (e.g. '1', '0.3', '2', '3') for the ring indicator. */
+  speedMode?: string;
 }
 
 /**
@@ -57,6 +61,8 @@ export function ShutterButton({
   disabled,
   recordingProgress,
   recordingRingScale,
+  handsFreeMode,
+  speedMode,
 }: ShutterButtonProps) {
   const { spring } = useMotionConfig();
   const { colors } = useAppTheme();
@@ -77,31 +83,53 @@ export function ShutterButton({
   }, [reducedMotion, shutterScale, spring, onPress]);
 
   const showRing = isRecording;
+  const showSpeedIndicator = speedMode && speedMode !== '1';
+
+  const accessibilityLabel = isRecording
+    ? 'Stop recording'
+    : handsFreeMode
+      ? 'Start hands-free capture with 3 second countdown'
+      : 'Take photo or hold for video';
 
   return (
     <Pressable
       onPress={handlePress}
       onLongPress={onLongPress}
       onPressOut={onPressOut}
-      delayLongPress={250}
+      delayLongPress={handsFreeMode ? 10000 : 250}
       hitSlop={24}
-      accessibilityLabel={
-        isRecording ? 'Stop recording' : 'Take photo or hold for video'
-      }
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       disabled={disabled}
     >
-      <Reanimated.View style={[styles.outer, { borderColor: colors.brand }, shutterStyle]}>
+      <Reanimated.View
+        style={[
+          styles.outer,
+          { borderColor: handsFreeMode && !isRecording ? colors.antiqueGold : colors.brand },
+          shutterStyle,
+        ]}
+      >
         {showRing && (
-          <RecordingRing progress={recordingProgress} scale={recordingRingScale} />
+          <RecordingRing
+            progress={recordingProgress}
+            scale={recordingRingScale}
+          />
         )}
         <View
           style={[
             styles.inner,
             isRecording && styles.innerRecording,
             isRecording && { backgroundColor: colors.danger },
+            handsFreeMode && !isRecording && { backgroundColor: colors.antiqueGold },
           ]}
         />
+        {/* Speed indicator badge — shows the current speed multiplier
+            on the shutter when a non-1× speed is selected */}
+        {showSpeedIndicator && !isRecording && (
+          <View style={styles.speedBadge}>
+            <Text style={styles.speedBadgeText}>{speedMode}×</Text>
+          </View>
+        )}
       </Reanimated.View>
     </Pressable>
   );
@@ -134,5 +162,20 @@ const styles = StyleSheet.create({
     height: SHUTTER_INNER * 0.6,
     borderRadius: Radius.sm,
     // backgroundColor applied inline via colors.danger (theme token)
+  },
+  // Speed badge — small pill on the shutter showing the speed multiplier
+  speedBadge: {
+    position: 'absolute',
+    bottom: -4,
+    alignSelf: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  speedBadgeText: {
+    fontFamily: Typography.family.bold,
+    fontSize: 10,
+    color: '#fff',
   },
 });

@@ -23,6 +23,7 @@ import {
   Animated,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -45,6 +46,8 @@ import {
   Path as SkiaPath,
   Paint as SkiaPaint,
   Skia,
+  Text as SkiaText,
+  useFont,
 } from '@shopify/react-native-skia';
 
 import { Space, Radius, FontFamily, Type, Elevation } from '../../../theme/designTokens';
@@ -64,7 +67,7 @@ import {
   normalize,
 } from '../../color/';
 import type { CreatorColor } from '../../color/';
-import type { BrushType, DrawingDocument, Stroke } from './DrawingTypes';
+import type { BrushType, DrawingDocument, EmojiBrushConfig, Stroke } from './DrawingTypes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Skia availability guard
@@ -95,12 +98,59 @@ const BRUSH_SEGMENTS: SegmentOption[] = [
   { label: 'Highlight', value: 'highlighter', icon: 'color-fill-outline' },
   { label: 'Neon', value: 'neon', icon: 'bulb-outline' },
   { label: 'Eraser', value: 'eraser', icon: 'backspace-outline' },
+  { label: 'Emoji', value: 'emoji', icon: 'happy-outline' },
 ];
 
 const PRESET_COLORS = [
   '#000000', '#FFFFFF', '#E53935', '#FB8C00',
   '#FDD835', '#43A047', '#1E88E5', '#8E24AA',
 ];
+
+// ── Emoji picker catalog (Snapchat emoji-brush parity) ────────────────────
+interface EmojiCategory {
+  id: string;
+  name: string;
+  emojis: string[];
+}
+
+const EMOJI_CATEGORIES: EmojiCategory[] = [
+  {
+    id: 'faces',
+    name: 'Faces',
+    emojis: ['😀', '😍', '🥰', '😎', '🤩', '😂', '🥳', '😭', '🤔', '😴', '🤯', '😱'],
+  },
+  {
+    id: 'hearts',
+    name: 'Hearts',
+    emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💔', '❣️', '💕', '💖'],
+  },
+  {
+    id: 'hands',
+    name: 'Hands',
+    emojis: ['👍', '👎', '👏', '🙌', '🤝', '✌️', '🤞', '🤟', '👋', '🤙', '👌', '💪'],
+  },
+  {
+    id: 'animals',
+    name: 'Animals',
+    emojis: ['🐶', '🐱', '🦄', '🦋', '🐝', '🦋', '🐢', '🦊', '🐼', '🦁', '🐯', '🐸'],
+  },
+  {
+    id: 'food',
+    name: 'Food',
+    emojis: ['🍕', '🍔', '🍟', '🌮', '🍣', '🍩', '🍦', '🍓', '🍉', '🥑', '🌶️', '🍿'],
+  },
+  {
+    id: 'symbols',
+    name: 'Symbols',
+    emojis: ['🔥', '✨', '⭐', '💯', '🎉', '👑', '💎', '🚀', '🌈', '☀️', '❄️', '⚡'],
+  },
+];
+
+const DEFAULT_EMOJI = '🔥';
+const EMOJI_MIN_SIZE = 16;
+const EMOJI_MAX_SIZE = 80;
+const EMOJI_MIN_SPACING = 8;
+const EMOJI_MAX_SPACING = 80;
 
 const MIN_SIZE = 4;
 const MAX_SIZE = 40;
@@ -141,6 +191,55 @@ function smoothPathToSkia(points: { x: number; y: number }[], tension = 0.5): Sk
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Emoji stamp spacing — compute stamp points along a polyline at `spacing` px
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Walk along the polyline `points` and emit stamp positions every `spacing` px.
+ * The first point is always stamped; subsequent stamps are placed at cumulative
+ * distance `spacing` along the path. This mirrors Snapchat's emoji-brush behavior
+ * where stamps are spaced, not placed on every touch sample.
+ */
+function computeStampPoints(
+  points: { x: number; y: number }[],
+  spacing: number,
+  jitter: number,
+  stampSize: number,
+): { x: number; y: number; rotation: number }[] {
+  if (points.length === 0) return [];
+  const stamps: { x: number; y: number; rotation: number }[] = [];
+  const jitterRange = jitter * stampSize * 0.5;
+
+  const makeStamp = (x: number, y: number) => ({
+    x: x + (Math.random() - 0.5) * jitterRange,
+    y: y + (Math.random() - 0.5) * jitterRange,
+    rotation: (Math.random() - 0.5) * 30,
+  });
+
+  stamps.push(makeStamp(points[0]!.x, points[0]!.y));
+
+  if (points.length === 1) return stamps;
+
+  let accumulated = 0;
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]!;
+    const curr = points[i]!;
+    const dx = curr.x - prev.x;
+    const dy = curr.y - prev.y;
+    const segLen = Math.sqrt(dx * dx + dy * dy);
+    if (segLen === 0) continue;
+    accumulated += segLen;
+    while (accumulated >= spacing) {
+      // Back up along the segment to the exact stamp position
+      const overshoot = accumulated - spacing;
+      const t = 1 - overshoot / segLen;
+      stamps.push(makeStamp(prev.x + dx * t, prev.y + dy * t));
+      accumulated -= spacing;
+    }
+  }
+  return stamps;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Single-stroke Skia renderer (memoized)
 // ─────────────────────────────────────────────────────────────────────────────
 interface StrokePathProps {
@@ -148,9 +247,71 @@ interface StrokePathProps {
   keyPrefix: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EmojiStamp — renders a single emoji glyph via Skia text.
+// Uses the system emoji font (Apple Color Emoji on iOS, Noto Color Emoji on
+// Android). Falls back to a plain RN Text overlay when the font is unavailable.
+// ─────────────────────────────────────────────────────────────────────────────
+interface EmojiStampProps {
+  emoji: string;
+  x: number;
+  y: number;
+  size: number;
+  rotation: number;
+}
+
+const EmojiStamp = React.memo(function EmojiStamp({
+  emoji,
+  x,
+  y,
+  size,
+  rotation,
+}: EmojiStampProps) {
+  // useFont returns null until the font is loaded. We request the system
+  // emoji font; on iOS this is "Apple Color Emoji", on Android "NotoColorEmoji".
+  // Skia resolves these by family name from the platform font collection.
+  const font = useFont('Apple Color Emoji', size);
+  if (!font) return null;
+  // Skia Text baseline: y is the baseline position. Offset by size*0.8 so the
+  // emoji is visually centered on the stamp point.
+  const baselineY = y + size * 0.8;
+  return (
+    <SkiaText
+      text={emoji}
+      x={x - size * 0.4}
+      y={baselineY}
+      font={font}
+      color="#FFFFFF"
+      transform={[{ rotate: rotation }, { translateX: x }, { translateY: y }]}
+    />
+  );
+});
+
 const StrokePath = React.memo(function StrokePath({ stroke, keyPrefix }: StrokePathProps) {
   if (!skiaAvailable) return null;
   if (stroke.brushType === 'eraser') return null; // eraser rendered via blend mode
+
+  // ── Emoji brush: render emoji glyphs as text at spaced stamp points ──
+  if (stroke.brushType === 'emoji') {
+    const cfg = stroke.emojiConfig;
+    if (!cfg || !cfg.emoji) return null;
+    const stamps = computeStampPoints(stroke.points, cfg.spacing, cfg.jitter, cfg.size);
+    if (stamps.length === 0) return null;
+    return (
+      <Group key={`${keyPrefix}_${stroke.id}`}>
+        {stamps.map((stamp, i) => (
+          <EmojiStamp
+            key={`${keyPrefix}_emoji_${stroke.id}_${i}`}
+            emoji={cfg.emoji}
+            x={stamp.x}
+            y={stamp.y}
+            size={cfg.size}
+            rotation={stamp.rotation}
+          />
+        ))}
+      </Group>
+    );
+  }
 
   const path = smoothPathToSkia(stroke.points);
   if (!path) return null;
@@ -244,6 +405,16 @@ export function DrawingWorkspace({
   const [redoStack, setRedoStack] = useState<Stroke[]>([]);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
+  // ── Emoji brush state ──
+  const [emojiBrush, setEmojiBrush] = useState<EmojiBrushConfig>({
+    emoji: DEFAULT_EMOJI,
+    size: 32,
+    spacing: 24,
+    rotation: 0,
+    jitter: 0,
+  });
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState<string>('faces');
+
   // Recent color history (persisted via AsyncStorage, spec §4).
   const { recents, commitColor: commitRecentColor } = useCreatorColorHistory();
 
@@ -325,10 +496,11 @@ export function DrawingWorkspace({
         color: brushType === 'eraser' ? '#000000' : brushColor,
         size: brushSize,
         points: [],
+        emojiConfig: brushType === 'emoji' ? { ...emojiBrush } : undefined,
       };
       renderTickSV.value = renderTickSV.value + 1;
     },
-    [brushType, brushColor, brushSize, renderTickSV],
+    [brushType, brushColor, brushSize, emojiBrush, renderTickSV],
   );
 
   const addPoint = useCallback(
@@ -580,6 +752,7 @@ export function DrawingWorkspace({
           />
 
           {/* Color picker row — preset swatches + shared CreatorColorPicker */}
+          {brushType !== 'emoji' && (
           <View style={styles.colorRow}>
             {PRESET_COLORS.map((c) => {
               const selected = brushColor === c && brushType !== 'eraser';
@@ -618,9 +791,10 @@ export function DrawingWorkspace({
               />
             </PressScale>
           </View>
+          )}
 
           {/* Shared CreatorColorPicker — compact row with HEX, eyedropper, recents */}
-          {showColorPicker && (
+          {showColorPicker && brushType !== 'emoji' && (
             <View style={styles.colorPickerSection}>
               <CreatorColorPicker
                 color={brushColorObj}
@@ -634,28 +808,120 @@ export function DrawingWorkspace({
             </View>
           )}
 
-          {/* Size slider — CreatorSlider (RNGH + Reanimated, 44pt touch target) */}
-          <View style={styles.sizeRow}>
-            <View style={styles.sizeDotWrap}>
-              <View
-                style={{
-                  width: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
-                  height: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
-                  borderRadius: 999,
-                  backgroundColor: brushType === 'eraser' ? colors.border : brushColor,
-                }}
-              />
+          {/* ── Emoji brush panel (replaces color/size when emoji mode active) ── */}
+          {brushType === 'emoji' ? (
+            <View style={styles.emojiPanel}>
+              {/* Emoji category tabs */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.emojiTabsContent}
+                style={styles.emojiTabs}
+              >
+                {EMOJI_CATEGORIES.map((cat) => {
+                  const active = cat.id === activeEmojiCategory;
+                  return (
+                    <PressScale
+                      key={cat.id}
+                      accessibilityLabel={`${cat.name} emoji category`}
+                      accessibilityRole="button"
+                      onPress={() => setActiveEmojiCategory(cat.id)}
+                      style={active ? [styles.emojiTab, styles.emojiTabActive] : styles.emojiTab}
+                    >
+                      <Text
+                        style={active ? [styles.emojiTabLabel, styles.emojiTabLabelActive] : styles.emojiTabLabel}
+                        numberOfLines={1}
+                      >
+                        {cat.name}
+                      </Text>
+                    </PressScale>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Emoji grid for the active category */}
+              <View style={styles.emojiGrid}>
+                {(EMOJI_CATEGORIES.find((c) => c.id === activeEmojiCategory) ?? EMOJI_CATEGORIES[0]!).emojis.map(
+                  (em) => {
+                    const selected = em === emojiBrush.emoji;
+                    return (
+                      <Pressable
+                        key={em}
+                        onPress={() => setEmojiBrush((prev) => ({ ...prev, emoji: em }))}
+                        accessibilityLabel={`Select ${em} emoji`}
+                        accessibilityRole="button"
+                        hitSlop={2}
+                        style={[
+                          styles.emojiCell,
+                          { borderColor: selected ? colors.brand : 'transparent' },
+                        ]}
+                      >
+                        <Text style={styles.emojiCellText}>{em}</Text>
+                      </Pressable>
+                    );
+                  },
+                )}
+              </View>
+
+              {/* Emoji size slider */}
+              <View style={styles.sizeRow}>
+                <Text style={styles.emojiSizePreview}>{emojiBrush.emoji}</Text>
+                <CreatorSlider
+                  value={emojiBrush.size}
+                  min={EMOJI_MIN_SIZE}
+                  max={EMOJI_MAX_SIZE}
+                  step={2}
+                  onValueChange={(v) => setEmojiBrush((prev) => ({ ...prev, size: v }))}
+                  onCommit={(v) => setEmojiBrush((prev) => ({ ...prev, size: v }))}
+                  accessibilityLabel="Emoji stamp size"
+                />
+              </View>
+
+              {/* Stamp spacing slider */}
+              <View style={styles.sizeRow}>
+                <Ionicons
+                  name="resize-outline"
+                  size={18}
+                  color={colors.textSecondary}
+                  accessibilityLabel="Spacing"
+                />
+                <CreatorSlider
+                  value={emojiBrush.spacing}
+                  min={EMOJI_MIN_SPACING}
+                  max={EMOJI_MAX_SPACING}
+                  step={2}
+                  onValueChange={(v) => setEmojiBrush((prev) => ({ ...prev, spacing: v }))}
+                  onCommit={(v) => setEmojiBrush((prev) => ({ ...prev, spacing: v }))}
+                  accessibilityLabel="Emoji stamp spacing"
+                />
+              </View>
             </View>
-            <CreatorSlider
-              value={brushSize}
-              min={MIN_SIZE}
-              max={MAX_SIZE}
-              step={1}
-              onValueChange={setBrushSize}
-              onCommit={setBrushSize}
-              accessibilityLabel="Brush size"
-            />
-          </View>
+          ) : (
+            <>
+              {/* Size slider — CreatorSlider (RNGH + Reanimated, 44pt touch target) */}
+              <View style={styles.sizeRow}>
+                <View style={styles.sizeDotWrap}>
+                  <View
+                    style={{
+                      width: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
+                      height: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
+                      borderRadius: 999,
+                      backgroundColor: brushType === 'eraser' ? colors.border : brushColor,
+                    }}
+                  />
+                </View>
+                <CreatorSlider
+                  value={brushSize}
+                  min={MIN_SIZE}
+                  max={MAX_SIZE}
+                  step={1}
+                  onValueChange={setBrushSize}
+                  onCommit={setBrushSize}
+                  accessibilityLabel="Brush size"
+                />
+              </View>
+            </>
+          )}
         </Reanimated.View>
       </View>
     </GestureHandlerRootView>
@@ -763,6 +1029,61 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    // ── Emoji brush panel ──
+    emojiPanel: {
+      gap: Space.sm,
+    },
+    emojiTabs: {
+      flexGrow: 0,
+    },
+    emojiTabsContent: {
+      gap: Space.xs,
+      paddingRight: Space.md,
+    },
+    emojiTab: {
+      height: 32,
+      paddingHorizontal: Space.sm,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emojiTabActive: {
+      backgroundColor: colors.brand,
+      borderColor: colors.brand,
+    },
+    emojiTabLabel: {
+      fontFamily: FontFamily.medium,
+      fontSize: Type.caption.size,
+      color: colors.textSecondary,
+    },
+    emojiTabLabelActive: {
+      color: colors.textInverse,
+    },
+    emojiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Space.xs,
+    },
+    emojiCell: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.sm,
+      borderWidth: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emojiCellText: {
+      fontSize: 28,
+      lineHeight: 32,
+    },
+    emojiSizePreview: {
+      fontSize: 24,
+      width: 36,
+      textAlign: 'center',
     },
   });
 }

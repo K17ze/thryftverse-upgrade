@@ -50,6 +50,7 @@ import {
   type AudioTrack,
   DEFAULT_AUDIO_CONFIG,
 } from './AudioTypes';
+import { WaveformTrack } from '../../poster/timeline/WaveformTrack';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -149,6 +150,47 @@ export function AudioBrowserSheet({
       ...prev,
       startOffsetMs: clamp(v, 0, selectedTrack?.durationMs ?? 0),
     }));
+  }, [selectedTrack]);
+
+  const handleFadeInChange = useCallback((v: number) => {
+    setConfig((prev) => ({
+      ...prev,
+      fadeInMs: clamp(v, 0, selectedTrack?.durationMs ?? 0),
+    }));
+  }, [selectedTrack]);
+
+  const handleFadeOutChange = useCallback((v: number) => {
+    setConfig((prev) => ({
+      ...prev,
+      fadeOutMs: clamp(v, 0, selectedTrack?.durationMs ?? 0),
+    }));
+  }, [selectedTrack]);
+
+  const handleTrimStartChange = useCallback((v: number) => {
+    const maxTrim = selectedTrack?.durationMs ?? 0;
+    setConfig((prev) => {
+      const clampedStart = clamp(v, 0, maxTrim);
+      // Ensure trimStart < trimEnd (if trimEnd is set).
+      const currentEnd = prev.trimEndMs ?? maxTrim;
+      return {
+        ...prev,
+        trimStartMs: clampedStart,
+        trimEndMs: Math.max(clampedStart + 100, currentEnd),
+      };
+    });
+  }, [selectedTrack]);
+
+  const handleTrimEndChange = useCallback((v: number) => {
+    const maxTrim = selectedTrack?.durationMs ?? 0;
+    setConfig((prev) => {
+      const clampedEnd = clamp(v, 100, maxTrim);
+      const currentStart = prev.trimStartMs ?? 0;
+      return {
+        ...prev,
+        trimStartMs: Math.min(currentStart, clampedEnd - 100),
+        trimEndMs: clampedEnd,
+      };
+    });
   }, [selectedTrack]);
 
   const handleConfirm = useCallback(() => {
@@ -293,6 +335,82 @@ export function AudioBrowserSheet({
                 valueColor={colors.textMuted}
                 onChange={handleStartOffsetChange}
                 disabled={startOffsetDisabled}
+              />
+
+              {/* ── Waveform visualization ── */}
+              <View style={styles.waveformSection}>
+                <Text style={[styles.waveformLabel, { color: colors.textSecondary }]}>
+                  Waveform
+                </Text>
+                <WaveformTrack
+                  samples={selectedTrack.waveform}
+                  audioUri={selectedTrack.uri}
+                  trackWidth={280}
+                  color={colors.antiqueGold}
+                  height={36}
+                />
+              </View>
+
+              {/* ── Fade controls (timeline integration) ── */}
+              <SliderRow
+                label="Fade In"
+                valueText={formatDuration(config.fadeInMs)}
+                min={0}
+                max={selectedTrack.durationMs}
+                value={config.fadeInMs}
+                trackColor={colors.border}
+                fillColor={colors.brand}
+                thumbColor={colors.textPrimary}
+                labelColor={colors.textPrimary}
+                valueColor={colors.textMuted}
+                onChange={handleFadeInChange}
+                disabled={trackVolumeDisabled}
+              />
+
+              <SliderRow
+                label="Fade Out"
+                valueText={formatDuration(config.fadeOutMs)}
+                min={0}
+                max={selectedTrack.durationMs}
+                value={config.fadeOutMs}
+                trackColor={colors.border}
+                fillColor={colors.brand}
+                thumbColor={colors.textPrimary}
+                labelColor={colors.textPrimary}
+                valueColor={colors.textMuted}
+                onChange={handleFadeOutChange}
+                disabled={trackVolumeDisabled}
+              />
+
+              {/* ── Trim controls (timeline integration) ── */}
+              <SliderRow
+                label="Trim Start"
+                valueText={formatDuration(config.trimStartMs ?? 0)}
+                min={0}
+                max={selectedTrack.durationMs}
+                value={config.trimStartMs ?? 0}
+                trackColor={colors.border}
+                fillColor={colors.antiqueGold}
+                thumbColor={colors.textPrimary}
+                labelColor={colors.textPrimary}
+                valueColor={colors.textMuted}
+                onChange={handleTrimStartChange}
+                disabled={trackVolumeDisabled}
+              />
+
+              <SliderRow
+                label="Trim End"
+                valueText={formatDuration(config.trimEndMs ?? selectedTrack.durationMs)}
+                min={0}
+                max={selectedTrack.durationMs}
+                value={config.trimEndMs ?? selectedTrack.durationMs}
+                trackColor={colors.border}
+                fillColor={colors.antiqueGold}
+                thumbColor={colors.textPrimary}
+                labelColor={colors.textPrimary}
+                valueColor={colors.textMuted}
+                onChange={handleTrimEndChange}
+                disabled={trackVolumeDisabled}
               />
 
               <PreviewButton
@@ -753,6 +871,15 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       fontSize: Type.caption.size,
       fontVariant: ['tabular-nums'],
+    },
+    // ── Waveform ──
+    waveformSection: {
+      gap: Space.xxs,
+      paddingVertical: Space.xs,
+    },
+    waveformLabel: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
     },
     noTrackState: {
       paddingVertical: Space.lg,

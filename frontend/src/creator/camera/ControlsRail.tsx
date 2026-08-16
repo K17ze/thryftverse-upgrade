@@ -38,6 +38,15 @@ export interface ControlsRailProps {
   onToggleTools: () => void;
   /** Antique-gold accent colour from the active theme. */
   accentColor: string;
+  // ── Hands-free capture (expanded only) ──
+  handsFreeMode: boolean;
+  onToggleHandsFree: () => void;
+  // ── Speed modes (expanded only, segment control rendered in CreatorCamera) ──
+  speedMode: string;
+  onSpeedChange: (value: string) => void;
+  // ── Green screen (post-capture, expanded only) ──
+  greenScreenActive: boolean;
+  onToggleGreenScreen: () => void;
 }
 
 /**
@@ -74,6 +83,10 @@ export function ControlsRail({
   showTools,
   onToggleTools,
   accentColor,
+  handsFreeMode,
+  onToggleHandsFree,
+  greenScreenActive,
+  onToggleGreenScreen,
 }: ControlsRailProps) {
   return (
     <View style={[styles.rail, { top }]} pointerEvents="box-none">
@@ -169,6 +182,49 @@ export function ControlsRail({
               <Text style={styles.railLabel}>
                 {multiCaptureMode ? `${multiCaptureCount + (hasCapturedUri ? 1 : 0)} photos` : 'Multi'}
               </Text>
+            </Pressable>
+          )}
+
+          {/* Hands-free capture — 3s countdown then auto-record.
+              Lets the user prop the phone and capture without holding
+              the shutter. Active state uses the accent colour. */}
+          {!isVisualSearch && (
+            <Pressable
+              style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
+              onPress={onToggleHandsFree}
+              hitSlop={12}
+              accessibilityLabel={handsFreeMode ? 'Hands-free on' : 'Hands-free off'}
+              accessibilityHint="Toggles hands-free capture with a 3-second countdown"
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={handsFreeMode ? 'hand-right' : 'hand-right-outline'}
+                size={CONTROL_RAIL_ICON}
+                color={handsFreeMode ? accentColor : '#fff'}
+              />
+              <Text style={styles.railLabel}>Free</Text>
+            </Pressable>
+          )}
+
+          {/* Green screen (post-capture) — background replacement.
+              Real-time chroma keying is not feasible with expo-camera
+              alone, so the effect is applied in post-production via
+              Skia. Truthfully labelled in the UI. */}
+          {!isVisualSearch && (
+            <Pressable
+              style={({ pressed }) => [styles.railBtn, pressed && styles.btnPressed]}
+              onPress={onToggleGreenScreen}
+              hitSlop={12}
+              accessibilityLabel={greenScreenActive ? 'Green screen on (post-capture)' : 'Green screen off'}
+              accessibilityHint="Opens background replacement settings. Effect applied after capture."
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={greenScreenActive ? 'color-fill' : 'color-fill-outline'}
+                size={CONTROL_RAIL_ICON}
+                color={greenScreenActive ? accentColor : '#fff'}
+              />
+              <Text style={styles.railLabel}>Screen</Text>
             </Pressable>
           )}
         </>

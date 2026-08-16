@@ -795,7 +795,7 @@ export const POSTER_TEMPLATES: CreatorTemplate[] = [
       canvas: { aspectRatio: 0.5625, background: { type: 'color', value: '#0d0d0d' } },
       pages: [page([
         { ...baseLayer(createStableId('media'), 1), type: 'media', width: 0.7, height: 0.5, y: 0.3, payload: { mediaUri: '', mediaType: 'image', contentFit: 'cover', opacity: 1 } },
-        { ...baseLayer(createStableId('music'), 2), type: 'music', width: 0.6, height: 0.12, y: 0.72, payload: { trackName: 'New Track', artistName: 'Artist', opacity: 1 } },
+        { ...baseLayer(createStableId('music'), 2), type: 'music', width: 0.6, height: 0.12, y: 0.72, payload: { trackName: 'New Track', artistName: 'Artist', opacity: 1, volume: 1, fadeInMs: 0, fadeOutMs: 0 } },
         { ...baseLayer(createStableId('text'), 3), type: 'text', width: 0.7, height: 0.06, y: 0.88, payload: { text: 'Out now', textStyle: 'compact', textColor: '#C9A46A', alignment: 'center', opacity: 1 } },
       ], 15000)],
       metadata: { title: 'Music Drop', caption: '', visibility: 'public', allowReplies: true, allowReactions: true, expiresInHours: 24, allowRemix: false },

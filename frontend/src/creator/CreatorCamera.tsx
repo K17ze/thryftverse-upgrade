@@ -44,6 +44,8 @@ import { ShutterButton } from './camera/ShutterButton';
 import { ControlsRail } from './camera/ControlsRail';
 import { GalleryCarousel } from './camera/GalleryCarousel';
 import { PermissionState } from './camera/PermissionState';
+import { GreenScreenSheet, type GreenScreenSettings } from './camera/GreenScreenSheet';
+import { CreatorSegmentControl } from './controls/CreatorSegmentControl';
 import { CreatorAnalytics } from './creatorAnalytics';
 import type { CreatorInitialMedia } from '../navigation/types';
 
@@ -87,6 +89,30 @@ const RECORDING_RING_STROKE = 4;
 const MODE_SWITCHER_HEIGHT = 36;
 // Press-and-hold threshold for video recording (ms)
 const HOLD_THRESHOLD_MS = 350;
+
+// ── Hands-free capture (Snapchat hands-free pattern) ──
+// When enabled, a 3-second countdown runs, then recording begins
+// automatically and stops at HANDS_FREE_DEFAULT_DURATION. The user
+// can tap to stop early. This lets the user prop the phone and capture
+// without holding the shutter.
+const HANDS_FREE_COUNTDOWN = 3; // seconds
+const HANDS_FREE_DEFAULT_DURATION = 10000; // 10s default
+const HANDS_FREE_MAX_DURATION = 30000; // 30s max
+
+// ── Capture speed modes ──
+// expo-camera 57 does NOT support native slow/fast-motion recording
+// (no fps or speed parameter in recordAsync). The video is always
+// recorded at 1×. The selected speed multiplier is stored in the clip
+// metadata (CreatorInitialMedia.speed) so the timeline/export engine
+// applies it at playback. This is the truthful approach — we do not
+// claim the native camera is recording in slow-motion.
+const SPEED_MODES = [
+  { label: '0.3×', value: '0.3' },
+  { label: '1×', value: '1' },
+  { label: '2×', value: '2' },
+  { label: '3×', value: '3' },
+] as const;
+const DEFAULT_SPEED = '1';
 
 type FlashMode = 'off' | 'on' | 'auto';
 type ZoomStepIndex = 0 | 1 | 2;
@@ -154,6 +180,28 @@ export default function CreatorCamera({
   // captures to frames; Look maps captures to layers.
   const [multiCaptureMode, setMultiCaptureMode] = useState(false);
   const [multiCaptures, setMultiCaptures] = useState<CreatorInitialMedia[]>([]);
+
+  // ── Hands-free capture mode ──
+  // When enabled, tapping the shutter starts a 3-second countdown, then
+  // recording begins automatically and stops at the configured duration.
+  const [handsFreeMode, setHandsFreeMode] = useState(false);
+  const [handsFreeCountdown, setHandsFreeCountdown] = useState<number | null>(null);
+  const handsFreeCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Capture speed mode ──
+  // Stored as a string for CreatorSegmentControl; converted to number
+  // when building CreatorInitialMedia metadata.
+  const [speedMode, setSpeedMode] = useState<string>(DEFAULT_SPEED);
+
+  // ── Green screen (post-capture) ──
+  // Real-time chroma keying is not feasible with expo-camera alone (no
+  // frame-processor API). The user selects a background image and key
+  // parameters; the video is recorded normally and the green screen
+  // effect is applied in post-production via Skia. The settings are
+  // preserved in CreatorInitialMedia.greenScreen so the timeline can
+  // re-render the composite.
+  const [showGreenScreenSheet, setShowGreenScreenSheet] = useState(false);
+  const [greenScreenSettings, setGreenScreenSettings] = useState<GreenScreenSettings | null>(null);
 
   // ── Flagship upgrade shared values ──
   // Flip animation (double-tap to switch camera)
@@ -313,6 +361,155 @@ export default function CreatorCamera({
     });
   }, [haptic]);
 
+  // ── Hands-free mode toggle ──
+  const toggleHandsFree = useCallback(() => {
+    haptic.selection();
+    setHandsFreeMode((p) => !p);
+    // Cancel any in-progress hands-free countdown
+    if (handsFreeCountdownRef.current) {
+      clearInterval(handsFreeCountdownRef.current);
+      handsFreeCountdownRef.current = null;
+    }
+    setHandsFreeCountdown(null);
+  }, [haptic]);
+
+  // ── Speed mode change ──
+  const handleSpeedChange = useCallback((value: string) => {
+    haptic.selection();
+    setSpeedMode(value);
+  }, [haptic]);
+
+  // ── Green screen toggle ──
+  const toggleGreenScreen = useCallback(() => {
+    haptic.selection();
+    if (greenScreenSettings) {
+      // Toggle off — clear settings
+      setGreenScreenSettings(null);
+    } else {
+      // Open the sheet to configure
+      setShowGreenScreenSheet(true);
+    }
+  }, [haptic, greenScreenSettings]);
+
+  const handleGreenScreenApply = useCallback((settings: GreenScreenSettings) => {
+    haptic.light();
+    setGreenScreenSettings(settings);
+    setShowGreenScreenSheet(false);
+  }, [haptic]);
+
+  const handleGreenScreenCancel = useCallback(() => {
+    haptic.light();
+    setShowGreenScreenSheet(false);
+  }, [haptic]);
+
+  // ── P0.1: One unified recording lifecycle ────────────────────────
+  // beginVideoRecording() starts native recordAsync() and stores the promise.
+  // stopRecording() calls stopRecording() on the native camera, which causes
+  // the promise to resolve. The awaited result enters the same review object
+  // as a photo. Cleanup runs on background/unmount/interruption.
+  // Declared before startHandsFreeCapture (which calls beginVideoRecording)
+  // to avoid temporal dead zone errors with const arrow functions.
+  const stopRecording = useCallback(() => {
+    if (!isRecording) return;
+    haptic.medium();
+    // Stop native recording — this resolves the recordAsync promise
+    cameraRef.current?.stopRecording();
+    // The await in beginVideoRecording handles the rest (UI cleanup, review)
+  }, [isRecording, haptic]);
+
+  const beginVideoRecording = useCallback(async (customMaxDuration?: number) => {
+    if (!cameraRef.current || isRecording) return;
+    haptic.medium(); // medium on recording start
+    setIsRecording(true);
+    setRecordingElapsed(0);
+    recordingProgress.value = 0;
+    // Ring scale pulse on start
+    if (!reducedMotion) {
+      recordingRingScale.value = withSequence(
+        withSpring(1.15, spring.tap),
+        withSpring(1, spring.entrance),
+      );
+    }
+    // Use custom duration (hands-free) or fall back to the standard max
+    const maxDuration = Math.min(customMaxDuration ?? RECORDING_MAX_DURATION, HANDS_FREE_MAX_DURATION);
+    const startTime = Date.now();
+    recordingTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      setRecordingElapsed(elapsed);
+      recordingProgress.value = Math.min(1, elapsed / maxDuration);
+      if (elapsed >= maxDuration) {
+        // Auto-stop at max duration
+        stopRecording();
+      }
+    }, 50);
+
+    // Start native recording — one promise for the entire lifecycle
+    recordingPromiseRef.current = cameraRef.current.recordAsync({
+      maxDuration: maxDuration / 1000,
+    });
+
+    try {
+      const result = await recordingPromiseRef.current;
+      recordingPromiseRef.current = null;
+      if (result?.uri) {
+        haptic.medium();
+        // Capture flash — white overlay
+        if (!reducedMotion) {
+          captureFlash.value = withSequence(
+            withTiming(0.8, { duration: 80, easing: Easing.out(Easing.cubic) }),
+            withTiming(0, { duration: 120, easing: Easing.in(Easing.cubic) }),
+          );
+        }
+        setCapturedKind('video');
+        setCapturedUri(result.uri);
+        CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', Date.now() - startTime);
+      }
+    } catch {
+      show('Failed to record video', 'error');
+    }
+
+    // Cleanup UI state (runs after promise resolves or rejects)
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    recordingProgress.value = withSpring(0, spring.entrance);
+  }, [cameraRef, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, stopRecording, spring, captureFlash, isPoster]);
+
+  // ── Hands-free countdown → auto-record ──
+  // Starts a 3-second countdown with haptic ticks, then begins recording.
+  // Recording auto-stops at HANDS_FREE_DEFAULT_DURATION. The user can
+  // tap the shutter to stop early.
+  const startHandsFreeCapture = useCallback(async () => {
+    if (!cameraRef.current || isRecording || handsFreeCountdown !== null) return;
+    haptic.medium(); // medium on countdown start
+
+    for (let i = HANDS_FREE_COUNTDOWN; i > 0; i--) {
+      setHandsFreeCountdown(i);
+      // Reanimated spring countdown: scale 1.5→1.0 bouncy + fade in/out
+      if (!reducedMotion) {
+        countdownScale.value = 1.5;
+        countdownOpacity.value = 0;
+        countdownScale.value = withSpring(1, spring.lift);
+        countdownOpacity.value = withSequence(
+          withTiming(1, { duration: 100 }),
+          withDelay(700, withTiming(0, { duration: 200 })),
+        );
+      } else {
+        countdownScale.value = 1;
+        countdownOpacity.value = 1;
+        countdownOpacity.value = withDelay(800, withTiming(0, { duration: 0 }));
+      }
+      haptic.light(); // tick on each number
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    setHandsFreeCountdown(null);
+
+    // Begin recording with the hands-free duration
+    beginVideoRecording(HANDS_FREE_DEFAULT_DURATION);
+  }, [cameraRef, isRecording, handsFreeCountdown, haptic, reducedMotion, countdownScale, countdownOpacity, spring, beginVideoRecording]);
+
   const toggleGrid = useCallback(() => {
     haptic.selection();
     setShowGrid((p) => !p);
@@ -428,78 +625,6 @@ export default function CreatorCamera({
     }
   }, [cameraRef, countdown, haptic, reducedMotion, show, timerOption, countdownScale, countdownOpacity, captureFlash, spring]);
 
-  // ── P0.1: One unified recording lifecycle ────────────────────────
-  // beginVideoRecording() starts native recordAsync() and stores the promise.
-  // stopRecording() calls stopRecording() on the native camera, which causes
-  // the promise to resolve. The awaited result enters the same review object
-  // as a photo. Cleanup runs on background/unmount/interruption.
-  const stopRecording = useCallback(() => {
-    if (!isRecording) return;
-    haptic.medium();
-    // Stop native recording — this resolves the recordAsync promise
-    cameraRef.current?.stopRecording();
-    // The await in beginVideoRecording handles the rest (UI cleanup, review)
-  }, [isRecording, haptic]);
-
-  const beginVideoRecording = useCallback(async () => {
-    if (!cameraRef.current || isRecording) return;
-    haptic.medium(); // medium on recording start
-    setIsRecording(true);
-    setRecordingElapsed(0);
-    recordingProgress.value = 0;
-    // Ring scale pulse on start
-    if (!reducedMotion) {
-      recordingRingScale.value = withSequence(
-        withSpring(1.15, spring.tap),
-        withSpring(1, spring.entrance),
-      );
-    }
-    const maxDuration = RECORDING_MAX_DURATION;
-    const startTime = Date.now();
-    recordingTimerRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      setRecordingElapsed(elapsed);
-      recordingProgress.value = Math.min(1, elapsed / maxDuration);
-      if (elapsed >= maxDuration) {
-        // Auto-stop at max duration
-        stopRecording();
-      }
-    }, 50);
-
-    // Start native recording — one promise for the entire lifecycle
-    recordingPromiseRef.current = cameraRef.current.recordAsync({
-      maxDuration: maxDuration / 1000,
-    });
-
-    try {
-      const result = await recordingPromiseRef.current;
-      recordingPromiseRef.current = null;
-      if (result?.uri) {
-        haptic.medium();
-        // Capture flash — white overlay
-        if (!reducedMotion) {
-          captureFlash.value = withSequence(
-            withTiming(0.8, { duration: 80, easing: Easing.out(Easing.cubic) }),
-            withTiming(0, { duration: 120, easing: Easing.in(Easing.cubic) }),
-          );
-        }
-        setCapturedKind('video');
-        setCapturedUri(result.uri);
-        CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', Date.now() - startTime);
-      }
-    } catch {
-      show('Failed to record video', 'error');
-    }
-
-    // Cleanup UI state (runs after promise resolves or rejects)
-    setIsRecording(false);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    recordingProgress.value = withSpring(0, spring.entrance);
-  }, [cameraRef, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, stopRecording, spring, captureFlash, isPoster]);
-
   // ── Cleanup recording on unmount / interruption ──
   useEffect(() => {
     return () => {
@@ -511,6 +636,11 @@ export default function CreatorCamera({
       if (recordingPromiseRef.current) {
         cameraRef.current?.stopRecording();
         recordingPromiseRef.current = null;
+      }
+      // Clean up hands-free countdown timer
+      if (handsFreeCountdownRef.current) {
+        clearInterval(handsFreeCountdownRef.current);
+        handsFreeCountdownRef.current = null;
       }
     };
   }, []);
@@ -538,27 +668,45 @@ export default function CreatorCamera({
   // Quick tap takes a photo. Press-and-hold (beyond HOLD_THRESHOLD_MS) starts
   // video recording; releasing stops it. This eliminates the need for
   // permanent Photo/Video/Boomerang mode tabs.
+  //
+  // In hands-free mode, a tap starts the 3-second countdown then auto-records.
+  // A tap during recording stops it early. Long-press is disabled in
+  // hands-free mode since the user doesn't need to hold the button.
   const handleShutterPress = useCallback(() => {
+    // If recording, tap stops early (hands-free or normal)
+    if (isRecording) {
+      stopRecording();
+      return;
+    }
+    // Hands-free: tap starts countdown → auto-record
+    if (handsFreeMode) {
+      startHandsFreeCapture();
+      return;
+    }
     // Quick tap — take photo (only if the long-press didn't fire)
-    if (!isLongPressRef.current && !isRecording) {
+    if (!isLongPressRef.current) {
       takePhoto();
     }
-  }, [takePhoto, isRecording]);
+  }, [takePhoto, isRecording, handsFreeMode, startHandsFreeCapture, stopRecording]);
 
   const handleShutterLongPress = useCallback(() => {
+    // Long-press disabled in hands-free mode
+    if (handsFreeMode) return;
     // Press-and-hold — start video recording
     isLongPressRef.current = true;
     beginVideoRecording();
-  }, [beginVideoRecording]);
+  }, [beginVideoRecording, handsFreeMode]);
 
   const handleShutterPressOut = useCallback(() => {
+    // In hands-free mode, release does nothing (recording auto-stops)
+    if (handsFreeMode) return;
     // Release — if recording, stop
     if (isRecording) {
       stopRecording();
     }
     // Reset long-press flag after a tick so onPress doesn't also fire
     setTimeout(() => { isLongPressRef.current = false; }, 50);
-  }, [isRecording, stopRecording]);
+  }, [isRecording, stopRecording, handsFreeMode]);
 
   // ── Quick-review flow ──
   useEffect(() => {
@@ -586,58 +734,72 @@ export default function CreatorCamera({
     }
   }, [haptic, reducedMotion, reviewOpacity, spring]);
 
+  // ── Build a CreatorInitialMedia with speed + greenScreen metadata ──
+  // Speed: expo-camera 57 records at 1× always; the multiplier is stored
+  //   in metadata so the timeline/export engine applies it at playback.
+  // GreenScreen: post-capture chroma key settings are preserved so the
+  //   timeline can re-render the composite via Skia.
+  const buildCaptureMedia = useCallback((uri: string, kind: 'image' | 'video'): CreatorInitialMedia => {
+    const media: CreatorInitialMedia = {
+      id: makeStableId('capture'),
+      uri,
+      kind,
+    };
+    // Attach speed metadata for video captures (1× is the default and
+    // omitted to keep backward-compatible payloads clean)
+    if (kind === 'video' && speedMode !== DEFAULT_SPEED) {
+      media.speed = parseFloat(speedMode);
+    }
+    // Attach green screen settings if active
+    if (greenScreenSettings) {
+      media.greenScreen = {
+        backgroundUri: greenScreenSettings.backgroundUri,
+        keyColor: greenScreenSettings.keyColor,
+        tolerance: greenScreenSettings.tolerance,
+        feather: greenScreenSettings.feather,
+      };
+    }
+    return media;
+  }, [speedMode, greenScreenSettings]);
+
   const handleConfirmCapture = useCallback(() => {
     if (!capturedUri) return;
     haptic.light();
     // In multi-capture mode, add to stack instead of immediately sending
     if (multiCaptureMode) {
-      const media: CreatorInitialMedia = {
-        id: makeStableId('capture'),
-        uri: capturedUri,
-        kind: capturedKind,
-      };
+      const media = buildCaptureMedia(capturedUri, capturedKind);
       setMultiCaptures((prev) => [...prev, media]);
       setCapturedUri(null);
       return;
     }
     // If onCaptureBatch is provided, use it for poster/look modes
     if (onCaptureBatch && !isVisualSearch) {
-      onCaptureBatch([{
-        id: makeStableId('capture'),
-        uri: capturedUri,
-        kind: capturedKind,
-      }]);
+      onCaptureBatch([buildCaptureMedia(capturedUri, capturedKind)]);
     } else {
       onCapture(capturedUri);
     }
-  }, [capturedUri, capturedKind, haptic, onCapture, onCaptureBatch, multiCaptureMode, isVisualSearch]);
+  }, [capturedUri, capturedKind, haptic, onCapture, onCaptureBatch, multiCaptureMode, isVisualSearch, buildCaptureMedia]);
 
   // ── Multi-capture: add another photo without leaving camera ──
   const handleAddAnother = useCallback(() => {
     haptic.selection();
     if (capturedUri) {
-      const media: CreatorInitialMedia = {
-        id: makeStableId('capture'),
-        uri: capturedUri,
-        kind: capturedKind,
-      };
+      const media = buildCaptureMedia(capturedUri, capturedKind);
       setMultiCaptures((prev) => [...prev, media]);
       setCapturedUri(null);
     }
-  }, [capturedUri, capturedKind, haptic]);
+  }, [capturedUri, capturedKind, haptic, buildCaptureMedia]);
 
   // ── Multi-capture: finish and send ALL captures (P0.3 fix) ──
   // Every capture is retained and sent as a CreatorInitialMedia[] batch.
   // Poster maps captures to frames; Look maps captures to layers.
+  // Speed and greenScreen metadata are preserved on each clip so the
+  // timeline/export engine can apply them at playback.
   const handleFinishMultiCapture = useCallback(() => {
     if (multiCaptures.length === 0 && !capturedUri) return;
     haptic.medium();
     const currentCapture: CreatorInitialMedia[] = capturedUri
-      ? [{
-          id: makeStableId('capture'),
-          uri: capturedUri,
-          kind: capturedKind,
-        }]
+      ? [buildCaptureMedia(capturedUri, capturedKind)]
       : [];
     const all = [...multiCaptures, ...currentCapture];
     // Send all captures via onCaptureBatch if available, else fall back
@@ -648,7 +810,7 @@ export default function CreatorCamera({
     }
     setMultiCaptures([]);
     setMultiCaptureMode(false);
-  }, [multiCaptures, capturedUri, capturedKind, haptic, onCapture, onCaptureBatch]);
+  }, [multiCaptures, capturedUri, capturedKind, haptic, onCapture, onCaptureBatch, buildCaptureMedia]);
 
   // ── Multi-capture: toggle mode ──
   const toggleMultiCapture = useCallback(() => {
@@ -781,13 +943,14 @@ export default function CreatorCamera({
         </Text>
       </Reanimated.View>
 
-      {/* Countdown overlay — Reanimated spring scale + fade */}
-      {countdown !== null && (
+      {/* Countdown overlay — Reanimated spring scale + fade.
+          Shows the self-timer countdown OR the hands-free countdown. */}
+      {(countdown !== null || handsFreeCountdown !== null) && (
         <View style={styles.countdownOverlay} pointerEvents="none">
           <Reanimated.Text
             style={[styles.countdownText, countdownTextStyle]}
           >
-            {countdown}
+            {countdown ?? handsFreeCountdown}
           </Reanimated.Text>
         </View>
       )}
@@ -859,6 +1022,15 @@ export default function CreatorCamera({
         showTools={showTools}
         onToggleTools={() => { haptic.light(); setShowTools((p) => !p); }}
         accentColor={colors.antiqueGold}
+        // ── Hands-free capture ──
+        handsFreeMode={handsFreeMode}
+        onToggleHandsFree={toggleHandsFree}
+        // ── Speed modes ──
+        speedMode={speedMode}
+        onSpeedChange={handleSpeedChange}
+        // ── Green screen (post-capture) ──
+        greenScreenActive={!!greenScreenSettings}
+        onToggleGreenScreen={toggleGreenScreen}
       />
 
       {/* Bottom controls — gallery, shutter, flip */}
@@ -879,22 +1051,72 @@ export default function CreatorCamera({
           onLongPress={handleShutterLongPress}
           onPressOut={handleShutterPressOut}
           isRecording={isRecording}
-          disabled={countdown !== null}
+          disabled={countdown !== null || handsFreeCountdown !== null}
           recordingProgress={recordingProgress}
           recordingRingScale={recordingRingScale}
+          handsFreeMode={handsFreeMode}
+          speedMode={speedMode}
         />
 
         {/* Spacer — flip is in the right rail, this keeps the shutter centered */}
         <View style={styles.bottomSpacer} />
       </View>
 
-      {/* Recording timer badge — shown while recording */}
+      {/* Recording timer badge — shown while recording.
+          Includes speed indicator when a non-1× speed mode is active. */}
       {isRecording && (
         <View style={[styles.recordingBadge, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
           <View style={[styles.recordingDot, { backgroundColor: colors.danger }]} />
           <Text style={styles.recordingTimerText}>
             {Math.floor(recordingElapsed / 1000)}s
+            {speedMode !== DEFAULT_SPEED && `  ${speedMode}×`}
           </Text>
+        </View>
+      )}
+
+      {/* Speed mode segment control — shown above the bottom bar when
+          tools are expanded. Uses CreatorSegmentControl for spring
+          physics + selection haptic. The speed is stored in clip
+          metadata; expo-camera records at 1× and the timeline applies
+          the speed at playback (truthful labelling). */}
+      {showTools && !isVisualSearch && !isRecording && handsFreeCountdown === null && countdown === null && (
+        <View style={[styles.speedControlWrap, { bottom: Math.max(insets.bottom, 16) + 120 }]}>
+          <CreatorSegmentControl
+            segments={SPEED_MODES.map((s) => ({ label: s.label, value: s.value }))}
+            value={speedMode}
+            onChange={handleSpeedChange}
+            testID="camera-speed-control"
+          />
+        </View>
+      )}
+
+      {/* Hands-free mode indicator — subtle badge when hands-free is armed */}
+      {handsFreeMode && !isRecording && handsFreeCountdown === null && (
+        <View style={[styles.handsFreeBadge, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
+          <Ionicons name="hand-right-outline" size={14} color={colors.antiqueGold} />
+          <Text style={[styles.handsFreeBadgeText, { color: colors.antiqueGold }]}>Hands-free</Text>
+        </View>
+      )}
+
+      {/* Green screen (post-capture) sheet — background image picker,
+          key color, tolerance, feather. Real-time chroma keying is not
+          feasible with expo-camera alone, so the effect is applied in
+          post-production via Skia. Truthfully labelled. */}
+      <GreenScreenSheet
+        visible={showGreenScreenSheet}
+        onApply={handleGreenScreenApply}
+        onCancel={handleGreenScreenCancel}
+      />
+
+      {/* Green screen active indicator — shows the selected background
+          thumbnail when green screen is armed */}
+      {greenScreenSettings && !showGreenScreenSheet && (
+        <View style={[styles.greenScreenBadge, { top: Math.max(insets.top, 16) + (handsFreeMode ? 100 : 60) }]} pointerEvents="none">
+          <Image
+            source={{ uri: greenScreenSettings.backgroundUri }}
+            style={styles.greenScreenThumb}
+          />
+          <Text style={styles.greenScreenBadgeText}>Green Screen (post)</Text>
         </View>
       )}
 
@@ -1539,5 +1761,56 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     fontSize: Type.caption.size,
     // color applied inline via colors.background (theme token)
+  },
+  // ── Speed mode segment control wrapper ──
+  // Positioned above the bottom bar, centered. The segment control
+  // itself is 36pt tall with equal-width segments.
+  speedControlWrap: {
+    position: 'absolute',
+    left: Space.lg,
+    right: Space.lg,
+    alignSelf: 'center',
+    maxWidth: 320,
+  },
+  // ── Hands-free mode badge ──
+  // Subtle indicator that hands-free is armed. Positioned at top-left
+  // so it doesn't conflict with the recording badge (top-center).
+  handsFreeBadge: {
+    position: 'absolute',
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  handsFreeBadgeText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+  },
+  // ── Green screen active badge ──
+  // Shows the selected background thumbnail + truthful "post-capture" label.
+  greenScreenBadge: {
+    position: 'absolute',
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  greenScreenThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.sm,
+  },
+  greenScreenBadgeText: {
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    color: 'rgba(255,255,255,0.85)',
   },
 });

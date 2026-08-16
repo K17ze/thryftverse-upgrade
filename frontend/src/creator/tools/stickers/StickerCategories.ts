@@ -51,7 +51,17 @@ export interface StickerCategory {
 }
 
 // ── Curated sticker catalog ───────────────────────────────────────────
+// The 'auto' category is a placeholder entry — its stickers are populated
+// dynamically at runtime by AutoStickers.ts based on media analysis.
+export const AUTO_STICKER_CATEGORY: StickerCategory = {
+  id: 'auto',
+  name: 'Auto',
+  icon: 'bulb-outline',
+  stickers: [],
+};
+
 export const STICKER_CATEGORIES: StickerCategory[] = [
+  AUTO_STICKER_CATEGORY,
   {
     id: 'emoji',
     name: 'Emoji',

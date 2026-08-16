@@ -6,4 +6,5 @@ export type {
   BrushType,
   Stroke,
   DrawingDocument,
+  EmojiBrushConfig,
 } from './DrawingTypes';

@@ -294,12 +294,17 @@ const DecorativeLayerPayloadSchema = z.object({
 });
 
 // Draw layer — freehand strokes (Instagram/Snapchat parity: pen, marker,
-// highlighter, neon, eraser). Points are normalized 0-1 relative to layer bounds.
+// highlighter, neon, eraser, emoji). Points are normalized 0-1 relative to layer bounds.
 const DrawStrokeSchema = z.object({
   points: z.array(z.object({ x: z.number(), y: z.number() })),
   color: z.string().default('#ffffff'),
   width: z.number().min(1).max(50).default(4),
-  tool: z.enum(['pen', 'marker', 'highlighter', 'neon', 'eraser']).default('pen'),
+  tool: z.enum(['pen', 'marker', 'highlighter', 'neon', 'eraser', 'emoji']).default('pen'),
+  // Emoji brush config — present only when tool === 'emoji'.
+  emoji: z.string().optional(),
+  emojiSize: z.number().min(8).max(120).default(32),
+  emojiSpacing: z.number().min(4).max(100).default(24),
+  emojiJitter: z.number().min(0).max(1).default(0),
 });
 
 const DrawLayerPayloadSchema = z.object({
@@ -316,7 +321,11 @@ const GifLayerPayloadSchema = z.object({
   opacity: z.number().min(0).max(1).default(1),
 });
 
-// Music layer — track sticker (Instagram-style music sticker)
+// Music layer — track sticker (Instagram-style music sticker) and
+// timeline audio citizen (spec 09_POSTER_TIMELINE_CAMERA_AUDIO §10).
+// Extended for timeline integration: volume, fades, trim, and a
+// timeRange so the music track is a real timeline citizen rather than
+// just a sticker.
 const MusicLayerPayloadSchema = z.object({
   trackName: z.string().min(1).max(120),
   artistName: z.string().max(120).default(''),
@@ -327,6 +336,22 @@ const MusicLayerPayloadSchema = z.object({
   durationMs: z.number().min(1000).optional(),
   isExplicit: z.boolean().optional(),
   opacity: z.number().min(0).max(1).default(1),
+  // ── Timeline integration (spec 09 §10 P0) ──
+  // Volume for the music track, separate from the original video audio.
+  volume: z.number().min(0).max(1).default(1),
+  // Fade in/out (linear ramp) in milliseconds.
+  fadeInMs: z.number().min(0).default(0),
+  fadeOutMs: z.number().min(0).default(0),
+  // Trim: where in the source track playback starts/ends.
+  trimStartMs: z.number().min(0).optional(),
+  trimEndMs: z.number().min(0).optional(),
+  // Timeline time range — when the music track is visible/audible
+  // within the composition. Inherits from BaseLayerSchema.timeRange
+  // but duplicated here for explicit music-layer access.
+  timeRange: z.object({
+    startMs: z.number(),
+    endMs: z.number(),
+  }).optional(),
 });
 
 // ── Base layer schema ──────────────────────────────────────────────

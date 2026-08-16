@@ -55,9 +55,11 @@ import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import {
   STICKER_CATEGORIES,
+  AUTO_STICKER_CATEGORY,
   type StickerDef,
   type StickerCategory,
 } from './StickerCategories';
+import { AutoStickerRail, type AutoStickerInput } from './AutoStickerRail';
 
 // ── Props ────────────────────────────────────────────────────────────
 
@@ -67,6 +69,8 @@ export interface StickerBrowserSheetProps {
   onStickerSelect: (sticker: StickerDef) => void;
   /** Override the category list. Defaults to STICKER_CATEGORIES. */
   categories?: StickerCategory[];
+  /** Input for auto-suggested stickers (media palette + document). */
+  autoStickerInput?: AutoStickerInput;
 }
 
 // ── Geometry ─────────────────────────────────────────────────────────
@@ -87,6 +91,7 @@ export function StickerBrowserSheet({
   onClose,
   onStickerSelect,
   categories = STICKER_CATEGORIES,
+  autoStickerInput,
 }: StickerBrowserSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -94,7 +99,7 @@ export function StickerBrowserSheet({
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [activeCategoryId, setActiveCategoryId] = useState<string>(
-    categories[0]?.id ?? 'emoji',
+    categories[0]?.id ?? 'auto',
   );
   const [query, setQuery] = useState('');
   const searchRef = useRef<TextInput>(null);
@@ -260,9 +265,16 @@ export function StickerBrowserSheet({
           </ScrollView>
         )}
 
-        {/* Grid */}
+        {/* Grid — or AutoStickerRail when the Auto category is active */}
         <View style={styles.gridWrap}>
-          {gridData.length === 0 ? (
+          {!isSearching && activeCategoryId === AUTO_STICKER_CATEGORY.id ? (
+            <View style={styles.autoRailWrap}>
+              <AutoStickerRail
+                input={autoStickerInput ?? { palette: [] }}
+                onStickerSelect={handleSelect}
+              />
+            </View>
+          ) : gridData.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons
                 name="search-outline"
@@ -428,6 +440,10 @@ function createStyles(colors: ThemeColors) {
     } as TextStyle,
     gridWrap: {
       flex: 1,
+    } as ViewStyle,
+    autoRailWrap: {
+      flex: 1,
+      paddingVertical: Space.sm,
     } as ViewStyle,
     gridContent: {
       paddingVertical: Space.sm,

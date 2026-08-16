@@ -44,6 +44,10 @@ import { DispatchCountdown } from '../components/orders/DispatchCountdown';
 import { OrderStatusStepper, OrderStepperStage } from '../components/orders/OrderStatusStepper';
 import { ReviewPromptSheet } from '../components/orders/ReviewPromptSheet';
 import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
+import {
+  resolveCapabilities,
+  type OrderCapability,
+} from '../components/orders/orderCapabilities';
 
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
 
@@ -452,6 +456,8 @@ export default function OrderDetailScreen() {
 
   const isMountedRef = useRef(true);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scrollViewRef = useRef<ScrollView | null>(null);
+  const timelineYRef = useRef(0);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -803,205 +809,7 @@ export default function OrderDetailScreen() {
     }
   }, [orderMutation, orderId, show, refreshOrder]);
 
-  // --- Action availability ---
-
-  const canCancel = isBuyer && (normalisedStatus === 'created' || normalisedStatus === 'paid');
-  const canShip = isSeller && (normalisedStatus === 'paid' || normalisedStatus === 'processing' || normalisedStatus === 'preparing');
-  const canDeliver = isBuyer && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery');
-  const canReportIssue = !isTerminal && normalisedStatus !== 'created' && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded';
-  const canRequestRefund = isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed');
-
-  const mutationLocked = orderMutation !== null;
-
-  // --- Build action footer ---
-  const footerActions = useMemo((): { primary?: OrderActionConfig; secondary?: OrderActionConfig } => {
-    if (!backendOrder || !isKnown) return {};
-
-    if (canShip && canCancel) {
-      return {
-        primary: {
-          label: 'Mark shipped',
-          onPress: () => { haptics.heavyPress(); handleShip(); },
-          variant: 'primary',
-          loading: orderMutation === 'ship',
-          disabled: mutationLocked && orderMutation !== 'ship',
-          accessibilityLabel: 'Mark order as shipped',
-        },
-        secondary: {
-          label: 'Cancel order',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Cancel this order?',
-              'This will cancel the order and notify the buyer. This action cannot be undone.',
-              [
-                { text: 'Keep order', style: 'cancel' },
-                { text: 'Cancel order', style: 'destructive', onPress: handleCancel },
-              ]
-            );
-          },
-          variant: 'destructive',
-          loading: orderMutation === 'cancel',
-          disabled: mutationLocked && orderMutation !== 'cancel',
-          accessibilityLabel: 'Cancel order',
-        },
-      };
-    }
-
-    if (canShip) {
-      return {
-        primary: {
-          label: 'Mark shipped',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Mark as shipped?',
-              'The order will be marked as shipped without tracking details. Add tracking later.',
-              [
-                { text: 'Not yet', style: 'cancel' },
-                { text: 'Mark shipped', style: 'destructive', onPress: handleShip },
-              ]
-            );
-          },
-          variant: 'primary',
-          loading: orderMutation === 'ship',
-          disabled: mutationLocked && orderMutation !== 'ship',
-          accessibilityLabel: 'Mark order as shipped',
-        },
-      };
-    }
-
-    if (canDeliver) {
-      return {
-        primary: {
-          label: 'Confirm delivery',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Confirm receipt?',
-              'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. If something is wrong, report an issue instead.',
-              [
-                { text: 'Not yet', style: 'cancel' },
-                { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
-              ]
-            );
-          },
-          variant: 'primary',
-          loading: orderMutation === 'deliver',
-          disabled: mutationLocked && orderMutation !== 'deliver',
-          accessibilityLabel: 'Confirm delivery — releases funds to seller',
-        },
-      };
-    }
-
-    if (canCancel) {
-      return {
-        primary: {
-          label: 'Cancel order',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Cancel this order?',
-              'This will cancel the order and notify the seller. This action cannot be undone.',
-              [
-                { text: 'Keep order', style: 'cancel' },
-                { text: 'Cancel order', style: 'destructive', onPress: handleCancel },
-              ]
-            );
-          },
-          variant: 'destructive',
-          loading: orderMutation === 'cancel',
-          disabled: mutationLocked && orderMutation !== 'cancel',
-          accessibilityLabel: 'Cancel order',
-        },
-      };
-    }
-
-    if (canReportIssue) {
-      return {
-        primary: {
-          label: 'Report an issue',
-          onPress: () => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); },
-          variant: 'secondary',
-          accessibilityLabel: 'Report an issue with this order',
-        },
-      };
-    }
-
-    if (isBuyer && canRequestRefund) {
-      return {
-        primary: {
-          label: 'Leave a review',
-          onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
-          variant: 'primary',
-          accessibilityLabel: 'Write a review for this order',
-        },
-        secondary: {
-          label: 'Request refund',
-          onPress: () => {
-            haptics.heavyPress();
-            Alert.alert(
-              'Request a refund?',
-              'This will request a refund from the escrow-held funds. The seller will be notified and our team will review the request.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Request refund',
-                  style: 'destructive',
-                  onPress: () => handleRefund('buyer_requested_refund'),
-                },
-              ]
-            );
-          },
-          variant: 'destructive',
-          loading: orderMutation === 'refund',
-          disabled: mutationLocked && orderMutation !== 'refund',
-          accessibilityLabel: 'Request a refund for this order',
-        },
-      };
-    }
-
-    if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
-      return {
-        primary: {
-          label: 'Leave a review',
-          onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
-          variant: 'primary',
-          accessibilityLabel: 'Write a review for this order',
-        },
-      };
-    }
-
-    return {};
-  }, [backendOrder, isKnown, canShip, canCancel, canDeliver, canReportIssue, canRequestRefund, orderMutation, mutationLocked, handleShip, handleCancel, handleDeliver, handleRefund, navigation, orderId, isBuyer, normalisedStatus]);
-
-  // --- Copy tracking number ---
-  const handleCopyTracking = useCallback(async (trackingNumber: string) => {
-    haptics.tap();
-    try {
-      await Clipboard.setStringAsync(trackingNumber);
-      show('Tracking number copied', 'success');
-    } catch {
-      show('Could not copy tracking number', 'error');
-    }
-  }, [show]);
-
-  // --- Open shipping label ---
-  const handleOpenShippingLabel = useCallback(async (url: string) => {
-    haptics.tap();
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        show('Unable to open shipping label URL', 'error');
-        return;
-      }
-      await Linking.openURL(url);
-    } catch {
-      show('Unable to open shipping label', 'error');
-    }
-  }, [show]);
-
-  // --- Track on carrier site ---
+  // --- Track on carrier site (declared early so footer can reference) ---
   const carrierTrackingUrl = useMemo(() => {
     if (!backendOrder?.trackingNumber || !backendOrder?.shippingProvider) return null;
     const tn = backendOrder.trackingNumber;
@@ -1032,6 +840,208 @@ export default function OrderDetailScreen() {
     }
   }, [carrierTrackingUrl, show]);
 
+  // --- Action availability (canonical resolver) ---
+  //
+  // This screen MUST NOT independently recompute canShip/canDeliver/canCancel.
+  // The single source of truth is resolveCapabilities() from orderCapabilities.
+  // See audit finding #3 and AGENTS.md §2 (fix at the source-of-truth).
+
+  const capabilities = useMemo<OrderCapability | null>(() => {
+    if (!backendOrder || !isKnown) return null;
+    return resolveCapabilities({
+      status: backendOrder.status,
+      role: isBuyer ? 'buyer' : 'seller',
+      hasOpenResolution: Boolean(openTicket),
+      hasReview: false, // review state surfaced separately via reviewPrompt
+      hasTracking: Boolean(backendOrder.trackingNumber || parcelEvents.length > 0),
+      fulfilmentSnapshot: backendOrder.fulfilmentSnapshot ?? null,
+      isSubmitting: orderMutation !== null,
+    });
+  }, [backendOrder, isKnown, isBuyer, openTicket, parcelEvents.length, orderMutation]);
+
+  const mutationLocked = orderMutation !== null;
+
+  // --- Build action footer from canonical capabilities ---
+  const footerActions = useMemo((): { primary?: OrderActionConfig; secondary?: OrderActionConfig } => {
+    if (!backendOrder || !isKnown || !capabilities) return {};
+
+    const primary = capabilities.primaryAction;
+    const secondary = capabilities.secondaryActions[0] ?? null;
+
+    const buildAction = (action: typeof primary): OrderActionConfig | undefined => {
+      if (!action) return undefined;
+      switch (action) {
+        case 'pay':
+          return {
+            label: 'Complete payment',
+            onPress: () => { haptics.heavyPress(); navigation.navigate('Checkout', { orderId }); },
+            variant: 'primary',
+            accessibilityLabel: 'Complete payment for this order',
+          };
+        case 'dispatch':
+          // Seller paid → guided fulfilment. NEVER a direct generic mark-shipped.
+          return {
+            label: 'Ship item',
+            onPress: () => { haptics.heavyPress(); navigation.navigate('SellerFulfilment', { orderId }); },
+            variant: 'primary',
+            accessibilityLabel: 'Start guided dispatch for this order',
+          };
+        case 'track_order':
+          return {
+            label: 'Track parcel',
+            onPress: () => {
+              haptics.tap();
+              if (carrierTrackingUrl) {
+                handleTrackOnCarrierSite();
+              } else {
+                // Scroll to timeline — the tracking section is below.
+                scrollViewRef.current?.scrollTo({ y: timelineYRef.current, animated: true });
+              }
+            },
+            variant: 'primary',
+            accessibilityLabel: 'Track your parcel',
+          };
+        case 'inspect':
+          // Buyer delivered → check your item before confirming/reviewing.
+          return {
+            label: 'Check your item',
+            onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
+            variant: 'primary',
+            accessibilityLabel: 'Inspect your item and confirm everything is OK',
+          };
+        case 'leave_review':
+          return {
+            label: 'Leave a review',
+            onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
+            variant: 'primary',
+            accessibilityLabel: 'Write a review for this order',
+          };
+        case 'view_review':
+          return {
+            label: 'View your review',
+            onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
+            variant: 'secondary',
+            accessibilityLabel: 'View your submitted review',
+          };
+        case 'confirm_delivery':
+          // Demoted secondary — releases escrowed funds (high-consequence).
+          return {
+            label: 'Confirm receipt',
+            onPress: () => {
+              haptics.heavyPress();
+              Alert.alert(
+                'Confirm receipt?',
+                'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. If something is wrong, report an issue instead.',
+                [
+                  { text: 'Not yet', style: 'cancel' },
+                  { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
+                ]
+              );
+            },
+            variant: 'secondary',
+            loading: orderMutation === 'deliver',
+            disabled: mutationLocked && orderMutation !== 'deliver',
+            accessibilityLabel: 'Confirm delivery — releases funds to seller',
+          };
+        case 'cancel':
+          return {
+            label: 'Cancel order',
+            onPress: () => {
+              haptics.heavyPress();
+              Alert.alert(
+                'Cancel this order?',
+                isBuyer
+                  ? 'This will cancel the order and notify the seller. This action cannot be undone.'
+                  : 'This will cancel the order and notify the buyer. This action cannot be undone.',
+                [
+                  { text: 'Keep order', style: 'cancel' },
+                  { text: 'Cancel order', style: 'destructive', onPress: handleCancel },
+                ]
+              );
+            },
+            variant: 'destructive',
+            loading: orderMutation === 'cancel',
+            disabled: mutationLocked && orderMutation !== 'cancel',
+            accessibilityLabel: 'Cancel order',
+          };
+        case 'report_issue':
+          return {
+            label: 'Report an issue',
+            onPress: () => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); },
+            variant: 'secondary',
+            accessibilityLabel: 'Report an issue with this order',
+          };
+        case 'view_resolution':
+          return {
+            label: 'View open request',
+            onPress: () => { haptics.tap(); navigation.navigate('SupportTicketDetail', { ticketId: openTicket?.id ?? '' }); },
+            variant: 'secondary',
+            accessibilityLabel: 'View open support request',
+          };
+        case 'contact':
+          if (!counterparty) return undefined;
+          return {
+            label: `Message ${counterparty.role.toLowerCase()}`,
+            onPress: () => {
+              haptics.tap();
+              navigation.navigate('Chat', {
+                conversationId: `${counterparty.id}_${backendOrder.listingId}`,
+                focusQuery: counterparty.username,
+                partnerUserId: counterparty.id,
+                itemId: backendOrder.listingId,
+              });
+            },
+            variant: 'secondary',
+            accessibilityLabel: `Message ${counterparty.role.toLowerCase()}`,
+          };
+        case 'view_receipt':
+          return {
+            label: 'View receipt',
+            onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
+            variant: 'secondary',
+            accessibilityLabel: 'View order receipt',
+          };
+        default:
+          return undefined;
+      }
+    };
+
+    return {
+      primary: buildAction(primary),
+      secondary: buildAction(secondary) ?? undefined,
+    };
+  }, [backendOrder, isKnown, capabilities, carrierTrackingUrl, handleTrackOnCarrierSite, handleDeliver, handleCancel, handleShip, navigation, orderId, isBuyer, counterparty, openTicket, orderMutation, mutationLocked]);
+
+  // --- Copy tracking number ---
+  const handleCopyTracking = useCallback(async (trackingNumber: string) => {
+    haptics.tap();
+    try {
+      await Clipboard.setStringAsync(trackingNumber);
+      show('Tracking number copied', 'success');
+    } catch {
+      show('Could not copy tracking number', 'error');
+    }
+  }, [show]);
+
+  // --- Open shipping label ---
+  const handleOpenShippingLabel = useCallback(async (url: string) => {
+    haptics.tap();
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        show('Unable to open shipping label URL', 'error');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      show('Unable to open shipping label', 'error');
+    }
+  }, [show]);
+
+  // --- Track on carrier site ---
+  // (Moved above action-availability so the footer "Track parcel" action
+  //  can reference these without a use-before-declaration error.)
+
   // --- Manual refresh ---
   const handleManualRefresh = useCallback(() => {
     haptics.tap();
@@ -1049,15 +1059,8 @@ export default function OrderDetailScreen() {
       onPress: () => navigation.navigate('OrderReceipt', { orderId }),
     });
 
-    if (canShip) {
-      actions.push({
-        key: 'dispatch',
-        label: 'Dispatch item',
-        icon: 'cube-outline',
-        onPress: () => navigation.navigate('SellerFulfilment', { orderId }),
-        variant: 'primary',
-      });
-    }
+    // Guided dispatch is now the primary footer action when the seller can
+    // ship — do not duplicate it in overflow (audit finding #1/#9).
 
     if (counterparty) {
       actions.push({
@@ -1089,7 +1092,7 @@ export default function OrderDetailScreen() {
       });
     }
 
-    if (canRequestRefund) {
+    if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
       actions.push({
         key: 'refund',
         label: 'Request refund',
@@ -1134,7 +1137,7 @@ export default function OrderDetailScreen() {
     }
 
     return actions;
-  }, [navigation, orderId, canShip, counterparty, backendOrder, openTicket, isBuyer, normalisedStatus, canRequestRefund, handleRefund]);
+  }, [navigation, orderId, counterparty, backendOrder, openTicket, isBuyer, normalisedStatus, handleRefund]);
 
   // --- Render ---
 
@@ -1265,6 +1268,7 @@ export default function OrderDetailScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: footerActions.primary || footerActions.secondary ? 100 + insets.bottom : 40 + insets.bottom }]}
       >
@@ -1287,7 +1291,7 @@ export default function OrderDetailScreen() {
           ) : null}
 
           {/* Dispatch countdown for seller when order needs shipping */}
-          {canShip && backendOrder.createdAt && (
+          {capabilities?.canDispatch && backendOrder.createdAt && (
             <DispatchCountdown
               createdAt={backendOrder.createdAt}
               shipped={!!backendOrder.shippedAt}
@@ -1422,7 +1426,10 @@ export default function OrderDetailScreen() {
         <View style={[styles.sectionDivider, t.sectionDivider]} />
 
         {/* 5. Tracking or order timeline */}
-        <View style={styles.timelineSection}>
+        <View
+          style={styles.timelineSection}
+          onLayout={(e) => { timelineYRef.current = e.nativeEvent.layout.y; }}
+        >
           <Text style={[styles.sectionLabel, t.sectionLabel]}>Timeline</Text>
           <OrderTrackingTimeline
             entries={timelineEntries}

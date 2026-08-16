@@ -213,6 +213,10 @@ function DrawingWorkspaceAdapter({ onClose, onAddLayer, editingLayer }: { onClos
       color: s.color,
       width: s.size,
       tool: s.brushType,
+      emoji: s.emojiConfig?.emoji,
+      emojiSize: s.emojiConfig?.size ?? 32,
+      emojiSpacing: s.emojiConfig?.spacing ?? 24,
+      emojiJitter: s.emojiConfig?.jitter ?? 0,
     }));
     if (isEditing && editingLayer) {
       onAddLayer({
@@ -259,6 +263,9 @@ function AudioBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; onA
         artistName: '',
         startOffsetMs: config.startOffsetMs,
         opacity: 1,
+        volume: 1,
+        fadeInMs: 0,
+        fadeOutMs: 0,
       },
     });
     onClose();
@@ -2176,7 +2183,11 @@ interface DrawStroke {
   points: DrawPoint[];
   color: string;
   width: number;
-  tool: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk';
+  tool: 'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk' | 'emoji';
+  emoji?: string;
+  emojiSize?: number;
+  emojiSpacing?: number;
+  emojiJitter?: number;
 }
 
 function buildSkiaPath(points: DrawPoint[], canvasW: number, canvasH: number): any {
@@ -2800,6 +2811,9 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         previewUrl: track.previewUrl,
         trackId: track.trackId,
         opacity: 1,
+        volume: 1,
+        fadeInMs: 0,
+        fadeOutMs: 0,
       },
     });
     onClose();

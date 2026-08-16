@@ -56,6 +56,11 @@ export interface AudioConfig {
   /** 0..1 — how much to lower original audio when the track plays.
    *  0 = fully mute original, 1 = no change. Default: 0.3 */
   duckingLevel?: number;
+  // ── Timeline integration (spec 09 §10 P0) ──
+  // Trim: where in the source track playback starts/ends. When absent,
+  // the full track (from startOffsetMs) is used.
+  trimStartMs?: number;
+  trimEndMs?: number;
 }
 
 /**
