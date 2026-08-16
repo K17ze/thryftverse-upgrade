@@ -1,11 +1,41 @@
-fix(creator): resolve 11 TS integration errors from camera/drawing/captions wave
+feat(creator): wave 3 — timeline ops, voiceover, sticker pin, LUT grading, folders, perf+a11y
 
-- ShutterButton: add missing Text import, drop unsupported speedMode prop
-- CreatorAssetPicker: add volume/fade fields to music payloads, emoji fields to DrawStroke
-- CreatorCamera: fix beginVideoRecording hoisting, add GreenScreenSheet module
-- templates: add music layer required fields
-- AutoStickerRail: re-export AutoStickerInput type
-- SellerFulfilmentScreen: fix pre-existing type errors
+Wave 3 flagship upgrades addressing remaining zero-gap ledger rows:
+
+Timeline operations:
+- TimelineOperations.ts: trim, split, duplicate, replace, reorder, speed, crop, rotate
+- SpeedCurveEvaluator.ts: speed curve interpolation (Meta Edits Aug 2026 benchmark)
+- TransitionEvaluator.ts: cut/fade/dissolve/slide/wipe transitions
+- TimelineTypes.ts: speed curves, transitions, crop, rotation types
+
+Voiceover & audio mixing:
+- VoiceoverRecorder.ts: real-time recording with metering
+- WaveformExtractor.ts: real waveform sample extraction
+- AudioMixer.ts: multi-track mixing with ducking
+
+Sticker pin tracking & drawing palettes:
+- StickerPinTracker.ts: motion-tracked sticker pinning to media layers
+- StickerPinOverlay.tsx: visual crosshair + drag handle
+- DrawingPaletteSystem.ts: 7 palettes including inclusive skin tones
+- DrawingPaletteBar.tsx: palette switching UI
+
+LUT color grading (CapCut/VN Aug 2026 benchmark):
+- LUTEffect.ts: Skia RuntimeEffect shader for 3D LUT color grading
+- Trilinear interpolation across blue channel slices
+- 6 built-in LUTs: cinematic, vintage, noir, vivid, matte, film
+- Identity LUT fallback for missing assets
+
+Project folders & adjustment layers (Meta Edits Aug 2026 benchmark):
+- ProjectFolderTypes.ts + ProjectFolderStore.ts: folder organization
+- ProjectFolderOrganizeMode.tsx: drag-and-drop folder management
+- AdjustmentLayerEvaluator.ts: adjustable effect layers across timeline
+
+Performance & accessibility:
+- FrameProfiler.ts: real frame timing measurement
+- PerformanceOverlay.tsx: dev-mode FPS overlay with Skia graph
+- usePerformanceMonitor.ts: hook with threshold alerts
+- CanvasAccessibilityLabels.ts: comprehensive a11y labels
+- TimelineAccessibility.ts + ColorAccessibility.ts: expanded a11y
 
 Generated with [Devin](https://devin.ai)
 

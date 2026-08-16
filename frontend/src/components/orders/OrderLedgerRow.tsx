@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type, Control } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import {
   normaliseOrderStatus,
@@ -11,6 +11,7 @@ import {
   isTerminalStatus,
   isCancelledStatus,
   getNextActionHint,
+  needsAction,
   type OrderRole,
 } from './orderCapabilities';
 import { formatShortDate } from '../../utils/dateFormat';
@@ -27,6 +28,10 @@ export interface OrderViewModel {
   shippingProvider: string | null;
   role: OrderRole;
   counterpartyUsername: string | null;
+  /** Ship-by deadline (ISO 8601) — shown as an urgent badge when present. */
+  shipByDate?: string | null;
+  /** The exact service the buyer paid for (from the immutable snapshot). */
+  serviceName?: string | null;
 }
 
 
@@ -46,6 +51,15 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
   const terminal = isTerminalStatus(order.status);
   const dateLabel = formatShortDate(order.createdAt);
   const nextAction = getNextActionHint(order.status, order.role);
+  const isNeedsAction = needsAction(order.status, order.role);
+
+  // Ship-by deadline urgency (seller view, paid status)
+  const shipByDaysLeft = order.shipByDate
+    ? Math.ceil((new Date(order.shipByDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    : null;
+  const shipByOverdue = shipByDaysLeft != null && shipByDaysLeft < 0;
+  const shipByUrgent = shipByDaysLeft != null && shipByDaysLeft >= 0 && shipByDaysLeft <= 1;
+  const showDeadlineBadge = isNeedsAction && order.role === 'seller' && order.shipByDate;
 
   const contextVerb = order.role === 'buyer' ? 'Bought' : 'Sold';
   const counterpartyLabel = order.counterpartyUsername
@@ -71,11 +85,11 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
   // Short order number for scannable reference — first 8 chars uppercased
   const shortOrderNumber = order.id.slice(0, 8).toUpperCase();
 
-  const accessibilityLabel = `Order ${shortOrderNumber}, ${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${trackingLine ? `, ${trackingLine}` : ''}${nextAction ? `, Next: ${nextAction}` : ''}`;
+  const accessibilityLabel = `Order ${shortOrderNumber}, ${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${trackingLine ? `, ${trackingLine}` : ''}${nextAction ? `, Next: ${nextAction}` : ''}${showDeadlineBadge ? `, Ship by ${formatShortDate(order.shipByDate!)}` : ''}`;
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed, isNeedsAction && styles.rowNeedsAction]}
       onPress={onPress}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       accessibilityRole="button"
@@ -117,7 +131,38 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
           </Text>
         )}
 
-        {nextAction && (
+        {/* Deadline badge — shown for seller needs-action orders with a ship-by date */}
+        {showDeadlineBadge && (
+          <View style={[
+            styles.deadlineBadge,
+            shipByOverdue
+              ? { backgroundColor: `${colors.danger}12`, borderColor: `${colors.danger}30` }
+              : shipByUrgent
+                ? { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}30` }
+                : { backgroundColor: `${colors.brand}08`, borderColor: colors.border },
+          ]}>
+            <Ionicons
+              name={shipByOverdue ? 'alert-circle' : 'time-outline'}
+              size={12}
+              color={shipByOverdue ? colors.danger : shipByUrgent ? colors.warning : colors.textSecondary}
+            />
+            <Text style={[
+              styles.deadlineText,
+              { color: shipByOverdue ? colors.danger : shipByUrgent ? colors.warning : colors.textSecondary },
+            ]}>
+              {shipByOverdue
+                ? 'Overdue — dispatch now'
+                : shipByUrgent && shipByDaysLeft === 0
+                  ? 'Dispatch today'
+                  : shipByUrgent
+                    ? `Ship tomorrow (${formatShortDate(order.shipByDate!)})`
+                    : `Ship by ${formatShortDate(order.shipByDate!)}`}
+            </Text>
+          </View>
+        )}
+
+        {/* Next action — contextual CTA hint */}
+        {nextAction && !terminal && (
           <View style={styles.nextActionRow}>
             <Ionicons name="arrow-forward-circle-outline" size={12} color={colors.brand} />
             <Text style={styles.nextActionText}>{nextAction}</Text>
@@ -174,6 +219,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   rowPressed: {
     opacity: 0.7,
+  },
+  rowNeedsAction: {
+    // Subtle left accent for needs-action rows — the eye finds urgent work first
+    borderLeftWidth: 3,
+    borderLeftColor: colors.brand,
+    paddingLeft: Space.md - 3,
   },
   thumbContainer: {
     width: THUMB_SIZE,
@@ -301,5 +352,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: Typography.family.medium,
     letterSpacing: Type.captionElevated.letterSpacing,
     color: colors.brand,
+  },
+  // Deadline badge — urgent ship-by indicator for seller needs-action rows
+  deadlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs / 2 + 1,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.xs,
+    alignSelf: 'flex-start',
+  },
+  deadlineText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.meta.letterSpacing,
   },
 });

@@ -246,6 +246,8 @@ export default function MyOrdersScreen() {
         shippingProvider: order.shippingProvider,
         role,
         counterpartyUsername,
+        shipByDate: order.shipByDate ?? null,
+        serviceName: order.fulfilmentSnapshot?.serviceName ?? order.fulfilmentSnapshot?.carrierId ?? null,
       };
     });
   }, [orders, viewerId]);

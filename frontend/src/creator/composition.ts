@@ -388,6 +388,41 @@ const BaseLayerSchema = z.object({
     value: z.number(),
     easing: z.enum(['linear', 'ease-in', 'ease-out', 'ease-in-out', 'spring']),
   })).optional(),
+  // Object pin — binds this layer to a normalized anchor point on another
+  // (typically media) layer so it follows that point as the target layer
+  // moves/scales/rotates over time via keyframes. Optional — absent on
+  // layers that are not pinned. See StickerPinTracker for the transform
+  // computation that resolves a pin into a concrete position each frame.
+  pin: z.object({
+    layerId: z.string().min(1),
+    anchor: z.object({
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+    }),
+  }).optional(),
+});
+
+// Adjustment layer payload — applies an effect stack as an adjustment
+// layer across the whole timeline (Meta Edits August 2026 feature).
+// Unlike visible layers, an adjustment layer is not rendered directly;
+// instead, its effects are merged with each clip's own effects during
+// playback. The `scope` field controls which clips the adjustment
+// applies to: 'all' for every clip, or an explicit list of clip IDs.
+const AdjustmentLayerPayloadSchema = z.object({
+  // The ordered effect stack to apply to targeted clips.
+  effects: z.array(EffectNodeSchema).default([]),
+  // Which clips this adjustment layer applies to.
+  // 'all' = every clip in the timeline; { clipIds } = only the listed clips.
+  scope: z.union([
+    z.literal('all'),
+    z.object({ clipIds: z.array(z.string()) }),
+  ]).default('all'),
+  // Whether the adjustment layer is active.
+  enabled: z.boolean().default(true),
+  // Blend opacity for the effect (0..1). At 1, the full effect is
+  // applied; at 0, no effect is applied. Intermediate values blend
+  // the effect with the original via intensity interpolation.
+  opacity: z.number().min(0).max(1).default(1),
 });
 
 // ── Discriminated union of layer types ─────────────────────────────
@@ -412,11 +447,17 @@ export const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('hashtag'), payload: HashtagLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('time'), payload: TimeLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('weather'), payload: WeatherLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('adjustment'), payload: AdjustmentLayerPayloadSchema }),
 ]);
 
 export type CreatorLayer = z.infer<typeof CreatorLayerSchema>;
 
 export type LayerType = CreatorLayer['type'];
+
+// ── Adjustment layer (Meta Edits August 2026) ───────────────────────
+// Convenience type for the adjustment layer payload and the layer itself.
+export type AdjustmentLayerPayload = z.infer<typeof AdjustmentLayerPayloadSchema>;
+export type AdjustmentLayer = Extract<CreatorLayer, { type: 'adjustment' }>;
 
 // ── Page schema ────────────────────────────────────────────────────
 

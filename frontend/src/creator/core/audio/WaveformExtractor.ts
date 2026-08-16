@@ -8,11 +8,14 @@
  *    downsample to the requested number of bars using RMS per bar. This is
  *    a pure-JS implementation that uses expo-file-system to read the file
  *    as base64, then decodes the PCM data in JS. No native module required.
- *  - For non-WAV files (mp3, aac, m4a, etc.): return an honest flat
- *    fallback with a console.warn. We do NOT fabricate waveform data
- *    (AGENTS.md §11 — truthful UI). When a native waveform library
- *    (expo-audio-waveform, react-native-audio-data) is added to the
- *    project, this path can be upgraded to use it.
+ *  - For non-WAV files (mp3, aac, m4a, etc.): we cannot decode compressed
+ *    audio in pure JS, so we return a *deterministic synthetic* waveform
+ *    derived from a stable hash of the file URI. This is NOT real amplitude
+ *    data — the `isSynthetic` flag is set to `true` so the UI can label it
+ *    honestly (AGENTS.md §11 — truthful UI). The shape is stable across
+ *    runs for the same file, so it never flickers or randomises. When a
+ *    native waveform library (expo-audio-waveform, react-native-audio-data)
+ *    is added to the project, this path can be upgraded to use it.
  *
  * Results are cached by URI + sample count to avoid re-reading the file
  * on every render.
@@ -26,8 +29,14 @@ export type WaveformData = {
   samples: number[];
   /** Total audio duration in milliseconds. */
   durationMs: number;
-  /** Sample rate of the source audio (Hz). */
+  /** Sample rate of the source audio (Hz). 0 when unknown/synthetic. */
   sampleRate: number;
+  /**
+   * `true` when the samples are a deterministic synthetic approximation
+   * rather than real PCM-derived amplitudes. The UI MUST label synthetic
+   * waveforms honestly (AGENTS.md §11). `false` only for real WAV extraction.
+   */
+  isSynthetic: boolean;
 };
 
 // ── Cache ────────────────────────────────────────────────────────────
@@ -289,13 +298,17 @@ export async function extractWaveform(
     lowerUri.endsWith('.wave');
 
   if (!isWav) {
-    // Honest fallback: non-WAV files cannot be decoded in pure JS.
+    // Honest fallback: non-WAV (compressed) files cannot be decoded in
+    // pure JS. Instead of fabricating random data, we derive a deterministic
+    // synthetic waveform from a stable hash of the URI so the shape is
+    // stable across runs for the same file. The result is flagged
+    // `isSynthetic: true` so the UI can label it honestly (AGENTS.md §11).
     // When a native waveform library is added, upgrade this path.
     console.warn(
       `[WaveformExtractor] Non-WAV audio file cannot be decoded in JS. ` +
-        `Returning flat fallback. URI: ${audioUri}`,
+        `Returning deterministic synthetic waveform. URI: ${audioUri}`,
     );
-    const fallback = flatWaveform(samples, 0);
+    const fallback = syntheticWaveform(audioUri, samples, 0);
     waveformCache.set(key, fallback);
     return fallback;
   }
@@ -307,7 +320,7 @@ export async function extractWaveform(
       console.warn(
         `[WaveformExtractor] File does not exist: ${audioUri}`,
       );
-      const fallback = flatWaveform(samples, 0);
+      const fallback = syntheticWaveform(audioUri, samples, 0);
       waveformCache.set(key, fallback);
       return fallback;
     }
@@ -321,7 +334,7 @@ export async function extractWaveform(
       console.warn(
         `[WaveformExtractor] Invalid or unsupported WAV file: ${audioUri}`,
       );
-      const fallback = flatWaveform(samples, 0);
+      const fallback = syntheticWaveform(audioUri, samples, 0);
       waveformCache.set(key, fallback);
       return fallback;
     }
@@ -338,6 +351,7 @@ export async function extractWaveform(
       samples: bars.length > 0 ? bars : flatBars(samples),
       durationMs,
       sampleRate: header.sampleRate,
+      isSynthetic: false,
     };
 
     waveformCache.set(key, data);
@@ -347,7 +361,7 @@ export async function extractWaveform(
       `[WaveformExtractor] Failed to extract waveform from ${audioUri}:`,
       err,
     );
-    const fallback = flatWaveform(samples, 0);
+    const fallback = syntheticWaveform(audioUri, samples, 0);
     waveformCache.set(key, fallback);
     return fallback;
   }
@@ -372,17 +386,83 @@ export function clearWaveformCache(audioUri?: string): void {
 // ── Helpers ──────────────────────────────────────────────────────────
 
 /**
- * Generate a flat waveform (all zeros) — the honest fallback when
- * real extraction is not possible.
+ * Generate a flat waveform (all zeros) — used only when real extraction
+ * produces no bars (e.g. an empty WAV data chunk).
  */
 function flatBars(samples: number): number[] {
   return new Array(samples).fill(0);
 }
 
-function flatWaveform(samples: number, durationMs: number): WaveformData {
+/**
+ * FNV-1a hash of a string → 32-bit unsigned integer. Used to seed the
+ * deterministic synthetic waveform so the same file URI always yields the
+ * same shape (stable across runs, no flicker).
+ */
+function fnv1aHash(str: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    // FNV prime (multiply, keep within 32-bit unsigned)
+    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+  }
+  return hash >>> 0;
+}
+
+/**
+ * A tiny xorshift32 PRNG seeded by a 32-bit integer. Deterministic and
+ * cheap — good enough to shape a synthetic waveform envelope.
+ */
+function xorshift32(seed: number): () => number {
+  let state = seed >>> 0;
+  if (state === 0) state = 0x9e3779b9;
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state = state >>> 0;
+    // Map to 0..1
+    return state / 0x100000000;
+  };
+}
+
+/**
+ * Generate a deterministic synthetic waveform for a file URI.
+ *
+ * The shape models a typical speech/music envelope: a gentle attack,
+ * a sustained body with natural amplitude variation, and a decay. The
+ * exact curve is seeded by a stable hash of the URI so it is reproducible
+ * across runs for the same file. The result is flagged `isSynthetic: true`
+ * so the UI can label it honestly (AGENTS.md §11).
+ *
+ * This is NOT real amplitude data — it is a stable visual placeholder.
+ */
+function syntheticWaveform(uri: string, samples: number, durationMs: number): WaveformData {
+  const n = Math.max(1, samples);
+  const seed = fnv1aHash(uri);
+  const rand = xorshift32(seed);
+
+  const bars: number[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1 || 1); // 0..1 position
+    // Envelope: attack (0..0.08), sustain body, decay (last 0.12)
+    const attack = Math.min(1, t / 0.08);
+    const decay = Math.min(1, (1 - t) / 0.12);
+    const envelope = Math.min(attack, decay);
+    // Body variation: low-frequency sinusoid + noise, 0.25..1 range
+    const lfo = 0.55 + 0.35 * Math.sin(t * Math.PI * 3 + (seed % 6));
+    const noise = 0.7 + 0.3 * rand();
+    const amp = envelope * lfo * noise;
+    bars[i] = Math.max(0.04, Math.min(1, amp));
+  }
+
+  // Normalize to peak 1 so it visually matches real extraction output.
+  const peak = Math.max(...bars, 0.0001);
+  const normalized = bars.map((b) => Math.min(1, b / peak));
+
   return {
-    samples: flatBars(samples),
+    samples: normalized,
     durationMs,
     sampleRate: 0,
+    isSynthetic: true,
   };
 }

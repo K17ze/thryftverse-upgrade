@@ -49,3 +49,12 @@ export { PROJECT_SCHEMA_VERSION } from './projectTypes';
 
 // Asset registry options type
 export type { ImportAssetOptions } from './AssetRegistry';
+
+// Project folders (Meta Edits August 2026)
+export type { ProjectFolder, FolderCollection } from './ProjectFolderTypes';
+export { FOLDERS_STORAGE_KEY } from './ProjectFolderTypes';
+export {
+  useProjectFolderStore,
+  getFolderProjectCount,
+  findFolderForProject,
+} from './ProjectFolderStore';

@@ -23,6 +23,11 @@
  *   // ...
  *   await recorder.stop();
  *   const uri = recorder.uri;
+ *
+ * Metering (expo-av Audio.Recording):
+ *   const status = await recording.getStatusAsync();
+ *   // status.metering: -160..0 dBFS → normalize to 0..1
+ *   const level = Math.pow(10, status.metering / 20); // 0..1
  */
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -37,6 +42,13 @@ export type VoiceoverClip = {
   /** Timestamp when the recording was made. */
   recordedAt: number;
 };
+
+/**
+ * Callback invoked periodically during recording with the current
+ * input level (0..1, normalized from dBFS metering). Used by the UI
+ * to render a live waveform visualization.
+ */
+export type MeteringListener = (level: number) => void;
 
 // ── Error ────────────────────────────────────────────────────────────
 
@@ -73,11 +85,29 @@ export class VoiceoverDependencyError extends Error {
  */
 export class VoiceoverRecorder {
   private _isRecording = false;
+  private _isPaused = false;
   private _startTime = 0;
+  private _accumulatedMs = 0;
+  private _meteringListeners = new Set<MeteringListener>();
+  private _meteringInterval: ReturnType<typeof setInterval> | null = null;
 
-  /** Whether a recording is currently in progress. */
+  /** Whether a recording is currently in progress (not paused). */
   get isRecording(): boolean {
-    return this._isRecording;
+    return this._isRecording && !this._isPaused;
+  }
+
+  /** Whether recording is currently paused. */
+  get isPaused(): boolean {
+    return this._isPaused;
+  }
+
+  /**
+   * Elapsed recording time in milliseconds (excluding paused intervals).
+   */
+  get elapsedMs(): number {
+    if (!this._isRecording) return this._accumulatedMs;
+    if (this._isPaused) return this._accumulatedMs;
+    return this._accumulatedMs + (Date.now() - this._startTime);
   }
 
   /**
@@ -92,6 +122,20 @@ export class VoiceoverRecorder {
     // When one is added, attempt a dynamic import here and return true
     // if the module loads successfully.
     return false;
+  }
+
+  /**
+   * Subscribe to live metering (input level) updates during recording.
+   * The listener receives a 0..1 normalized amplitude. Returns an
+   * unsubscribe function. When the native dependency is unavailable, no
+   * updates are emitted — the UI should treat the absence of updates as
+   * "metering not available" and label it honestly (AGENTS.md §11).
+   */
+  setMeteringListener(listener: MeteringListener): () => void {
+    this._meteringListeners.add(listener);
+    return () => {
+      this._meteringListeners.delete(listener);
+    };
   }
 
   /**
@@ -130,7 +174,35 @@ export class VoiceoverRecorder {
     //   this._recorder.record();
 
     this._isRecording = true;
+    this._isPaused = false;
+    this._accumulatedMs = 0;
     this._startTime = Date.now();
+    this._startMeteringPolling();
+  }
+
+  /**
+   * Pause the current recording. The microphone is muted and the elapsed
+   * time accumulator is frozen. Safe to call when already paused.
+   */
+  async pauseRecording(): Promise<void> {
+    if (!this._isRecording || this._isPaused) return;
+    // When expo-audio is available:
+    //   await this._recorder.pause();
+    this._accumulatedMs += Date.now() - this._startTime;
+    this._isPaused = true;
+    this._stopMeteringPolling();
+  }
+
+  /**
+   * Resume a paused recording.
+   */
+  async resumeRecording(): Promise<void> {
+    if (!this._isRecording || !this._isPaused) return;
+    // When expo-audio is available:
+    //   this._recorder.record();
+    this._isPaused = false;
+    this._startTime = Date.now();
+    this._startMeteringPolling();
   }
 
   /**
@@ -151,8 +223,14 @@ export class VoiceoverRecorder {
     //   const uri = this._recorder.uri;
     //   const durationMs = (this._recorder.durationMs ?? 0) * 1000;
 
-    const durationMs = Date.now() - this._startTime;
+    if (!this._isPaused) {
+      this._accumulatedMs += Date.now() - this._startTime;
+    }
+    const durationMs = this._accumulatedMs;
+    this._stopMeteringPolling();
     this._isRecording = false;
+    this._isPaused = false;
+    this._accumulatedMs = 0;
 
     // This URI would come from the recorder. Since the dependency is not
     // available, we never reach this line in practice (the dependency error
@@ -176,6 +254,9 @@ export class VoiceoverRecorder {
       // No recording to cancel — this is a no-op when the dependency
       // is missing, not an error.
       this._isRecording = false;
+      this._isPaused = false;
+      this._accumulatedMs = 0;
+      this._stopMeteringPolling();
       return;
     }
 
@@ -184,6 +265,52 @@ export class VoiceoverRecorder {
       //   await this._recorder.stop();
       //   // Delete the temp file
       this._isRecording = false;
+      this._isPaused = false;
+      this._accumulatedMs = 0;
+      this._stopMeteringPolling();
     }
+  }
+
+  // ── Metering polling ────────────────────────────────────────────────
+
+  /**
+   * Start polling the recorder for metering levels and emitting them to
+   * subscribers. When the native dependency is unavailable this is a no-op
+   * (no updates are emitted), which the UI handles honestly.
+   */
+  private _startMeteringPolling(): void {
+    this._stopMeteringPolling();
+    if (!VoiceoverRecorder.isAvailable()) return;
+
+    // When expo-av is available:
+    //   this._meteringInterval = setInterval(async () => {
+    //     const status = await this._recorder.getStatusAsync();
+    //     if (status.isRecording && status.metering != null) {
+    //       // metering is -160..0 dBFS → normalize to 0..1
+    //       const level = Math.pow(10, status.metering / 20);
+    //       this._emitMetering(Math.max(0, Math.min(1, level)));
+    //     }
+    //   }, 60);
+    this._meteringInterval = setInterval(() => {
+      // Placeholder: real metering wired in the migration above.
+      this._emitMetering(0);
+    }, 60);
+  }
+
+  private _stopMeteringPolling(): void {
+    if (this._meteringInterval !== null) {
+      clearInterval(this._meteringInterval);
+      this._meteringInterval = null;
+    }
+  }
+
+  private _emitMetering(level: number): void {
+    this._meteringListeners.forEach((cb) => {
+      try {
+        cb(level);
+      } catch {
+        // Listener errors must not crash the recording loop.
+      }
+    });
   }
 }

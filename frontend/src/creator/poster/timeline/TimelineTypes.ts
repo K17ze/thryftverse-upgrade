@@ -22,10 +22,59 @@ export interface TimeRange {
   endMs: number;
 }
 
+/**
+ * A single control point on a timeline-native speed curve. Unlike the
+ * richer {@link SpeedCurve} model (which uses normalized 0..1 positions),
+ * a {@link SpeedCurvePoint} anchors speed to an absolute source-media time
+ * in milliseconds. This is the canonical representation used by the
+ * timeline operations and the {@link SpeedCurveEvaluator}.
+ */
+export interface SpeedCurvePoint {
+  /** Source-media time in milliseconds. */
+  timeMs: number;
+  /** Playback speed multiplier at this point (0.25 to 4.0). */
+  speed: number;
+}
+
+/**
+ * The set of transition styles supported by the timeline operations and the
+ * {@link TransitionEvaluator}. This is the timeline-native subset; the
+ * broader {@link ../transitions/TransitionTypes.TransitionType} includes
+ * additional preset styles (zoom, flash, spin) used by the frame-preset rail.
+ */
+export type TransitionType = 'cut' | 'fade' | 'dissolve' | 'slide' | 'wipe';
+
+/**
+ * A transition between two clips on the timeline. Stored on the timeline
+ * state and evaluated by the {@link TransitionEvaluator} during playback
+ * and export.
+ */
+export interface Transition {
+  id: string;
+  fromClipId: string;
+  toClipId: string;
+  type: TransitionType;
+  durationMs: number;
+}
+
+/**
+ * A crop rectangle applied to a clip's source media. Coordinates are
+ * normalized (0..1) relative to the source frame dimensions, matching the
+ * Skia draw-rect contract used by the render pipeline.
+ */
+export interface ClipCropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface PosterClip {
   id: string;
   assetId: string;
   sourceUri: string;
+  /** Media kind — used by replaceClipAsset and the render pipeline. */
+  mediaType?: 'image' | 'video';
   trimStartMs: number;
   trimEndMs: number;
   speed: number; // 0.25 to 4.0
@@ -33,6 +82,17 @@ export interface PosterClip {
   thumbnailUri?: string;
   /** Computed: (trimEnd - trimStart) adjusted for speed. */
   durationMs: number;
+  /**
+   * Variable speed curve anchored to source-media time. When present, the
+   * renderer samples the curve via the {@link SpeedCurveEvaluator} to
+   * compute instantaneous speed at each timeline position. The `speed`
+   * field holds the average speed for duration display.
+   */
+  speedCurve?: SpeedCurvePoint[];
+  /** Crop rectangle (normalized 0..1) applied to the source frame. */
+  cropRect?: ClipCropRect;
+  /** Rotation in degrees — one of 0, 90, 180, 270. */
+  rotation?: number;
 }
 
 export interface OverlayLayer {
@@ -46,6 +106,8 @@ export interface OverlayLayer {
 export interface TimelineState {
   clips: PosterClip[];
   overlays: OverlayLayer[];
+  /** Transitions between adjacent clips. Evaluated by TransitionEvaluator. */
+  transitions?: Transition[];
   playheadMs: number;
   totalDurationMs: number;
   isPlaying: boolean;

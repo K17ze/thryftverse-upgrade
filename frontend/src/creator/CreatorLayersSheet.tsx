@@ -37,6 +37,7 @@ const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ioni
   mention: 'at-outline',
   look: 'shirt-outline',
   vote: 'stats-chart-outline',
+  adjustment: 'color-wand-outline',
   quiz: 'help-circle-outline',
   question: 'chatbubble-outline',
   emojiSlider: 'happy-outline',
