@@ -35,8 +35,8 @@ import { createLookOnApi, updateLookOnApi } from '../services/looksApi';
 import { createPosterStory, scheduleCreatorDocument } from '../services/postersApi';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
-import { useUploadManager } from './core/upload';
-import type { UploadJob, UploadJobState } from './core/upload';
+import { useUploadManager, detectMimeType } from './core/upload';
+import type { UploadJob, UploadJobStatus } from './core/upload';
 import type { CreatorDocument, CreatorLayer } from './composition';
 import {
   validateForPublish,
@@ -75,6 +75,8 @@ interface LocalMediaRef {
   layerId: string;
   field: string;
   currentUri: string;
+  /** Asset type hint for MIME detection: "image" or "video". */
+  assetType: string;
 }
 
 function scanDocumentForLocalUris(doc: CreatorDocument): LocalMediaRef[] {
@@ -82,21 +84,23 @@ function scanDocumentForLocalUris(doc: CreatorDocument): LocalMediaRef[] {
   for (const page of doc.pages) {
     for (const layer of page.layers) {
       if (layer.type === 'media') {
+        // mediaType is "image" | "video" on the media layer payload.
+        const mediaType = layer.payload.mediaType ?? 'image';
         if (layer.payload.mediaUri && isLocalUri(layer.payload.mediaUri)) {
-          refs.push({ layerId: layer.id, field: 'mediaUri', currentUri: layer.payload.mediaUri });
+          refs.push({ layerId: layer.id, field: 'mediaUri', currentUri: layer.payload.mediaUri, assetType: mediaType });
         }
         if (layer.payload.thumbnailUri && isLocalUri(layer.payload.thumbnailUri)) {
-          refs.push({ layerId: layer.id, field: 'thumbnailUri', currentUri: layer.payload.thumbnailUri });
+          refs.push({ layerId: layer.id, field: 'thumbnailUri', currentUri: layer.payload.thumbnailUri, assetType: 'image' });
         }
       }
       if (layer.type === 'product' && layer.payload.snapshotImageUrl) {
         if (isLocalUri(layer.payload.snapshotImageUrl)) {
-          refs.push({ layerId: layer.id, field: 'snapshotImageUrl', currentUri: layer.payload.snapshotImageUrl });
+          refs.push({ layerId: layer.id, field: 'snapshotImageUrl', currentUri: layer.payload.snapshotImageUrl, assetType: 'image' });
         }
       }
       if (layer.type === 'look' && layer.payload.snapshotImageUrl) {
         if (isLocalUri(layer.payload.snapshotImageUrl)) {
-          refs.push({ layerId: layer.id, field: 'snapshotImageUrl', currentUri: layer.payload.snapshotImageUrl });
+          refs.push({ layerId: layer.id, field: 'snapshotImageUrl', currentUri: layer.payload.snapshotImageUrl, assetType: 'image' });
         }
       }
     }
@@ -135,23 +139,25 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function jobStateLabel(state: UploadJobState, attempt: number): string {
+function jobStateLabel(state: UploadJobStatus, retries: number): string {
   switch (state) {
     case 'queued': return 'Queued';
-    case 'uploading': return attempt > 0 ? `Retrying (${attempt + 1})` : 'Uploading';
+    case 'initiating': return 'Preparing';
+    case 'uploading': return retries > 0 ? `Retrying (${retries + 1})` : 'Uploading';
     case 'paused': return 'Paused';
     case 'failed': return 'Failed';
-    case 'complete': return 'Done';
+    case 'completed': return 'Done';
   }
 }
 
-function jobStateIcon(state: UploadJobState): string {
+function jobStateIcon(state: UploadJobStatus): string {
   switch (state) {
     case 'queued': return 'time-outline';
+    case 'initiating': return 'sync-outline';
     case 'uploading': return 'cloud-upload-outline';
     case 'paused': return 'pause-outline';
     case 'failed': return 'alert-circle-outline';
-    case 'complete': return 'checkmark-circle-outline';
+    case 'completed': return 'checkmark-circle-outline';
   }
 }
 
@@ -187,11 +193,26 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   // ── Smooth progress bar (UI-thread animated) ────────────────────
+  // During the upload stage, the bar reflects **real transmitted bytes**
+  // (uploadManager.progress, 0–1) mapped into the 0.15–0.7 range of the
+  // overall publish flow. No fake interpolation — the bar advances only
+  // when actual bytes are confirmed sent by XMLHttpRequest.onprogress.
   const progressWidth = useSharedValue(0);
 
   const progressAnimatedStyle = useAnimatedStyle(() => ({
     width: `${Math.round(progressWidth.value * 100)}%`,
   }));
+
+  // Sync real upload byte progress to the progress bar during upload.
+  useEffect(() => {
+    if (stage !== 'uploading') return;
+    if (uploadManager.totalBytes <= 0) return;
+    // Map upload progress (0..1) into the 0.15–0.7 range.
+    const fraction = 0.15 + uploadManager.progress * 0.55;
+    progressWidth.value = reduceMotion
+      ? fraction
+      : withSpring(fraction, { ...spring.entrance, damping: 24 });
+  }, [stage, uploadManager.progress, uploadManager.totalBytes, reduceMotion, spring.entrance, progressWidth]);
 
   // Haptic feedback when entering the success state
   useEffect(() => {
@@ -239,27 +260,35 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
       // 2. Upload all local media URIs before publishing
       if (hasLocalUris(document)) {
         setStage('uploading');
-        const prepFraction = 0.15;
-        progressWidth.value = reduceMotion ? prepFraction : withSpring(prepFraction, spring.entrance);
+        // The progress bar starts at 0.15 (upload range start). Real
+        // byte progress is synced via the useEffect above — the bar
+        // advances only when XMLHttpRequest confirms bytes sent.
+        progressWidth.value = reduceMotion ? 0.15 : withSpring(0.15, spring.entrance);
 
         if (USE_UPLOAD_MANAGER) {
           // ── Durable UploadManager path ──
           // Queue each local URI as a persistent upload job, then wait
-          // for all jobs to reach a terminal state. This path survives
-          // network interruptions — jobs persist to AsyncStorage and
-          // resume automatically on reconnect.
+          // for all jobs to reach a terminal state. Jobs persist to
+          // AsyncStorage and retry with exponential backoff on network
+          // failures. The current transport is **retryable** (whole-file
+          // re-upload on failure with real byte progress). Multipart
+          // (resumable at part level) is implemented but awaiting
+          // backend endpoints — see MultipartUploader.ts.
           const localRefs = scanDocumentForLocalUris(document);
           const projectId = document.id;
 
           for (const ref of localRefs) {
             const assetId = `${ref.layerId}_${ref.field}`;
+            // Detect the correct MIME type from the file extension +
+            // asset-type hint. Never image/* for video.
+            const mimeType = detectMimeType(ref.currentUri, ref.assetType);
             await uploadManager.queueUpload({
               projectId,
               assetId,
-              localUri: ref.currentUri,
-              bytesTotal: 0,
-              maxAttempts: 5,
-              contentType: ref.field === 'mediaUri' ? 'image/*' : 'image/*',
+              localPath: ref.currentUri,
+              mimeType,
+              assetType: ref.assetType,
+              maxRetries: 5,
               folder: document.type === 'look' ? 'looks' : 'posters',
             });
           }
@@ -269,17 +298,17 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
           const finalJobs = await uploadManager.waitForCompletion();
 
           // Check for failures
-          const failedJobs = finalJobs.filter((j) => j.state === 'failed');
+          const failedJobs = finalJobs.filter((j) => j.status === 'failed');
           if (failedJobs.length > 0) {
             throw new Error(
-              `Upload failed: ${failedJobs[0].lastError ?? 'Unknown error'}`,
+              `Upload failed: ${failedJobs[0].error ?? 'Unknown error'}`,
             );
           }
 
           // Replace local URIs in the document with remote URLs
           workingDoc = document;
           for (const job of finalJobs) {
-            if (job.state === 'complete' && job.remoteUrl) {
+            if (job.status === 'completed' && job.remoteUrl) {
               // Parse layerId and field from assetId
               const sepIdx = job.assetId.lastIndexOf('_');
               const layerId = job.assetId.substring(0, sepIdx);
@@ -288,9 +317,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
             }
           }
 
-          // Animate progress to 0.7 (upload complete)
-          const uploadDoneFraction = 0.7;
-          progressWidth.value = reduceMotion ? uploadDoneFraction : withSpring(uploadDoneFraction, spring.entrance);
+          // Upload complete — advance to 0.7 (end of upload range).
+          progressWidth.value = reduceMotion ? 0.7 : withSpring(0.7, spring.entrance);
         } else {
           // ── Legacy foreground pipeline path ──
           workingDoc = await uploadAllLocalMedia(document, (progress) => {
@@ -405,6 +433,9 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
             springCfg={spring.entrance}
             progressAnimatedStyle={progressAnimatedStyle}
             progressWidth={progressWidth}
+            stage={stage}
+            uploadedBytes={uploadManager.uploadedBytes}
+            totalBytes={uploadManager.totalBytes}
           />
         )}
 
@@ -450,9 +481,9 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
 }
 
 // ── Sharing state — single quiet progress indicator ───────────────
-// Replaces the former 4-step "Preparing → Uploading → Processing →
-// Publishing" theatre. Most users only need confidence that sharing is
-// happening. Granular stages remain in telemetry/logs, not product chrome.
+// Shows real byte progress during upload (actual transmitted bytes /
+// total bytes via XMLHttpRequest.onprogress) and a quiet "Publishing…"
+// label during the server publish step. No fake stage theatre.
 interface SharingStateViewProps {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -460,6 +491,9 @@ interface SharingStateViewProps {
   springCfg: { damping: number; stiffness: number; mass: number };
   progressAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
   progressWidth: ReturnType<typeof useSharedValue<number>>;
+  stage: 'uploading' | 'publishing';
+  uploadedBytes: number;
+  totalBytes: number;
 }
 
 function SharingStateView({
@@ -467,11 +501,17 @@ function SharingStateView({
   styles,
   reduceMotion,
   progressAnimatedStyle,
+  stage,
+  uploadedBytes,
+  totalBytes,
 }: SharingStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
+  const showByteProgress = stage === 'uploading' && totalBytes > 0;
   return (
     <View style={localStyles.centerState}>
-      <Text style={localStyles.centerStateTitle}>Sharing…</Text>
+      <Text style={localStyles.centerStateTitle}>
+        {stage === 'uploading' ? 'Uploading…' : 'Publishing…'}
+      </Text>
       <View style={localStyles.progressBarTrack}>
         <Reanimated.View style={[localStyles.progressBarFillContainer, progressAnimatedStyle]}>
           <LinearGradient
@@ -482,6 +522,11 @@ function SharingStateView({
           />
         </Reanimated.View>
       </View>
+      {showByteProgress && (
+        <Text style={localStyles.progressByteLabel}>
+          {formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}
+        </Text>
+      )}
       {!reduceMotion && (
         <ActivityIndicator size="small" color={colors.brand} style={{ marginTop: Space.sm }} />
       )}
@@ -1270,6 +1315,12 @@ function createStyles(colors: ThemeColorsType) {
     },
     progressBarGradient: {
       flex: 1,
+    },
+    progressByteLabel: {
+      fontFamily: Typography.family.medium,
+      fontSize: Type.meta.size,
+      color: colors.textMuted,
+      marginTop: Space.xs,
     },
     // ── Error state ──
     errorCircle: {

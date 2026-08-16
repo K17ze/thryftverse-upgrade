@@ -124,6 +124,10 @@ function TextEditorAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () 
         textStyle: existingPayload.textStyle,
         textColor: existingPayload.textColor,
         backgroundColor: existingPayload.backgroundColor,
+        fill: existingPayload.fill,
+        stroke: existingPayload.stroke,
+        shadow: existingPayload.shadow,
+        background: existingPayload.background,
         alignment: existingPayload.alignment,
         opacity: 1,
         textEffect: existingPayload.textEffect,
@@ -167,6 +171,7 @@ function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; o
         payload: {
           text: sticker.emoji,
           textStyle: 'clean',
+          fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
           textColor: '#ffffff',
           alignment: 'center',
           opacity: 1,
@@ -1877,7 +1882,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const [text, setText] = useState(existingPayload?.text ?? '');
   const [textStyle, setTextStyle] = useState<string>(existingPayload?.textStyle ?? 'clean');
   const [textColor, setTextColor] = useState(existingPayload?.textColor ?? '#ffffff');
-  const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>(existingPayload?.alignment ?? 'center');
+  const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>(existingPayload?.alignment ?? 'center');
   const [textEffect, setTextEffect] = useState<string>(existingPayload?.textEffect ?? 'none');
   const [textAnimation, setTextAnimation] = useState<string>(existingPayload?.textAnimation ?? 'none');
   const [textBgColor, setTextBgColor] = useState(existingPayload?.backgroundColor ?? 'transparent');

@@ -1,10 +1,15 @@
 /**
- * AutoAdjustButton — a one-tap "Auto" color correction button.
+ * AutoAdjustButton — a one-tap enhancement button.
  *
- * Shows a wand glyph + "Auto" label. Tapping applies the auto-adjust
- * effect (via {@link AutoAdjustButtonProps.onApply}). When an auto-adjust
- * is already active, tapping removes it (toggle behavior) — the parent
- * owns that logic and reflects state through `isActive`.
+ * When real image analysis is available (via `computeAutoAdjust`), this
+ * button is labeled "Auto" and shows a loading spinner while analyzing
+ * pixel data. When the analysis pipeline falls back to a curated preset,
+ * the button honestly labels itself "Enhance" — never "Auto" or
+ * "intelligent" for static constants (AGENTS.md §11, spec 07 §6).
+ *
+ * Tapping applies the auto/enhance adjustment (via `onApply`). When an
+ * auto-adjust is already active, tapping removes it (toggle behavior) —
+ * the parent owns that logic and reflects state through `isActive`.
  *
  * After a successful apply, the button briefly shows a checkmark +
  * "Applied" confirmation for 1.5s before returning to the active state.
@@ -13,10 +18,10 @@
  * state — a subtle brand-tinted pill. Resting state is a transparent
  * 44pt touch target with no chrome.
  * Per AGENTS.md §13/§18: medium haptic on apply, suppressed under reduced
- * motion.
+ * motion, accessibility label and state.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
@@ -35,12 +40,25 @@ export interface AutoAdjustButtonProps {
   onApply: () => void;
   /** True when an auto-adjust effect is currently applied to the layer. */
   isActive: boolean;
+  /** True while the image analysis is running (loading state). */
+  isLoading?: boolean;
+  /**
+   * Whether real pixel-level analysis is available. When false, the button
+   * is labeled "Enhance" instead of "Auto" (AGENTS.md §11 truth).
+   * Defaults to true (real analysis is the primary path).
+   */
+  isRealAnalysis?: boolean;
 }
 
 /** How long the "Applied" confirmation state remains visible. */
 const APPLIED_CONFIRMATION_MS = 1500;
 
-export function AutoAdjustButton({ onApply, isActive }: AutoAdjustButtonProps) {
+export function AutoAdjustButton({
+  onApply,
+  isActive,
+  isLoading = false,
+  isRealAnalysis = true,
+}: AutoAdjustButtonProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -55,6 +73,7 @@ export function AutoAdjustButton({ onApply, isActive }: AutoAdjustButtonProps) {
   }, []);
 
   const handlePress = useCallback(() => {
+    if (isLoading) return; // Ignore presses while analyzing.
     if (!reducedMotion) haptic.medium();
     onApply();
     // Only show the "Applied" confirmation when turning the effect on.
@@ -63,33 +82,54 @@ export function AutoAdjustButton({ onApply, isActive }: AutoAdjustButtonProps) {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => setJustApplied(false), APPLIED_CONFIRMATION_MS);
     }
-  }, [reducedMotion, haptic, onApply, isActive]);
+  }, [reducedMotion, haptic, onApply, isActive, isLoading]);
 
   const showingApplied = justApplied;
   const active = isActive || showingApplied;
 
-  // Icon + label swap to a checkmark while the apply confirmation is visible.
-  const iconName: React.ComponentProps<typeof Ionicons>['name'] = showingApplied
-    ? 'checkmark-circle'
-    : 'color-wand-outline';
-  const label = showingApplied ? 'Applied' : 'Auto';
+  // Icon + label swap based on state.
+  // Loading: spinner + "Analyzing…"
+  // Applied: checkmark + "Applied"
+  // Active (real analysis): wand + "Auto"
+  // Active (fallback): wand + "Enhance"
+  // Resting (real analysis): wand + "Auto"
+  // Resting (fallback): wand + "Enhance"
+  const label = isLoading
+    ? 'Analyzing…'
+    : showingApplied
+      ? 'Applied'
+      : isRealAnalysis
+        ? 'Auto'
+        : 'Enhance';
+
   const accentColor = active ? colors.brand : colors.textSecondary;
   const labelColor = active ? colors.brand : colors.textMuted;
+
+  const accessibilityLabel = isRealAnalysis
+    ? 'Auto color correction'
+    : 'Enhance — curated preset';
+
+  const accessibilityHint = isLoading
+    ? 'Analyzing image, please wait'
+    : active
+      ? isRealAnalysis
+        ? 'Removes the auto color correction from the selected media'
+        : 'Removes the enhance preset from the selected media'
+      : isRealAnalysis
+        ? 'Analyzes the image and applies one-tap color correction'
+        : 'Applies a curated enhance preset to the selected media';
 
   return (
     <Pressable
       onPress={handlePress}
+      disabled={isLoading}
       accessibilityRole="button"
-      accessibilityLabel="Auto color correction"
-      accessibilityHint={
-        active
-          ? 'Removes the auto color correction from the selected media'
-          : 'Applies one-tap intelligent color correction to the selected media'
-      }
-      accessibilityState={{ selected: isActive }}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ selected: isActive, disabled: isLoading }}
       style={({ pressed }) => [
         styles.touch,
-        { opacity: pressed ? 0.7 : 1 },
+        { opacity: pressed && !isLoading ? 0.7 : isLoading ? 0.6 : 1 },
       ]}
     >
       <View
@@ -102,7 +142,15 @@ export function AutoAdjustButton({ onApply, isActive }: AutoAdjustButtonProps) {
           },
         ]}
       >
-        <Ionicons name={iconName} size={Control.icon} color={accentColor} />
+        {isLoading ? (
+          <ActivityIndicator size="small" color={accentColor} style={styles.spinner} />
+        ) : (
+          <Ionicons
+            name={showingApplied ? 'checkmark-circle' : 'color-wand-outline'}
+            size={Control.icon}
+            color={accentColor}
+          />
+        )}
         <Text
           style={[
             styles.label,
@@ -131,6 +179,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
     borderRadius: Radius.full,
+  },
+  spinner: {
+    width: Control.icon,
+    height: Control.icon,
   },
   label: {
     fontSize: FontSize.caption,

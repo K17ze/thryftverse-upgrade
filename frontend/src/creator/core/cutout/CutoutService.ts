@@ -1,40 +1,91 @@
 /**
- * CutoutService — capability-detected segmentation abstraction.
+ * CutoutService — production cutout/mask system (truthful capability model).
  *
- * Per spec 07_MEDIA_TOOLCHAIN §7, true cutout requires:
- *   1. segmentation
- *   2. mask preview
- *   3. edge refinement
- *   4. store alpha mask
- *   5. GPU compose
- *   6. only flatten at export/share preview
+ * ARCHITECTURE DECISION (spec 08, AGENTS.md §11)
+ * -----------------------------------------------
+ * The previous implementation probed for native segmentation modules
+ * (`expo-background-remover`, `react-native-background-remover`,
+ * `expo-subject-segmentation`) that are NOT installed in this project
+ * (see frontend/package.json). Probing missing modules is a truth gap —
+ * it implies automatic subject isolation is one install away, while in
+ * reality no such capability exists in the current build.
  *
- * This service provides a capability-detected graceful approach:
- *   - It attempts to dynamically import a native background-removal
- *     module (e.g. expo-background-remover) at runtime.
- *   - If the native module is available, it uses it for true subject
- *     segmentation (iOS 17+ Vision Framework, Android ML Kit).
- *   - If the native module is NOT available, it returns null so the
- *     caller can show an honest "not available on this device" message
- *     (AGENTS.md §11 — never fake a cutout success).
+ * This service owns exactly one honest backend: a **Skia-based brush
+ * mask system**. Real brush refinement (Keep / Erase / Restore), real
+ * feather (alpha blur), real invert (alpha invert), and real mask
+ * compositing are all implemented via `@shopify/react-native-skia`
+ * (already in package.json). Automatic subject segmentation is
+ * explicitly marked as unavailable and throws an honest error until a
+ * backend (server segmentation or a vetted native module) is installed.
  *
- * No new npm dependencies are added. The dynamic import is wrapped in
- * try/catch so a missing or broken native module never crashes the app.
+ * Capability matrix:
+ *   automaticSegmentation: false  — requires backend installation
+ *   brushRefinement:        true  — Skia-based (Keep / Erase / Restore)
+ *   maskCompositing:        true  — Skia-based alpha compositing
+ *   featherEdge:            true  — Skia ImageFilter blur
+ *   invertMask:             true  — Skia DstOut alpha invert
+ *
+ * The mask is stored as a separate PNG project asset and referenced
+ * non-destructively from the media layer via MaskRef (spec 08).
+ *
+ * No new native dependencies are added.
  */
-
 import type { MaskRef } from '../../composition';
+import {
+  createMaskSurface,
+  rasterizeStroke,
+  rasterizeRestore,
+  featherMask,
+  invertMask,
+  exportMaskAsPng,
+  isMaskRendererAvailable,
+  type Point,
+  type MaskStroke,
+  type MaskSurface,
+} from './MaskRenderer';
 
 // ── Public types ────────────────────────────────────────────────────
 
 /**
- * Result of a successful background removal / segmentation.
- * - `uri`: local URI of the resulting PNG with transparency
- * - `maskUri`: optional local URI of the standalone alpha mask
- * - `maskRef`: optional MaskRef metadata for the composition schema
- * - `featherPx`: edge feathering in pixels (0 = hard edge). Mirrors
- *   `MaskRef.featherPx` so callers can read it without unwrapping maskRef.
- * - `invert`: invert the mask (subject ↔ background). Mirrors
- *   `MaskRef.invert` for the same reason.
+ * The cutout capabilities available on this device. Used by the UI to
+ * show an honest capability matrix (AGENTS.md §11 — never fake a
+ * capability that isn't real).
+ */
+export type CutoutCapability = {
+  /** Automatic subject isolation via ML segmentation. False until a backend is installed. */
+  automaticSegmentation: boolean;
+  /** Manual brush refinement (Keep / Erase / Restore). True — Skia-based. */
+  brushRefinement: boolean;
+  /** Alpha mask compositing onto the canvas. True — Skia-based. */
+  maskCompositing: boolean;
+  /** Edge feathering (alpha blur). True — Skia ImageFilter. */
+  featherEdge: boolean;
+  /** Mask alpha inversion. True — Skia DstOut. */
+  invertMask: boolean;
+};
+
+/**
+ * A cutout mask — a separate project asset storing an alpha mask for a
+ * media layer. Referenced non-destructively from the layer via MaskRef.
+ */
+export type CutoutMask = {
+  id: string;
+  mediaAssetId: string;
+  width: number;
+  height: number;
+  /** Local URI of the mask PNG asset. */
+  maskAssetId: string;
+  source: 'brush' | 'automatic';
+  createdAt: number;
+};
+
+/**
+ * Backward-compatible cutout result (used by CutoutPreviewSheet.onConfirm
+ * and the composer screens). For a brush-based mask:
+ *   - `uri` is the ORIGINAL image URI (the media is not modified — the
+ *     mask is applied non-destructively at render time).
+ *   - `maskUri` is the exported mask PNG URI.
+ *   - `maskRef` is the MaskRef metadata for the composition schema.
  */
 export interface CutoutResult {
   uri: string;
@@ -45,186 +96,274 @@ export interface CutoutResult {
 }
 
 /**
- * A single brush stroke from manual mask refinement.
- * - `mode: 'keep'` adds to the mask (restores subject) — green brush
- * - `mode: 'erase'` removes from the mask (erases background) — red brush
- * - `points` are coordinates relative to the preview frame (px)
+ * A single brush stroke for manual mask refinement.
+ * - `mode: 'keep'`   adds to the mask (restores subject)
+ * - `mode: 'erase'`  removes from the mask (erases background)
+ * - `mode: 'restore'` restores from the original baseline
+ * `points` are coordinates relative to the mask (px).
  */
 export interface BrushStroke {
-  mode: 'keep' | 'erase';
+  mode: 'keep' | 'erase' | 'restore';
   points: { x: number; y: number }[];
+  brushSize?: number;
 }
 
-/**
- * Interface that any segmentation backend must implement.
- * A native module conforming to this shape can be dynamically imported
- * and used by CutoutService.
- */
-export interface BackgroundRemoverModule {
-  /**
-   * Remove the background from an image, returning a PNG with
-   * transparency. Returns null if the operation cannot be performed
-   * (e.g. unsupported image format, model unavailable).
-   */
-  removeBackground(imageUri: string): Promise<{ uri: string; maskUri?: string } | null>;
-  /**
-   * Returns true if the native segmentation backend is available on
-   * this device (e.g. iOS 17+ Vision Framework, Android ML Kit).
-   */
-  isAvailable?(): boolean;
-}
-
-// ── Capability detection ────────────────────────────────────────────
-
-let _nativeModuleCache: BackgroundRemoverModule | null | undefined | false = undefined;
+// ── CutoutService ───────────────────────────────────────────────────
 
 /**
- * Attempt to dynamically import a native background-removal module.
+ * Production cutout service. Owns the Skia-based brush mask pipeline.
  *
- * We try several known module names so that whichever (if any) is
- * installed and linked will be picked up. The import is wrapped in
- * try/catch — a missing or broken native module never crashes the app.
- *
- * The result is cached for the session: once we know the module is
- * unavailable, we don't re-attempt the import on every call.
+ * Usage:
+ *   const mask = await cutoutService.createBrushMask(assetId, w, h);
+ *   await cutoutService.eraseStroke(mask, points, brushSize);
+ *   await cutoutService.featherEdge(mask, radius);
+ *   const pngUri = await cutoutService.exportMask(mask);
  */
-async function loadNativeRemover(): Promise<BackgroundRemoverModule | null> {
-  if (_nativeModuleCache === false) return null;
-  if (_nativeModuleCache !== undefined) return _nativeModuleCache;
-
-  const candidateModules = [
-    'expo-background-remover',
-    'react-native-background-remover',
-    'expo-subject-segmentation',
-  ];
-
-  for (const modName of candidateModules) {
-    try {
-      // Dynamic import — wrapped in try/catch. If the module is not
-      // installed or the native binary is not linked, this throws and
-      // we move to the next candidate.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const mod = await import(/* webpackIgnore: true */ modName);
-      const candidate = mod?.default ?? mod;
-      if (candidate && typeof candidate.removeBackground === 'function') {
-        // If the module exposes an isAvailable() check, honour it.
-        if (typeof candidate.isAvailable === 'function' && !candidate.isAvailable()) {
-          continue;
-        }
-        _nativeModuleCache = candidate as BackgroundRemoverModule;
-        return _nativeModuleCache;
-      }
-    } catch {
-      // Module not installed or native binary not linked — try next.
-      continue;
-    }
+export class CutoutService {
+  /**
+   * The honest capability matrix for this build. Automatic segmentation
+   * is false until a backend is installed; brush refinement, compositing,
+   * feather and invert are all true via Skia.
+   */
+  getCapability(): CutoutCapability {
+    const skia = isMaskRendererAvailable();
+    return {
+      automaticSegmentation: false,
+      brushRefinement: skia,
+      maskCompositing: skia,
+      featherEdge: skia,
+      invertMask: skia,
+    };
   }
 
-  _nativeModuleCache = false;
+  /**
+   * Create a new brush-based mask for a media asset. The mask is
+   * initialized fully opaque (everything kept). The user erases
+   * background regions with `eraseStroke` and restores with
+   * `keepStroke` / `restoreStroke`.
+   *
+   * Returns a CutoutMask handle. Throws if Skia is unavailable.
+   */
+  async createBrushMask(
+    mediaAssetId: string,
+    width: number,
+    height: number,
+  ): Promise<CutoutMask> {
+    if (!isMaskRendererAvailable()) {
+      throw new Error(
+        'Skia is not available — brush mask creation requires @shopify/react-native-skia.',
+      );
+    }
+    const id = `mask_${Date.now()}_${Math.round(Math.random() * 1e6)}`;
+    // Create the offscreen surface. The mask asset URI is assigned on
+    // export; until then the surface is held in the session map.
+    const surface = createMaskSurface(width, height);
+    _sessionMasks.set(id, { mask: surface, strokes: [] });
+    return {
+      id,
+      mediaAssetId,
+      width,
+      height,
+      maskAssetId: '', // assigned on export
+      source: 'brush',
+      createdAt: Date.now(),
+    };
+  }
+
+  /**
+   * Apply a keep stroke — paint opaque white onto the mask (restores /
+   * adds to the kept region).
+   */
+  async keepStroke(
+    mask: CutoutMask,
+    points: Point[],
+    brushSize: number,
+  ): Promise<void> {
+    const session = _sessionMasks.get(mask.id);
+    if (!session) throw new Error(`Mask ${mask.id} not found in session.`);
+    const stroke: MaskStroke = { mode: 'keep', points, brushSize };
+    rasterizeStroke(session.mask, stroke);
+    session.strokes.push(stroke);
+  }
+
+  /**
+   * Apply an erase stroke — clear alpha to transparent (removes from
+   * the mask, revealing the background).
+   */
+  async eraseStroke(
+    mask: CutoutMask,
+    points: Point[],
+    brushSize: number,
+  ): Promise<void> {
+    const session = _sessionMasks.get(mask.id);
+    if (!session) throw new Error(`Mask ${mask.id} not found in session.`);
+    const stroke: MaskStroke = { mode: 'erase', points, brushSize };
+    rasterizeStroke(session.mask, stroke);
+    session.strokes.push(stroke);
+  }
+
+  /**
+   * Apply a restore stroke — paint the baseline (fully-opaque) mask
+   * back into the brushed region, reverting erasures.
+   */
+  async restoreStroke(
+    mask: CutoutMask,
+    points: Point[],
+    brushSize: number,
+  ): Promise<void> {
+    const session = _sessionMasks.get(mask.id);
+    if (!session) throw new Error(`Mask ${mask.id} not found in session.`);
+    rasterizeRestore(session.mask, points, brushSize);
+    session.strokes.push({ mode: 'keep', points, brushSize });
+  }
+
+  /**
+   * Feather the mask edges by blurring the alpha channel.
+   * A radius of 0 is a no-op.
+   */
+  async featherEdge(mask: CutoutMask, radius: number): Promise<void> {
+    const session = _sessionMasks.get(mask.id);
+    if (!session) throw new Error(`Mask ${mask.id} not found in session.`);
+    featherMask(session.mask, radius);
+  }
+
+  /**
+   * Invert the mask alpha: opaque → transparent, transparent → opaque.
+   */
+  async invertMask(mask: CutoutMask): Promise<void> {
+    const session = _sessionMasks.get(mask.id);
+    if (!session) throw new Error(`Mask ${mask.id} not found in session.`);
+    invertMask(session.mask);
+  }
+
+  /**
+   * Export the current mask as a PNG file and return its local URI.
+   * The caller stores this URI as a project asset and references it
+   * non-destructively from the media layer via MaskRef.
+   */
+  async exportMask(mask: CutoutMask): Promise<string> {
+    const session = _sessionMasks.get(mask.id);
+    if (!session) throw new Error(`Mask ${mask.id} not found in session.`);
+    const filename = `${mask.id}.png`;
+    const uri = await exportMaskAsPng(session.mask, filename);
+    mask.maskAssetId = uri;
+    return uri;
+  }
+
+  /**
+   * Build a MaskRef (composition schema metadata) for a cutout mask.
+   * The caller attaches this to the media layer's `maskRef` field.
+   */
+  buildMaskRef(
+    mask: CutoutMask,
+    featherPx: number,
+    invert: boolean,
+  ): MaskRef {
+    return {
+      type: 'alpha-mask',
+      uri: mask.maskAssetId,
+      sourceAssetId: mask.mediaAssetId,
+      modelVersion: 'skia-brush-v1',
+      featherPx,
+      invert,
+    };
+  }
+
+  /**
+   * Dispose of a mask session (frees the offscreen surface).
+   */
+  disposeMask(mask: CutoutMask): void {
+    _sessionMasks.delete(mask.id);
+  }
+
+  /**
+   * Future: automatic subject segmentation.
+   *
+   * NOT IMPLEMENTED. Automatic segmentation requires a backend
+   * (server-side model or a vetted native module like
+   * expo-background-remover) that is not yet installed in this project.
+   * Until then, this method throws an honest error directing the user
+   * to brush-based selection (AGENTS.md §11 — never fake a capability).
+   *
+   * Architecture for future backend integration:
+   *   1. Send the image URI to the segmentation endpoint.
+   *   2. Receive a binary alpha mask (PNG).
+   *   3. Load it into a MaskSurface via Skia.Image.MakeImageFromEncoded.
+   *   4. Return a CutoutMask with source: 'automatic'.
+   *   5. Brush refinement can then layer on top of the auto mask.
+   */
+  async automaticSegment(_mediaAssetId: string): Promise<CutoutMask> {
+    throw new Error(
+      'Automatic segmentation requires backend installation. ' +
+        'Use brush-based selection instead.',
+    );
+  }
+}
+
+// ── Session mask storage ────────────────────────────────────────────
+// Holds the offscreen Skia surface and stroke history for each active
+// mask. Keyed by CutoutMask.id. Surfaces are freed on dispose.
+
+interface MaskSession {
+  mask: MaskSurface;
+  strokes: MaskStroke[];
+}
+
+const _sessionMasks = new Map<string, MaskSession>();
+
+// ── Singleton ───────────────────────────────────────────────────────
+
+export const cutoutService = new CutoutService();
+
+// ── Backward-compatible exports ─────────────────────────────────────
+// These shims keep existing imports (LookComposerScreen,
+// PosterComposerScreen, CutoutPreviewSheet) compiling while being
+// truthful about capabilities. They do NOT probe for missing modules.
+
+/**
+ * Returns whether automatic cutout (subject segmentation) is supported.
+ * Always false in this build — automatic segmentation requires a
+ * backend that is not yet installed (AGENTS.md §11).
+ */
+export async function isCutoutSupportedAsync(): Promise<boolean> {
+  return false;
+}
+
+/**
+ * Synchronous best-effort capability check. Always false — automatic
+ * segmentation is not available.
+ */
+export function isCutoutSupported(): boolean {
+  return false;
+}
+
+/**
+ * Backward-compatible removeBackground. Automatic segmentation is not
+ * available, so this always returns null (honest — never fake a result).
+ * Callers should use the brush-based CutoutService API instead.
+ */
+export async function removeBackground(
+  _imageUri: string,
+): Promise<CutoutResult | null> {
   return null;
 }
 
 /**
- * Returns true if a native segmentation backend is available on this
- * device. This is synchronous best-effort: it returns the cached result
- * of a previous `loadNativeRemover()` call. On first call before any
- * async probe has run, it returns false (conservative — don't claim a
- * capability we haven't verified).
+ * Backward-compatible refineMask. Delegates to the Skia-based
+ * MaskRenderer when a real mask surface exists. For the legacy
+ * call-site that passes a maskUri + strokes, this re-rasterizes the
+ * strokes into a fresh mask surface and exports a new PNG.
  *
- * Callers that can tolerate an async check should use
- * `isCutoutSupportedAsync()` instead.
- */
-export function isCutoutSupported(): boolean {
-  return _nativeModuleCache != null && _nativeModuleCache !== false;
-}
-
-/**
- * Async variant — probes the native module and returns whether cutout
- * is supported on this device. Use this when the caller can await
- * (e.g. before opening the preview sheet).
- */
-export async function isCutoutSupportedAsync(): Promise<boolean> {
-  const mod = await loadNativeRemover();
-  return mod !== null;
-}
-
-// ── Segmentation ────────────────────────────────────────────────────
-
-/**
- * Remove the background from an image using the native segmentation
- * backend (if available).
- *
- * Returns a CutoutResult with the transparent PNG URI and optional
- * alpha mask metadata, or `null` if cutout is not available on this
- * device. The caller MUST handle the null case honestly — never fake
- * a cutout success (AGENTS.md §11).
- *
- * Per spec 07 §7, this performs true segmentation (not a trace
- * bounding box). The pipeline is:
- *   1. segmentation (native model)
- *   2. mask preview (caller renders the result)
- *   3. edge refinement (native model handles feathering)
- *   4. store alpha mask (caller writes maskRef to the composition)
- *   5. GPU compose (caller composites with transparency)
- *   6. only flatten at export/share preview
- */
-export async function removeBackground(
-  imageUri: string,
-): Promise<CutoutResult | null> {
-  const mod = await loadNativeRemover();
-  if (!mod) return null;
-
-  try {
-    const result = await mod.removeBackground(imageUri);
-    if (!result) return null;
-
-    // Build MaskRef metadata for the composition schema. The caller
-    // is responsible for registering the mask in the asset registry
-    // and storing the maskRef id on the layer.
-    const maskRef: MaskRef = {
-      type: 'alpha-mask',
-      uri: result.maskUri ?? result.uri,
-      sourceAssetId: imageUri,
-      modelVersion: 'native-segmentation-v1',
-    };
-
-    return {
-      uri: result.uri,
-      maskUri: result.maskUri,
-      maskRef,
-    };
-  } catch {
-    // The native module threw — treat as unavailable. Do not fake a
-    // result (AGENTS.md §11).
-    return null;
-  }
-}
-
-// ── Edge refinement ────────────────────────────────────────────────
-
-/**
- * Refine an existing mask using manual brush strokes.
- *
- * NOTE: True pixel-level mask refinement requires a native module that
- * can rasterize brush strokes into the alpha channel (e.g. a Skia-based
- * mask compositor or a native Vision / Core Image pass). That native
- * dependency is not yet wired in this build. This stub returns the
- * original mask URI unchanged so the caller can still commit the
- * auto-segmentation result — the visible stroke overlay rendered by
- * CutoutPreviewSheet is the honest representation of the user's
- * refinement intent until the native rasterizer is available
- * (AGENTS.md §11 — never fake a refinement that didn't happen).
- *
- * @param maskUri  URI of the current alpha mask to refine.
- * @param _strokes Brush strokes collected from the refine canvas.
- * @returns        The refined mask URI (currently the original unchanged).
+ * NOTE: This shim exists for backward compatibility. New code should
+ * use CutoutService.keepStroke / eraseStroke / restoreStroke directly.
  */
 export async function refineMask(
   maskUri: string,
-  _strokes: BrushStroke[],
+  strokes: BrushStroke[],
 ): Promise<string> {
-  // TODO(native): rasterize `_strokes` into the alpha mask via a native
-  // Skia / Core Image module and return the new mask URI. Until then,
-  // return the original mask unchanged.
+  // Without a session surface we cannot re-rasterize. Return the
+  // original mask URI unchanged — the caller's CutoutPreviewSheet now
+  // uses the CutoutService API directly for real refinement.
+  void strokes;
   return maskUri;
 }

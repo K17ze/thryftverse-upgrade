@@ -25,6 +25,9 @@ export interface AudioTrack {
   durationMs: number;
   uri: string;
   sourceType: 'library' | 'original' | 'voiceover';
+  /** Cached waveform samples (0..1 normalized amplitudes). Populated
+   *  by the WaveformExtractor when the track is loaded. */
+  waveform?: number[];
 }
 
 /**
@@ -47,6 +50,12 @@ export interface AudioConfig {
   // Audio fade (P1). Smooth volume ramp at start/end of the track.
   fadeInMs: number;      // 0 to track duration
   fadeOutMs: number;     // 0 to track duration
+  // Audio ducking (P1). When enabled, the original/background audio is
+  // automatically lowered when a voiceover or priority track is active.
+  duckingEnabled?: boolean;
+  /** 0..1 — how much to lower original audio when the track plays.
+   *  0 = fully mute original, 1 = no change. Default: 0.3 */
+  duckingLevel?: number;
 }
 
 /**

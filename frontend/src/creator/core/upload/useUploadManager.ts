@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UploadJobStore } from './UploadJobStore';
 import { UploadManager } from './UploadManager';
-import type { QueueUploadParams, UploadJob, UploadEventListener } from './UploadTypes';
+import type { QueueUploadParams, UploadJob, UploadEventListener, ProjectProgress } from './UploadTypes';
 
 /**
  * Shared singleton store + manager. Created once per JS runtime so that
@@ -23,8 +23,16 @@ export type QueueParams = QueueUploadParams;
 export interface UseUploadManagerResult {
   jobs: UploadJob[];
   isUploading: boolean;
-  /** Aggregate completion fraction 0–1 across the project's jobs. */
+  /**
+   * Aggregate completion fraction 0–1 across the project's jobs, based
+   * on **real transmitted bytes** (not job count). This is the truthful
+   * progress value — no fake interpolation.
+   */
   progress: number;
+  /** Total bytes across all jobs for the active project. */
+  totalBytes: number;
+  /** Total uploaded bytes across all jobs for the active project. */
+  uploadedBytes: number;
   queueUpload: (params: QueueParams) => Promise<string>;
   pauseJob: (jobId: string) => void;
   resumeJob: (jobId: string) => Promise<void>;
@@ -33,10 +41,12 @@ export interface UseUploadManagerResult {
   isProjectComplete: boolean;
   /**
    * Wait until all jobs for the active project reach a terminal state
-   * (`complete` or `failed`). Resolves with the final job list so the
+   * (`completed` or `failed`). Resolves with the final job list so the
    * caller can inspect `remoteUrl` on each completed job.
    */
   waitForCompletion: () => Promise<UploadJob[]>;
+  /** Aggregate progress snapshot for the active project. */
+  projectProgress: ProjectProgress;
 }
 
 /**
@@ -45,6 +55,9 @@ export interface UseUploadManagerResult {
  * Subscribes to the shared `UploadManager` and re-renders on any event.
  * When `projectId` is provided, `jobs` and `progress` are filtered to
  * that project; otherwise all jobs are surfaced.
+ *
+ * Progress is computed from **real bytes**: `sum(progress * sizeBytes) /
+ * sum(sizeBytes)`. No fake interpolation, no stage percentages.
  */
 export function useUploadManager(projectId?: string): UseUploadManagerResult {
   const manager = getSharedManager();
@@ -93,18 +106,49 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
   const filteredJobs = useMemo(() => jobs, [jobs]);
 
   const isUploading = useMemo(
-    () => filteredJobs.some((j) => j.state === 'uploading' || j.state === 'queued'),
+    () =>
+      filteredJobs.some(
+        (j) =>
+          j.status === 'uploading' ||
+          j.status === 'queued' ||
+          j.status === 'initiating',
+      ),
     [filteredJobs],
   );
 
-  const progress = useMemo(() => {
-    if (filteredJobs.length === 0) return 0;
-    const complete = filteredJobs.filter((j) => j.state === 'complete').length;
-    return complete / filteredJobs.length;
+  // Real byte progress: sum(progress * sizeBytes) / sum(sizeBytes).
+  const { progress, totalBytes, uploadedBytes } = useMemo(() => {
+    if (filteredJobs.length === 0) {
+      return { progress: 0, totalBytes: 0, uploadedBytes: 0 };
+    }
+    let total = 0;
+    let uploaded = 0;
+    for (const j of filteredJobs) {
+      total += j.sizeBytes;
+      uploaded += j.progress * j.sizeBytes;
+    }
+    return {
+      progress: total > 0 ? Math.min(1, uploaded / total) : 0,
+      totalBytes: total,
+      uploadedBytes: uploaded,
+    };
   }, [filteredJobs]);
 
+  const projectProgress = useMemo<ProjectProgress>(
+    () => ({
+      complete: filteredJobs.filter((j) => j.status === 'completed').length,
+      total: filteredJobs.length,
+      uploadedBytes,
+      totalBytes,
+      progress,
+    }),
+    [filteredJobs, uploadedBytes, totalBytes, progress],
+  );
+
   const isProjectComplete = useMemo(
-    () => filteredJobs.length > 0 && filteredJobs.every((j) => j.state === 'complete'),
+    () =>
+      filteredJobs.length > 0 &&
+      filteredJobs.every((j) => j.status === 'completed'),
     [filteredJobs],
   );
 
@@ -129,6 +173,8 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
     jobs: filteredJobs,
     isUploading,
     progress,
+    totalBytes,
+    uploadedBytes,
     queueUpload,
     pauseJob,
     resumeJob,
@@ -136,5 +182,6 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
     retryJob,
     isProjectComplete,
     waitForCompletion,
+    projectProgress,
   };
 }

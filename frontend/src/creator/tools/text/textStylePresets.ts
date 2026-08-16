@@ -144,14 +144,42 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
  * The full text style configuration produced by the text editor. Mirrors the
  * fields of the `text` layer payload in composition.ts so the caller can
  * spread it directly into a CreatorLayer.
+ *
+ * New fields (fill, stroke, shadow, background) use the canonical
+ * CreatorColor type (spec 06_TEXT_TYPOGRAPHY §1). Legacy fields (textColor,
+ * backgroundColor, textEffect) are kept for backward compatibility and
+ * migrated on load by migrateTextLayerPayload in composition.ts.
  */
 export interface TextStyleConfig {
   text: string;
   textStyle: string;
+  // Legacy color (backward compat) — migrated to `fill` on load
   textColor: string;
   backgroundColor?: string;
-  alignment: 'left' | 'center' | 'right';
+  // Canonical fill as CreatorColor (spec 06 §1)
+  fill?: { space: 'srgb'; r: number; g: number; b: number; a: number };
+  // Stroke with real width + color
+  stroke?: {
+    color: { space: 'srgb'; r: number; g: number; b: number; a: number };
+    width: number;
+  };
+  // Shadow with real blur + offset + color
+  shadow?: {
+    color: { space: 'srgb'; r: number; g: number; b: number; a: number };
+    blur: number;
+    offsetX: number;
+    offsetY: number;
+  };
+  // Background with real color + padding + radius
+  background?: {
+    color: { space: 'srgb'; r: number; g: number; b: number; a: number };
+    radius: number;
+    paddingX: number;
+    paddingY: number;
+  };
+  alignment: 'left' | 'center' | 'right' | 'justify';
   opacity: number;
+  // Legacy effect (backward compat) — migrated to stroke/shadow on load
   textEffect: 'none' | 'shadow' | 'neon' | 'outline' | 'glow';
   textAnimation: 'none' | 'typewriter' | 'bounce' | 'fade' | 'slide';
 }
@@ -164,6 +192,7 @@ export const DEFAULT_TEXT_STYLE: TextStyleConfig = {
   text: '',
   textStyle: 'clean',
   textColor: '#ffffff',
+  fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
   alignment: 'center',
   opacity: 1,
   textEffect: 'none',

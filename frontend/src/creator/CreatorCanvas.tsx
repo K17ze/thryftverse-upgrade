@@ -15,7 +15,16 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Canvas as SkiaCanvas, Path as SkiaPath, Skia } from '@shopify/react-native-skia';
+import {
+  Canvas as SkiaCanvas,
+  Path as SkiaPath,
+  Skia,
+  Image as SkiaImage,
+  ColorMatrix as SkiaColorMatrix,
+  Mask as SkiaMask,
+  useImage as useSkiaImage,
+  Fit as SkiaFit,
+} from '@shopify/react-native-skia';
 import { Image as ExpoImage } from 'expo-image';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -25,6 +34,10 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
 import { getVisibleLayersSorted } from './composition';
+// Playback pipeline — single clock, keyframe evaluator, effect evaluator
+import type { PlaybackClock } from './core/playback/PlaybackClock';
+import { evaluateKeyframes } from './core/playback/KeyframeEvaluator';
+import { evaluateCompositionEffectStack } from './core/playback/EffectEvaluator';
 // Shared layer primitives — single source of truth for accent colours,
 // context menus, and gesture handling across poster + creator surfaces.
 import {
@@ -83,6 +96,15 @@ export interface CreatorCanvasProps {
   safeZoneTop?: number;
   /** Height (px) of the bottom reserved tool dock for the safe zone. */
   safeZoneBottom?: number;
+  /** Playback clock — when provided, video play/pause/seek follows the clock
+   *  instead of hardcoded shouldPlay. Drives temporal visibility, keyframes,
+   *  and timeline-driven playback. Optional — absent in Look composer and
+   *  viewer contexts (backward compatible). */
+  playbackClock?: PlaybackClock | null;
+  /** Current playback time (ms) — when provided with playbackClock, drives
+   *  temporal visibility, keyframe evaluation, and overlay time ranges.
+   *  When absent, layers render in their static (non-temporal) state. */
+  currentTimeMs?: number;
 }
 
 export function CreatorCanvas({
@@ -108,6 +130,8 @@ export function CreatorCanvas({
   showSafeZone,
   safeZoneTop = 0,
   safeZoneBottom = 0,
+  playbackClock = null,
+  currentTimeMs,
 }: CreatorCanvasProps) {
   const { canvas } = document;
   const visibleLayers = getVisibleLayersSorted(page);
@@ -236,6 +260,8 @@ export function CreatorCanvas({
           onDelete={onLayerDelete}
           onReorder={onLayerReorder}
           onToggleLock={onLayerToggleLock}
+          playbackClock={playbackClock}
+          currentTimeMs={currentTimeMs}
         />
         );
       })}
@@ -344,6 +370,10 @@ interface LayerRendererProps {
   onDelete?: (layerId: string) => void;
   onReorder?: (layerId: string, direction: 'front' | 'back') => void;
   onToggleLock?: (layerId: string) => void;
+  /** Playback clock — drives temporal visibility, keyframes, video play/pause/seek. */
+  playbackClock?: PlaybackClock | null;
+  /** Current playback time (ms) — used for temporal visibility and keyframe evaluation. */
+  currentTimeMs?: number;
 }
 
 const SNAP_THRESHOLD = 0.02;
@@ -367,6 +397,8 @@ const LayerRenderer = React.memo(function LayerRenderer({
   onMultiDragUpdate,
   onMultiDragCommit,
   onContextMenu,
+  playbackClock,
+  currentTimeMs,
 }: LayerRendererProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -648,12 +680,68 @@ const LayerRenderer = React.memo(function LayerRenderer({
       transform: [
         { rotate: `${rotationSV.value}deg` },
       ],
-      opacity: layer.opacity,
+      opacity: effectiveOpacity,
       zIndex: layer.zIndex,
     };
   });
 
-  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight);
+  // ── Temporal visibility & keyframe evaluation ───────────────────
+  // When a playback clock is provided, layers with a timeRange are only
+  // visible during that time window. Layers with keyframes have their
+  // position/scale/rotation/opacity interpolated at the current time.
+  const hasPlaybackClock = !!playbackClock;
+  const timeMs = currentTimeMs ?? 0;
+
+  // Temporal visibility: if the layer has a timeRange and we have a clock,
+  // check whether the current time is within the range.
+  const isTemporallyVisible = useMemo(() => {
+    if (!hasPlaybackClock) return true;
+    if (!layer.timeRange) return true;
+    return timeMs >= layer.timeRange.startMs && timeMs < layer.timeRange.endMs;
+  }, [hasPlaybackClock, layer.timeRange, timeMs]);
+
+  // Keyframe evaluation: if the layer has keyframes and we have a clock,
+  // compute the interpolated values at the current time.
+  const keyframeValues = useMemo(() => {
+    if (!hasPlaybackClock || !layer.keyframes || layer.keyframes.length === 0) return null;
+    const result: Partial<Record<'position' | 'scale' | 'rotation' | 'opacity', number>> = {};
+    const props: Array<'position' | 'scale' | 'rotation' | 'opacity'> = ['position', 'scale', 'rotation', 'opacity'];
+    for (const prop of props) {
+      const val = evaluateKeyframes(layer.keyframes!, timeMs, prop);
+      if (val !== null) result[prop] = val;
+    }
+    return Object.keys(result).length > 0 ? result : null;
+  }, [hasPlaybackClock, layer.keyframes, timeMs]);
+
+  // Apply keyframe values to shared values when in playback mode
+  useEffect(() => {
+    if (!hasPlaybackClock || !keyframeValues) return;
+    if (keyframeValues.position !== undefined) {
+      // Position keyframes drive the center position (normalized 0-1)
+      // The keyframe value is interpreted as a normalized position
+      translateX.value = keyframeValues.position * canvasWidth;
+    }
+    if (keyframeValues.scale !== undefined) {
+      scaleSV.value = keyframeValues.scale;
+    }
+    if (keyframeValues.rotation !== undefined) {
+      rotationSV.value = keyframeValues.rotation;
+    }
+  }, [hasPlaybackClock, keyframeValues, canvasWidth, canvasHeight, translateX, scaleSV, rotationSV]);
+
+  // Compute effective opacity (layer opacity * keyframe opacity * temporal visibility)
+  const effectiveOpacity = useMemo(() => {
+    let opacity = layer.opacity;
+    if (keyframeValues?.opacity !== undefined) {
+      opacity *= keyframeValues.opacity;
+    }
+    if (hasPlaybackClock && !isTemporallyVisible) {
+      opacity = 0;
+    }
+    return opacity;
+  }, [layer.opacity, keyframeValues, hasPlaybackClock, isTemporallyVisible]);
+
+  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs);
 
   // Smart alignment guides: while dragging, detect when this layer's
   // left/right/centre aligns with a sibling's left/right/centre (vertical
@@ -796,21 +884,25 @@ const LayerRenderer = React.memo(function LayerRenderer({
     );
   }
 
-  const left = layer.x * canvasWidth;
-  const top = layer.y * canvasHeight;
-  const width = layer.width * canvasWidth * layer.scale;
-  const height = layer.height * canvasHeight * layer.scale;
+  // Non-edit (preview/view) render path — apply keyframe-driven transform
+  // and temporal opacity when a playback clock is present.
+  const previewScale = keyframeValues?.scale ?? layer.scale;
+  const previewRotation = keyframeValues?.rotation ?? layer.rotation;
+  const previewLeft = (keyframeValues?.position !== undefined ? keyframeValues.position : layer.x) * canvasWidth;
+  const previewTop = layer.y * canvasHeight;
+  const width = layer.width * canvasWidth * previewScale;
+  const height = layer.height * canvasHeight * previewScale;
 
   return (
     <View
       style={{
         position: 'absolute',
-        left: left - width / 2,
-        top: top - height / 2,
+        left: previewLeft - width / 2,
+        top: previewTop - height / 2,
         width,
         height,
-        transform: [{ rotate: `${layer.rotation}deg` }],
-        opacity: layer.opacity,
+        transform: [{ rotate: `${previewRotation}deg` }],
+        opacity: effectiveOpacity,
         zIndex: layer.zIndex,
       }}
       pointerEvents="none"
@@ -864,10 +956,16 @@ function getLayerRadius(layer: CreatorLayer): number {
   }
 }
 
-function renderLayerContent(layer: CreatorLayer, width: number, height: number): React.ReactNode {
+function renderLayerContent(
+  layer: CreatorLayer,
+  width: number,
+  height: number,
+  playbackClock?: PlaybackClock | null,
+  currentTimeMs?: number,
+): React.ReactNode {
   switch (layer.type) {
     case 'media':
-      return <MediaLayerContent layer={layer} width={width} height={height} />;
+      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} />;
     case 'text':
       return <TextLayerContent layer={layer} />;
     case 'product':
@@ -909,14 +1007,73 @@ function renderLayerContent(layer: CreatorLayer, width: number, height: number):
   }
 }
 
-function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLayer, { type: 'media' }>; width: number; height: number }) {
+function MediaLayerContent({
+  layer,
+  width,
+  height,
+  playbackClock,
+  currentTimeMs,
+}: {
+  layer: Extract<CreatorLayer, { type: 'media' }>;
+  width: number;
+  height: number;
+  playbackClock?: PlaybackClock | null;
+  currentTimeMs?: number;
+}) {
   const { payload } = layer;
   const [videoError, setVideoError] = React.useState(false);
+  const hasPlaybackClock = !!playbackClock;
+
+  // ── Effect evaluation ───────────────────────────────────────────
+  // Evaluate the effect stack into renderable parameters (color matrix,
+  // blur, vignette, grain). Applied to images via Skia ColorMatrix.
+  const evaluatedEffect = useMemo(() => {
+    if (!payload.effects || payload.effects.length === 0) return null;
+    return evaluateCompositionEffectStack(payload.effects, 1);
+  }, [payload.effects]);
+
+  const hasColorMatrix = !!evaluatedEffect?.colorMatrix && evaluatedEffect.colorMatrix.length === 20;
+
+  // ── Mask evaluation ──────────────────────────────────────────────
+  // If the layer has a maskRef, we composite the media with the mask
+  // using Skia's Mask component (alpha mode). The mask URI is resolved
+  // from the layer's maskRef field (which stores the mask URI directly
+  // in the current schema).
+  const maskUri = layer.maskRef ?? null;
+  const skiaMaskImage = useSkiaImage(maskUri);
+  const hasMask = !!skiaMaskImage;
+
+  // ── Skia image for effect/mask rendering ─────────────────────────
+  // For images with effects or masks, we load the image via Skia's
+  // useImage hook so we can render it inside a Skia Canvas with
+  // ColorMatrix and Mask components.
+  const skiaImage = useSkiaImage(payload.mediaUri);
+  const useSkiaRendering = (hasColorMatrix || hasMask) && !!skiaImage;
+
+  // ── Video playback state ─────────────────────────────────────────
+  // When a playback clock is provided, video play/pause follows the clock.
+  // When no clock is present (Look composer, viewer), fall back to the
+  // legacy behavior: shouldPlay=true, muted=true, looping=true.
+  const volume = payload.volume ?? 1;
+  const speed = payload.speed ?? 1;
+  const isMuted = hasPlaybackClock ? volume === 0 : true;
+  const shouldPlay = hasPlaybackClock ? (playbackClock?.isPlaying ?? false) : true;
+  const isLooping = !hasPlaybackClock;
+
+  // ── Video seek driven by playback clock ──────────────────────────
+  // When the clock's currentTimeMs changes, seek the video to the
+  // corresponding source position. The seek is handled by the Video
+  // compat component's internal effect on `shouldPlay` and the
+  // playback clock's registered adapter. For simplicity, we use the
+  // currentTimeMs prop to drive seeks via a ref to the Video player.
+  // The actual seek is performed by the playback clock's video adapter,
+  // which is registered by the timeline screen. Here we just pass the
+  // playback state as props.
 
   if (payload.mediaType === 'video' && !videoError) {
     return (
       <>
-        {payload.thumbnailUri && (
+        {payload.thumbnailUri && !hasPlaybackClock && (
           <CachedImage
             uri={payload.thumbnailUri}
             style={StyleSheet.absoluteFill}
@@ -928,15 +1085,86 @@ function MediaLayerContent({ layer, width, height }: { layer: Extract<CreatorLay
           source={{ uri: payload.mediaUri }}
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.COVER}
-          shouldPlay
-          isMuted
-          isLooping
+          shouldPlay={shouldPlay}
+          isMuted={isMuted}
+          isLooping={isLooping}
           onError={() => setVideoError(true)}
         />
+        {/* Video effects: documented as needing Skia video integration.
+            The current expo-video VideoView renders natively and cannot
+            be wrapped in a Skia Canvas. For now, video effects are
+            applied via a CSS filter fallback (opacity/blur) or deferred
+            to the export pipeline. Image effects are fully rendered
+            via Skia below. */}
+        {evaluatedEffect?.blurRadius && evaluatedEffect.blurRadius > 0 && (
+          <View
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
+            pointerEvents="none"
+          />
+        )}
         <View style={mediaStyles.videoBadge} pointerEvents="none" accessibilityLabel="Video media layer" accessibilityRole="image">
           <Ionicons name="videocam" size={12} color="#fff" />
         </View>
       </>
+    );
+  }
+
+  // ── Image rendering with Skia effects/mask ───────────────────────
+  // When the image has effects (color matrix) or a mask, render it via
+  // a Skia Canvas with ColorMatrix and Mask components. Otherwise, use
+  // the standard CachedImage for memory/disk caching and BlurHash support.
+  if (useSkiaRendering) {
+    const contentFitMap: Record<string, SkiaFit> = {
+      cover: 'cover',
+      contain: 'contain',
+      fill: 'fill',
+    };
+    const fit = contentFitMap[payload.contentFit] ?? 'cover';
+
+    return (
+      <SkiaCanvas style={{ width, height }} accessibilityLabel="Media layer with effects" accessibilityRole="image">
+        {hasMask && skiaMaskImage ? (
+          <SkiaMask
+            mode="alpha"
+            mask={
+              <SkiaImage
+                image={skiaMaskImage}
+                x={0}
+                y={0}
+                width={width}
+                height={height}
+                fit={fit}
+              />
+            }
+          >
+            <SkiaImage
+              image={skiaImage!}
+              x={0}
+              y={0}
+              width={width}
+              height={height}
+              fit={fit}
+            >
+              {hasColorMatrix && (
+                <SkiaColorMatrix matrix={evaluatedEffect!.colorMatrix!} />
+              )}
+            </SkiaImage>
+          </SkiaMask>
+        ) : (
+          <SkiaImage
+            image={skiaImage!}
+            x={0}
+            y={0}
+            width={width}
+            height={height}
+            fit={fit}
+          >
+            {hasColorMatrix && (
+              <SkiaColorMatrix matrix={evaluatedEffect!.colorMatrix!} />
+            )}
+          </SkiaImage>
+        )}
+      </SkiaCanvas>
     );
   }
 

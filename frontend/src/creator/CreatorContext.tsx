@@ -16,7 +16,7 @@ import { getTemplateById } from './templates';
 import { createStableId, makeStableId } from '../utils/createStableId';
 import { haptics } from '../utils/haptics';
 import type { CreatorInitialMedia } from '../navigation/types';
-import { ProjectStore, AssetRegistry, CrashJournal } from './core/projectStore';
+import { ProjectStore, AssetRegistry, CrashJournal, PROJECT_SCHEMA_VERSION } from './core/projectStore';
 import type { ProjectPackage, ProjectType } from './core/projectStore';
 
 export interface CreatorContextValue {
@@ -348,15 +348,10 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         return;
       }
       // Load the most recently updated project
-      const latest = projects.sort((a, b) =>
-        (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''),
-      )[0];
-      const pkg = await store.loadProject(latest.id);
-      if (pkg?.document) {
-        // ProjectPackage.document is typed as `unknown` to avoid a hard
-        // dependency on the composition schema. Cast through unknown to
-        // the CreatorDocument type for the setDocument call.
-        setDocument(pkg.document as CreatorDocument);
+      const latest = projects.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+      const pkg = await store.loadProject(latest.projectId);
+      if (pkg?.composition) {
+        setDocument(pkg.composition);
         setIsDirty(true);
       }
       await journal.checkpoint();
@@ -719,18 +714,16 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
           // Ensure a project ID exists for this document
           if (!projectIdRef.current) {
             const pkg = await store.createProject(document.type);
-            projectIdRef.current = pkg.id;
+            projectIdRef.current = pkg.projectId;
           }
           const projectPkg: ProjectPackage = {
-            id: projectIdRef.current,
-            version: 1,
-            type: document.type,
-            title: document.metadata.title || undefined,
-            document,
+            projectId: projectIdRef.current!,
+            version: PROJECT_SCHEMA_VERSION,
+            name: document.metadata.title || 'Untitled',
+            composition: document,
             assets: {},
-            createdAt: document.updatedAt,
-            updatedAt: new Date().toISOString(),
-            renderVersion: '2',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
           };
           await store.saveProject(projectPkg);
           // Checkpoint the crash journal after a successful atomic save
@@ -765,18 +758,16 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         try {
           if (!projectIdRef.current) {
             const pkg = await store.createProject(current.type);
-            projectIdRef.current = pkg.id;
+            projectIdRef.current = pkg.projectId;
           }
           const projectPkg: ProjectPackage = {
-            id: projectIdRef.current,
-            version: 1,
-            type: current.type,
-            title: current.metadata.title || undefined,
-            document: current,
+            projectId: projectIdRef.current!,
+            version: PROJECT_SCHEMA_VERSION,
+            name: current.metadata.title || 'Untitled',
+            composition: current,
             assets: {},
-            createdAt: current.updatedAt,
-            updatedAt: new Date().toISOString(),
-            renderVersion: '2',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
           };
           await store.saveProject(projectPkg);
           if (journal) {
@@ -806,19 +797,21 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (!projectIdRef.current) {
       try {
         const pkg = await store.createProject(initialType);
-        projectIdRef.current = pkg.id;
+        projectIdRef.current = pkg.projectId;
       } catch {
         return null;
       }
     }
 
+    const projectId = projectIdRef.current;
+    if (!projectId) return null;
+
     try {
-      const ref = await registry.importAsset(
-        projectIdRef.current,
+      return await registry.importAsset(
+        projectId,
         sourceUri,
-        mediaType,
+        { type: mediaType, source: 'gallery' },
       );
-      return ref.id;
     } catch {
       return null;
     }
@@ -1337,18 +1330,16 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
             try {
               if (!projectIdRef.current) {
                 const pkg = await store.createProject(current.type);
-                projectIdRef.current = pkg.id;
+                projectIdRef.current = pkg.projectId;
               }
               const projectPkg: ProjectPackage = {
-                id: projectIdRef.current,
-                version: 1,
-                type: current.type,
-                title: current.metadata.title || undefined,
-                document: current,
+                projectId: projectIdRef.current!,
+                version: PROJECT_SCHEMA_VERSION,
+                name: current.metadata.title || 'Untitled',
+                composition: current,
                 assets: {},
-                createdAt: current.updatedAt,
-                updatedAt: new Date().toISOString(),
-                renderVersion: '2',
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
               };
               await store.saveProject(projectPkg);
               if (journal) {

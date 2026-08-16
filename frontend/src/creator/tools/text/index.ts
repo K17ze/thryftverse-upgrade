@@ -29,3 +29,14 @@ export {
   type TextStyleCategory,
   type TextStyleConfig,
 } from './textStylePresets';
+
+// ── Font Registry (spec 06_TEXT_TYPOGRAPHY §2) ───────────────────────
+export {
+  CURATED_FONTS,
+  getFontById,
+  getDefaultFont,
+  resolveFontPreviewStyle,
+  getFontsByCategory,
+  type FontArchetype,
+  type FontCategory,
+} from './FontRegistry';

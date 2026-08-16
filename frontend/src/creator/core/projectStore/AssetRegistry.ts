@@ -3,10 +3,13 @@
  * project.
  *
  * The key durability guarantee: when a media asset is imported, the file is
- * COPIED from the source gallery URI into the project's own assets directory.
- * The project then references `localProjectUri` (the durable copy) instead of
- * the transient gallery URI, so deleting the original from the gallery never
- * breaks the draft.
+ * COPIED from the source URI into the project's own `assets/` directory. The
+ * project's asset index then references `localPath` (relative to the project
+ * package) instead of the transient source URI, so deleting the original
+ * from the gallery never breaks the draft.
+ *
+ * All acquisition paths (camera, gallery, replace, look, generated) must
+ * route through `importAsset()` to ensure media is project-owned.
  */
 
 import { File } from 'expo-file-system';
@@ -14,10 +17,22 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { createStableId } from '../../../utils/createStableId';
 import type { ProjectStore } from './ProjectStore';
-import type { AssetMediaType, AssetRef, AssetUploadState } from './projectTypes';
+import type {
+  AssetMediaType,
+  AssetSource,
+  ProjectAssetEntry,
+} from './projectTypes';
 
 /** Thumbnail target width (height auto-scaled to preserve aspect ratio). */
 const THUMBNAIL_WIDTH = 256;
+
+/** Options for importing an asset. */
+export type ImportAssetOptions = {
+  type: AssetMediaType;
+  source: AssetSource;
+  originalFilename?: string;
+  mimeType?: string;
+};
 
 export class AssetRegistry {
   private projectStore: ProjectStore;
@@ -28,116 +43,133 @@ export class AssetRegistry {
 
   /**
    * Import a media asset into a project by copying the source file into the
-   * project's assets directory. Returns the registered AssetRef.
+   * project's `assets/` directory. Returns the registered assetId, or `null`
+   * if the import failed.
+   *
+   * The asset entry is persisted into the project package's `assets` index
+   * with a `localPath` relative to the project directory.
    */
   async importAsset(
     projectId: string,
     sourceUri: string,
-    mediaType: AssetMediaType,
-  ): Promise<AssetRef> {
+    options: ImportAssetOptions,
+  ): Promise<string | null> {
     const assetsDir = this.projectStore.getAssetsDir(projectId);
     const assetId = createStableId('asset');
-    const now = new Date().toISOString();
+    const now = Date.now();
 
-    // Derive a file extension from the source URI (best-effort).
-    const ext = extractExtension(sourceUri, mediaType);
+    // Derive a file extension and filename from the source URI.
+    const ext = extractExtension(sourceUri, options.type);
     const localFileName = `${assetId}.${ext}`;
-    const localProjectUri = `${assetsDir}${localFileName}`;
+    const localPath = `assets/${localFileName}`; // relative to project dir
+    const absolutePath = `${assetsDir}${localFileName}`;
 
-    // Copy the source media into project-owned storage.
-    const sourceFile = new File(sourceUri);
-    const destFile = new File(localProjectUri);
     // Ensure the assets directory exists.
+    const destFile = new File(absolutePath);
     if (destFile.parentDirectory && !destFile.parentDirectory.exists) {
       destFile.parentDirectory.create({ intermediates: true, idempotent: true });
     }
-    await sourceFile.copy(destFile, { overwrite: true });
 
-    // Compute a simple content hash from file size + modification time.
-    const contentHash = computeSimpleHash(destFile);
-
-    const asset: AssetRef = {
-      id: assetId,
-      sourceUri,
-      localProjectUri,
-      mediaType,
-      contentHash,
-      uploadState: 'local',
-      createdAt: now,
-    };
-
-    // Persist the asset ref into the project package.
-    const project = await this.projectStore.loadProject(projectId);
-    if (project) {
-      project.assets[assetId] = asset;
-      await this.projectStore.saveProject(project);
-    }
-
-    return asset;
-  }
-
-  /** Get an asset by ID (reads from the in-memory project package). */
-  getAsset(projectId: string, assetId: string): AssetRef | null {
-    // Synchronous read of the project package is not available with the new
-    // expo-file-system API; callers should prefer getAssetAsync. We perform
-    // a best-effort synchronous text read.
-    const jsonFile = new File(this.projectStore.getProjectJsonPath(projectId));
-    if (!jsonFile.exists) return null;
+    // Copy the source media into project-owned storage.
+    const sourceFile = new File(sourceUri);
     try {
-      const raw = jsonFile.textSync();
-      const pkg = JSON.parse(raw) as { assets?: Record<string, AssetRef> };
-      return pkg.assets?.[assetId] ?? null;
-    } catch {
+      await sourceFile.copy(destFile, { overwrite: true });
+    } catch (err) {
+      console.warn(`[AssetRegistry] Failed to copy asset from ${sourceUri}:`, err);
       return null;
     }
+
+    // Verify file integrity after copy.
+    if (!destFile.exists) {
+      console.warn(`[AssetRegistry] Copied asset file does not exist at ${absolutePath}`);
+      return null;
+    }
+
+    // Gather file metadata.
+    const sizeBytes = getFileSize(destFile);
+    const originalFilename = options.originalFilename ?? extractFilename(sourceUri);
+    const mimeType = options.mimeType ?? defaultMimeType(options.type, ext);
+
+    const entry: ProjectAssetEntry = {
+      type: options.type,
+      originalFilename,
+      localPath,
+      mimeType,
+      sizeBytes,
+      importedAt: now,
+      source: options.source,
+    };
+
+    // Persist the asset entry into the project package.
+    const project = await this.projectStore.loadProject(projectId);
+    if (!project) {
+      // Clean up the copied file if the project can't be loaded.
+      try {
+        if (destFile.exists) destFile.delete();
+      } catch {
+        // Non-fatal.
+      }
+      console.warn(`[AssetRegistry] Could not load project ${projectId} to register asset.`);
+      return null;
+    }
+
+    project.assets[assetId] = entry;
+    const saved = await this.projectStore.saveProject(project);
+    if (!saved) {
+      console.warn(`[AssetRegistry] Failed to persist asset entry for ${assetId}.`);
+      // The file is copied but not indexed — caller should retry or the
+      // file will be orphaned. We still return the assetId so the caller
+      // can track it.
+    }
+
+    return assetId;
   }
 
-  /** Async variant of getAsset (preferred). */
-  async getAssetAsync(projectId: string, assetId: string): Promise<AssetRef | null> {
+  /**
+   * Get an asset entry by ID (async — loads the project package).
+   */
+  async getAssetAsync(
+    projectId: string,
+    assetId: string,
+  ): Promise<ProjectAssetEntry | null> {
     const project = await this.projectStore.loadProject(projectId);
     if (!project) return null;
     return project.assets[assetId] ?? null;
   }
 
   /**
-   * Update an asset's upload state (and optionally record its remote URI).
-   * Persists the change to the project package.
+   * Get the absolute URI for an asset's local file, given its relative
+   * `localPath` within the project package.
    */
-  async updateAssetState(
-    projectId: string,
-    assetId: string,
-    uploadState: AssetUploadState,
-    remoteUri?: string,
-  ): Promise<void> {
-    const project = await this.projectStore.loadProject(projectId);
-    if (!project) return;
-    const asset = project.assets[assetId];
-    if (!asset) return;
-    asset.uploadState = uploadState;
-    if (remoteUri !== undefined) {
-      asset.remoteUri = remoteUri;
-    }
-    await this.projectStore.saveProject(project);
+  getAssetUri(projectId: string, localPath: string): string {
+    return `${this.projectStore.getProjectDir(projectId)}${localPath}`;
   }
 
   /**
-   * Generate a low-res thumbnail for an asset and store it next to the asset.
-   * Only supported for `image` assets (video/audio thumbnails require a
-   * platform-specific frame extractor and are skipped here).
+   * Generate a low-res thumbnail for an asset and store it in the project's
+   * `thumbnails/` directory.
    *
-   * Returns the thumbnail URI, or an empty string if generation was skipped.
+   * Supported for `image` assets (via expo-image-manipulator). Video
+   * thumbnails require a platform-specific frame extractor and are skipped
+   * (returns empty string). Audio/mask assets do not support thumbnails.
+   *
+   * Returns the thumbnail's relative path (e.g. `thumbnails/{assetId}_thumb.jpg`),
+   * or an empty string if generation was skipped/failed.
    */
   async generateThumbnail(projectId: string, assetId: string): Promise<string> {
     const asset = await this.getAssetAsync(projectId, assetId);
-    if (!asset || !asset.localProjectUri) return '';
-    if (asset.mediaType !== 'image') return '';
+    if (!asset) return '';
+    if (asset.type !== 'image') return '';
 
-    const assetsDir = this.projectStore.getAssetsDir(projectId);
+    const thumbsDir = this.projectStore.getThumbnailsDir(projectId);
     const thumbName = `${assetId}_thumb.jpg`;
-    const thumbUri = `${assetsDir}${thumbName}`;
+    const thumbRelPath = `thumbnails/${thumbName}`;
+    const thumbAbsPath = `${thumbsDir}${thumbName}`;
+
+    const sourceAbsPath = this.getAssetUri(projectId, asset.localPath);
 
     try {
-      const context = ImageManipulator.manipulate(asset.localProjectUri);
+      const context = ImageManipulator.manipulate(sourceAbsPath);
       context.resize({ width: THUMBNAIL_WIDTH });
       const rendered = await context.renderAsync();
       const result = await rendered.saveAsync({
@@ -147,7 +179,7 @@ export class AssetRegistry {
 
       // saveAsync writes to the cache directory; copy into project storage.
       const cacheFile = new File(result.uri);
-      const destFile = new File(thumbUri);
+      const destFile = new File(thumbAbsPath);
       if (destFile.parentDirectory && !destFile.parentDirectory.exists) {
         destFile.parentDirectory.create({ intermediates: true, idempotent: true });
       }
@@ -159,21 +191,38 @@ export class AssetRegistry {
         // Non-fatal.
       }
 
-      // Record dimensions + thumbnail URI on the asset.
+      // Record dimensions on the asset entry.
       const project = await this.projectStore.loadProject(projectId);
       if (project) {
         const a = project.assets[assetId];
         if (a) {
-          a.thumbnailUri = thumbUri;
           a.width = a.width ?? result.width;
           a.height = a.height ?? result.height;
           await this.projectStore.saveProject(project);
         }
       }
-      return thumbUri;
-    } catch {
+      return thumbRelPath;
+    } catch (err) {
+      console.warn(`[AssetRegistry] Thumbnail generation failed for ${assetId}:`, err);
       return '';
     }
+  }
+
+  /**
+   * Update an asset entry's dimensions (e.g. after probing video metadata).
+   * Persists the change to the project package.
+   */
+  async updateAssetMetadata(
+    projectId: string,
+    assetId: string,
+    updates: Partial<Pick<ProjectAssetEntry, 'width' | 'height' | 'durationMs'>>,
+  ): Promise<void> {
+    const project = await this.projectStore.loadProject(projectId);
+    if (!project) return;
+    const asset = project.assets[assetId];
+    if (!asset) return;
+    project.assets[assetId] = { ...asset, ...updates };
+    await this.projectStore.saveProject(project);
   }
 
   /** Remove an asset (and its file + thumbnail). */
@@ -184,36 +233,25 @@ export class AssetRegistry {
     if (!asset) return;
 
     // Delete the copied media file.
-    if (asset.localProjectUri) {
-      const f = new File(asset.localProjectUri);
-      if (f.exists) {
-        try {
-          f.delete();
-        } catch {
-          // Non-fatal.
-        }
+    const assetAbsPath = this.getAssetUri(projectId, asset.localPath);
+    const assetFile = new File(assetAbsPath);
+    if (assetFile.exists) {
+      try {
+        assetFile.delete();
+      } catch {
+        // Non-fatal.
       }
     }
-    // Delete the thumbnail.
-    if (asset.thumbnailUri) {
-      const t = new File(asset.thumbnailUri);
-      if (t.exists) {
-        try {
-          t.delete();
-        } catch {
-          // Non-fatal.
-        }
-      }
-    }
-    // Delete the proxy.
-    if (asset.proxyUri) {
-      const p = new File(asset.proxyUri);
-      if (p.exists) {
-        try {
-          p.delete();
-        } catch {
-          // Non-fatal.
-        }
+
+    // Delete the thumbnail if it follows the convention.
+    const thumbRelPath = `thumbnails/${assetId}_thumb.jpg`;
+    const thumbAbsPath = this.getAssetUri(projectId, thumbRelPath);
+    const thumbFile = new File(thumbAbsPath);
+    if (thumbFile.exists) {
+      try {
+        thumbFile.delete();
+      } catch {
+        // Non-fatal.
       }
     }
 
@@ -221,23 +259,21 @@ export class AssetRegistry {
     await this.projectStore.saveProject(project);
   }
 
-  /** List all assets for a project (synchronous best-effort read). */
-  listAssets(projectId: string): AssetRef[] {
-    const jsonFile = new File(this.projectStore.getProjectJsonPath(projectId));
-    if (!jsonFile.exists) return [];
-    try {
-      const raw = jsonFile.textSync();
-      const pkg = JSON.parse(raw) as { assets?: Record<string, AssetRef> };
-      return Object.values(pkg.assets ?? {});
-    } catch {
-      return [];
-    }
+  /**
+   * List all asset entries for a project (loads the full package).
+   */
+  async listAssets(projectId: string): Promise<ProjectAssetEntry[]> {
+    const project = await this.projectStore.loadProject(projectId);
+    if (!project) return [];
+    return Object.values(project.assets);
   }
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────
+
 /**
- * Extract a file extension from a URI, falling back to a sensible default per
- * media type.
+ * Extract a file extension from a URI, falling back to a sensible default
+ * per media type.
  */
 function extractExtension(uri: string, mediaType: AssetMediaType): string {
   const clean = uri.split('?')[0].split('#')[0];
@@ -253,25 +289,58 @@ function extractExtension(uri: string, mediaType: AssetMediaType): string {
       return 'mp4';
     case 'audio':
       return 'm4a';
+    case 'mask':
+      return 'png';
     default:
       return 'bin';
   }
 }
 
 /**
- * Compute a simple, stable content hash from file size + modification time.
- * This avoids a full-file hash pass on every import while still detecting
- * most accidental re-imports of the same file. When the platform exposes an
- * md5 via `info({ md5: true })`, that is preferred.
+ * Extract a filename from a URI (best-effort).
  */
-function computeSimpleHash(file: File): string {
+function extractFilename(uri: string): string {
+  const clean = uri.split('?')[0].split('#')[0];
+  const slash = clean.lastIndexOf('/');
+  if (slash >= 0 && slash < clean.length - 1) {
+    return clean.slice(slash + 1);
+  }
+  return 'unknown';
+}
+
+/**
+ * Default MIME type per media type + extension.
+ */
+function defaultMimeType(mediaType: AssetMediaType, ext: string): string {
+  const e = ext.toLowerCase();
+  switch (mediaType) {
+    case 'image':
+      if (e === 'png') return 'image/png';
+      if (e === 'webp') return 'image/webp';
+      if (e === 'gif') return 'image/gif';
+      return 'image/jpeg';
+    case 'video':
+      if (e === 'mov') return 'video/quicktime';
+      if (e === 'webm') return 'video/webm';
+      return 'video/mp4';
+    case 'audio':
+      if (e === 'mp3') return 'audio/mpeg';
+      if (e === 'wav') return 'audio/wav';
+      return 'audio/m4a';
+    case 'mask':
+      return 'image/png';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+/**
+ * Get the file size in bytes (best-effort).
+ */
+function getFileSize(file: File): number {
   try {
-    const info = file.info({ md5: true });
-    if (info.md5) return `md5:${info.md5}`;
-    const size = info.size ?? file.size ?? 0;
-    const mtime = info.modificationTime ?? file.modificationTime ?? 0;
-    return `size:${size}:mtime:${mtime}`;
+    return file.size ?? 0;
   } catch {
-    return '';
+    return 0;
   }
 }

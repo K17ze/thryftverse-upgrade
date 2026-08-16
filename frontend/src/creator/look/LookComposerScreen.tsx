@@ -51,7 +51,7 @@ import {
   type ToolGroup,
 } from '../core/toolRegistry';
 import { EffectPreviewRail, AdjustPanel, FILTER_PRESETS, AutoAdjustButton, computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
-import type { EffectPreset } from '../tools/effects';
+import type { AdjustNode } from '../tools/effects';
 import { LayoutPreviewRail } from './layout/LayoutPreviewRail';
 import { autoCompose } from './layout/autoCompose';
 import type { AssetTransform, LayoutPreview, LayoutId } from './layout/layoutTypes';
@@ -653,7 +653,7 @@ function LookComposerInner() {
     return filterNode?.type === 'filter' ? filterNode.id : null;
   }, [currentEffects]);
 
-  const currentAdjustments = useMemo<Partial<EffectPreset['adjustments']>>(() => {
+  const currentAdjustments = useMemo<Partial<Omit<AdjustNode, 'type'>>>(() => {
     const adjustNode = currentEffects.find((n) => n.type === 'adjust');
     if (adjustNode?.type !== 'adjust') return {};
     const { type: _t, ...rest } = adjustNode;
@@ -709,17 +709,27 @@ function LookComposerInner() {
     return adjust ? isAutoAdjustNode(adjust) : false;
   }, [currentEffects]);
 
-  const handleAutoAdjust = useCallback(() => {
+  const handleAutoAdjust = useCallback(async () => {
     if (!selectedMediaLayer) return;
     const existing = currentEffects.find((n) => n.type === 'adjust');
-    const newEffects: EffectNode[] = existing && isAutoAdjustNode(existing)
-      ? currentEffects.filter((n) => n.type !== 'adjust')
-      : [...currentEffects.filter((n) => n.type !== 'adjust'), computeAutoAdjust()];
+    if (existing && isAutoAdjustNode(existing)) {
+      const newEffects = currentEffects.filter((n) => n.type !== 'adjust');
+      updateLayer(selectedMediaLayer.id, {
+        type: 'media',
+        payload: { ...selectedMediaLayer.payload, effects: newEffects },
+      }, 'Remove auto-adjust');
+      return;
+    }
+    const autoNode = await computeAutoAdjust(effectsSourceUri);
+    const newEffects: EffectNode[] = [
+      ...currentEffects.filter((n) => n.type !== 'adjust'),
+      autoNode,
+    ];
     updateLayer(selectedMediaLayer.id, {
       type: 'media',
       payload: { ...selectedMediaLayer.payload, effects: newEffects },
-    }, existing && isAutoAdjustNode(existing) ? 'Remove auto-adjust' : 'Apply auto-adjust');
-  }, [selectedMediaLayer, currentEffects, updateLayer]);
+    }, 'Apply auto-adjust');
+  }, [selectedMediaLayer, currentEffects, updateLayer, effectsSourceUri]);
 
   // ── Text editing actions ────────────────────────────────────────────
   const handleTextEditAction = useCallback(() => {

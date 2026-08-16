@@ -74,12 +74,71 @@ export type MaskRef = {
 const TextLayerPayloadSchema = z.object({
   text: z.string().min(1).max(500),
   textStyle: z.enum(['headline', 'editorial', 'clean', 'compact', 'handwritten', 'bubble', 'deco', 'poster', 'squeeze', 'signature']).default('clean'),
-  textColor: z.string().default('#ffffff'),
+  // Canonical fill as structured RGBA (CreatorColor). Source of truth for
+  // text color (spec 06_TEXT_TYPOGRAPHY §1). Optional — the migration
+  // function and renderer default to white when absent, preserving
+  // backward compat with legacy text layers that only have textColor.
+  fill: z.object({
+    space: z.literal('srgb'),
+    r: z.number().min(0).max(1),
+    g: z.number().min(0).max(1),
+    b: z.number().min(0).max(1),
+    a: z.number().min(0).max(1).default(1),
+  }).optional(),
+  // Backward compat: legacy textColor string. Migrated to `fill` on load
+  // by migrateTextLayerPayload. Kept optional so old documents validate.
+  textColor: z.string().optional(),
+  // Background/pill with real color + padding + radius (spec §1).
+  background: z.object({
+    color: z.object({
+      space: z.literal('srgb'),
+      r: z.number(),
+      g: z.number(),
+      b: z.number(),
+      a: z.number(),
+    }),
+    radius: z.number().min(0).default(4),
+    paddingX: z.number().min(0).default(8),
+    paddingY: z.number().min(0).default(4),
+  }).optional(),
+  // Backward compat: legacy backgroundColor string.
   backgroundColor: z.string().optional(),
-  alignment: z.enum(['left', 'center', 'right']).default('center'),
-  lineHeight: z.number().min(0.8).max(3).optional(),
-  opacity: z.number().min(0).max(1).default(1),
+  // Stroke (outline) with real width + color (spec §1).
+  stroke: z.object({
+    color: z.object({
+      space: z.literal('srgb'),
+      r: z.number(),
+      g: z.number(),
+      b: z.number(),
+      a: z.number(),
+    }),
+    width: z.number().min(0).max(20).default(2),
+  }).optional(),
+  // Shadow with real blur + offset + color (spec §1).
+  shadow: z.object({
+    color: z.object({
+      space: z.literal('srgb'),
+      r: z.number(),
+      g: z.number(),
+      b: z.number(),
+      a: z.number(),
+    }),
+    blur: z.number().min(0).max(30).default(4),
+    offsetX: z.number().default(0),
+    offsetY: z.number().default(2),
+  }).optional(),
+  // Backward compat: legacy textEffect enum. Migrated to stroke/shadow
+  // on load by migrateTextLayerPayload.
   textEffect: z.enum(['none', 'shadow', 'neon', 'outline', 'glow']).optional(),
+  // Typography
+  fontFamilyId: z.string().optional(),
+  fontWeight: z.union([z.string(), z.number()]).optional(),
+  italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
+  letterSpacing: z.number().optional(),
+  lineHeight: z.number().min(0.8).max(3).optional(),
+  alignment: z.enum(['left', 'center', 'right', 'justify']).default('center'),
+  opacity: z.number().min(0).max(1).default(1),
   textAnimation: z.enum(['none', 'typewriter', 'bounce', 'fade', 'slide']).optional(),
   // Animation timing for text layer entrance (Phase 8 motion)
   animation: z.object({
@@ -413,6 +472,91 @@ export function safeValidateDocument(doc: unknown): { success: boolean; data?: C
   return { success: false, error: result.error.message };
 }
 
+// ── Text layer migration (spec 06_TEXT_TYPOGRAPHY §1) ───────────────
+
+/**
+ * Convert a hex color string (#RRGGBB or #RRGGBBAA) to a CreatorColor
+ * object. Returns white if the string is invalid.
+ */
+function hexToCreatorColor(hex: string): { space: 'srgb'; r: number; g: number; b: number; a: number } {
+  const cleaned = hex.trim().replace(/^#/, '');
+  if (!/^[0-9a-fA-F]+$/.test(cleaned)) {
+    return { space: 'srgb', r: 1, g: 1, b: 1, a: 1 };
+  }
+  let r = 1, g = 1, b = 1, a = 1;
+  if (cleaned.length === 3) {
+    r = parseInt(cleaned[0]! + cleaned[0]!, 16) / 255;
+    g = parseInt(cleaned[1]! + cleaned[1]!, 16) / 255;
+    b = parseInt(cleaned[2]! + cleaned[2]!, 16) / 255;
+  } else if (cleaned.length === 6) {
+    r = parseInt(cleaned.slice(0, 2), 16) / 255;
+    g = parseInt(cleaned.slice(2, 4), 16) / 255;
+    b = parseInt(cleaned.slice(4, 6), 16) / 255;
+  } else if (cleaned.length === 8) {
+    r = parseInt(cleaned.slice(0, 2), 16) / 255;
+    g = parseInt(cleaned.slice(2, 4), 16) / 255;
+    b = parseInt(cleaned.slice(4, 6), 16) / 255;
+    a = parseInt(cleaned.slice(6, 8), 16) / 255;
+  }
+  return { space: 'srgb', r, g, b, a };
+}
+
+/**
+ * Migrate a legacy text layer payload to the new schema format.
+ *
+ * Converts:
+ *  - `textColor` (hex string) → `fill` (CreatorColor)
+ *  - `backgroundColor` (hex string) → `background` (with color, radius, padding)
+ *  - `textEffect` ('shadow' | 'outline' | 'neon' | 'glow') → `shadow` / `stroke`
+ *
+ * If the payload already has the new fields (`fill`, `stroke`, `shadow`,
+ * `background`), they are preserved. The legacy fields are kept for
+ * backward compatibility but the new fields take precedence.
+ *
+ * @returns A new payload object with the new fields populated.
+ */
+export function migrateTextLayerPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...payload };
+
+  // Migrate textColor → fill (only if fill is not already set)
+  if (!result['fill'] && typeof result['textColor'] === 'string') {
+    result['fill'] = hexToCreatorColor(result['textColor']);
+  }
+
+  // Migrate backgroundColor → background (only if background is not already set)
+  if (!result['background'] && typeof result['backgroundColor'] === 'string') {
+    result['background'] = {
+      color: hexToCreatorColor(result['backgroundColor']),
+      radius: 4,
+      paddingX: 8,
+      paddingY: 4,
+    };
+  }
+
+  // Migrate textEffect → stroke / shadow (only if not already set)
+  if (result['textEffect'] && typeof result['textEffect'] === 'string') {
+    const effect = result['textEffect'];
+    if ((effect === 'outline' || effect === 'glow') && !result['stroke']) {
+      result['stroke'] = {
+        color: { space: 'srgb', r: 0, g: 0, b: 0, a: 1 },
+        width: effect === 'glow' ? 4 : 2,
+      };
+    }
+    if ((effect === 'shadow' || effect === 'neon') && !result['shadow']) {
+      result['shadow'] = {
+        color: effect === 'neon'
+          ? { space: 'srgb', r: 1, g: 1, b: 1, a: 0.8 }
+          : { space: 'srgb', r: 0, g: 0, b: 0, a: 0.8 },
+        blur: effect === 'neon' ? 12 : 4,
+        offsetX: 0,
+        offsetY: 2,
+      };
+    }
+  }
+
+  return result;
+}
+
 // ── Migration helpers ──────────────────────────────────────────────
 
 export function migrateLookToDocument(params: {
@@ -570,6 +714,7 @@ export function migratePosterFramesToDocument(params: {
         payload: {
           text: frame.caption,
           textStyle: 'clean',
+          fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
           textColor: '#ffffff',
           alignment: 'center',
           opacity: 1,
@@ -600,6 +745,7 @@ export function migratePosterFramesToDocument(params: {
             payload: {
               text: pStr(sticker.payload, 'text'),
               textStyle: mapTextStyle(pStrOpt(sticker.payload, 'textStyle')),
+              fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
               textColor: pStr(sticker.payload, 'textColor', '#ffffff'),
               backgroundColor: pStrOpt(sticker.payload, 'backgroundColor'),
               alignment: pStr(sticker.payload, 'alignment', 'center') as 'left' | 'center' | 'right',
@@ -994,6 +1140,7 @@ export function goldenLookFixture(): CreatorDocument {
           payload: {
             text: 'Summer Edit',
             textStyle: 'editorial',
+            fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
             textColor: '#ffffff',
             alignment: 'center',
             opacity: 1,
@@ -1073,6 +1220,7 @@ export function goldenPosterFixture(): CreatorDocument {
           payload: {
             text: 'New Drop',
             textStyle: 'headline',
+            fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
             textColor: '#ffffff',
             alignment: 'center',
             opacity: 0.9,
@@ -1089,6 +1237,7 @@ export function goldenPosterFixture(): CreatorDocument {
           payload: {
             text: 'Available now — link in bio',
             textStyle: 'clean',
+            fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
             textColor: '#ffffff',
             alignment: 'center',
             opacity: 1,

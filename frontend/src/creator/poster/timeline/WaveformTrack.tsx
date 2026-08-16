@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import React, { useMemo, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { Space, FontFamily } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
+import { extractWaveform } from '../../core/audio';
 
 // ── Skia availability check (same pattern as DrawingCanvas /
 //    FlagshipEmptyGraphic) ─────────────────────────────────────────────
@@ -40,31 +41,85 @@ const MIN_BAR_WIDTH = 2;
 const FLAT_LINE_HEIGHT = 1; // honest flat line when no samples
 
 export interface WaveformTrackProps {
-  /** 0–1 normalized amplitudes. When undefined/empty, an honest flat
+  /** 0–1 normalized amplitudes. When provided, these are rendered directly.
+   *  When undefined and `audioUri` is provided, the component extracts
+   *  the waveform asynchronously. When both are absent, an honest flat
    *  line is rendered — never fabricated bars. */
   samples?: number[];
+  /** Audio file URI for real waveform extraction. When provided and
+   *  `samples` is absent, the component extracts the waveform on mount
+   *  and when the URI changes. Results are cached by the extractor. */
+  audioUri?: string;
+  /** Number of bars to extract when using `audioUri` (default 100). */
+  barCount?: number;
   trackWidth: number;
   color?: string;
   height?: number;
 }
 
 export const WaveformTrack = React.memo(function WaveformTrack({
-  samples,
+  samples: providedSamples,
+  audioUri,
+  barCount = 100,
   trackWidth,
   color,
   height = DEFAULT_HEIGHT,
 }: WaveformTrackProps) {
   const { colors } = useAppTheme();
   const barColor = color ?? colors.antiqueGold;
-  const hasSamples = Boolean(samples && samples.length > 0);
+
+  // ── Async waveform extraction state ──
+  const [extractedSamples, setExtractedSamples] = useState<number[] | undefined>(undefined);
+  const [isExtracting, setIsExtracting] = useState(false);
+
+  useEffect(() => {
+    // If samples are provided directly, skip extraction.
+    if (providedSamples) {
+      setExtractedSamples(undefined);
+      setIsExtracting(false);
+      return;
+    }
+    if (!audioUri) {
+      setExtractedSamples(undefined);
+      setIsExtracting(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsExtracting(true);
+
+    extractWaveform(audioUri, barCount)
+      .then((data) => {
+        if (!cancelled) {
+          setExtractedSamples(data.samples);
+          setIsExtracting(false);
+        }
+      })
+      .catch(() => {
+        // extractWaveform already logs a warning and returns a flat fallback,
+        // but guard against unexpected rejections.
+        if (!cancelled) {
+          setExtractedSamples(undefined);
+          setIsExtracting(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [audioUri, barCount, providedSamples]);
+
+  // Use provided samples, then extracted samples, then nothing.
+  const effectiveSamples = providedSamples ?? extractedSamples;
+  const hasSamples = Boolean(effectiveSamples && effectiveSamples.length > 0);
 
   // Compute bar geometry: distribute bars evenly across the track width.
-  const { barWidth, barCount } = useMemo(() => {
-    if (!hasSamples || trackWidth <= 0) return { barWidth: 0, barCount: 0 };
-    const count = samples!.length;
+  const { barWidth, computedBarCount } = useMemo(() => {
+    if (!hasSamples || trackWidth <= 0) return { barWidth: 0, computedBarCount: 0 };
+    const count = effectiveSamples!.length;
     const w = Math.max(MIN_BAR_WIDTH, Math.floor((trackWidth / count) - BAR_GAP));
-    return { barWidth: w, barCount: count };
-  }, [hasSamples, samples, trackWidth]);
+    return { barWidth: w, computedBarCount: count };
+  }, [hasSamples, effectiveSamples, trackWidth]);
 
   return (
     <View
@@ -75,22 +130,33 @@ export const WaveformTrack = React.memo(function WaveformTrack({
           backgroundColor: colors.surfaceAlt,
         },
       ]}
-      accessibilityLabel={hasSamples ? 'Audio waveform track' : 'Audio waveform track, no audio waveform'}
+      accessibilityLabel={
+        isExtracting
+          ? 'Audio waveform track, extracting waveform'
+          : hasSamples
+            ? 'Audio waveform track'
+            : 'Audio waveform track, no audio waveform'
+      }
     >
-      {hasSamples && trackWidth > 0 ? (
+      {isExtracting ? (
+        // ── Loading state: small spinner while extracting ──
+        <View style={waveStyles.loading}>
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        </View>
+      ) : hasSamples && trackWidth > 0 ? (
         skiaAvailable ? (
           <SkiaWaveform
-            samples={samples!}
+            samples={effectiveSamples!}
             trackWidth={trackWidth}
             trackHeight={height}
             barWidth={barWidth}
-            barCount={barCount}
+            barCount={computedBarCount}
             barGap={BAR_GAP}
             color={barColor}
           />
         ) : (
           <ViewWaveform
-            samples={samples!}
+            samples={effectiveSamples!}
             trackWidth={trackWidth}
             trackHeight={height}
             barWidth={barWidth}
@@ -221,6 +287,11 @@ const waveStyles = StyleSheet.create({
     height: '100%',
   },
   empty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loading: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',

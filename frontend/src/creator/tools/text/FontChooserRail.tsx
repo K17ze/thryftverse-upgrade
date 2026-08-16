@@ -17,12 +17,12 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Space, Radius, Stroke, Type } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { resolvePreviewStyle, type TextStylePreset } from './textStylePresets';
+import { resolveFontPreviewStyle, type FontArchetype } from './FontRegistry';
 
 export interface FontChooserRailProps {
   /** The user's current text. Rendered in each font. Falls back to "Aa" when empty. */
   text: string;
-  presets: TextStylePreset[];
+  fonts: FontArchetype[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
@@ -32,7 +32,7 @@ const ITEM_HEIGHT = 72;
 
 export function FontChooserRail({
   text,
-  presets,
+  fonts,
   selectedId,
   onSelect,
 }: FontChooserRailProps) {
@@ -58,21 +58,21 @@ export function FontChooserRail({
       accessibilityRole="list"
       accessibilityLabel="Font chooser"
     >
-      {presets.map((preset) => {
-        const isSelected = selectedId === preset.id;
-        const previewStyle = resolvePreviewStyle(preset.id, Type.body.size);
+      {fonts.map((font) => {
+        const isSelected = selectedId === font.id;
+        const previewStyle = resolveFontPreviewStyle(font.id, Type.body.size);
         // Clamp long text so the 64pt cell stays legible.
         const cellText =
           displayText.length > 6 ? `${displayText.slice(0, 6)}…` : displayText;
         return (
           <Pressable
-            key={preset.id}
-            onPress={() => handleSelect(preset.id)}
+            key={font.id}
+            onPress={() => handleSelect(font.id)}
             style={[
               styles.item,
               isSelected && styles.itemSelected,
             ]}
-            accessibilityLabel={`Font ${preset.name}`}
+            accessibilityLabel={`Font ${font.name}`}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -94,7 +94,7 @@ export function FontChooserRail({
               ]}
               numberOfLines={1}
             >
-              {preset.name}
+              {font.name}
             </Text>
           </Pressable>
         );

@@ -1,19 +1,24 @@
 /**
  * TextEditorSheet — bottom sheet for text editing.
  *
- * Extracted from CreatorAssetPicker's monolithic TextPicker (spec
- * 07_MEDIA_TOOLCHAIN). Provides:
+ * Per spec 06_TEXT_TYPOGRAPHY_EDITORIAL_SYSTEM §1:
+ *   - Real text model with fill (CreatorColor), stroke, shadow, background
+ *   - Every visible UI control maps to a distinct persisted value
+ *   - Thin/Thick and Soft/Strong render materially differently
+ *
+ * Provides:
  *   - TextInput (auto-focus on open)
- *   - FontChooserRail below the input
- *   - Color picker row (8 preset colors + custom spectrum)
+ *   - FontChooserRail using curated FontRegistry (spec §2, §3)
+ *   - Fill color via CreatorColorPicker (spec §1)
  *   - Alignment toggle (left/center/right)
- *   - Background toggle (none/pill/outline)
- *   - Stroke toggle (none/thin/thick)
- *   - Shadow toggle (none/soft/strong)
+ *   - Stroke controls: enable, width slider, color picker
+ *   - Shadow controls: enable, blur slider, offset X/Y, color picker
+ *   - Background controls: enable, color picker, padding, radius
  *   - Animation selector (fade/rise/type/pop/slide)
  *   - Done button
  *
- * The sheet is self-contained and emits a TextStyleConfig on confirm.
+ * Backward compat: if a layer has old textColor/textEffect/backgroundColor,
+ * they are migrated to the new fill/stroke/shadow/background fields on open.
  */
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
@@ -23,29 +28,42 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  Dimensions,
+  PanResponder,
+  type TextStyle,
+  type LayoutChangeEvent,
+  type GestureResponderEvent,
+  type PanResponderGestureState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import {
   Space,
   Radius,
   Type,
   Typography,
   Stroke,
+  Control,
 } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { FontChooserRail } from './FontChooserRail';
+import { CURATED_FONTS, resolveFontPreviewStyle } from './FontRegistry';
 import {
-  TEXT_STYLE_PRESETS,
   DEFAULT_TEXT_STYLE,
-  resolvePreviewStyle,
   type TextStyleConfig,
-  type TextStylePreset,
 } from './textStylePresets';
+import {
+  CreatorColorPicker,
+  useCreatorColorHistory,
+  toRgbaString,
+  toHexString,
+  fromHexString,
+  BLACK,
+  WHITE,
+  type CreatorColor,
+  type RecentColor,
+} from '../../color';
 
 export interface TextEditorSheetProps {
   visible: boolean;
@@ -55,47 +73,20 @@ export interface TextEditorSheetProps {
   onConfirm: (text: string, style: TextStyleConfig) => void;
 }
 
-// ── Static option sets ────────────────────────────────────────────────
-const PRESET_COLORS = [
-  '#ffffff',
-  '#000000',
-  '#9b0202',
-  '#215634',
-  '#06489A',
-  '#C9A46A',
-  '#6B3245',
-  '#B85566',
-];
+// ── Types ────────────────────────────────────────────────────────────
 
-type AlignmentKey = 'left' | 'center' | 'right';
+type AlignmentKey = 'left' | 'center' | 'right' | 'justify';
+type AnimationKey = 'none' | 'fade' | 'rise' | 'type' | 'pop' | 'slide';
+type ColorSection = 'fill' | 'stroke' | 'shadow' | 'background';
+
+// ── Static option sets ────────────────────────────────────────────────
+
 const ALIGNMENTS: Array<{ key: AlignmentKey; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'left', icon: 'text-outline' },
   { key: 'center', icon: 'text' },
   { key: 'right', icon: 'list-outline' },
 ];
 
-type BackgroundKey = 'none' | 'pill' | 'outline';
-const BACKGROUNDS: Array<{ key: BackgroundKey; label: string }> = [
-  { key: 'none', label: 'None' },
-  { key: 'pill', label: 'Pill' },
-  { key: 'outline', label: 'Outline' },
-];
-
-type StrokeKey = 'none' | 'thin' | 'thick';
-const STROKES: Array<{ key: StrokeKey; label: string }> = [
-  { key: 'none', label: 'None' },
-  { key: 'thin', label: 'Thin' },
-  { key: 'thick', label: 'Thick' },
-];
-
-type ShadowKey = 'none' | 'soft' | 'strong';
-const SHADOWS: Array<{ key: ShadowKey; label: string }> = [
-  { key: 'none', label: 'None' },
-  { key: 'soft', label: 'Soft' },
-  { key: 'strong', label: 'Strong' },
-];
-
-type AnimationKey = 'none' | 'fade' | 'rise' | 'type' | 'pop' | 'slide';
 const ANIMATIONS: Array<{ key: AnimationKey; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'none', label: 'None', icon: 'close-outline' },
   { key: 'fade', label: 'Fade', icon: 'eye-outline' },
@@ -105,7 +96,6 @@ const ANIMATIONS: Array<{ key: AnimationKey; label: string; icon: React.Componen
   { key: 'slide', label: 'Slide', icon: 'arrow-forward-outline' },
 ];
 
-// Map the editor-local animation keys to the composition payload keys.
 const ANIMATION_TO_PAYLOAD: Record<AnimationKey, TextStyleConfig['textAnimation']> = {
   none: 'none',
   fade: 'fade',
@@ -115,31 +105,21 @@ const ANIMATION_TO_PAYLOAD: Record<AnimationKey, TextStyleConfig['textAnimation'
   slide: 'slide',
 };
 
-// Map background/stroke/shadow toggles to the composition textEffect field.
-// The composition schema models effects as a single enum; we map the
-// three-toggle UI onto that enum plus the backgroundColor field.
-function resolveEffect(
-  bg: BackgroundKey,
-  stroke: StrokeKey,
-  shadow: ShadowKey,
-): { textEffect: TextStyleConfig['textEffect']; backgroundColor?: string; textColor: string } {
-  // Stroke takes priority for the textEffect enum, then shadow, then bg.
-  if (stroke === 'thin' || stroke === 'thick') {
-    return { textEffect: 'outline', textColor: '#ffffff' };
-  }
-  if (shadow === 'soft' || shadow === 'strong') {
-    return { textEffect: 'shadow', textColor: '#ffffff' };
-  }
-  if (bg === 'pill') {
-    return { textEffect: 'none', backgroundColor: '#000000', textColor: '#ffffff' };
-  }
-  if (bg === 'outline') {
-    return { textEffect: 'outline', textColor: '#ffffff' };
-  }
-  return { textEffect: 'none', textColor: '#ffffff' };
+// ── Helpers ───────────────────────────────────────────────────────────
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v));
 }
 
-const { width: SCREEN_W } = Dimensions.get('window');
+function hexToColor(hex: string): CreatorColor {
+  return fromHexString(hex) ?? WHITE;
+}
+
+function colorToRgba(c: CreatorColor): string {
+  return toRgbaString(c);
+}
+
+// ── Component ─────────────────────────────────────────────────────────
 
 export function TextEditorSheet({
   visible,
@@ -152,59 +132,234 @@ export function TextEditorSheet({
   const haptic = useHaptic();
   const styles = useEditorStyles(colors);
   const inputRef = useRef<TextInput>(null);
+  const { recents, commitColor: addRecent } = useCreatorColorHistory();
 
+  // ── State ──
   const [text, setText] = useState(initialText);
-  const [presetId, setPresetId] = useState<string>(initialStyle?.textStyle ?? DEFAULT_TEXT_STYLE.textStyle);
-  const [textColor, setTextColor] = useState<string>(initialStyle?.textColor ?? DEFAULT_TEXT_STYLE.textColor);
-  const [alignment, setAlignment] = useState<AlignmentKey>(initialStyle?.alignment ?? DEFAULT_TEXT_STYLE.alignment);
-  const [bgMode, setBgMode] = useState<BackgroundKey>('none');
-  const [strokeMode, setStrokeMode] = useState<StrokeKey>('none');
-  const [shadowMode, setShadowMode] = useState<ShadowKey>('none');
-  const [animation, setAnimation] = useState<AnimationKey>('none');
-  const [showSpectrum, setShowSpectrum] = useState(false);
+  const [fontId, setFontId] = useState<string>(initialStyle?.textStyle ?? DEFAULT_TEXT_STYLE.textStyle);
 
-  // Reset state when the sheet opens with a new initial value.
+  // Fill color (CreatorColor)
+  const [fillColor, setFillColor] = useState<CreatorColor>(
+    initialStyle?.fill ?? (initialStyle?.textColor ? hexToColor(initialStyle.textColor) : WHITE),
+  );
+
+  // Alignment
+  const [alignment, setAlignment] = useState<AlignmentKey>(
+    initialStyle?.alignment ?? DEFAULT_TEXT_STYLE.alignment,
+  );
+
+  // Stroke
+  const [strokeEnabled, setStrokeEnabled] = useState(Boolean(initialStyle?.stroke));
+  const [strokeWidth, setStrokeWidth] = useState(initialStyle?.stroke?.width ?? 2);
+  const [strokeColor, setStrokeColor] = useState<CreatorColor>(initialStyle?.stroke?.color ?? BLACK);
+
+  // Shadow
+  const [shadowEnabled, setShadowEnabled] = useState(Boolean(initialStyle?.shadow));
+  const [shadowBlur, setShadowBlur] = useState(initialStyle?.shadow?.blur ?? 4);
+  const [shadowOffsetX, setShadowOffsetX] = useState(initialStyle?.shadow?.offsetX ?? 0);
+  const [shadowOffsetY, setShadowOffsetY] = useState(initialStyle?.shadow?.offsetY ?? 2);
+  const [shadowColor, setShadowColor] = useState<CreatorColor>(initialStyle?.shadow?.color ?? BLACK);
+
+  // Background
+  const [bgEnabled, setBgEnabled] = useState(Boolean(initialStyle?.background));
+  const [bgRadius, setBgRadius] = useState(initialStyle?.background?.radius ?? 4);
+  const [bgPaddingX, setBgPaddingX] = useState(initialStyle?.background?.paddingX ?? 8);
+  const [bgPaddingY, setBgPaddingY] = useState(initialStyle?.background?.paddingY ?? 4);
+  const [bgColor, setBgColor] = useState<CreatorColor>(initialStyle?.background?.color ?? BLACK);
+
+  // Animation
+  const [animation, setAnimation] = useState<AnimationKey>('none');
+
+  // Track which color section is expanded (only one at a time)
+  const [expandedColor, setExpandedColor] = useState<ColorSection | null>(null);
+
+  // ── Migrate legacy fields on open ──
   useEffect(() => {
     if (visible) {
       setText(initialText);
-      setPresetId(initialStyle?.textStyle ?? DEFAULT_TEXT_STYLE.textStyle);
-      setTextColor(initialStyle?.textColor ?? DEFAULT_TEXT_STYLE.textColor);
+      setFontId(initialStyle?.textStyle ?? DEFAULT_TEXT_STYLE.textStyle);
+
+      // Migrate textColor → fill
+      if (initialStyle?.fill) {
+        setFillColor(initialStyle.fill);
+      } else if (initialStyle?.textColor) {
+        setFillColor(hexToColor(initialStyle.textColor));
+      } else {
+        setFillColor(WHITE);
+      }
+
       setAlignment(initialStyle?.alignment ?? DEFAULT_TEXT_STYLE.alignment);
-      setBgMode('none');
-      setStrokeMode('none');
-      setShadowMode('none');
+
+      // Migrate textEffect → stroke/shadow
+      const effect = initialStyle?.textEffect;
+      if (initialStyle?.stroke) {
+        setStrokeEnabled(true);
+        setStrokeWidth(initialStyle.stroke.width);
+        setStrokeColor(initialStyle.stroke.color);
+      } else if (effect === 'outline' || effect === 'glow') {
+        setStrokeEnabled(true);
+        setStrokeWidth(effect === 'glow' ? 4 : 2);
+        setStrokeColor(BLACK);
+      } else {
+        setStrokeEnabled(false);
+        setStrokeWidth(2);
+        setStrokeColor(BLACK);
+      }
+
+      if (initialStyle?.shadow) {
+        setShadowEnabled(true);
+        setShadowBlur(initialStyle.shadow.blur);
+        setShadowOffsetX(initialStyle.shadow.offsetX);
+        setShadowOffsetY(initialStyle.shadow.offsetY);
+        setShadowColor(initialStyle.shadow.color);
+      } else if (effect === 'shadow' || effect === 'neon') {
+        setShadowEnabled(true);
+        setShadowBlur(effect === 'neon' ? 12 : 4);
+        setShadowOffsetX(0);
+        setShadowOffsetY(2);
+        setShadowColor(effect === 'neon' ? { ...WHITE, a: 0.8 } : { ...BLACK, a: 0.8 });
+      } else {
+        setShadowEnabled(false);
+        setShadowBlur(4);
+        setShadowOffsetX(0);
+        setShadowOffsetY(2);
+        setShadowColor(BLACK);
+      }
+
+      // Migrate backgroundColor → background
+      if (initialStyle?.background) {
+        setBgEnabled(true);
+        setBgRadius(initialStyle.background.radius);
+        setBgPaddingX(initialStyle.background.paddingX);
+        setBgPaddingY(initialStyle.background.paddingY);
+        setBgColor(initialStyle.background.color);
+      } else if (initialStyle?.backgroundColor) {
+        setBgEnabled(true);
+        setBgRadius(4);
+        setBgPaddingX(8);
+        setBgPaddingY(4);
+        setBgColor(hexToColor(initialStyle.backgroundColor));
+      } else {
+        setBgEnabled(false);
+        setBgRadius(4);
+        setBgPaddingX(8);
+        setBgPaddingY(4);
+        setBgColor(BLACK);
+      }
+
       setAnimation('none');
-      setShowSpectrum(false);
+      setExpandedColor(null);
+
       // Auto-focus the input on open.
       const t = setTimeout(() => inputRef.current?.focus(), 120);
       return () => clearTimeout(t);
     }
   }, [visible, initialText, initialStyle]);
 
+  // ── Color picker handlers ──
+  const handleFillCommit = useCallback((c: CreatorColor) => {
+    setFillColor(c);
+    addRecent(c);
+  }, [addRecent]);
+
+  const handleStrokeCommit = useCallback((c: CreatorColor) => {
+    setStrokeColor(c);
+    addRecent(c);
+  }, [addRecent]);
+
+  const handleShadowCommit = useCallback((c: CreatorColor) => {
+    setShadowColor(c);
+    addRecent(c);
+  }, [addRecent]);
+
+  const handleBgCommit = useCallback((c: CreatorColor) => {
+    setBgColor(c);
+    addRecent(c);
+  }, [addRecent]);
+
+  const toggleColorSection = useCallback((section: ColorSection) => {
+    haptic.selection();
+    setExpandedColor((prev) => (prev === section ? null : section));
+  }, [haptic]);
+
+  // ── Confirm ──
   const handleConfirm = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const resolved = resolveEffect(bgMode, strokeMode, shadowMode);
+
     const style: TextStyleConfig = {
       text: trimmed,
-      textStyle: presetId,
-      textColor,
-      backgroundColor: resolved.backgroundColor,
+      textStyle: fontId,
+      // Legacy fields (backward compat)
+      textColor: toHexString(fillColor),
+      backgroundColor: bgEnabled ? toHexString(bgColor) : undefined,
       alignment,
       opacity: 1,
-      textEffect: resolved.textEffect,
+      textEffect: strokeEnabled ? 'outline' : shadowEnabled ? 'shadow' : 'none',
       textAnimation: ANIMATION_TO_PAYLOAD[animation],
+      // New canonical fields
+      fill: fillColor,
+      stroke: strokeEnabled ? { color: strokeColor, width: strokeWidth } : undefined,
+      shadow: shadowEnabled
+        ? { color: shadowColor, blur: shadowBlur, offsetX: shadowOffsetX, offsetY: shadowOffsetY }
+        : undefined,
+      background: bgEnabled
+        ? { color: bgColor, radius: bgRadius, paddingX: bgPaddingX, paddingY: bgPaddingY }
+        : undefined,
     };
+
     haptic.light();
     onConfirm(trimmed, style);
-  }, [text, presetId, textColor, alignment, bgMode, strokeMode, shadowMode, animation, haptic, onConfirm]);
+  }, [
+    text, fontId, fillColor, alignment, strokeEnabled, strokeWidth, strokeColor,
+    shadowEnabled, shadowBlur, shadowOffsetX, shadowOffsetY, shadowColor,
+    bgEnabled, bgColor, bgRadius, bgPaddingX, bgPaddingY, animation,
+    haptic, onConfirm,
+  ]);
 
-  const previewStyle = useMemo(
-    () => resolvePreviewStyle(presetId, Type.bodyEmphasis.size + 2),
-    [presetId],
+  // ── Preview style ──
+  const previewFontStyle = useMemo(
+    () => resolveFontPreviewStyle(fontId, Type.bodyEmphasis.size + 2),
+    [fontId],
   );
 
   const canConfirm = text.trim().length > 0;
+
+  // ── Preview text style with effects ──
+  const previewTextBase: TextStyle = {
+    fontSize: previewFontStyle.fontSize,
+    fontFamily: previewFontStyle.fontFamily,
+    lineHeight: previewFontStyle.lineHeight,
+    textAlign: alignment,
+    color: colorToRgba(fillColor),
+  };
+
+  // Shadow style for preview
+  const previewShadow: TextStyle = shadowEnabled
+    ? {
+        textShadowColor: colorToRgba(shadowColor),
+        textShadowOffset: { width: shadowOffsetX, height: shadowOffsetY },
+        textShadowRadius: shadowBlur,
+      }
+    : {};
+
+  // Stroke preview: use multi-shadow technique (8 directions)
+  const strokeOffsets = useMemo(() => {
+    if (!strokeEnabled || strokeWidth <= 0) return [];
+    const w = strokeWidth;
+    return [
+      { width: -w, height: 0 },
+      { width: w, height: 0 },
+      { width: 0, height: -w },
+      { width: 0, height: w },
+      { width: -w, height: -w },
+      { width: w, height: -w },
+      { width: -w, height: w },
+      { width: w, height: w },
+    ];
+  }, [strokeEnabled, strokeWidth]);
+
+  const previewText = text.trim() || 'Your text preview';
 
   return (
     <SheetContainer visible={visible} onClose={onClose} maxHeight={0.9}>
@@ -229,20 +384,56 @@ export function TextEditorSheet({
         </View>
 
         <View style={styles.body}>
-          {/* Live preview */}
-          <View style={styles.preview}>
-            <Text
-              style={[
-                styles.previewText,
-                { color: textColor, textAlign: alignment, fontFamily: previewStyle.fontFamily },
-              ]}
-              numberOfLines={3}
-            >
-              {text.trim() || 'Your text preview'}
-            </Text>
+          {/* ── Live preview ── */}
+          <View
+            style={[
+              styles.preview,
+              bgEnabled && {
+                backgroundColor: colorToRgba(bgColor),
+                borderRadius: bgRadius,
+                paddingHorizontal: bgPaddingX,
+                paddingVertical: bgPaddingY,
+              },
+            ]}
+          >
+            {strokeEnabled && strokeOffsets.length > 0 ? (
+              <View style={styles.strokePreviewWrap}>
+                {strokeOffsets.map((offset, i) => (
+                  <Text
+                    key={`stroke-${i}`}
+                    style={[
+                      previewTextBase,
+                      {
+                        position: 'absolute',
+                        color: 'transparent',
+                        textShadowColor: colorToRgba(strokeColor),
+                        textShadowOffset: offset,
+                        textShadowRadius: 0,
+                      },
+                    ]}
+                    numberOfLines={3}
+                  >
+                    {previewText}
+                  </Text>
+                ))}
+                <Text
+                  style={[previewTextBase, previewShadow, { position: 'absolute' }]}
+                  numberOfLines={3}
+                >
+                  {previewText}
+                </Text>
+              </View>
+            ) : (
+              <Text
+                style={[previewTextBase, previewShadow]}
+                numberOfLines={3}
+              >
+                {previewText}
+              </Text>
+            )}
           </View>
 
-          {/* Text input */}
+          {/* ── Text input ── */}
           <TextInput
             ref={inputRef}
             style={styles.input}
@@ -255,77 +446,29 @@ export function TextEditorSheet({
             accessibilityLabel="Text content"
           />
 
-          {/* Font chooser rail */}
+          {/* ── Font chooser rail ── */}
           <Text style={styles.sectionLabel}>Font</Text>
           <FontChooserRail
             text={text}
-            presets={TEXT_STYLE_PRESETS}
-            selectedId={presetId}
-            onSelect={setPresetId}
+            fonts={CURATED_FONTS}
+            selectedId={fontId}
+            onSelect={setFontId}
           />
 
-          {/* Color picker row */}
-          <Text style={styles.sectionLabel}>Color</Text>
-          <View style={styles.colorRow}>
-            {PRESET_COLORS.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => { haptic.selection(); setTextColor(c); setShowSpectrum(false); }}
-                onLongPress={() => { haptic.medium(); setTextColor(c); setShowSpectrum(true); }}
-                style={[
-                  styles.colorOption,
-                  { backgroundColor: c },
-                  textColor === c && !showSpectrum && styles.colorOptionActive,
-                ]}
-                accessibilityLabel={`Text color ${c}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: textColor === c && !showSpectrum }}
-                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-              />
-            ))}
-            <Pressable
-              onPress={() => { haptic.selection(); setShowSpectrum((v) => !v); }}
-              style={[
-                styles.colorOption,
-                styles.colorOptionCustom,
-                showSpectrum && styles.colorOptionActive,
-              ]}
-              accessibilityLabel="Custom color"
-              accessibilityRole="button"
-              accessibilityState={{ selected: showSpectrum }}
-              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            >
-              <Ionicons name="color-palette-outline" size={18} color={colors.textSecondary} />
-            </Pressable>
-          </View>
+          {/* ── Fill color ── */}
+          <Text style={styles.sectionLabel}>Text Color</Text>
+          <CreatorColorPicker
+            color={fillColor}
+            onChange={setFillColor}
+            onCommit={handleFillCommit}
+            mode={expandedColor === 'fill' ? 'expanded' : 'compact'}
+            recents={recents as RecentColor[]}
+            onCommitRecent={addRecent}
+            accessibilityLabel="Text fill color picker"
+            style={styles.colorPicker}
+          />
 
-          {/* Spectrum picker */}
-          {showSpectrum && (
-            <View style={styles.spectrumWrap}>
-              <LinearGradient
-                colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.spectrumBar}
-              >
-                <Pressable
-                  style={StyleSheet.absoluteFill}
-                  onPress={(e) => {
-                    const { locationX } = e.nativeEvent;
-                    const ratio = Math.max(0, Math.min(1, locationX / (SCREEN_W - Space.md * 2 - 4)));
-                    const hue = ratio * 360;
-                    const hex = hslToHex(hue, 80, 55);
-                    setTextColor(hex);
-                  }}
-                  accessibilityLabel="Spectrum color picker"
-                  accessibilityRole="adjustable"
-                />
-              </LinearGradient>
-              <View style={[styles.spectrumIndicator, { backgroundColor: textColor }]} />
-            </View>
-          )}
-
-          {/* Alignment */}
+          {/* ── Alignment ── */}
           <Text style={styles.sectionLabel}>Alignment</Text>
           <View style={styles.toggleRow}>
             {ALIGNMENTS.map((a) => {
@@ -346,91 +489,233 @@ export function TextEditorSheet({
             })}
           </View>
 
-          {/* Background toggle */}
-          <Text style={styles.sectionLabel}>Background</Text>
-          <View style={styles.toggleRow}>
-            {BACKGROUNDS.map((b) => {
-              const isActive = bgMode === b.key;
-              return (
-                <Pressable
-                  key={b.key}
-                  onPress={() => { haptic.selection(); setBgMode(b.key); }}
-                  style={[styles.toggleOption, isActive && styles.toggleOptionActive]}
-                  accessibilityLabel={`Background ${b.label}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text
-                    style={[
-                      styles.toggleLabel,
-                      { color: isActive ? colors.brand : colors.textSecondary },
-                    ]}
-                  >
-                    {b.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          {/* ── Stroke section ── */}
+          <View style={styles.effectSectionHeader}>
+            <Text style={styles.sectionLabel}>Stroke</Text>
+            <Pressable
+              onPress={() => { haptic.selection(); setStrokeEnabled((v) => !v); }}
+              style={[styles.enableToggle, strokeEnabled && styles.enableToggleActive]}
+              accessibilityLabel={strokeEnabled ? 'Disable stroke' : 'Enable stroke'}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: strokeEnabled }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={strokeEnabled ? 'checkmark-circle' : 'ellipse-outline'}
+                size={24}
+                color={strokeEnabled ? colors.brand : colors.textMuted}
+              />
+            </Pressable>
           </View>
 
-          {/* Stroke toggle */}
-          <Text style={styles.sectionLabel}>Stroke</Text>
-          <View style={styles.toggleRow}>
-            {STROKES.map((s) => {
-              const isActive = strokeMode === s.key;
-              return (
-                <Pressable
-                  key={s.key}
-                  onPress={() => { haptic.selection(); setStrokeMode(s.key); }}
-                  style={[styles.toggleOption, isActive && styles.toggleOptionActive]}
-                  accessibilityLabel={`Stroke ${s.label}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text
-                    style={[
-                      styles.toggleLabel,
-                      { color: isActive ? colors.brand : colors.textSecondary },
-                    ]}
-                  >
-                    {s.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          {strokeEnabled && (
+            <View style={styles.effectControls}>
+              <MiniSlider
+                label="Width"
+                value={strokeWidth}
+                min={0}
+                max={20}
+                step={0.5}
+                valueFormatter={(v) => `${v.toFixed(1)}px`}
+                onChange={setStrokeWidth}
+                colors={colors}
+              />
+              <Pressable
+                onPress={() => toggleColorSection('stroke')}
+                style={styles.colorSectionToggle}
+                accessibilityLabel="Stroke color"
+                accessibilityRole="button"
+              >
+                <View style={[styles.colorWell, { backgroundColor: colorToRgba(strokeColor) }]} />
+                <Text style={[styles.colorWellLabel, { color: colors.textSecondary }]}>
+                  {toHexString(strokeColor).toUpperCase()}
+                </Text>
+                <Ionicons
+                  name={expandedColor === 'stroke' ? 'chevron-up-outline' : 'chevron-down-outline'}
+                  size={16}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+              {expandedColor === 'stroke' && (
+                <CreatorColorPicker
+                  color={strokeColor}
+                  onChange={setStrokeColor}
+                  onCommit={handleStrokeCommit}
+                  mode="expanded"
+                  recents={recents as RecentColor[]}
+                  onCommitRecent={addRecent}
+                  accessibilityLabel="Stroke color picker"
+                  style={styles.colorPicker}
+                />
+              )}
+            </View>
+          )}
+
+          {/* ── Shadow section ── */}
+          <View style={styles.effectSectionHeader}>
+            <Text style={styles.sectionLabel}>Shadow</Text>
+            <Pressable
+              onPress={() => { haptic.selection(); setShadowEnabled((v) => !v); }}
+              style={[styles.enableToggle, shadowEnabled && styles.enableToggleActive]}
+              accessibilityLabel={shadowEnabled ? 'Disable shadow' : 'Enable shadow'}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: shadowEnabled }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={shadowEnabled ? 'checkmark-circle' : 'ellipse-outline'}
+                size={24}
+                color={shadowEnabled ? colors.brand : colors.textMuted}
+              />
+            </Pressable>
           </View>
 
-          {/* Shadow toggle */}
-          <Text style={styles.sectionLabel}>Shadow</Text>
-          <View style={styles.toggleRow}>
-            {SHADOWS.map((s) => {
-              const isActive = shadowMode === s.key;
-              return (
-                <Pressable
-                  key={s.key}
-                  onPress={() => { haptic.selection(); setShadowMode(s.key); }}
-                  style={[styles.toggleOption, isActive && styles.toggleOptionActive]}
-                  accessibilityLabel={`Shadow ${s.label}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text
-                    style={[
-                      styles.toggleLabel,
-                      { color: isActive ? colors.brand : colors.textSecondary },
-                    ]}
-                  >
-                    {s.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          {shadowEnabled && (
+            <View style={styles.effectControls}>
+              <MiniSlider
+                label="Blur"
+                value={shadowBlur}
+                min={0}
+                max={30}
+                step={0.5}
+                valueFormatter={(v) => `${v.toFixed(1)}px`}
+                onChange={setShadowBlur}
+                colors={colors}
+              />
+              <MiniSlider
+                label="Offset X"
+                value={shadowOffsetX}
+                min={-20}
+                max={20}
+                step={1}
+                valueFormatter={(v) => `${v}px`}
+                onChange={setShadowOffsetX}
+                colors={colors}
+              />
+              <MiniSlider
+                label="Offset Y"
+                value={shadowOffsetY}
+                min={-20}
+                max={20}
+                step={1}
+                valueFormatter={(v) => `${v}px`}
+                onChange={setShadowOffsetY}
+                colors={colors}
+              />
+              <Pressable
+                onPress={() => toggleColorSection('shadow')}
+                style={styles.colorSectionToggle}
+                accessibilityLabel="Shadow color"
+                accessibilityRole="button"
+              >
+                <View style={[styles.colorWell, { backgroundColor: colorToRgba(shadowColor) }]} />
+                <Text style={[styles.colorWellLabel, { color: colors.textSecondary }]}>
+                  {toHexString(shadowColor).toUpperCase()}
+                </Text>
+                <Ionicons
+                  name={expandedColor === 'shadow' ? 'chevron-up-outline' : 'chevron-down-outline'}
+                  size={16}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+              {expandedColor === 'shadow' && (
+                <CreatorColorPicker
+                  color={shadowColor}
+                  onChange={setShadowColor}
+                  onCommit={handleShadowCommit}
+                  mode="expanded"
+                  recents={recents as RecentColor[]}
+                  onCommitRecent={addRecent}
+                  accessibilityLabel="Shadow color picker"
+                  style={styles.colorPicker}
+                />
+              )}
+            </View>
+          )}
+
+          {/* ── Background section ── */}
+          <View style={styles.effectSectionHeader}>
+            <Text style={styles.sectionLabel}>Background</Text>
+            <Pressable
+              onPress={() => { haptic.selection(); setBgEnabled((v) => !v); }}
+              style={[styles.enableToggle, bgEnabled && styles.enableToggleActive]}
+              accessibilityLabel={bgEnabled ? 'Disable background' : 'Enable background'}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: bgEnabled }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={bgEnabled ? 'checkmark-circle' : 'ellipse-outline'}
+                size={24}
+                color={bgEnabled ? colors.brand : colors.textMuted}
+              />
+            </Pressable>
           </View>
 
-          {/* Animation selector */}
+          {bgEnabled && (
+            <View style={styles.effectControls}>
+              <MiniSlider
+                label="Padding H"
+                value={bgPaddingX}
+                min={0}
+                max={40}
+                step={1}
+                valueFormatter={(v) => `${v}px`}
+                onChange={setBgPaddingX}
+                colors={colors}
+              />
+              <MiniSlider
+                label="Padding V"
+                value={bgPaddingY}
+                min={0}
+                max={40}
+                step={1}
+                valueFormatter={(v) => `${v}px`}
+                onChange={setBgPaddingY}
+                colors={colors}
+              />
+              <MiniSlider
+                label="Radius"
+                value={bgRadius}
+                min={0}
+                max={30}
+                step={1}
+                valueFormatter={(v) => `${v}px`}
+                onChange={setBgRadius}
+                colors={colors}
+              />
+              <Pressable
+                onPress={() => toggleColorSection('background')}
+                style={styles.colorSectionToggle}
+                accessibilityLabel="Background color"
+                accessibilityRole="button"
+              >
+                <View style={[styles.colorWell, { backgroundColor: colorToRgba(bgColor) }]} />
+                <Text style={[styles.colorWellLabel, { color: colors.textSecondary }]}>
+                  {toHexString(bgColor).toUpperCase()}
+                </Text>
+                <Ionicons
+                  name={expandedColor === 'background' ? 'chevron-up-outline' : 'chevron-down-outline'}
+                  size={16}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+              {expandedColor === 'background' && (
+                <CreatorColorPicker
+                  color={bgColor}
+                  onChange={setBgColor}
+                  onCommit={handleBgCommit}
+                  mode="expanded"
+                  recents={recents as RecentColor[]}
+                  onCommitRecent={addRecent}
+                  accessibilityLabel="Background color picker"
+                  style={styles.colorPicker}
+                />
+              )}
+            </View>
+          )}
+
+          {/* ── Animation selector ── */}
           <Text style={styles.sectionLabel}>Animation</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.animContent}>
             {ANIMATIONS.map((a) => {
@@ -459,7 +744,7 @@ export function TextEditorSheet({
             })}
           </ScrollView>
 
-          {/* Done button */}
+          {/* ── Done button ── */}
           <Pressable
             onPress={handleConfirm}
             style={[styles.confirmBtn, !canConfirm && styles.confirmBtnDisabled]}
@@ -477,25 +762,113 @@ export function TextEditorSheet({
   );
 }
 
-// ── HSL → HEX (for the spectrum color picker) ─────────────────────────
-function hslToHex(h: number, s: number, l: number): string {
-  const sNorm = s / 100;
-  const lNorm = l / 100;
-  const c = (1 - Math.abs(2 * lNorm - 1)) * sNorm;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = lNorm - c / 2;
-  let r = 0, g = 0, b = 0;
-  if (h < 60) { r = c; g = x; }
-  else if (h < 120) { r = x; g = c; }
-  else if (h < 180) { g = c; b = x; }
-  else if (h < 240) { g = x; b = c; }
-  else if (h < 300) { r = x; b = c; }
-  else { r = c; b = x; }
-  const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+// ── MiniSlider (PanResponder-based, no new deps) ─────────────────────
+
+interface MiniSliderProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  valueFormatter: (v: number) => string;
+  onChange: (v: number) => void;
+  colors: ThemeColors;
+}
+
+function MiniSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  valueFormatter,
+  onChange,
+  colors,
+}: MiniSliderProps) {
+  const trackWidthRef = useRef(0);
+  const [trackWidth, setTrackWidth] = useState(0);
+  const styles = useEditorStyles(colors);
+
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
+    trackWidthRef.current = e.nativeEvent.layout.width;
+    setTrackWidth(e.nativeEvent.layout.width);
+  }, []);
+
+  const range = max - min;
+  const clamped = clamp(value, min, max);
+  const ratio = range === 0 ? 0 : (clamped - min) / range;
+  const trackLayoutWidth = trackWidth > 0 ? trackWidth : 1;
+  const thumbPosition = ratio * trackLayoutWidth;
+
+  const valueToPosition = useCallback(
+    (x: number) => {
+      const r = Math.min(1, Math.max(0, x / trackLayoutWidth));
+      const raw = min + r * range;
+      // Snap to step
+      return Math.round(raw / step) * step;
+    },
+    [trackLayoutWidth, min, range, step],
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
+          const next = valueToPosition(thumbPosition + g.dx);
+          onChange(clamp(next, min, max));
+        },
+        onPanResponderRelease: () => {},
+        onPanResponderTerminationRequest: () => false,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [thumbPosition, valueToPosition, onChange],
+  );
+
+  return (
+    <View style={styles.sliderRow}>
+      <View style={styles.sliderHeader}>
+        <Text style={[styles.sliderLabel, { color: colors.textSecondary }]}>
+          {label}
+        </Text>
+        <Text style={[styles.sliderValue, { color: colors.textMuted }]}>
+          {valueFormatter(clamped)}
+        </Text>
+      </View>
+      <View
+        style={styles.trackWrap}
+        onLayout={handleLayout}
+        {...panResponder.panHandlers}
+        accessibilityLabel={`${label} slider`}
+        accessibilityRole="adjustable"
+        accessibilityValue={{
+          min,
+          max,
+          now: clamped,
+          text: valueFormatter(clamped),
+        }}
+      >
+        <View style={[styles.track, { backgroundColor: colors.border }]} />
+        <View
+          style={[
+            styles.fill,
+            { width: thumbPosition, backgroundColor: colors.brand },
+          ]}
+        />
+        <View
+          style={[
+            styles.thumb,
+            { left: thumbPosition, backgroundColor: colors.textPrimary },
+          ]}
+        />
+      </View>
+    </View>
+  );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────
+
 function useEditorStyles(colors: ThemeColors) {
   return React.useMemo(
     () =>
@@ -533,10 +906,13 @@ function useEditorStyles(colors: ThemeColors) {
           justifyContent: 'center',
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
+          overflow: 'hidden',
         },
-        previewText: {
-          fontSize: Type.bodyEmphasis.size + 2,
-          fontFamily: Typography.family.medium,
+        strokePreviewWrap: {
+          // The multi-shadow stroke technique requires a relative container
+          alignItems: 'center',
+          justifyContent: 'center',
+          alignSelf: 'stretch',
         },
         input: {
           fontFamily: Typography.family.regular,
@@ -557,41 +933,8 @@ function useEditorStyles(colors: ThemeColors) {
           color: colors.textSecondary,
           marginTop: Space.xs,
         },
-        colorRow: {
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          gap: Space.sm,
-        },
-        colorOption: {
-          width: 36,
-          height: 36,
-          borderRadius: Radius.full,
-          borderWidth: Stroke.standard,
-          borderColor: colors.borderSubtle,
-        },
-        colorOptionActive: {
-          borderWidth: Stroke.emphasis,
-          borderColor: colors.brand,
-        },
-        colorOptionCustom: {
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.surfaceAlt,
-        },
-        spectrumWrap: {
-          marginTop: Space.xs,
-          gap: Space.xs,
-        },
-        spectrumBar: {
-          height: 36,
-          borderRadius: Radius.full,
-          overflow: 'hidden',
-        },
-        spectrumIndicator: {
-          width: 36,
-          height: 12,
-          borderRadius: Radius.full,
-          alignSelf: 'center',
+        colorPicker: {
+          // No extra padding — CreatorColorPicker manages its own layout
         },
         toggleRow: {
           flexDirection: 'row',
@@ -599,7 +942,7 @@ function useEditorStyles(colors: ThemeColors) {
         },
         toggleOption: {
           flex: 1,
-          height: 40,
+          height: 44,
           borderRadius: Radius.md,
           borderWidth: Stroke.standard,
           borderColor: colors.borderSubtle,
@@ -610,10 +953,89 @@ function useEditorStyles(colors: ThemeColors) {
           borderWidth: Stroke.emphasis,
           borderColor: colors.brand,
         },
-        toggleLabel: {
+        // ── Effect section header (label + enable toggle) ──
+        effectSectionHeader: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        },
+        enableToggle: {
+          width: Control.hit,
+          height: Control.hit,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        enableToggleActive: {},
+        effectControls: {
+          gap: Space.sm,
+        },
+        // ── Color section toggle ──
+        colorSectionToggle: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.sm,
+          paddingVertical: Space.xs,
+          minHeight: 44,
+        },
+        colorWell: {
+          width: 28,
+          height: 28,
+          borderRadius: Radius.sm,
+          borderWidth: Stroke.hairline,
+          borderColor: 'rgba(0,0,0,0.1)',
+        },
+        colorWellLabel: {
           fontFamily: Typography.family.medium,
           fontSize: Type.caption.size,
+          flex: 1,
         },
+        // ── Slider ──
+        sliderRow: {
+          paddingVertical: Space.xs,
+        },
+        sliderHeader: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: Space.xxs,
+        },
+        sliderLabel: {
+          fontFamily: Typography.family.regular,
+          fontSize: Type.caption.size,
+        },
+        sliderValue: {
+          fontFamily: Typography.family.medium,
+          fontSize: Type.caption.size,
+          fontVariant: ['tabular-nums'],
+        },
+        trackWrap: {
+          height: Control.hit,
+          justifyContent: 'center',
+          position: 'relative',
+        },
+        track: {
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          height: 3,
+          borderRadius: Radius.full,
+        },
+        fill: {
+          position: 'absolute',
+          left: 0,
+          height: 3,
+          borderRadius: Radius.full,
+        },
+        thumb: {
+          position: 'absolute',
+          width: 16,
+          height: 16,
+          borderRadius: Radius.full,
+          marginLeft: -8,
+          borderWidth: Stroke.standard,
+          borderColor: 'rgba(0,0,0,0)',
+        },
+        // ── Animation ──
         animContent: {
           gap: Space.sm,
           paddingRight: Space.md,
@@ -623,7 +1045,7 @@ function useEditorStyles(colors: ThemeColors) {
           alignItems: 'center',
           gap: Space.xs,
           paddingHorizontal: Space.smMd,
-          height: 40,
+          height: 44,
           borderRadius: Radius.md,
           borderWidth: Stroke.standard,
           borderColor: colors.borderSubtle,
@@ -636,6 +1058,7 @@ function useEditorStyles(colors: ThemeColors) {
           fontFamily: Typography.family.medium,
           fontSize: Type.caption.size,
         },
+        // ── Confirm ──
         confirmBtn: {
           backgroundColor: colors.brand,
           borderRadius: Radius.sm,
