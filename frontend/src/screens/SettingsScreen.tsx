@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -52,53 +52,49 @@ interface DestinationMeta {
 // Section names mirror the visible settings grouping so search results stay
 // consistent with the browsable hierarchy.
 const ROUTE_METADATA: DestinationMeta[] = [
-  // ── Account ──
-  { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor', section: 'Account', showSection: true },
-  { key: 'Verification', label: 'Verify your identity', searchTerms: 'identity dac7 tax badge seller trust kyc', section: 'Account' },
-  { key: 'ChangePassword', label: 'Change password', searchTerms: '2fa two factor security', section: 'Account' },
-  { key: 'ConnectedAccounts', label: 'Connected accounts', searchTerms: 'google apple oauth social login', section: 'Account' },
-  { key: 'ActiveSessions', label: 'Devices & sessions', searchTerms: 'login device security', section: 'Account' },
-  { key: 'AccountControl', label: 'Account control', searchTerms: 'delete deactivate download export security', section: 'Account' },
-  { key: 'DataExport', label: 'Download my data', searchTerms: 'export gdpr', section: 'Account' },
-  { key: 'DeleteAccount', label: 'Delete account', searchTerms: 'permanently erase gdpr remove', section: 'Account' },
-  // ── Privacy & safety ──
-  { key: 'PrivacySettings', label: 'Privacy & safety', searchTerms: 'controls visibility blocked', section: 'Privacy & safety', showSection: true },
-  { key: 'ChatSettings', label: 'Chat privacy', searchTerms: 'who can message messaging', section: 'Privacy & safety' },
-  { key: 'DataPrivacy', label: 'Data & privacy', searchTerms: 'gdpr retention third party cookies', section: 'Privacy & safety' },
-  { key: 'BlockedUsers', label: 'Blocked users', searchTerms: 'block unblock', section: 'Privacy & safety' },
-  // ── Buying ──
-  { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'delivery shipping', section: 'Buying', showSection: true },
-  { key: 'Payments', label: 'Payment methods', searchTerms: 'card bank', section: 'Buying' },
-  { key: 'Closet', label: 'Saved & collections', searchTerms: 'closet wishlist', section: 'Buying' },
-  // ── Selling & payouts ──
-  { key: 'Wallet', label: 'Payout account', searchTerms: 'wallet balance', section: 'Selling & payouts', showSection: true },
-  { key: 'BalanceHistory', label: 'Payout history', searchTerms: 'balance', section: 'Selling & payouts' },
-  { key: 'Postage', label: 'Shipping preferences', searchTerms: 'postage carrier', section: 'Selling & payouts' },
+  // ── Your account (profile, security, privacy) ──
+  { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor', section: 'Your account', showSection: true },
+  { key: 'Verification', label: 'Verify your identity', searchTerms: 'identity dac7 tax badge seller trust kyc', section: 'Your account' },
+  { key: 'ChangePassword', label: 'Change password', searchTerms: '2fa two factor security', section: 'Your account' },
+  { key: 'ConnectedAccounts', label: 'Connected accounts', searchTerms: 'google apple oauth social login', section: 'Your account' },
+  { key: 'ActiveSessions', label: 'Devices & sessions', searchTerms: 'login device security', section: 'Your account' },
+  { key: 'AccountControl', label: 'Account control', searchTerms: 'delete deactivate download export security', section: 'Your account' },
+  { key: 'DataExport', label: 'Download my data', searchTerms: 'export gdpr', section: 'Your account' },
+  { key: 'DeleteAccount', label: 'Delete account', searchTerms: 'permanently erase gdpr remove', section: 'Your account' },
+  { key: 'PrivacySettings', label: 'Privacy & safety', searchTerms: 'controls visibility blocked', section: 'Your account' },
+  { key: 'ChatSettings', label: 'Chat privacy', searchTerms: 'who can message messaging', section: 'Your account' },
+  { key: 'DataPrivacy', label: 'Data & privacy', searchTerms: 'gdpr retention third party cookies', section: 'Your account' },
+  { key: 'BlockedUsers', label: 'Blocked users', searchTerms: 'block unblock', section: 'Your account' },
+  // ── Buying & selling (payments, payouts, orders, co-own, disputes) ──
+  { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'delivery shipping', section: 'Buying & selling', showSection: true },
+  { key: 'Payments', label: 'Payment methods', searchTerms: 'card bank', section: 'Buying & selling' },
+  { key: 'Closet', label: 'Saved & collections', searchTerms: 'closet wishlist', section: 'Buying & selling' },
+  { key: 'Wallet', label: 'Payout account', searchTerms: 'wallet balance', section: 'Buying & selling' },
+  { key: 'BalanceHistory', label: 'Payout history', searchTerms: 'balance', section: 'Buying & selling' },
+  { key: 'Postage', label: 'Shipping preferences', searchTerms: 'postage carrier', section: 'Buying & selling' },
+  { key: 'CoOwnPriceAlerts', label: 'Price alerts', searchTerms: 'notifications co-own', section: 'Buying & selling' },
+  { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'recurring orders co-own', section: 'Buying & selling' },
+  { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'statements cgt co-own', section: 'Buying & selling' },
+  { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Buying & selling' },
   // ── Notifications ──
   { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push alerts', section: 'Notifications', showSection: true },
   { key: 'EmailNotifications', label: 'Email preferences', searchTerms: '', section: 'Notifications' },
   { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push offers price drop marketing quiet hours', section: 'Notifications' },
-  // ── Personalisation & appearance ──
-  { key: 'Personalisation', label: 'Personalisation & appearance', searchTerms: 'theme currency language feed', section: 'Personalisation & appearance', showSection: true },
-  { key: 'AIPreferences', label: 'Recommendations', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell recommendations', section: 'Personalisation & appearance' },
-  { key: 'YourAlgorithm', label: 'Your feed', searchTerms: 'feed recommendations topics signals transparency algorithm', section: 'Personalisation & appearance' },
-  { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'carbon neutral packaging badges eco secondhand', section: 'Personalisation & appearance' },
-  // ── Accessibility ──
-  { key: 'AccessibilitySettings', label: 'Accessibility', searchTerms: 'text size reduced motion high contrast screen reader', section: 'Personalisation & appearance' },
-  // ── Co-Own ──
-  { key: 'CoOwnPriceAlerts', label: 'Price alerts', searchTerms: 'notifications', section: 'Co-Own', showSection: true },
-  { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'recurring orders', section: 'Co-Own' },
-  { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'statements cgt', section: 'Co-Own' },
-  // ── Help & about ──
-  { key: 'HelpSupport', label: 'Help', searchTerms: 'support faq contact', section: 'Help & about', showSection: true },
-  { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Help & about' },
-  { key: 'About', label: 'About Thryftverse', searchTerms: 'version', section: 'Help & about' },
+  // ── Experience (appearance, language, currency, accessibility, recommendations) ──
+  { key: 'Personalisation', label: 'Content preferences', searchTerms: 'theme currency language feed personalisation appearance', section: 'Experience', showSection: true },
+  { key: 'AIPreferences', label: 'Recommendations', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell recommendations', section: 'Experience' },
+  { key: 'YourAlgorithm', label: 'Your feed', searchTerms: 'feed recommendations topics signals transparency algorithm', section: 'Experience' },
+  { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'carbon neutral packaging badges eco secondhand', section: 'Experience' },
+  { key: 'AccessibilitySettings', label: 'Accessibility', searchTerms: 'text size reduced motion high contrast screen reader', section: 'Experience' },
   // ── Connected services (normal product destination) ──
   { key: 'BotDirectory', label: 'Agents', searchTerms: 'agent assistant browse catalogue deploy permissions', section: 'Connected services', showSection: true },
   { key: 'AIAgentIntegration', label: 'Connections', searchTerms: 'openai anthropic claude gemini endpoint byok provider credentials api connections', section: 'Connected services' },
   { key: 'CustomBots', label: 'Your agents', searchTerms: 'custom agents created deployed manage draft published', section: 'Connected services' },
-  // ── Advanced & developer (developer-only tools, not consumer features) ──
-  { key: 'RuntimeSmokeTest', label: 'Runtime smoke test', searchTerms: 'diagnostic developer debug', section: 'Advanced & developer', showSection: true },
+  // ── Help & legal (support, safety, terms, about) ──
+  { key: 'HelpSupport', label: 'Help Centre', searchTerms: 'support faq contact', section: 'Help & legal', showSection: true },
+  { key: 'About', label: 'About Thryftverse', searchTerms: 'version', section: 'Help & legal' },
+  // ── Advanced (developer-only tools, not consumer features) ──
+  { key: 'RuntimeSmokeTest', label: 'Runtime smoke test', searchTerms: 'diagnostic developer debug', section: 'Advanced', showSection: true },
 ];
 
 export default function SettingsScreen({ navigation }: Props) {
@@ -276,7 +272,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const q = searchQuery.toLowerCase().trim();
 
   // ── Developer eligibility gate ──
-  // The "Advanced & developer" section is hidden from ordinary consumers.
+  // The "Advanced" section is hidden from ordinary consumers.
   // It is revealed only when the user has enabled developer mode
   // (Settings → About → tap version 7 times). Per spec 18, developer mode
   // keeps only raw debugging tools — not consumer agent features, which now
@@ -286,8 +282,8 @@ export default function SettingsScreen({ navigation }: Props) {
   const searchResults = React.useMemo(() => {
     if (!isSearching) return [];
     return ROUTE_METADATA.filter((d) => {
-      // Hide Advanced & developer routes from search when the section is gated.
-      if (d.section === 'Advanced & developer' && !showAdvancedDeveloper) return false;
+      // Hide Advanced routes from search when the section is gated.
+      if (d.section === 'Advanced' && !showAdvancedDeveloper) return false;
       return (
         d.searchTerms.toLowerCase().includes(q) ||
         d.label.toLowerCase().includes(q) ||
@@ -384,8 +380,8 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           ) : null}
 
-          {/* ── ACCOUNT ── */}
-          <SettingsSection title="Account" icon="person-circle-outline" noCard>
+          {/* ── YOUR ACCOUNT (profile, security, privacy) ── */}
+          <SettingsSection title="Your account" icon="person-circle-outline" noCard>
             <SettingsRow
               icon="shield-checkmark-outline"
               iconColor={currentUser?.emailVerified ? colors.success : colors.textMuted}
@@ -430,18 +426,12 @@ export default function SettingsScreen({ navigation }: Props) {
               subtitle="Permanently erase your account"
               danger
               onPress={() => navigation.navigate('DeleteAccount')}
-              isLast
             />
-          </SettingsSection>
-    
-          {/* ── PRIVACY & SAFETY ── */}
-          <SettingsSection title="Privacy & safety" icon="lock-closed-outline" noCard>
             <SettingsRow
               icon="eye-outline"
               title="Privacy & safety"
               subtitle="Visibility, blocked users"
               onPress={() => navigation.navigate('PrivacySettings')}
-              isFirst
             />
             <SettingsRow
               icon="chatbubble-outline"
@@ -464,8 +454,8 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── BUYING ── */}
-          <SettingsSection title="Buying" icon="bag-outline" noCard>
+          {/* ── BUYING & SELLING (payments, payouts, orders, co-own, disputes) ── */}
+          <SettingsSection title="Buying & selling" icon="bag-outline" noCard>
             <SettingsRow
               icon="location-outline"
               title="Saved addresses"
@@ -483,18 +473,17 @@ export default function SettingsScreen({ navigation }: Props) {
               icon="heart-outline"
               title="Saved & collections"
               onPress={() => navigation.navigate('Closet')}
-              isLast
             />
-          </SettingsSection>
-    
-          {/* ── SELLING & PAYOUTS ── */}
-          <SettingsSection title="Selling & payouts" icon="cash-outline" noCard>
             <SettingsRow
               icon="wallet-outline"
               title="Payout account"
               subtitle="Balance and wallet"
               onPress={() => navigation.navigate('Wallet')}
-              isFirst
+            />
+            <SettingsRow
+              icon="cash-outline"
+              title="Payout history"
+              onPress={() => navigation.navigate('BalanceHistory')}
             />
             <SettingsRow
               icon="cube-outline"
@@ -502,9 +491,28 @@ export default function SettingsScreen({ navigation }: Props) {
               onPress={() => navigation.navigate('Postage')}
             />
             <SettingsRow
-              icon="cash-outline"
-              title="Payout history"
-              onPress={() => navigation.navigate('BalanceHistory')}
+              icon="notifications-outline"
+              title="Price alerts"
+              subtitle="Notify on price thresholds"
+              onPress={() => navigation.navigate('CoOwnPriceAlerts')}
+            />
+            <SettingsRow
+              icon="repeat-outline"
+              title="Auto-invest plans"
+              subtitle="Recurring buy schedules"
+              onPress={() => navigation.navigate('CoOwnRecurringOrders')}
+            />
+            <SettingsRow
+              icon="document-text-outline"
+              title="Tax documents"
+              subtitle="Annual statements & P&L"
+              onPress={() => navigation.navigate('CoOwnTaxDocuments')}
+            />
+            <SettingsRow
+              icon="folder-open-outline"
+              title="Resolution Centre"
+              subtitle="Disputes and resolutions"
+              onPress={() => navigation.navigate('ResolutionCentre')}
               isLast
             />
           </SettingsSection>
@@ -541,8 +549,8 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── PERSONALISATION & APPEARANCE ── */}
-          <SettingsSection title="Personalisation & appearance" icon="color-palette-outline" noCard>
+          {/* ── EXPERIENCE (appearance, language, currency, accessibility, recommendations) ── */}
+          <SettingsSection title="Experience" icon="color-palette-outline" noCard>
             <SettingsRow
               icon="color-palette-outline"
               title="Theme"
@@ -614,30 +622,6 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── CO-OWN ── */}
-          <SettingsSection title="Co-Own" icon="diamond-outline" noCard>
-            <SettingsRow
-              icon="notifications-outline"
-              title="Price alerts"
-              subtitle="Notify on price thresholds"
-              onPress={() => navigation.navigate('CoOwnPriceAlerts')}
-              isFirst
-            />
-            <SettingsRow
-              icon="repeat-outline"
-              title="Auto-invest plans"
-              subtitle="Recurring buy schedules"
-              onPress={() => navigation.navigate('CoOwnRecurringOrders')}
-            />
-            <SettingsRow
-              icon="document-text-outline"
-              title="Tax documents"
-              subtitle="Annual statements & P&L"
-              onPress={() => navigation.navigate('CoOwnTaxDocuments')}
-              isLast
-            />
-          </SettingsSection>
-    
           {/* ── CONNECTED SERVICES ── */}
           {/* Per spec 18: Agents are a normal product destination, not hidden
               behind developer mode. Create Agent is intentionally excluded from
@@ -665,19 +649,14 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── HELP & ABOUT ── */}
-          <SettingsSection title="Help & about" icon="help-circle-outline" noCard>
-    
+          {/* ── HELP & LEGAL (support, safety, terms, about) ── */}
+          <SettingsSection title="Help & legal" icon="help-circle-outline" noCard>
+
             <SettingsRow
               icon="help-circle-outline"
               title="Help Centre"
               onPress={() => navigation.navigate('HelpSupport')}
               isFirst
-            />
-            <SettingsRow
-              icon="folder-open-outline"
-              title="Resolution Centre"
-              onPress={() => navigation.navigate('ResolutionCentre')}
             />
             <SettingsRow
               icon="document-text-outline"
@@ -698,13 +677,13 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── ADVANCED & DEVELOPER ── */}
+          {/* ── ADVANCED (developer-only) ── */}
           {/* Per spec 18: Developer mode keeps only raw debugging tools — not
               consumer agent features, which now live in "Connected services"
               above. Gated behind developer mode (Settings → About → tap version
               7 times) so ordinary consumers never see implementation technology. */}
           {showAdvancedDeveloper ? (
-            <SettingsSection title="Advanced & developer" icon="code-working-outline" noCard>
+            <SettingsSection title="Advanced" icon="code-working-outline" noCard>
               <SettingsRow
                 icon="terminal-outline"
                 title="Runtime smoke test"

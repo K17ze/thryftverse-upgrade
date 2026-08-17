@@ -93,6 +93,7 @@ export function trackTelemetryEvent(eventName: string, payload: TelemetryPayload
 
   fetchJson('/analytics/events', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ event: eventName, ...safePayload }),
   }).catch(() => {
     // Best-effort — analytics must not crash the app

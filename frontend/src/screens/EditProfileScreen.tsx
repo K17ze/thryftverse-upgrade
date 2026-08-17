@@ -22,7 +22,6 @@ import { CachedImage } from '../components/CachedImage';
 import { updateMyProfile } from '../services/profileApi';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { SettingsRow } from '../components/settings/SettingsRow';
 import { queryKeys } from '../platform/server/queryKeys';
 
 export default function EditProfileScreen() {
@@ -33,7 +32,6 @@ export default function EditProfileScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const queryClient = useQueryClient();
   const currentUser = useStore((state) => state.currentUser);
-  const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const userAvatar = useStore((state) => state.userAvatar);
   const updateUserProfile = useStore((state) => state.updateUserProfile);
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
@@ -270,41 +268,6 @@ export default function EditProfileScreen() {
             isLast
           />
         </View>
-
-        {/* ── Security — flat grouped native rows, navigation only ── */}
-        <View style={styles.sectionGroupFlush}>
-          <Text style={[styles.sectionLabel, { paddingHorizontal: Space.md }]}>Security</Text>
-          <SettingsRow
-            icon="lock-closed-outline"
-            iconColor={colors.brand}
-            title="Password"
-            subtitle="Change your password"
-            onPress={() => navigation.navigate('ChangePassword')}
-            isFirst
-          />
-          <SettingsRow
-            icon="shield-checkmark-outline"
-            iconColor={twoFactorEnabled ? colors.brand : colors.textMuted}
-            title="Two-factor authentication"
-            subtitle={twoFactorEnabled ? 'Enabled' : 'Add an extra layer of security'}
-            value={twoFactorEnabled ? 'On' : 'Off'}
-            onPress={() => navigation.navigate('TwoFactorSetup')}
-            isLast
-          />
-        </View>
-
-        {/* ── Account — flat native row, navigation only ── */}
-        <View style={styles.sectionGroupFlush}>
-          <Text style={[styles.sectionLabel, { paddingHorizontal: Space.md }]}>Account</Text>
-          <SettingsRow
-            icon="shield-outline"
-            title="Account control"
-            subtitle="Download your data or delete your account"
-            onPress={() => navigation.navigate('AccountControl')}
-            isFirst
-            isLast
-          />
-        </View>
       </KeyboardAwareScrollView>
     </FlagshipScreen>
   );
@@ -473,10 +436,6 @@ function createStyles(colors: ThemeColors) {
     sectionGroup: {
       paddingTop: Space.lg,
       paddingHorizontal: Space.md,
-    },
-    // ── Flush sections — no horizontal padding so SettingsRow owns its padding ──
-    sectionGroupFlush: {
-      paddingTop: Space.lg,
     },
     sectionLabel: {
       fontSize: Type.metaElevated.size,

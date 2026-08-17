@@ -167,14 +167,11 @@ export default function InboxScreen() {
     memberCount: { color: colors.textMuted },
     snippet: { color: colors.textSecondary },
     snippetUnread: { color: colors.textPrimary },
-    unreadDot: { backgroundColor: colors.textPrimary },
     unreadPill: { backgroundColor: colors.textPrimary },
     unreadPillText: { color: colors.textInverse },
-    timeUnread: { color: colors.textPrimary },
     contextThumb: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     draftBadge: { backgroundColor: `${colors.brand}1A` },
     draftBadgeText: { color: colors.brand },
-    rowInnerUnread: { backgroundColor: `${colors.brand}06` },
     swipeDelete: { backgroundColor: `${colors.danger}1F` },
     swipePin: { backgroundColor: `${colors.brand}14` },
     swipeArchive: { backgroundColor: `${colors.brand}14` },
@@ -1006,11 +1003,6 @@ const styles = StyleSheet.create({
   snippetUnread: {
     fontFamily: FontFamily.semibold,
   },
-  unreadDot: {
-    width: Space.sm,
-    height: Space.sm,
-    borderRadius: RadiusRoleValue.compactControl,
-  },
   unreadPill: {
     borderRadius: RadiusRoleValue.compactControl,
     paddingHorizontal: Space.xs + 2,
@@ -1019,9 +1011,6 @@ const styles = StyleSheet.create({
   },
   unreadPillText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
-  timeUnread: {
     fontFamily: FontFamily.semibold,
   },
   rowMeta: {
@@ -1063,8 +1052,6 @@ const styles = StyleSheet.create({
   draftBadgeText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-  },
-  rowInnerUnread: {
   },
   requestListingContext: {
     flexDirection: 'row',

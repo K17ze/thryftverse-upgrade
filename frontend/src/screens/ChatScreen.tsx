@@ -9,6 +9,7 @@ import {
   Alert,
   Pressable,
   ActivityIndicator,
+  Dimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from "react-native";
@@ -136,6 +137,89 @@ import {
   DEFAULT_BUYER_QUICK_REPLIES,
 } from "../hooks/chat";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
+
+// ─── Composer-stack contextual resolver ───────────────────────────────
+// The audit defines a strict priority for the contextual elements that
+// compete for vertical space around the message list. Only the
+// highest-priority contextual elements that fit the height budget are
+// shown, so the message list is never squeezed below ~40% of screen
+// height. Persistent elements (top bar, message list, composer) are
+// always visible and not part of this resolver.
+//
+// Priority order (highest first):
+//   1. safetyWarning       — user safety, always wins
+//   2. listingTransaction  — active commerce state only
+//   3. agentRow            — only when an agent is deployed/active
+//   4. suggestedReplies    — only when useful and not dismissed
+type ContextualStackSlot =
+  | "safetyWarning"
+  | "listingTransaction"
+  | "agentRow"
+  | "suggestedReplies";
+
+const CONTEXTUAL_SLOT_PRIORITY: Record<ContextualStackSlot, number> = {
+  safetyWarning: 1,
+  listingTransaction: 2,
+  agentRow: 3,
+  suggestedReplies: 4,
+};
+
+interface ContextualSlotState {
+  slot: ContextualStackSlot;
+  visible: boolean;
+  /** Estimated rendered height in pixels, including margins. */
+  estimatedHeight: number;
+}
+
+interface ContextualStackResolution {
+  /** Slots that should remain visible, in priority order. */
+  visible: Set<ContextualStackSlot>;
+  /** Slots suppressed to fit the height budget. */
+  suppressed: ContextualStackSlot[];
+  /** Total estimated height of the visible contextual stack. */
+  totalHeight: number;
+}
+
+/**
+ * Resolve which contextual stack slots should be visible given a pixel
+ * budget. Slots are kept in priority order until the cumulative height
+ * would exceed the budget; lower-priority slots are suppressed rather
+ * than overflowing. The highest-priority active slot is always admitted
+ * even if it alone exceeds the budget (e.g. a safety warning must never
+ * be hidden by the budget).
+ */
+function resolveContextualStack(
+  slots: ContextualSlotState[],
+  budgetPixels: number,
+): ContextualStackResolution {
+  const active = slots
+    .filter((s) => s.visible && s.estimatedHeight > 0)
+    .sort(
+      (a, b) =>
+        CONTEXTUAL_SLOT_PRIORITY[a.slot] - CONTEXTUAL_SLOT_PRIORITY[b.slot],
+    );
+
+  const visible = new Set<ContextualStackSlot>();
+  const suppressed: ContextualStackSlot[] = [];
+  let totalHeight = 0;
+
+  for (const slot of active) {
+    if (
+      visible.size === 0 ||
+      totalHeight + slot.estimatedHeight <= budgetPixels
+    ) {
+      visible.add(slot.slot);
+      totalHeight += slot.estimatedHeight;
+    } else {
+      suppressed.push(slot.slot);
+    }
+  }
+
+  return { visible, suppressed, totalHeight };
+}
+
+/** Minimum share of screen height reserved for the message list. */
+const MESSAGE_LIST_MIN_HEIGHT_RATIO = 0.4;
 
 export default function ChatScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
@@ -348,6 +432,53 @@ export default function ChatScreen({ navigation, route }: Props) {
       letterSpacing: 0.3,
       textTransform: 'uppercase',
     },
+
+    // Conversation-level safety banner — rendered above the message list
+    // as the highest-priority contextual element. Uses semantic tokens
+    // only; level emphasis comes from the icon/text colour, not alpha.
+    safetyBannerWrap: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.xs + 1,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm - 1,
+      backgroundColor: colors.surfaceAlt,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+
+    safetyBannerText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      fontFamily: Typography.family.medium,
+    },
+
+    // Suggested-replies wrapper — adds a dismiss control so the bar can
+    // be dismissed for the current conversation session.
+    suggestedRepliesWrap: {
+      position: 'relative',
+    },
+
+    suggestedRepliesClose: {
+      position: 'absolute',
+      top: Space.xs - 1,
+      right: Space.xs,
+      width: Control.icon - 6,
+      height: Control.icon - 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: Radius.full,
+    },
+
+    // Message list container — flexes to fill remaining space but is
+    // never squeezed below ~40% of screen height (audit requirement).
+    messageListContainer: {
+      flex: 1,
+      minHeight: Math.floor(
+        Dimensions.get('window').height * MESSAGE_LIST_MIN_HEIGHT_RATIO,
+      ),
+    },
   }), [colors]);
 
   const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
@@ -514,6 +645,10 @@ export default function ChatScreen({ navigation, route }: Props) {
   const [deployedChatAgents, setDeployedChatAgents] = useState<ChatAgent[]>([]);
   const [chatAgentSuggestions, setChatAgentSuggestions] = useState<SuggestedReply[]>([]);
 
+  // Suggested replies are dismissible for the current conversation session.
+  // Once dismissed they do not reappear until the conversation changes.
+  const [suggestedRepliesDismissed, setSuggestedRepliesDismissed] = useState(false);
+
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
 
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
@@ -663,6 +798,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     setIsTyping(false);
+  }, [conversationId]);
+
+  // Reset per-session dismissals when the conversation changes.
+  useEffect(() => {
+    setSuggestedRepliesDismissed(false);
   }, [conversationId]);
 
   const resolvedPartnerId = useMemo(() => {
@@ -1386,6 +1526,89 @@ export default function ChatScreen({ navigation, route }: Props) {
     return listings.find((l) => l.id === itemId) ?? null;
   }, [routeItemId, conversation?.itemId, listings]);
 
+  // Conversation-level safety warning (triggered by conversation state,
+  // e.g. off-platform payment requests in messages). This is distinct
+  // from the real-time composer typing warnings, which stay in the
+  // composer. The conversation-level warning is rendered above the
+  // message list as the highest-priority contextual element.
+  const conversationSafetyWarning = useMemo(() => {
+    if (!conversation) return null;
+    return detectChatSafetyWarning(
+      conversation,
+      currentUser?.id,
+      conversation.messages,
+    );
+  }, [conversation, currentUser?.id]);
+
+  // Screen height (stable for the session) used to budget the
+  // contextual stack and guarantee the message list keeps ≥40% of the
+  // screen height.
+  const screenHeight = useMemo(() => Dimensions.get("window").height, []);
+
+  // Memoized contextual-stack resolver. Determines which contextual
+  // elements (safety warning, listing transaction strip, agent row,
+  // suggested replies) may be visible simultaneously. When the combined
+  // height would squeeze the message list below ~40% of the screen,
+  // only the highest-priority elements are kept.
+  const contextualStack = useMemo(() => {
+    const TOP_BAR_EST = 52;
+    const COMPOSER_BASE_EST = 72;
+    // Reserve space for the composer-area banner stack (reply/undo/
+    // offline/reaction), which has its own resolver.
+    const COMPOSER_BANNER_EST = 120;
+    const minMessageListHeight = Math.floor(
+      screenHeight * MESSAGE_LIST_MIN_HEIGHT_RATIO,
+    );
+    const budget = Math.max(
+      0,
+      screenHeight -
+        TOP_BAR_EST -
+        COMPOSER_BASE_EST -
+        COMPOSER_BANNER_EST -
+        minMessageListHeight,
+    );
+
+    const slots: ContextualSlotState[] = [
+      {
+        slot: "safetyWarning",
+        visible: !!conversationSafetyWarning,
+        estimatedHeight: 52,
+      },
+      {
+        slot: "listingTransaction",
+        visible:
+          !isGroup && !!linkedListing && !!linkedListing.isSold,
+        estimatedHeight: 48,
+      },
+      {
+        slot: "agentRow",
+        visible: deployedChatAgents.length > 0,
+        estimatedHeight: 36,
+      },
+      {
+        slot: "suggestedReplies",
+        visible:
+          agentSuggestionsActive && !suggestedRepliesDismissed,
+        estimatedHeight: 52,
+      },
+    ];
+
+    return resolveContextualStack(slots, budget);
+  }, [
+    screenHeight,
+    conversationSafetyWarning,
+    isGroup,
+    linkedListing,
+    deployedChatAgents,
+    agentSuggestionsActive,
+    suggestedRepliesDismissed,
+  ]);
+
+  const isContextualSlotVisible = useCallback(
+    (slot: ContextualStackSlot) => contextualStack.visible.has(slot),
+    [contextualStack],
+  );
+
   // Memoized FlashList callbacks — stable references avoid re-rendering the
   // whole message list when parent state that doesn't affect messages changes.
   const messageKeyExtractor = useCallback((item: Message) => item.id, []);
@@ -1469,6 +1692,52 @@ export default function ChatScreen({ navigation, route }: Props) {
           }}
         />
 
+        {/* Contextual stack — resolved by priority + height budget.
+            Safety warning is the highest-priority contextual element and
+            sits directly below the top bar. It is only shown when the
+            conversation state triggers it (never as permanent chrome). */}
+        {isContextualSlotVisible("safetyWarning") && conversationSafetyWarning ? (
+          <View
+            style={styles.safetyBannerWrap}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+          >
+            <Ionicons
+              name={
+                conversationSafetyWarning.level === "danger"
+                  ? "warning"
+                  : conversationSafetyWarning.level === "caution"
+                    ? "alert-circle-outline"
+                    : "shield-outline"
+              }
+              size={14}
+              color={
+                conversationSafetyWarning.level === "danger"
+                  ? colors.danger
+                  : conversationSafetyWarning.level === "caution"
+                    ? colors.warning
+                    : colors.textMuted
+              }
+            />
+            <Text
+              style={[
+                styles.safetyBannerText,
+                {
+                  color:
+                    conversationSafetyWarning.level === "danger"
+                      ? colors.danger
+                      : conversationSafetyWarning.level === "caution"
+                        ? colors.warning
+                        : colors.textSecondary,
+                },
+              ]}
+              numberOfLines={2}
+            >
+              {conversationSafetyWarning.message}
+            </Text>
+          </View>
+        ) : null}
+
         {!isGroup && linkedListing && (
           <ChatListingContextBar
             thumbnailUri={getListingCoverUri(linkedListing.images, "")}
@@ -1526,8 +1795,14 @@ export default function ChatScreen({ navigation, route }: Props) {
           />
         )}
 
-        {/* Transaction strip — shows order milestone + deadline + CTA */}
-        {!isGroup && linkedListing && linkedListing.isSold && (
+        {/* Transaction strip — shows order milestone + deadline + CTA.
+            Only rendered when there is an active commerce state (sold
+            listing with an order) and the contextual-stack budget
+            admits it (priority 2, below the safety warning). */}
+        {isContextualSlotVisible("listingTransaction") &&
+          !isGroup &&
+          linkedListing &&
+          linkedListing.isSold && (
           <ChatTransactionStrip listingId={linkedListing.id} />
         )}
 
@@ -1570,37 +1845,41 @@ export default function ChatScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {isSyncing ? (
-          <SkeletonChatLoader count={6} />
-        ) : syncError && !messages.length ? (
-          <RetryState
-            message="Couldn't load messages. Check your connection and try again."
-            onRetry={() => void syncMessagesFromApi()}
-          />
-        ) : messages.length ? (
-          <FlashList
-            ref={listRef}
-            data={messages}
-            renderItem={renderMessageItem}
-            keyExtractor={messageKeyExtractor}
-            contentContainerStyle={styles.messageList}
-            showsVerticalScrollIndicator={false}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="always"
-            accessibilityLiveRegion="polite"
-            onScroll={handleMessageListScroll}
-            scrollEventThrottle={200}
-          />
-        ) : (
-          <View style={styles.emptyStateWrap}>
-            <EmptyState
-              density="compact"
-              icon="chatbubble-outline"
-              title="Start the conversation"
-              subtitle="Send a message below to get started."
+        {/* Message list — persistent. Flexes to fill remaining space but
+            is never squeezed below ~40% of screen height (audit). */}
+        <View style={styles.messageListContainer}>
+          {isSyncing ? (
+            <SkeletonChatLoader count={6} />
+          ) : syncError && !messages.length ? (
+            <RetryState
+              message="Couldn't load messages. Check your connection and try again."
+              onRetry={() => void syncMessagesFromApi()}
             />
-          </View>
-        )}
+          ) : messages.length ? (
+            <FlashList
+              ref={listRef}
+              data={messages}
+              renderItem={renderMessageItem}
+              keyExtractor={messageKeyExtractor}
+              contentContainerStyle={styles.messageList}
+              showsVerticalScrollIndicator={false}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="always"
+              accessibilityLiveRegion="polite"
+              onScroll={handleMessageListScroll}
+              scrollEventThrottle={200}
+            />
+          ) : (
+            <View style={styles.emptyStateWrap}>
+              <EmptyState
+                density="compact"
+                icon="chatbubble-outline"
+                title="Start the conversation"
+                subtitle="Send a message below to get started."
+              />
+            </View>
+          )}
+        </View>
 
         <KeyboardStickyView offset={{ closed: Math.max(insets.bottom, Space.sm) + Space.sm, opened: Space.sm }}>
         <View
@@ -1685,21 +1964,42 @@ export default function ChatScreen({ navigation, route }: Props) {
 
           {/* AI agent suggested replies — shown above the composer when an
               agent is deployed, suggestions are available, and the user has
-              not started typing. When agent suggestions are active, quick
-              replies are suppressed so only one suggestion area shows. */}
-          {agentSuggestionsActive && (
-            <SuggestedRepliesBar
-              suggestions={chatAgentSuggestions}
-              onSelect={handleSelectChatAgentSuggestion}
-              agentName={deployedChatAgents[0]?.name}
-              agentAvatar={deployedChatAgents[0]?.avatar}
-            />
+              not started typing. The contextual-stack resolver may suppress
+              them (priority 4) when the height budget is tight. Dismissable
+              for the current conversation session via the close control. */}
+          {isContextualSlotVisible("suggestedReplies") &&
+            agentSuggestionsActive && (
+            <View style={styles.suggestedRepliesWrap}>
+              <SuggestedRepliesBar
+                suggestions={chatAgentSuggestions}
+                onSelect={handleSelectChatAgentSuggestion}
+                agentName={deployedChatAgents[0]?.name}
+                agentAvatar={deployedChatAgents[0]?.avatar}
+              />
+              <Pressable
+                onPress={() => {
+                  haptic.light();
+                  setSuggestedRepliesDismissed(true);
+                }}
+                style={styles.suggestedRepliesClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Dismiss suggested replies"
+                accessibilityRole="button"
+                accessibilityHint="Hides suggested replies for this conversation"
+              >
+                <Ionicons name="close" size={15} color={colors.textMuted} />
+              </Pressable>
+            </View>
           )}
 
           {/* Deployed agent indicator — a single quiet chip that consolidates
               all deployed agents. Per spec 16: "a single quiet '2 agents'
-              indicator is enough." Tap to open the agent picker to manage. */}
-          {deployedChatAgents.length > 0 && (
+              indicator is enough." Tap to open the agent picker to manage.
+              Only rendered when an agent is actually deployed (priority 3);
+              the "ask AI" entry point lives in the composer's attachment
+              rail, not as permanent chrome. */}
+          {isContextualSlotVisible("agentRow") &&
+            deployedChatAgents.length > 0 && (
             <View style={styles.agentRow}>
               <Pressable
                 onPress={() => setChatAgentPickerVisible(true)}
@@ -1785,15 +2085,6 @@ export default function ChatScreen({ navigation, route }: Props) {
                     ]
                 : undefined
             }
-            safetyWarning={
-              conversation
-                ? detectChatSafetyWarning(
-                    conversation,
-                    currentUser?.id,
-                    conversation.messages,
-                  )?.message
-                : undefined
-            }
             dangerWarning={composerDangerWarning?.message}
             cautionWarning={composerCautionWarning?.message}
             onDismissDangerWarning={() => setDangerWarningDismissed(true)}
@@ -1802,8 +2093,13 @@ export default function ChatScreen({ navigation, route }: Props) {
         </View>
         </KeyboardStickyView>
 
+        {/* Audit: no simultaneous spinner + toast + full overlay for one
+            mutation. The composer's isSending spinner is the single
+            feedback signal for an in-flight send; overlay sheets are
+            suppressed while a send is in progress so the user never sees
+            a spinner and a full overlay at once. */}
         <ChatActionSheet
-          visible={attachmentPickerVisible}
+          visible={attachmentPickerVisible && !composerSending}
           onClose={() => setAttachmentPickerVisible(false)}
           onSelect={(action) => {
             if (action === "gallery" || action === "camera") {
@@ -1814,7 +2110,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           }}
         />
 
-        {pendingAttachment && (
+        {pendingAttachment && !composerSending && (
           <AttachmentReviewSheet
             visible={!!pendingAttachment}
             uri={pendingAttachment.uri}
@@ -1828,7 +2124,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             Demo mode per AGENTS.md §11 — agents use keyword-based suggestions,
             not real LLM inference. */}
         <ChatAgentPicker
-          visible={chatAgentPickerVisible}
+          visible={chatAgentPickerVisible && !composerSending}
           onClose={() => setChatAgentPickerVisible(false)}
           onDeploy={handleDeployChatAgent}
           deployedAgentIds={deployedChatAgents.map((a) => a.id)}

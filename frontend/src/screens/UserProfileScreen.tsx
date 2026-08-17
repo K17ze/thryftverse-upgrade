@@ -1,4 +1,4 @@
-﻿import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -100,16 +100,16 @@ function getCollapsedInitials(name: string): string {
 }
 
 export default function UserProfileScreen({ navigation, route }: Props) {
-  // ───────────────────────────────────────────────────────────────────────
-  // ALL HOOKS — unconditional, no early returns before this section ends
-  // ───────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
+  // ALL HOOKS - unconditional, no early returns before this section ends
+  // -----------------------------------------------------------------------
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
   const { colors, isDark } = useAppTheme();
 
-  // Themed color aliases — keep JSX readable, match old module-level consts
+  // Themed color aliases - keep JSX readable, match old module-level consts
   const BG = colors.background;
   const BORDER = colors.border;
   const MUTED = colors.textMuted;
@@ -118,7 +118,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const BRAND = colors.brand;
   const TEXT_INVERSE = colors.textInverse;
 
-  // Themed color proxy — supplements module-level `styles` with color properties
+  // Themed color proxy - supplements module-level `styles` with color properties
   // that cannot live in StyleSheet.create (they depend on the active theme).
   const t = {
     container: { backgroundColor: BG },
@@ -167,7 +167,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const looksQuery = useUserLooksInfinite(targetUserId);
   const reviewsQuery = useSellerReviewsInfinite(targetUserId);
 
-  // Seller trust summary — verified badge, response time, dispatch time, completed sales
+  // Seller trust summary - verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
 
   // Idle query placeholder for tabs that have no backend data source yet
@@ -212,7 +212,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   const profileDeepLink = useMemo(() => targetUserId ? `${PROFILE_WEB_BASE}/u/${encodeURIComponent(targetUserId)}` : PROFILE_WEB_BASE, [targetUserId]);
 
-  // Tab counts — ratingAverage consumed by ProfileHero via stats
+  // Tab counts - ratingAverage consumed by ProfileHero via stats
   const activeCount = stats?.activeListingCount ?? 0;
   const soldCount = stats?.soldListingCount ?? 0;
   const lookCount = stats?.publishedLookCount ?? 0;
@@ -254,7 +254,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const stickyShared = useSharedValue(false);
   const stickyThreshold = useSharedValue(9999);
 
-  // ── Per-destination scroll offset preservation ──
+  // -- Per-destination scroll offset preservation --
   // Declared before the scroll handler so saveScrollOffset is accessible
   // in the animatedScrollHandler closure (temporal dead zone safety).
   const scrollOffsets = useRef<Record<string, number>>({});
@@ -267,7 +267,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     scrollOffsets.current[currentDestination] = offset;
   }, [currentDestination]);
 
-  // Scroll handler — animated on native (UI-thread), plain JS on web.
+  // Scroll handler - animated on native (UI-thread), plain JS on web.
   // The web fallback is required because useAnimatedScrollHandler does not
   // receive scroll events from FlashList in Reanimated 4.x (issue #9266).
   const animatedScrollHandler = useAnimatedScrollHandler({
@@ -344,7 +344,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Handlers
   const handleShare = useCallback(async () => {
     try {
-      await Share.share({ message: `${displayUsername} on Thryftverse — ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
+      await Share.share({ message: `${displayUsername} on Thryftverse - ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
     } catch { /* ignore */ }
   }, [displayUsername, profileDeepLink]);
 
@@ -381,7 +381,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const handleRefresh = useCallback(() => { activeQuery.refetch(); publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery]);
   const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_BAR_HEIGHT); }, [insets.top]);
 
-  // When destination changes, queue a restore — no setTimeout during render
+  // When destination changes, queue a restore - no setTimeout during render
   const prevDestination = useRef<string>(currentDestination);
   useEffect(() => {
     if (prevDestination.current !== currentDestination) {
@@ -413,7 +413,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           setStickyRailVisible(shouldSticky);
         }
       } else {
-        // No previous offset — if currently collapsed, start at sticky threshold
+        // No previous offset - if currently collapsed, start at sticky threshold
         if (collapsedShared.value) {
           const stickyAt = stickyThreshold.value;
           if (stickyAt < 9999 && listRef.current) {
@@ -444,21 +444,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     );
   }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
 
-  // ───────────────────────────────────────────────────────────────────────
-  // DERIVED RENDER STATE — after all hooks
-  // ───────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
+  // DERIVED RENDER STATE - after all hooks
+  // -----------------------------------------------------------------------
   const isBlockedByTarget = viewer?.isBlockedByTarget && !viewer.isSelf;
   const isBlocked = viewer?.isBlocked ?? false;
   const canMessage = viewer?.canMessage ?? false;
 
-  // State labels — rendered by ProfileStates subcomponents:
+  // State labels - rendered by ProfileStates subcomponents:
   // "Profile unavailable" (ProfileUnavailableState)
   // "You've been blocked" (ProfileBlockedState)
   // canMessage gates the Message button (ProfileHero)
 
-  // ───────────────────────────────────────────────────────────────────────
-  // CONDITIONAL RENDERS — loading, error, unavailable, blocked
-  // ───────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
+  // CONDITIONAL RENDERS - loading, error, unavailable, blocked
+  // -----------------------------------------------------------------------
   if (isLoadingProfile && !targetProfile) {
     return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab as 'Shop' | 'Looks' | 'Reviews'} />;
   }
@@ -474,9 +474,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return <ProfileBlockedState onBack={() => navigation.goBack()} onShare={handleShare} coverHeight={COVER_HEIGHT} />;
   }
 
-  // ───────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
   // MAIN RENDER
-  // ───────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
   const numColumns = (activeTab === 'Reviews' || activeTab === 'Collections' || activeTab === 'Drops') ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
 
   const listHeader = (
@@ -508,7 +508,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onShopSegmentSelect={(s) => setShopSegment(s)}
       />
 
-      {/* Away-mode banner — shown when seller has holiday mode enabled */}
+      {/* Away-mode banner - shown when seller has holiday mode enabled */}
       {sellerTrust?.holidayMode === true ? (
         <View style={[styles.awayBanner, t.awayBanner]}>
           <Ionicons name="pause-circle" size={18} color={MUTED} />
@@ -525,11 +525,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
-      {/* Seller reputation metrics — prominent trust display */}
+      {/* Seller reputation metrics - prominent trust display */}
       <SellerReputationCard seller={sellerTrust ?? null} />
 
 
-      {/* Tab rail — measures Y for sticky threshold */}
+      {/* Tab rail - measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
         <TabRail
           tabs={[
@@ -616,7 +616,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     <View style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
-      {/* Top utility controls — overlay cover, fade out on scroll */}
+      {/* Top utility controls - overlay cover, fade out on scroll */}
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <Reanimated.View
           style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}
@@ -658,7 +658,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </Reanimated.View>
       </View>
 
-      {/* Collapsed header — total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
+      {/* Collapsed header - total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
       <Reanimated.View
         style={[styles.collapsedHeader, t.collapsedHeader, { height: insets.top + COLLAPSED_BAR_HEIGHT, paddingTop: insets.top }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
         pointerEvents={collapsedVisible ? 'auto' : 'none'}
@@ -718,7 +718,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       </Reanimated.View>
 
-      {/* Sticky tab rail — external overlay, appears when original scrolls past */}
+      {/* Sticky tab rail - external overlay, appears when original scrolls past */}
       <Reanimated.View
         style={[styles.stickyRailWrap, t.stickyRailWrap, { top: insets.top + COLLAPSED_BAR_HEIGHT }, stickyRailStyle]}
         pointerEvents={stickyRailVisible ? 'auto' : 'none'}
@@ -745,11 +745,11 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         ) : null}
       </Reanimated.View>
 
-      {/* Content list — cover scrolls naturally as first header item.
+      {/* Content list - cover scrolls naturally as first header item.
           On native: FlashList for virtualization + recycling.
           On web: ScrollView + map because FlashList v2 crashes on web
           ("Changing onViewableItemsChanged on the fly is not supported"
-          — FlashList v2 internally passes a new callback to FlatList). */}
+          - FlashList v2 internally passes a new callback to FlatList). */}
       {Platform.OS === 'web' ? (
         <ScrollView
           ref={(r: any) => { if (r && listRef.current !== r) listRef.current = r; }}
