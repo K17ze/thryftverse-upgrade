@@ -457,7 +457,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           </View>
           <View style={[styles.summaryRow, { borderBottomColor: colors.borderSubtle }]}>
             <View style={styles.summaryLabelCluster}>
-              <Ionicons name="shield-checkmark-outline" size={15} color={colors.textSecondary} />
+              <Ionicons name="checkmark-circle-outline" size={15} color={colors.textSecondary} />
               <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
                 Platform charge
               </Text>
@@ -482,7 +482,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             trust signals are decision inputs, not decoration. */}
         <View>
         <View style={styles.trustRow}>
-          <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
+          <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
           <Text style={[styles.trustText, { color: colors.textSecondary }]}>
             Protected by ThryftVerse Buyer Protection — secure settlement and support included.
           </Text>

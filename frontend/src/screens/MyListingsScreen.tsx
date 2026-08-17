@@ -250,7 +250,7 @@ export default function MyListingsScreen() {
               accessibilityLabel="View verification requests"
               accessibilityRole="button"
             >
-              <Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} />
+              <Ionicons name="checkmark-circle-outline" size={18} color={colors.brand} />
               <Text style={styles.quickActionText}>Verification</Text>
             </AnimatedPressable>
           )}

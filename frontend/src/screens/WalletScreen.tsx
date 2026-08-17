@@ -604,7 +604,7 @@ export default function WalletScreen({ navigation }: Props) {
         <FlagshipFormSection variant="flat" style={{ marginTop: Space.lg }}>
           <View style={styles.infoContent}>
             <View style={styles.infoHeader}>
-              <Ionicons name="shield-checkmark-outline" size={15} color={colors.brand} />
+              <Ionicons name="checkmark-circle-outline" size={15} color={colors.brand} />
               <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
             </View>
             <Text style={[styles.infoBody, { color: colors.textMuted }]}>

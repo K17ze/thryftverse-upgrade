@@ -13,19 +13,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, DockConstants, Type, Radius, Stroke, Control } from '../theme/designTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CURRENCIES } from '../constants/currencies';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
+import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
 import { haptics } from '../utils/haptics';
-import { makeStableId } from '../utils/createStableId';
 import { useStore } from '../store/useStore';
 
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -115,7 +113,6 @@ export default function EditListingScreen() {
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -229,6 +226,26 @@ export default function EditListingScreen() {
   }, [listing, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, mediaItems]);
 
   /* ── media handling ── */
+  const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
+    setMediaItems((prev) => {
+      if (prev.some((m) => m.uri === asset.uri)) return prev;
+      const draftItem: ListingMediaDraftItem = {
+        id: asset.id,
+        uri: asset.uri,
+        kind: asset.kind,
+        source: 'local',
+        fileName: asset.fileName,
+        mimeType: asset.mimeType,
+        fileSize: asset.fileSize,
+        width: asset.width,
+        height: asset.height,
+        durationMs: asset.durationMs,
+        status: 'draft',
+      };
+      return [...prev, draftItem].slice(0, 10);
+    });
+  }, []);
+
   const handlePickFromLibrary = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -237,14 +254,24 @@ export default function EditListingScreen() {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsMultipleSelection: true,
         allowsEditing: false,
         quality: 0.9,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const assets = result.assets.map(convertPickerAsset);
-        const existing = mediaItems.map((m) => ({ id: m.id, uri: m.uri, fileName: m.fileName || 'existing', mimeType: m.mimeType || 'image/jpeg', kind: m.kind }));
+        const existing = mediaItems.map((m) => ({
+          id: m.id,
+          uri: m.uri,
+          fileName: m.fileName ?? 'existing',
+          mimeType: m.mimeType ?? 'image/jpeg',
+          kind: m.kind,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          durationMs: m.durationMs,
+        }));
         const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
 
         if (validation.errors.length > 0) {
@@ -252,17 +279,9 @@ export default function EditListingScreen() {
           if (skipped) setErrorMsg(skipped);
         }
 
-        const newItems: ListingMediaDraftItem[] = validation.assets.map((asset) => ({
-          id: makeStableId('edit'),
-          uri: asset.uri,
-          kind: 'image' as const,
-          source: 'local' as const,
-          status: 'draft' as const,
-          fileName: asset.fileName,
-          mimeType: asset.mimeType,
-        }));
-
-        setMediaItems((prev) => [...prev, ...newItems].slice(0, 10));
+        for (const asset of validation.assets) {
+          appendPhotoAsset(asset);
+        }
         if (validation.assets.length > 0) {
           haptics.success();
         }
@@ -270,7 +289,7 @@ export default function EditListingScreen() {
     } catch {
       setErrorMsg('Could not open photo library. Try again.');
     }
-  }, [mediaItems]);
+  }, [appendPhotoAsset, mediaItems]);
 
   const handlePickFromCamera = useCallback(async () => {
     try {
@@ -280,27 +299,28 @@ export default function EditListingScreen() {
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         quality: 0.9,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = convertPickerAsset(result.assets[0]);
-        const existing = mediaItems.map((m) => ({ id: m.id, uri: m.uri, fileName: m.fileName || 'existing', mimeType: m.mimeType || 'image/jpeg', kind: m.kind }));
+        const existing = mediaItems.map((m) => ({
+          id: m.id,
+          uri: m.uri,
+          fileName: m.fileName ?? 'existing',
+          mimeType: m.mimeType ?? 'image/jpeg',
+          kind: m.kind,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          durationMs: m.durationMs,
+        }));
         const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
         if (validation.errors.length > 0) {
           setErrorMsg(validation.errors.map((e) => e.message).join('. '));
         }
         for (const a of validation.assets) {
-          const newItem: ListingMediaDraftItem = {
-            id: makeStableId('edit'),
-            uri: a.uri,
-            kind: 'image' as const,
-            source: 'local' as const,
-            status: 'draft' as const,
-            fileName: a.fileName,
-            mimeType: a.mimeType,
-          };
-          setMediaItems((prev) => [...prev, newItem].slice(0, 10));
+          appendPhotoAsset(a);
         }
         if (validation.assets.length > 0) {
           haptics.success();
@@ -309,7 +329,7 @@ export default function EditListingScreen() {
     } catch {
       setErrorMsg('Could not open camera. Try again.');
     }
-  }, [mediaItems]);
+  }, [appendPhotoAsset, mediaItems]);
 
   const handleRemoveItem = useCallback((itemId: string) => {
     const item = mediaItems.find((m) => m.id === itemId);
@@ -448,11 +468,13 @@ export default function EditListingScreen() {
         const assets = newLocalItems.map((m) => ({
           id: m.id,
           uri: m.uri,
-          fileName: m.fileName || m.uri.split('/').pop() || 'photo.jpg',
-          mimeType: m.mimeType || 'image/jpeg',
+          fileName: m.fileName ?? m.uri.split('/').pop() ?? 'photo.jpg',
+          mimeType: m.mimeType ?? 'image/jpeg',
           kind: m.kind,
+          fileSize: m.fileSize,
           width: m.width,
           height: m.height,
+          durationMs: m.durationMs,
         }));
         queue.addAssets(assets);
         await queue.run();
@@ -758,7 +780,6 @@ export default function EditListingScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ── 2. LISTING MEDIA STUDIO ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           {isOwner ? (
             <ListingMediaStudio
               items={mediaItems}
@@ -789,7 +810,6 @@ export default function EditListingScreen() {
               lockedNote="You do not have permission to edit this listing."
             />
           )}
-          </Reanimated.View>
 
           {/* ── 2a. PHOTO UPLOAD GUIDANCE ── */}
           <View style={[styles.photoGuideCard, t.photoGuideCard]}>
@@ -838,7 +858,7 @@ export default function EditListingScreen() {
           )}
 
           {/* ── 4. DETAILS ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Details</Text>
 
             <View style={styles.fieldGroup}>
@@ -956,10 +976,10 @@ export default function EditListingScreen() {
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </Pressable>
-          </Reanimated.View>
+          </View>
 
           {/* ── 5. PRICING ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Pricing</Text>
 
             <View style={styles.fieldGroup}>
@@ -1054,10 +1074,10 @@ export default function EditListingScreen() {
                 />
               </View>
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* ── 6. DESCRIPTION ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Description</Text>
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
@@ -1083,10 +1103,10 @@ export default function EditListingScreen() {
                 {description.trim().length} characters{description.trim().length < 10 ? ' · min 10' : description.length < 60 ? ' · add more detail' : ''}
               </Text>
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* ── 7. SHIPPING ── */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, t.sectionHeading]}>Shipping</Text>
 
             <Pressable
@@ -1119,7 +1139,7 @@ export default function EditListingScreen() {
               </View>
               <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} />
             </Pressable>
-          </Reanimated.View>
+          </View>
 
           {/* ── 8. SAVE/UPDATE FEEDBACK ── */}
           {errorMsg && saveStage !== 'idle' && (

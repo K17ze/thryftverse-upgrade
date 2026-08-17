@@ -332,7 +332,7 @@ function ProductCardV2Base({
               <Text style={styles.sellerName} numberOfLines={1}>@{sellerUsername}</Text>
               {sellerVerified ? (
                 <Ionicons
-                  name="shield-checkmark"
+                  name="checkmark-circle-outline"
                   size={11}
                   color={colors.success}
                   style={styles.sellerVerifiedIcon}

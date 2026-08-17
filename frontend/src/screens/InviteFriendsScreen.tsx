@@ -228,7 +228,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
               <Text style={styles.loyaltyBenefitText}>Reduced fees</Text>
             </View>
             <View style={styles.loyaltyBenefit}>
-              <Ionicons name="flash-outline" size={16} color={MUTED} />
+              <Ionicons name="speedometer-outline" size={16} color={MUTED} />
               <Text style={styles.loyaltyBenefitText}>Priority support</Text>
             </View>
             <View style={styles.loyaltyBenefit}>

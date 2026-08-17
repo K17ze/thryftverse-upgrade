@@ -19,6 +19,14 @@
  *   3. Comments referencing "psychology"
  *   4. Comments referencing "per spec" or "per audit" (OK but tracked)
  *   5. "AI-powered" in non-Agent feature UI text
+ *   6. Mock-returning exported functions in services/ (return hardcoded arrays without fetch)
+ *   7. Demo-shaped IDs (g-asset-*, g-col-*, g-ed-*, demo-*, mock-*, test-*) in service files
+ *   8. "AI" UI copy in files declaring requiresML: false or capabilityClass: 'filter'
+ *   9. Nested VirtualizedList/FlatList/FlashList inside a same-axis ScrollView
+ *  10. Direct navigation.navigate('ItemDetail') bypassing openProductDetail resolver
+ *
+ * INFO patterns (exit 0, reported to stderr):
+ *   1. Publication schema files omitting fields from the matching client contract
  *
  * Run via: npm run check:residue
  */
@@ -368,12 +376,297 @@ function checkAIPoweredText(src, filePath) {
   return violations;
 }
 
+/**
+ * Warning: Mock-returning exported functions in services/ directories.
+ * Flags `export async function fetch*` (or `export function fetch*`) that
+ * return hardcoded arrays/objects (`return [...]` / `return {...}`) without
+ * making a `fetch(` call. These are migration-time stubs that should be
+ * wired to a real backend.
+ */
+function checkMockReturningExports(src, filePath) {
+  const violations = [];
+  const rel = relative(SRC, filePath).replace(/\\/g, '/');
+  // Only check services/ directories
+  if (!rel.startsWith('services/')) return violations;
+
+  // Match exported async (or sync) functions whose name starts with "fetch"
+  const exportFnPattern =
+    /export\s+(?:async\s+)?function\s+(fetch\w*)\s*\([^)]*\)\s*\{/g;
+  let fnMatch;
+  while ((fnMatch = exportFnPattern.exec(src)) !== null) {
+    const fnName = fnMatch[1];
+    const bodyStart = fnMatch.index + fnMatch[0].length;
+    // Find the matching closing brace by counting braces
+    let depth = 1;
+    let i = bodyStart;
+    while (i < src.length && depth > 0) {
+      const ch = src[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      i++;
+    }
+    const body = src.slice(bodyStart, i - 1);
+
+    // Skip if the body makes a fetch() call — it's a real implementation
+    if (/\bfetch\s*\(/.test(body)) continue;
+
+    // Check for hardcoded return of array or object literal
+    if (/return\s*\[\s*\{?/.test(body) || /return\s*\{\s*/.test(body)) {
+      const lineNum = lineOf(src, fnMatch.index);
+      violations.push({
+        file: relPath(filePath),
+        line: lineNum,
+        rule: 'mock-returning-export',
+        severity: 'warning',
+        message: `Exported function "${fnName}" returns a hardcoded array/object without a fetch() call — wire to real backend (migration warning)`,
+      });
+    }
+  }
+  return violations;
+}
+
+/**
+ * Warning: Demo-shaped IDs in service files.
+ * Flags string literals matching patterns like `g-asset-1`, `g-col-1`,
+ * `g-ed-1`, `demo-*`, `mock-*`, `test-*` in service modules (not test files).
+ * These are placeholder/demo identifiers that should not ship in production
+ * service code.
+ */
+function checkDemoShapedIds(src, filePath) {
+  const violations = [];
+  const rel = relative(SRC, filePath).replace(/\\/g, '/');
+  // Only check service files, not test files
+  if (!rel.startsWith('services/')) return violations;
+
+  const demoIdPattern =
+    /['"`](g-asset-\w+|g-col-\w+|g-ed-\w+|demo-\w+|mock-\w+|test-\w+)['"`]/g;
+  let match;
+  while ((match = demoIdPattern.exec(src)) !== null) {
+    const lineNum = lineOf(src, match.index);
+    const lineStart = src.lastIndexOf('\n', match.index) + 1;
+    const lineEnd = src.indexOf('\n', match.index);
+    const lineText = src.slice(
+      lineStart,
+      lineEnd === -1 ? src.length : lineEnd
+    );
+    if (isCommentLine(lineText)) continue;
+    violations.push({
+      file: relPath(filePath),
+      line: lineNum,
+      rule: 'demo-shaped-id',
+      severity: 'warning',
+      message: `Demo-shaped ID "${match[1]}" in service module — replace with real domain identifiers before production`,
+    });
+  }
+  return violations;
+}
+
+/**
+ * Warning: "AI" UI copy in files that declare requiresML: false or
+ * capabilityClass: 'filter'. A feature manifest declaring no ML requirement
+ * should not advertise AI capabilities in its UI text.
+ */
+function checkAICopyWithoutML(src, filePath) {
+  const violations = [];
+  // Only check if the file declares a non-ML capability
+  const hasNonMLDecl =
+    /requiresML\s*:\s*false/.test(src) ||
+    /capabilityClass\s*:\s*['"`]filter['"`]/.test(src);
+  if (!hasNonMLDecl) return violations;
+
+  const lines = src.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (isCommentLine(line)) continue;
+    // Look for "AI" in UI text contexts: Text content, titles, labels
+    // Matches: >AI<, 'AI ...', "AI ...", `AI ...`, title: 'AI', label: 'AI'
+    // Avoid matching variable names like AIModel by requiring word boundary
+    // and surrounding text context.
+    const aiTextPattern =
+      /(?:>\s*AI\b|['"`]\s*AI\b|title\s*:\s*['"`]\s*AI\b|label\s*:\s*['"`]\s*AI\b)/;
+    if (aiTextPattern.test(line)) {
+      violations.push({
+        file: relPath(filePath),
+        line: i + 1,
+        rule: 'ai-copy-without-ml',
+        severity: 'warning',
+        message: `"AI" UI copy in a feature declaring requiresML: false or capabilityClass: 'filter' — avoid AI claims for non-ML features`,
+      });
+    }
+  }
+  return violations;
+}
+
+/**
+ * Warning: Nested VirtualizedList/FlatList/FlashList inside a ScrollView.
+ * Flags files that contain both a <ScrollView and a <FlatList, <FlashList,
+ * or <VirtualizedList — a potential same-axis nested scrolling violation
+ * that degrades scroll performance on React Native.
+ */
+function checkNestedVirtualizedList(src, filePath) {
+  const violations = [];
+  if (!/<ScrollView\b/.test(src)) return violations;
+
+  const listPattern = /<(FlatList|FlashList|VirtualizedList)\b/g;
+  let match;
+  while ((match = listPattern.exec(src)) !== null) {
+    const lineNum = lineOf(src, match.index);
+    violations.push({
+      file: relPath(filePath),
+      line: lineNum,
+      rule: 'nested-virtualized-list',
+      severity: 'warning',
+      message: `<${match[1]} inside a <ScrollView> — nested same-axis virtualized lists degrade scroll performance; flatten the layout`,
+    });
+  }
+  return violations;
+}
+
+/**
+ * Warning: Direct ItemDetail navigation bypassing the canonical resolver.
+ * Flags `navigation.navigate('ItemDetail'` or `navigation.push('ItemDetail'`
+ * in files that are NOT the canonical resolver (openProductDetail.ts) or
+ * test files. Migration to openProductDetail is recommended.
+ */
+function checkDirectItemDetailNavigation(src, filePath) {
+  const violations = [];
+  const rel = relative(SRC, filePath).replace(/\\/g, '/');
+  // Skip the canonical resolver itself
+  if (rel.endsWith('openProductDetail.ts')) return violations;
+
+  const navPattern =
+    /navigation\.(navigate|push)\s*\(\s*['"`]ItemDetail['"`]/g;
+  let match;
+  while ((match = navPattern.exec(src)) !== null) {
+    const lineNum = lineOf(src, match.index);
+    const lineStart = src.lastIndexOf('\n', match.index) + 1;
+    const lineEnd = src.indexOf('\n', match.index);
+    const lineText = src.slice(
+      lineStart,
+      lineEnd === -1 ? src.length : lineEnd
+    );
+    if (isCommentLine(lineText)) continue;
+    violations.push({
+      file: relPath(filePath),
+      line: lineNum,
+      rule: 'direct-itemdetail-navigation',
+      severity: 'warning',
+      message: `Direct navigation.${match[1]}('ItemDetail') bypasses the canonical openProductDetail resolver — migrate to openProductDetail()`,
+    });
+  }
+  return violations;
+}
+
+// ─── INFO checks ─────────────────────────────────────────────────────────────
+
+/**
+ * Info: Publication schema gaps.
+ * Flags backend schema files (in services/ or data/ directories with
+ * "schema" in the filename) that omit fields present in the matching client
+ * contract. This is informational only — it compares field names declared
+ * in a schema file against a co-located or referenced client contract.
+ *
+ * Detection heuristic:
+ * - Identifies schema files (filename contains "schema")
+ * - Looks for a sibling contract file (filename contains "contract" or
+ *   "types" in the same directory)
+ * - Extracts field names from both and reports fields present in the
+ *   contract but missing from the schema.
+ */
+function checkPublicationSchemaGaps(src, filePath, allFiles) {
+  const violations = [];
+  const rel = relative(SRC, filePath).replace(/\\/g, '/');
+  const baseName = rel.split('/').pop();
+
+  // Only check schema files in services/ or data/
+  if (
+    !(rel.startsWith('services/') || rel.startsWith('data/')) ||
+    !/schema/i.test(baseName)
+  ) {
+    return violations;
+  }
+
+  // Find a sibling contract file in the same directory
+  const dir = rel.substring(0, rel.lastIndexOf('/'));
+  const contractFile = allFiles.find((f) => {
+    const fRel = relative(SRC, f).replace(/\\/g, '/');
+    const fDir = fRel.substring(0, fRel.lastIndexOf('/'));
+    const fName = fRel.split('/').pop();
+    return (
+      fDir === dir &&
+      f !== filePath &&
+      /(contract|types)/i.test(fName) &&
+      /\.(ts|tsx)$/.test(fName)
+    );
+  });
+
+  if (!contractFile) return violations;
+
+  // Extract field names from the schema file (interface/type field declarations)
+  const schemaFields = new Set();
+  const schemaFieldPattern = /^\s*(\w+)\s*[?:]/gm;
+  let sm;
+  while ((sm = schemaFieldPattern.exec(src)) !== null) {
+    const name = sm[1];
+    // Skip type keywords and common non-field identifiers
+    if (
+      /^(type|interface|export|import|const|let|var|function|class|enum|return|if|for|while|switch|case|default|extends|implements)$/.test(
+        name
+      )
+    ) {
+      continue;
+    }
+    schemaFields.add(name);
+  }
+
+  // Extract field names from the contract file
+  let contractSrc;
+  try {
+    contractSrc = readFileSync(contractFile, 'utf-8');
+  } catch {
+    return violations;
+  }
+  const contractFields = new Set();
+  let cm;
+  while ((cm = schemaFieldPattern.exec(contractSrc)) !== null) {
+    const name = cm[1];
+    if (
+      /^(type|interface|export|import|const|let|var|function|class|enum|return|if|for|while|switch|case|default|extends|implements)$/.test(
+        name
+      )
+    ) {
+      continue;
+    }
+    contractFields.add(name);
+  }
+
+  // Report contract fields missing from the schema
+  const missing = [];
+  for (const field of contractFields) {
+    if (!schemaFields.has(field)) {
+      missing.push(field);
+    }
+  }
+
+  if (missing.length > 0) {
+    violations.push({
+      file: relPath(filePath),
+      line: 1,
+      rule: 'publication-schema-gap',
+      severity: 'info',
+      message: `Schema omits ${missing.length} field(s) present in client contract (${relative(SRC, contractFile).replace(/\\/g, '/')}): ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? ` ... and ${missing.length - 10} more` : ''}`,
+    });
+  }
+  return violations;
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 function main() {
   const files = walk(SRC);
   const errors = [];
   const warnings = [];
+  const infos = [];
 
   for (const file of files) {
     const src = readFileSync(file, 'utf-8');
@@ -388,6 +681,14 @@ function main() {
     // WARNING checks
     warnings.push(...checkWarningComments(src, file));
     warnings.push(...checkAIPoweredText(src, file));
+    warnings.push(...checkMockReturningExports(src, file));
+    warnings.push(...checkDemoShapedIds(src, file));
+    warnings.push(...checkAICopyWithoutML(src, file));
+    warnings.push(...checkNestedVirtualizedList(src, file));
+    warnings.push(...checkDirectItemDetailNavigation(src, file));
+
+    // INFO checks
+    infos.push(...checkPublicationSchemaGaps(src, file, files));
   }
 
   // ── Report ──────────────────────────────────────────────────────────────
@@ -402,12 +703,17 @@ function main() {
   for (const w of warnings) {
     warningRules[w.rule] = (warningRules[w.rule] || 0) + 1;
   }
+  const infoRules = {};
+  for (const info of infos) {
+    infoRules[info.rule] = (infoRules[info.rule] || 0) + 1;
+  }
 
   // Summary table
   console.log('Summary:');
   console.log(`  Files scanned : ${files.length}`);
   console.log(`  Errors        : ${errors.length}`);
   console.log(`  Warnings      : ${warnings.length}`);
+  console.log(`  Info          : ${infos.length}`);
 
   if (Object.keys(errorRules).length > 0) {
     console.log('\n  Error breakdown:');
@@ -419,6 +725,13 @@ function main() {
   if (Object.keys(warningRules).length > 0) {
     console.log('\n  Warning breakdown:');
     for (const [rule, count] of Object.entries(warningRules)) {
+      console.log(`    ${rule.padEnd(36)} ${count}`);
+    }
+  }
+
+  if (Object.keys(infoRules).length > 0) {
+    console.log('\n  Info breakdown:');
+    for (const [rule, count] of Object.entries(infoRules)) {
       console.log(`    ${rule.padEnd(36)} ${count}`);
     }
   }
@@ -449,6 +762,19 @@ function main() {
     }
   }
 
+  // Print INFOs to stderr
+  if (infos.length > 0) {
+    process.stderr.write(
+      `\nℹ production-residue: ${infos.length} INFO(s) found\n`
+    );
+    for (const v of infos.slice(0, 50)) {
+      process.stderr.write(`  ${v.file}:${v.line} [${v.rule}] ${v.message}\n`);
+    }
+    if (infos.length > 50) {
+      process.stderr.write(`  ... and ${infos.length - 50} more info\n`);
+    }
+  }
+
   // Exit code
   if (errors.length > 0) {
     console.error(
@@ -457,9 +783,9 @@ function main() {
     process.exit(1);
   }
 
-  if (warnings.length > 0) {
+  if (warnings.length > 0 || infos.length > 0) {
     console.log(
-      `\n~ production-residue: ${warnings.length} warning(s) reported (non-blocking).`
+      `\n~ production-residue: ${warnings.length} warning(s) and ${infos.length} info(s) reported (non-blocking).`
     );
   } else {
     console.log('\n✓ production-residue: No violations found.');

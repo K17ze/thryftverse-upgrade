@@ -141,7 +141,7 @@ export function CoOwnWalletBreakdown({
           </Text>
           {safeguardingPartner && (
             <View style={[styles.safeguardChip, { backgroundColor: colors.brand + '12' }]}>
-              <Ionicons name="shield-checkmark-outline" size={11} color={colors.brand} />
+              <Ionicons name="lock-closed-outline" size={11} color={colors.brand} />
               <Text style={[styles.safeguardChipText, { color: colors.brand }]} numberOfLines={1}>
                 Safeguarded at {safeguardingPartner}
               </Text>

@@ -154,7 +154,7 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
           <View style={styles.statusCard}>
             <View style={styles.statusHeader}>
               <View style={styles.statusIconWrap}>
-                <Ionicons name="shield-checkmark-outline" size={28} color={colors.brand} />
+                <Ionicons name="checkmark-circle-outline" size={28} color={colors.brand} />
               </View>
               <View style={{ flex: 1 }}>
                 <BodyEmphasis style={styles.statusTitle}>{ticket.topicLabel}</BodyEmphasis>

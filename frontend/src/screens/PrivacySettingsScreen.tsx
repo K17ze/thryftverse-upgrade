@@ -78,7 +78,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: postureColor }]}>
-              <Ionicons name="shield" size={20} color={colors.textInverse} />
+              <Ionicons name="checkmark-done-outline" size={20} color={colors.textInverse} />
             </View>
             <View style={styles.heroText}>
               <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Privacy posture</Text>
@@ -171,7 +171,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         <View style={[styles.safetyTipsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.safetyTipsHeader}>
             <View style={[styles.safetyTipsIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
-              <Ionicons name="shield-checkmark" size={18} color={colors.commerceTrust} />
+              <Ionicons name="checkmark-done-outline" size={18} color={colors.commerceTrust} />
             </View>
             <Text style={[styles.safetyTipsTitle, { color: colors.textPrimary }]}>Trading safely</Text>
           </View>

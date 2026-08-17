@@ -216,7 +216,7 @@ export function CoOwnRecoursePanel({
           accessibilityRole="button"
           accessibilityLabel="Respond to verification request"
         >
-          <Ionicons name="shield-checkmark-outline" size={16} color={colors.warning} />
+          <Ionicons name="checkmark-circle-outline" size={16} color={colors.warning} />
           <Text style={[styles.demandButtonText, { color: colors.warning }]}>
             Respond to verification ({activeVerificationDemands} pending)
           </Text>

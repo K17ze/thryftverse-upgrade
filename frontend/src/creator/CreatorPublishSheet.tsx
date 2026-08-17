@@ -1122,7 +1122,7 @@ function PublishReview({
           accessibilityRole="button"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="flash-outline" size={16} color={!document.metadata.scheduledFor ? colors.brand : colors.textSecondary} />
+          <Ionicons name="speedometer-outline" size={16} color={!document.metadata.scheduledFor ? colors.brand : colors.textSecondary} />
           <Text style={[styles.schedulePillText, !document.metadata.scheduledFor && { color: colors.brand }]}>Now</Text>
         </Pressable>
         <Pressable

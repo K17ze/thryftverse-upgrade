@@ -229,7 +229,7 @@ export function MarketplaceChatCard({
   if (type === 'safety_notice' && text) {
     return (
       <View style={styles.noticeInline}>
-        <Ionicons name="shield-checkmark-outline" size={14} color={colors.textMuted} />
+        <Ionicons name="checkmark-done-outline" size={14} color={colors.textMuted} />
         <Text style={styles.noticeInlineText}>{text}</Text>
       </View>
     );
@@ -254,7 +254,7 @@ export function MarketplaceChatCard({
     return (
       <View style={styles.systemEvent}>
         <View style={styles.systemEventIcon}>
-          <Ionicons name="shield-checkmark-outline" size={16} color={colors.textSecondary} />
+          <Ionicons name="checkmark-done-outline" size={16} color={colors.textSecondary} />
         </View>
         <View style={styles.systemEventCopy}>
           <View style={styles.systemEventHeading}>

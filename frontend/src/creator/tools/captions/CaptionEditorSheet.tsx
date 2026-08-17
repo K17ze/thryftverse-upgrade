@@ -363,7 +363,7 @@ export function CaptionEditorSheet({
               <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
               <Ionicons
-                name="sparkles-outline"
+                name="bulb-outline"
                 size={18}
                 color={sttAvailable ? colors.textInverse : colors.textMuted}
               />

@@ -270,7 +270,7 @@ export default function AuthLandingScreen() {
             accessibilityLabel="Buyer protection, make offers, and co-own trading"
           >
             <View style={styles.trustItem}>
-              <Ionicons name="shield-checkmark-outline" size={18} color="rgba(245,239,230,0.65)" />
+              <Ionicons name="checkmark-circle-outline" size={18} color="rgba(245,239,230,0.65)" />
               <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>Buyer protection</Text>
             </View>
             <View style={styles.trustDot} />

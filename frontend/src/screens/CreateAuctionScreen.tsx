@@ -543,7 +543,7 @@ export default function CreateAuctionScreen() {
                 <View>
                   <AppButton
                     title={isSubmitting ? 'Launching...' : 'Launch Auction'}
-                    icon={isSubmitting ? undefined : <Ionicons name="flash-outline" size={16} color={colors.background} />}
+                    icon={isSubmitting ? undefined : <Ionicons name="speedometer-outline" size={16} color={colors.background} />}
                     onPress={launchAuction}
                     variant="primary"
                     size="md"

@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
-  Image,
+  useWindowDimensions,
   Pressable,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,7 +20,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type, AspectRatio } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -31,8 +31,6 @@ import { UploadQueueItem, UploadQueueItemState } from '../../services/mediaUploa
 import { isVideoUri } from '../../utils/media';
 import { Video, ResizeMode } from '../compat/Video';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const COVER_H = Math.round(SCREEN_W * 10 / 16);
 const THUMB_SIZE = 80;
 
 type ItemStatus = 'draft' | 'pending' | 'preparing' | 'uploading' | 'uploaded' | 'failed' | 'cancelled';
@@ -250,7 +248,12 @@ export function ListingMediaStudio({
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
+  const coverHeight = Math.round(screenWidth / AspectRatio.marketplace);
+  const styles = React.useMemo(
+    () => createStyles(colors, screenWidth, coverHeight),
+    [colors, screenWidth, coverHeight],
+  );
 
   const handlePickLibrary = useCallback(() => {
     haptic.light();
@@ -363,7 +366,13 @@ export function ListingMediaStudio({
             <Ionicons name="videocam" size={22} color={colors.textMuted} />
           </View>
         ) : (
-          <Image source={{ uri: displayUri }} style={styles.thumbImage} resizeMode="cover" />
+          <ExpoImage
+            source={{ uri: displayUri }}
+            style={styles.thumbImage}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={displayUri}
+          />
         )}
 
         {isVideo && (
@@ -476,7 +485,14 @@ export function ListingMediaStudio({
             }}
           />
         ) : (
-          <Image source={{ uri: coverDisplayUri }} style={styles.coverImage} resizeMode="cover" />
+          <ExpoImage
+            source={{ uri: coverDisplayUri }}
+            style={styles.coverImage}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={coverDisplayUri}
+            transition={200}
+          />
         )}
 
         {/* Cover badge */}
@@ -513,7 +529,7 @@ export function ListingMediaStudio({
         {/* Cover upload progress overlay */}
         <UploadProgressOverlay
           status={coverStatus}
-          trackWidth={SCREEN_W}
+          trackWidth={screenWidth}
           variant="cover"
           reducedMotion={reducedMotion}
           colors={colors}
@@ -606,20 +622,20 @@ export function ListingMediaStudio({
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: number) {
   return StyleSheet.create({
   container: {
-    width: SCREEN_W,
+    width: screenWidth,
   },
   emptyCanvas: {
-    width: SCREEN_W,
+    width: screenWidth,
     paddingHorizontal: Space.md,
     paddingVertical: Space.lg,
     alignItems: 'center',
   },
   emptyDashed: {
     width: '100%',
-    height: COVER_H,
+    height: coverHeight,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: colors.border,
@@ -651,7 +667,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: SCREEN_W - Space.md * 2,
+    width: screenWidth - Space.md * 2,
     marginTop: Space.md,
   },
   emptySecondaryBtn: {
@@ -675,15 +691,15 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
   },
   coverWrap: {
-    width: SCREEN_W,
-    height: COVER_H,
+    width: screenWidth,
+    height: coverHeight,
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
   },
   coverImage: {
-    width: SCREEN_W,
-    height: COVER_H,
+    width: screenWidth,
+    height: coverHeight,
   },
   coverBadge: {
     position: 'absolute',

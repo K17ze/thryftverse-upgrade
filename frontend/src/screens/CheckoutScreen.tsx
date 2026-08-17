@@ -1657,7 +1657,7 @@ export default function CheckoutScreen() {
             value={formatFromFiat(POSTAGE_FEE, 'GBP')}
           />
           <View style={styles.protectionIncludedRow}>
-            <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} />
+            <Ionicons name="checkmark-circle-outline" size={12} color={colors.success} />
             <Text style={[styles.protectionIncludedText, t.protectionIncludedText]}>
               Includes buyer protection — funds held in escrow until you confirm
             </Text>

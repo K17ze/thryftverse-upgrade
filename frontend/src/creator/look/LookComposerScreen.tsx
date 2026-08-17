@@ -1974,7 +1974,7 @@ function LookComposerInner() {
                 accessibilityHint="Opens the AI effects browser to browse and apply AI-powered effects"
                 scale={0.97}
               >
-                <Ionicons name="sparkles" size={18} color={colors.textPrimary} />
+                <Ionicons name="bulb-outline" size={18} color={colors.textPrimary} />
                 <Text style={[styles.aiEffectsBtnText, { color: colors.textPrimary }]}>
                   AI Effects
                 </Text>

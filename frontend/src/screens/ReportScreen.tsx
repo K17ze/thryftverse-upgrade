@@ -97,7 +97,7 @@ export default function ReportScreen({ navigation, route }: Props) {
       >
         <View style={styles.complete}>
           <Ionicons
-            name="shield-checkmark-outline"
+            name="checkmark-circle-outline"
             size={28}
             color={colors.textPrimary}
           />

@@ -160,7 +160,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           <View style={[styles.trustSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.trustHeader}>
-              <Ionicons name="shield-checkmark-outline" size={20} color={colors.success} />
+              <Ionicons name="checkmark-done-outline" size={20} color={colors.success} />
               <Text style={styles.trustTitle}>
                 {loading ? 'Checking your sessions…' : otherSessions.length === 0 ? 'Your account is secure' : `${otherSessions.length} other active session${otherSessions.length > 1 ? 's' : ''}`}
               </Text>

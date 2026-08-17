@@ -180,7 +180,7 @@ export function CommerceDetailStateDock({
             <View
               style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
             >
-              <Ionicons name="shield-checkmark" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
+              <Ionicons name="checkmark-circle-outline" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
               <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
                 High-value item — authentication may be available
               </Text>
@@ -204,7 +204,7 @@ export function CommerceDetailStateDock({
             <View
               style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
             >
-              <Ionicons name="shield-checkmark" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
+              <Ionicons name="checkmark-circle-outline" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
               <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
                 Buyer protection
               </Text>

@@ -228,7 +228,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.securityNote}>
             <View style={styles.securityIconWrap}>
-              <Ionicons name="shield-checkmark" size={20} color={colors.success} />
+              <Ionicons name="checkmark-done" size={20} color={colors.success} />
             </View>
             <View style={styles.securityTextWrap}>
               <Text style={styles.securityTitle}>Account safety</Text>

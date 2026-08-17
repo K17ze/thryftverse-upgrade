@@ -426,7 +426,7 @@ function InspectionBanner({
     <View style={[styles.inspectionBanner, { borderColor: `${colors.brand}25`, backgroundColor: `${colors.brand}08` }]}>
       <View style={styles.inspectionHeader}>
         <View style={[styles.inspectionIcon, { backgroundColor: `${colors.brand}15` }]}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={colors.brand} />
+          <Ionicons name="checkmark-circle-outline" size={18} color={colors.brand} />
         </View>
         <View style={styles.inspectionHeaderText}>
           <Text style={[styles.inspectionTitle, { color: colors.textPrimary }]}>

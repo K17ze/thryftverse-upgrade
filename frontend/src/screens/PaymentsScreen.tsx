@@ -323,7 +323,7 @@ export default function PaymentsScreen({ navigation }: Props) {
             </View>
             {defaultMethod && (
               <View style={[styles.heroBadge, { backgroundColor: colors.success + '15' }]}>
-                <Ionicons name="shield-checkmark" size={12} color={colors.success} />
+                <Ionicons name="lock-closed-outline" size={12} color={colors.success} />
                 <Text style={[styles.heroBadgeText, { color: colors.success }]}>Secure</Text>
               </View>
             )}
@@ -449,7 +449,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           {/* Security Note */}
           <View>
             <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
+              <Ionicons name="lock-closed-outline" size={16} color={colors.success} />
               <Text style={styles.trustNoteText}>
                 Thryftverse stores provider references and limited display details, not card numbers or security codes.
               </Text>

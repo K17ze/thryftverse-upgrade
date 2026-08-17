@@ -396,7 +396,7 @@ export default function AssetDueDiligenceScreen() {
               )}
               {asset.custodyInsured && (
                 <View style={styles.evidenceRow}>
-                  <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
+                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.textMuted} />
                   <Text style={[styles.evidenceRowLabel, { color: colors.textSecondary }]}>
                     {asset.custodyInsurer ? `Insured · ${asset.custodyInsurer}` : 'Insured'}
                     {asset.custodyCoverageGbp != null ? ` · ${formatCoOwnIze(asset.custodyCoverageGbp)}` : ''}

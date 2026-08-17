@@ -743,7 +743,7 @@ export default function CreateCoOwnScreen() {
               {/* Liability summary */}
               <View style={[styles.recourseSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.recourseLiabilityRow}>
-                  <Ionicons name="shield-checkmark" size={20} color={colors.brand} />
+                  <Ionicons name="checkmark-done" size={20} color={colors.brand} />
                   <View style={styles.recourseLiabilityBody}>
                     <Text style={[styles.recourseLiabilityLabel, { color: colors.textMuted }]}>
                       Personal liability
@@ -817,7 +817,7 @@ export default function CreateCoOwnScreen() {
         {stage === 'review' ? (
           <AppButton
             title={isSubmitting ? 'Issuing...' : 'Issue Co-Own'}
-            icon={<Ionicons name="flash-outline" size={16} color={colors.background} />}
+            icon={<Ionicons name="speedometer-outline" size={16} color={colors.background} />}
             onPress={() => void issueCoOwn()}
             variant="primary"
             size="lg"
@@ -829,7 +829,7 @@ export default function CreateCoOwnScreen() {
         ) : stage === 'recourse' ? (
           <AppButton
             title={isSubmitting ? 'Signing...' : 'Sign & finish'}
-            icon={<Ionicons name="shield-checkmark" size={16} color={colors.background} />}
+            icon={<Ionicons name="checkmark-done" size={16} color={colors.background} />}
             onPress={() => void signAndFinish()}
             variant="primary"
             size="lg"

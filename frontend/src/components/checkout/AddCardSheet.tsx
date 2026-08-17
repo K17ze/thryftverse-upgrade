@@ -172,7 +172,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
       <View style={styles.boundary}>
         <View style={styles.boundaryRow}>
           <Ionicons
-            name="shield-checkmark-outline"
+            name="lock-closed-outline"
             size={19}
             color={themed.success}
           />

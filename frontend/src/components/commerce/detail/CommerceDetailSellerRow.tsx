@@ -121,7 +121,7 @@ export function CommerceDetailSellerRow({
               {displayedName}
             </Text>
             {institutional && verified ? (
-              <Ionicons name="shield-checkmark" size={15} color={colors.brand} />
+              <Ionicons name="checkmark-circle-outline" size={15} color={colors.brand} />
             ) : verified ? (
               <Ionicons name="checkmark-circle" size={14} color={colors.success} />
             ) : null}

@@ -559,7 +559,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
                 </View>
                 {group.risk === 'critical' ? (
                   <View style={styles.criticalWarning}>
-                    <Ionicons name="shield-checkmark-outline" size={16} color={colors.danger} />
+                    <Ionicons name="lock-closed-outline" size={16} color={colors.danger} />
                     <Text style={styles.criticalWarningText}>
                       Money and security actions always need your approval. The agent will send every request through the secure payment screens — it can never complete them on its own.
                     </Text>

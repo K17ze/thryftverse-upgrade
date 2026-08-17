@@ -126,7 +126,7 @@ export default function AboutScreen({ navigation }: Props) {
             >
               <View style={[styles.rowRoot, styles.rowBorder]}>
                 <View style={styles.rowIconWrap}>
-                  <Ionicons name="shield-checkmark-outline" size={22} color={colors.textPrimary} />
+                  <Ionicons name="lock-closed-outline" size={22} color={colors.textPrimary} />
                 </View>
                 <View style={styles.rowTextWrap}>
                   <Text style={styles.rowTitle}>Privacy Policy</Text>

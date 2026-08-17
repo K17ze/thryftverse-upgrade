@@ -92,7 +92,7 @@ export function CommercePartyStrip({
                 <Ionicons name="checkmark-circle" size={14} color={colors.success} />
               )}
               {showIssuerVerified && (
-                <Ionicons name="shield-checkmark-outline" size={14} color={colors.success} />
+                <Ionicons name="checkmark-circle-outline" size={14} color={colors.success} />
               )}
             </View>
             {party.location ? (
