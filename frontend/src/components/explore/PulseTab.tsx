@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -19,7 +18,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useToast } from '../../context/ToastContext';
 import { EmptyState } from '../EmptyState';
@@ -27,6 +25,7 @@ import { formatCountdown } from '../../data/tradeHub';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
 import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
+import { openProductDetail } from '../../platform/product/openProductDetail';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -56,40 +55,33 @@ interface LiveAuctionItem {
 }
 
 /* ── Trending rail item (merged from EditTab) ── */
-function TrendingRailItem({ item, index, onPress, styles, reducedMotion, formatPrice }: { item: { id: string; title: string; brand: string; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean; formatPrice: (n: number) => string }) {
+function TrendingRailItem({ item, onPress, styles, formatPrice }: { item: { id: string; title: string; brand: string; price: number; image: string }; onPress: () => void; styles: ReturnType<typeof createStyles>; formatPrice: (n: number) => string }) {
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
-      <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
-        <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
-        <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
-        <Text style={styles.trendingTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.trendingPrice}>{formatPrice(item.price)}</Text>
-      </AnimatedPressable>
-    </Reanimated.View>
+    <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
+      <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+      <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
+      <Text style={styles.trendingTitle} numberOfLines={1}>{item.title}</Text>
+      <Text style={styles.trendingPrice}>{formatPrice(item.price)}</Text>
+    </AnimatedPressable>
   );
 }
 
 /* ── Sub-components ── */
-function LiveNowCard({ auction, index, onPress, styles, reducedMotion, formatPrice }: { auction: LiveAuctionItem; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean; formatPrice: (n: number) => string }) {
-  const countdown = formatCountdown(Math.max(0, auction.endsAtMs - Date.now()));
+function LiveNowCard({ auction, now, onPress, styles, formatPrice }: { auction: LiveAuctionItem; now: number; onPress: () => void; styles: ReturnType<typeof createStyles>; formatPrice: (n: number) => string }) {
+  const countdown = formatCountdown(Math.max(0, auction.endsAtMs - now));
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
-      <AnimatedPressable style={styles.liveCard} onPress={onPress} activeOpacity={0.92}>
-        <CachedImage uri={auction.image} style={styles.liveImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
-        <View style={styles.liveContent}>
-          <Text style={styles.liveTitle} numberOfLines={1}>{auction.title}</Text>
-          <Text style={styles.liveBid}>Current bid · {formatPrice(auction.currentBid)}</Text>
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>{countdown}</Text>
-          </View>
-        </View>
-      </AnimatedPressable>
-    </Reanimated.View>
+    <AnimatedPressable style={styles.liveCard} onPress={onPress} activeOpacity={0.92}>
+      <CachedImage uri={auction.image} style={styles.liveImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+      <View style={styles.liveContent}>
+        <Text style={styles.liveTitle} numberOfLines={1}>{auction.title}</Text>
+        <Text style={styles.liveBid}>Current bid · {formatPrice(auction.currentBid)}</Text>
+        <Text style={styles.liveText}>{countdown}</Text>
+      </View>
+    </AnimatedPressable>
   );
 }
 
-function ActivityCard({ item, onPress, index, colors, styles, reducedMotion, formatPrice }: { item: ActivityItem; onPress: () => void; index: number; colors: ThemeColors; styles: ReturnType<typeof createStyles>; reducedMotion: boolean; formatPrice: (n: number) => string }) {
+function ActivityCard({ item, onPress, colors, styles, formatPrice }: { item: ActivityItem; onPress: () => void; colors: ThemeColors; styles: ReturnType<typeof createStyles>; formatPrice: (n: number) => string }) {
   const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
     fresh_drop: 'cube-outline',
@@ -98,34 +90,32 @@ function ActivityCard({ item, onPress, index, colors, styles, reducedMotion, for
   const accentMap: Record<ActivityType, string> = {
     auction_live: colors.danger,
     fresh_drop: colors.brand,
-    price_drop: '#dd6a33',
+    price_drop: colors.warning,
   };
 
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
-      <AnimatedPressable style={styles.activityCard} onPress={onPress} activeOpacity={0.92}>
-        <CachedImage uri={item.image} style={styles.activityImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
-        <View style={styles.activityContent}>
-          <View style={styles.activityHeader}>
-            <Ionicons name={iconMap[item.type]} size={14} color={accentMap[item.type]} />
-            <Text style={[styles.activityTypeLabel, { color: accentMap[item.type] }]}>
-              {item.type === 'auction_live' ? 'LIVE AUCTION'
-                : item.type === 'fresh_drop' ? 'FRESH DROP'
-                    : 'PRICE DROP'}
-            </Text>
-          </View>
-          <Text style={styles.activityTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.activitySubtitle} numberOfLines={1}>{item.subtitle}</Text>
-          <Text style={[styles.activityMeta, item.metaAccent && styles.activityMetaAccent]} numberOfLines={1}>{item.meta}</Text>
+    <AnimatedPressable style={styles.activityCard} onPress={onPress} activeOpacity={0.92}>
+      <CachedImage uri={item.image} style={styles.activityImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+      <View style={styles.activityContent}>
+        <View style={styles.activityHeader}>
+          <Ionicons name={iconMap[item.type]} size={14} color={accentMap[item.type]} />
+          <Text style={[styles.activityTypeLabel, { color: accentMap[item.type] }]}>
+            {item.type === 'auction_live' ? 'Auction in progress'
+              : item.type === 'fresh_drop' ? 'FRESH DROP'
+                  : 'PRICE DROP'}
+          </Text>
         </View>
-        {item.actionLabel && (
-          <View style={styles.activityAction}>
-            <Text style={styles.activityActionText}>{item.actionLabel}</Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-          </View>
-        )}
-      </AnimatedPressable>
-    </Reanimated.View>
+        <Text style={styles.activityTitle} numberOfLines={2}>{item.title}</Text>
+        <Text style={styles.activitySubtitle} numberOfLines={1}>{item.subtitle}</Text>
+        <Text style={[styles.activityMeta, item.metaAccent && styles.activityMetaAccent]} numberOfLines={1}>{item.meta}</Text>
+      </View>
+      {item.actionLabel && (
+        <View style={styles.activityAction}>
+          <Text style={styles.activityActionText}>{item.actionLabel}</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+        </View>
+      )}
+    </AnimatedPressable>
   );
 }
 
@@ -141,7 +131,6 @@ export default function PulseTab() {
   const formatPrice = React.useCallback((n: number) => formatFromFiat(n, 'GBP', { displayMode: 'fiat' }), [formatFromFiat]);
   const customAuctions = useStore((state) => state.customAuctions);
   const auctionRuntime = useStore((state) => state.auctionRuntime);
-  const reducedMotion = useReducedMotion();
 
   // Trending state (merged from EditTab to preserve trending rail + style quiz)
   const [trending, setTrending] = React.useState<TrendingListing[]>([]);
@@ -182,7 +171,7 @@ export default function PulseTab() {
       }));
   }, [trending, listings]);
 
-  const now = Date.now();
+  const [now, setNow] = useState(() => Date.now());
 
   const liveAuctions = useMemo<LiveAuctionItem[]>(() => {
     return customAuctions
@@ -200,6 +189,15 @@ export default function PulseTab() {
         listingId: a.listingId,
       }));
   }, [customAuctions, now]);
+
+  // Tick the clock every second only while there are live auctions, so idle
+  // renders don't fire and countdown text stays accurate without Date.now()
+  // being recomputed during render.
+  useEffect(() => {
+    if (liveAuctions.length === 0) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [liveAuctions.length]);
 
   const activities = useMemo<ActivityItem[]>(() => {
     const items: ActivityItem[] = [];
@@ -234,7 +232,12 @@ export default function PulseTab() {
 
   const handleActivityPress = (item: ActivityItem) => {
     haptic.light();
-    if (item.routeId) navigation.push('ItemDetail', { itemId: item.routeId });
+    if (!item.routeId) return;
+    if (item.type === 'auction_live') {
+      openProductDetail(navigation, { referenceKind: 'auction', canonicalId: item.routeId, sourceSurface: 'Pulse' });
+    } else {
+      openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.routeId, sourceSurface: 'Pulse' });
+    }
   };
 
   const handleViewAll = () => {
@@ -260,8 +263,8 @@ export default function PulseTab() {
       {trendingListings.length > 0 && (
         <View>
           <DiscoverySectionHeader
-            kicker="What's hot"
-            title="Trending Now"
+            kicker="Activity"
+            title="Popular this week"
             actionLabel="See all"
             onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
           />
@@ -283,14 +286,12 @@ export default function PulseTab() {
             })}
           </View>
           <HorizontalRail contentContainerStyle={styles.trendingScroll}>
-            {trendingListings.map((item, i) => (
+            {trendingListings.map((item) => (
               <TrendingRailItem
                 key={item.id}
                 item={item}
-                index={i}
-                onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'Pulse' }); }}
                 styles={styles}
-                reducedMotion={reducedMotion}
                 formatPrice={formatPrice}
               />
             ))}
@@ -308,14 +309,13 @@ export default function PulseTab() {
             onAction={handleViewAll}
           />
           <HorizontalRail contentContainerStyle={styles.liveScroll}>
-            {liveAuctions.map((auction, i) => (
+            {liveAuctions.map((auction) => (
               <LiveNowCard
                 key={auction.id}
                 auction={auction}
-                index={i}
-                onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: auction.listingId }); }}
+                now={now}
+                onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'auction', canonicalId: auction.id, sourceSurface: 'Pulse' }); }}
                 styles={styles}
-                reducedMotion={reducedMotion}
                 formatPrice={formatPrice}
               />
             ))}
@@ -326,10 +326,6 @@ export default function PulseTab() {
       {/* Live Pulse Banner */}
       <View>
         <AnimatedPressable style={styles.pulseBanner} onPress={handleViewAll} activeOpacity={0.92}>
-          <View style={styles.pulseDot}>
-            <View style={styles.pulseRing} />
-            <View style={styles.pulseCore} />
-          </View>
           <View>
             <Text style={styles.pulseBannerTitle}>Marketplace Live</Text>
             <Text style={styles.pulseBannerSub}>{activities.length} active events · {liveAuctions.length} live auctions</Text>
@@ -346,8 +342,8 @@ export default function PulseTab() {
           actionLabel="View all"
           onAction={handleViewAll}
         />
-        {activities.map((item, i) => (
-          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} colors={colors} styles={styles} reducedMotion={reducedMotion} formatPrice={formatPrice} />
+        {activities.map((item) => (
+          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} colors={colors} styles={styles} formatPrice={formatPrice} />
         ))}
       </View>
 
@@ -425,28 +421,12 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.meta.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: Space.xs,
-    backgroundColor: 'rgba(239,68,68,0.10)',
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-    alignSelf: 'flex-start',
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.danger,
-  },
   liveText: {
     fontSize: 10,
     fontFamily: Typography.family.semibold,
-    color: colors.danger,
+    color: colors.warning,
     fontVariant: ['tabular-nums'],
+    marginTop: Space.xs,
   },
 
   /* Pulse Banner */
@@ -460,26 +440,6 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     padding: Space.md,
     marginBottom: Space.md,
-  },
-  pulseDot: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pulseRing: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.danger,
-    opacity: 0.25,
-  },
-  pulseCore: {
-    width: 12,
-    height: 12,
-    borderRadius: Radius.md,
-    backgroundColor: colors.danger,
   },
   pulseBannerTitle: {
     fontSize: Type.subtitle.size,
@@ -702,7 +662,7 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.meta.letterSpacing,
   },
   windowTabTextActive: {
-    color: '#fff',
+    color: colors.textInverse,
   },
 
   /* Style Quiz (merged from EditTab) */

@@ -20,18 +20,12 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { Type, Typography, Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { AppSegmentControl } from '../components/ui/AppSegmentControl';
+import { DiscoveryModeNav, type DiscoveryMode } from '../components/discovery/DiscoveryModeNav';
 import { DiscoverScene, PulseScene, LooksScene } from '../scenes/discovery';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-type ExploreTab = 'discover' | 'pulse' | 'looks';
-
-const EXPLORE_TABS: { value: ExploreTab; label: string }[] = [
-  { value: 'discover', label: 'Discover' },
-  { value: 'pulse', label: 'Pulse' },
-  { value: 'looks', label: 'Looks' },
-];
+type ExploreTab = DiscoveryMode;
 
 // Main screen
 export default function SearchScreen() {
@@ -109,11 +103,6 @@ export default function SearchScreen() {
     borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  exploreTabsContainer: {
-    marginBottom: Space.smMd,
-    paddingHorizontal: Space.md,
   },
 
   syncRetryBanner: {
@@ -204,15 +193,12 @@ export default function SearchScreen() {
         />
       ) : null}
 
-      {/* -- Segment control (fixed/sticky) -- */}
-      <View style={styles.exploreTabsContainer}>
-        <AppSegmentControl
-          options={EXPLORE_TABS}
-          value={activeTab}
-          onChange={handleTabChange}
-          fullWidth
-        />
-      </View>
+      {/* -- Discovery mode navigation (sticky) -- */}
+      <DiscoveryModeNav
+        activeMode={activeTab}
+        onModeChange={handleTabChange}
+        onRepeatTap={() => void handleRefresh()}
+      />
 
       {/* -- Active scene — each tab owns its own scroll surface.
             Scenes stay mounted once visited so scroll position is

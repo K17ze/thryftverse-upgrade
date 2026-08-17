@@ -28,10 +28,10 @@ import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useToast } from '../context/ToastContext';
 import { sanitizeDecimalInput, sanitizeIntegerInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import { buildCreateCoOwnPrefillFromSell } from '../utils/syndicatePrefill';
-import { filterImageUris } from '../utils/media';
 import { haptics } from '../utils/haptics';
 import { makeStableId } from '../utils/createStableId';
 import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
+import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
 import { uploadMedia } from '../services/mediaUpload';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { createListingOnApi, createListingImageOnApi } from '../services/listingsApi';
@@ -436,26 +436,28 @@ export default function SellScreen() {
   }, []);
 
   /* -- photo handling -- */
-  const appendPhotoUri = useCallback((uri: string) => {
-    setPhotos((prev) => {
-      const next = [...prev, uri].slice(0, 10);
-      if (listingMode === 'co_own' && coOwnEnabled && authPhotos.length === 0) {
-        setAuthPhotos(filterImageUris(next, 2));
-      }
-      return next;
-    });
+  const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
     setMediaDraftItems((prev) => {
-      if (prev.some((m) => m.uri === uri)) return prev;
-      const next = [
-        ...prev,
-        {
-          id: makeStableId('sell'),
-          uri,
-          kind: 'image' as const,
-          source: 'local' as const,
-          status: 'draft' as const,
-        },
-      ].slice(0, 10);
+      if (prev.some((m) => m.uri === asset.uri)) return prev;
+      const draftItem: ListingMediaDraftItem = {
+        id: asset.id,
+        uri: asset.uri,
+        kind: asset.kind,
+        source: 'local',
+        fileName: asset.fileName,
+        mimeType: asset.mimeType,
+        fileSize: asset.fileSize,
+        width: asset.width,
+        height: asset.height,
+        durationMs: asset.durationMs,
+        status: 'draft',
+      };
+      const next = [...prev, draftItem].slice(0, 10);
+      // Keep photos in sync for backward compat
+      setPhotos(next.map((m) => m.uri));
+      if (listingMode === 'co_own' && coOwnEnabled && authPhotos.length === 0) {
+        setAuthPhotos(next.filter((m) => m.kind === 'image').map((m) => m.uri).slice(0, 2));
+      }
       return next;
     });
   }, [listingMode, coOwnEnabled, authPhotos.length]);
@@ -468,14 +470,24 @@ export default function SellScreen() {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsMultipleSelection: true,
         allowsEditing: false,
         quality: 0.9,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const assets = result.assets.map(convertPickerAsset);
-        const existing = photos.map((uri) => ({ id: uri, uri, fileName: 'existing', mimeType: 'image/jpeg', kind: 'image' as const }));
+        const existing = mediaDraftItems.map((m) => ({
+          id: m.id,
+          uri: m.uri,
+          fileName: m.fileName ?? 'existing',
+          mimeType: m.mimeType ?? 'image/jpeg',
+          kind: m.kind,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          durationMs: m.durationMs,
+        }));
         const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
 
         if (validation.errors.length > 0) {
@@ -484,7 +496,7 @@ export default function SellScreen() {
         }
 
         for (const asset of validation.assets) {
-          appendPhotoUri(asset.uri);
+          appendPhotoAsset(asset);
         }
         if (validation.assets.length > 0) {
           haptics.success();
@@ -493,7 +505,7 @@ export default function SellScreen() {
     } catch (e) {
       setErrorMsg('Could not open photo library. Try again.');
     }
-  }, [appendPhotoUri, photos]);
+  }, [appendPhotoAsset, mediaDraftItems]);
 
   const handlePickFromCamera = useCallback(async () => {
     try {
@@ -503,18 +515,28 @@ export default function SellScreen() {
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         quality: 0.9,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = convertPickerAsset(result.assets[0]);
-        const existing = photos.map((uri) => ({ id: uri, uri, fileName: 'existing', mimeType: 'image/jpeg', kind: 'image' as const }));
+        const existing = mediaDraftItems.map((m) => ({
+          id: m.id,
+          uri: m.uri,
+          fileName: m.fileName ?? 'existing',
+          mimeType: m.mimeType ?? 'image/jpeg',
+          kind: m.kind,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          durationMs: m.durationMs,
+        }));
         const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
         if (validation.errors.length > 0) {
           setErrorMsg(validation.errors.map((e) => e.message).join('. '));
         }
         for (const a of validation.assets) {
-          appendPhotoUri(a.uri);
+          appendPhotoAsset(a);
         }
         if (validation.assets.length > 0) {
           haptics.success();
@@ -523,7 +545,7 @@ export default function SellScreen() {
     } catch (e) {
       setErrorMsg('Could not open camera. Try again.');
     }
-  }, [appendPhotoUri, photos]);
+  }, [appendPhotoAsset, mediaDraftItems]);
 
   const removeItem = useCallback((itemId: string) => {
     setMediaDraftItems((prev) => {
@@ -1171,7 +1193,7 @@ export default function SellScreen() {
                 </Pressable>
               </View>
               <Text style={[styles.autofillDesc, t.autofillDesc]}>
-                From your photos.
+                Suggested from file name.
               </Text>
               {/* Flattened rows — no nested bordered chips (AGENTS.md §4: no card-on-card) */}
               {autofillSuggestion.title && (

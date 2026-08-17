@@ -185,9 +185,10 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
   // queues local media through this manager instead of the legacy
   // foreground pipeline.
   const uploadManager = useUploadManager(document.id);
-  const [stage, setStage] = useState<'review' | 'uploading' | 'publishing' | 'success' | 'error'>('review');
+  const [stage, setStage] = useState<'review' | 'uploading' | 'publishing' | 'success' | 'error' | 'scheduleFailed'>('review');
   const [errorMessage, setErrorMessage] = useState('');
   const [publishedId, setPublishedId] = useState('');
+  const [scheduleError, setScheduleError] = useState('');
   const publishGuardRef = useRef(new PublishGuard());
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -234,6 +235,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
     haptic.selection();
     setStage('review');
     setErrorMessage('');
+    setScheduleError('');
     progressWidth.value = 0;
     publishGuardRef.current.reset();
     onClose();
@@ -354,8 +356,18 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
         if (workingDoc.metadata.scheduledFor) {
           try {
             await scheduleCreatorDocument(workingDoc.id, workingDoc.metadata.scheduledFor);
-          } catch {
-            // Scheduling failure is non-fatal — the content is already published
+          } catch (scheduleErr: unknown) {
+            // Scheduling failed AFTER immediate publication. The content is
+            // already public — we must NOT show a success state that implies
+            // it will appear later. Surface an honest error with corrective
+            // actions (retry schedule or accept immediate publication).
+            publishGuardRef.current.complete(workingDoc.id);
+            setPublishedId(result.lookId);
+            setScheduleError(scheduleErr instanceof Error ? scheduleErr.message : 'Scheduling failed');
+            progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
+            setStage('scheduleFailed');
+            CreatorAnalytics.publishError(document.type, `Schedule failed after publish: ${scheduleErr instanceof Error ? scheduleErr.message : 'Unknown'}`);
+            return;
           }
         }
 
@@ -377,8 +389,18 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
         if (workingDoc.metadata.scheduledFor) {
           try {
             await scheduleCreatorDocument(workingDoc.id, workingDoc.metadata.scheduledFor);
-          } catch {
-            // Scheduling failure is non-fatal — the content is already published
+          } catch (scheduleErr: unknown) {
+            // Scheduling failed AFTER immediate publication. The content is
+            // already public — we must NOT show a success state that implies
+            // it will appear later. Surface an honest error with corrective
+            // actions (retry schedule or accept immediate publication).
+            publishGuardRef.current.complete(workingDoc.id);
+            setPublishedId(result.storyId);
+            setScheduleError(scheduleErr instanceof Error ? scheduleErr.message : 'Scheduling failed');
+            progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
+            setStage('scheduleFailed');
+            CreatorAnalytics.publishError(document.type, `Schedule failed after publish: ${scheduleErr instanceof Error ? scheduleErr.message : 'Unknown'}`);
+            return;
           }
         }
 
@@ -403,11 +425,41 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
     haptic.medium();
     setStage('review');
     setErrorMessage('');
+    setScheduleError('');
     progressWidth.value = 0;
     publishGuardRef.current.reset();
     // Re-trigger publish
     setTimeout(() => handlePublish(), 50);
   }, [haptic, progressWidth, handlePublish]);
+
+  // Retry only the scheduling step after a schedule failure. The content is
+  // already published immediately; this attempts to attach the scheduled_for
+  // timestamp again without re-publishing.
+  const handleRetrySchedule = useCallback(async () => {
+    if (!document.metadata.scheduledFor) return;
+    haptic.medium();
+    setStage('publishing');
+    progressWidth.value = reduceMotion ? 0.8 : withSpring(0.8, spring.entrance);
+    try {
+      await scheduleCreatorDocument(document.id, document.metadata.scheduledFor);
+      progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
+      setScheduleError('');
+      setStage('success');
+      CreatorAnalytics.publishSuccess(document.type, publishedId);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Scheduling failed';
+      setScheduleError(msg);
+      setStage('scheduleFailed');
+      CreatorAnalytics.publishError(document.type, `Schedule retry failed: ${msg}`);
+    }
+  }, [document.id, document.type, document.metadata.scheduledFor, publishedId, haptic, reduceMotion, spring.entrance, spring.success, progressWidth]);
+
+  // Accept that the content was published immediately (skip scheduling).
+  const handleAcceptImmediate = useCallback(() => {
+    haptic.selection();
+    setScheduleError('');
+    setStage('success');
+  }, [haptic]);
 
   if (!visible && stage === 'review') return null;
 
@@ -473,6 +525,28 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
             errorMessage={errorMessage}
             onRetry={handleRetry}
             haptic={haptic}
+          />
+        )}
+
+        {stage === 'scheduleFailed' && (
+          <ScheduleFailedView
+            colors={colors}
+            styles={styles}
+            reduceMotion={reduceMotion}
+            springCfg={spring.entrance}
+            scheduleError={scheduleError}
+            onRetrySchedule={handleRetrySchedule}
+            onAcceptImmediate={handleAcceptImmediate}
+            onView={() => {
+              haptic.selection();
+              onClose();
+              setStage('review');
+              if (document.type === 'look') {
+                navigation.replace('LookDetail', { lookId: publishedId });
+              } else {
+                navigation.replace('PosterViewer', { storyId: publishedId });
+              }
+            }}
           />
         )}
     </SheetContainer>
@@ -588,6 +662,99 @@ function ErrorStateView({
   );
 }
 
+// ── Schedule failed — honest state after immediate publish ─────────
+// Scheduling failed AFTER the content was already published immediately.
+// We must NOT show a success state that implies it will appear later.
+// Instead, surface an honest explanation and offer corrective actions:
+// retry the schedule, or accept the immediate publication.
+interface ScheduleFailedViewProps {
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  reduceMotion: boolean;
+  springCfg: { damping: number; stiffness: number; mass: number };
+  scheduleError: string;
+  onRetrySchedule: () => void;
+  onAcceptImmediate: () => void;
+  onView: () => void;
+}
+
+function ScheduleFailedView({
+  colors,
+  styles,
+  reduceMotion,
+  springCfg,
+  scheduleError,
+  onRetrySchedule,
+  onAcceptImmediate,
+  onView,
+}: ScheduleFailedViewProps) {
+  const localStyles = useMemo(() => createStyles(colors), [colors]);
+  const scale = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      scale.value = 1;
+      opacity.value = 1;
+    } else {
+      scale.value = withSpring(1, { ...springCfg, damping: 16 });
+      opacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+    }
+  }, [reduceMotion, springCfg, scale, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
+      <View style={localStyles.errorCircle}>
+        <Ionicons name="time-outline" size={36} color={colors.danger} />
+      </View>
+      <Text style={localStyles.centerStateTitle}>Scheduling failed</Text>
+      <Text style={localStyles.centerStateText}>
+        Your content was published immediately.
+      </Text>
+      {scheduleError ? (
+        <Text style={localStyles.scheduleFailedDetail}>{scheduleError}</Text>
+      ) : null}
+      <View style={localStyles.successBtnGroup}>
+        <PressScale
+          onPress={onRetrySchedule}
+          style={localStyles.viewBtn}
+          accessibilityLabel="Retry scheduling"
+          accessibilityHint="Attempts to schedule the already-published content for the selected date"
+          scale={0.97}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={localStyles.viewBtnText}>Retry schedule</Text>
+        </PressScale>
+        <PressScale
+          onPress={onAcceptImmediate}
+          style={localStyles.createBtn}
+          accessibilityLabel="Keep immediate publication"
+          accessibilityHint="Accepts that the content is already public and continues"
+          scale={0.97}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={localStyles.createBtnText}>Keep it live now</Text>
+        </PressScale>
+        <PressScale
+          onPress={onView}
+          style={localStyles.scheduleFailedViewBtn}
+          accessibilityLabel="View published content"
+          accessibilityHint="Opens the published look or poster"
+          scale={0.97}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={localStyles.scheduleFailedViewText}>View</Text>
+        </PressScale>
+      </View>
+    </Reanimated.View>
+  );
+}
+
 // ── Quiet success — continuity over ceremony ──────────────────────
 // Replaces the former confetti celebration. A small check, a single
 // line of confirmation, and a primary action that transitions to the
@@ -686,9 +853,14 @@ function PublishReview({
   // ── Audience selector segmented control ─────────────────────────
   const audienceOptions = [
     { key: 'public' as const, label: 'Public', icon: 'globe-outline' as const },
-    { key: 'closeFriends' as const, label: 'Followers', icon: 'people-outline' as const },
-    { key: 'private' as const, label: 'Close Friends', icon: 'star-outline' as const },
+    { key: 'closeFriends' as const, label: 'Close friends', icon: 'people-outline' as const },
+    { key: 'private' as const, label: 'Private', icon: 'lock-closed-outline' as const },
   ];
+  const audienceDescriptions: Record<string, string> = {
+    public: 'Visible to everyone on Thryftverse.',
+    closeFriends: 'Visible only to your approved close friends.',
+    private: 'Visible only to you. Not shared with anyone.',
+  };
   const activeAudienceIndex = audienceOptions.findIndex((o) => o.key === document.metadata.visibility);
 
   // Segmented control spring slide indicator
@@ -891,6 +1063,10 @@ function PublishReview({
           );
         })}
       </View>
+      {/* Audience description — supports informed consent */}
+      <Text style={styles.audienceDescription}>
+        {audienceDescriptions[document.metadata.visibility] ?? audienceDescriptions.public}
+      </Text>
 
       {/* Save to Camera Roll */}
       <View style={styles.cameraRollRow}>
@@ -1174,6 +1350,14 @@ function createStyles(colors: ThemeColorsType) {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
     },
+    audienceDescription: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
+      color: colors.textMuted,
+      paddingHorizontal: Space.xs,
+      marginTop: -Space.xs,
+      marginBottom: Space.sm,
+    },
     // ── Cover selection ──
     coverHint: {
       fontFamily: Typography.family.regular,
@@ -1377,6 +1561,26 @@ function createStyles(colors: ThemeColorsType) {
     },
     createBtnText: {
       color: colors.brand,
+      fontFamily: Typography.family.medium,
+      fontSize: Type.body.size,
+    },
+    // ── Schedule failed state ──
+    scheduleFailedDetail: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
+      color: colors.textMuted,
+      textAlign: 'center',
+      paddingHorizontal: Space.md,
+    },
+    scheduleFailedViewBtn: {
+      width: '100%',
+      height: 44,
+      borderRadius: Radius.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    scheduleFailedViewText: {
+      color: colors.textSecondary,
       fontFamily: Typography.family.medium,
       fontSize: Type.body.size,
     },

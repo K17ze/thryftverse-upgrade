@@ -1,140 +1,158 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
-  FlatList,
+  useWindowDimensions,
   Pressable,
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
+import { FlashList } from '@shopify/flash-list';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { CachedImage } from '../CachedImage';
-import { SharedTransitionView } from '../SharedTransitionView';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, AspectRatio } from '../../theme/designTokens';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { EmptyState } from '../EmptyState';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
-
-const { width: SCREEN_W } = Dimensions.get('window');
+import { isVideoUri } from '../../utils/media';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-function LookCard({
+// ── Template set ─────────────────────────────────────────────────────────────
+// A small, deterministic template set drives the mixed-tile Explore canvas.
+// Templates are assigned from item properties + index, never at random.
+//
+//   1×1 standard        — default image look (span 1, 4:5)
+//   1×2 portrait feature — tall portrait look (span 1, 4:5, taller media)
+//   2×1 cinematic        — video or multi-layer collage (span 2, 16:9)
+//   2×2 editorial anchor — rare, every 8th item (span 2, 4:5)
+//
+// `span` is consumed by FlashList's `overrideItemLayout`; the aspect ratio is
+// applied inside the tile so each cell sizes to its creator's media, not a
+// screen-imposed fixed height.
+const EDITORIAL_ANCHOR_INTERVAL = 8;
+
+interface LookTemplate {
+  /** Column span (1 or 2). Consumed by overrideItemLayout. */
+  span: 1 | 2;
+  /** Media aspect ratio (width / height) applied to the tile image. */
+  aspect: number;
+  /** Semantic template id — drives overlay cues. */
+  kind: 'standard' | 'portrait' | 'cinematic' | 'editorial';
+}
+
+function resolveLookTemplate(look: LookApiItem, index: number): LookTemplate {
+  // 2×2 editorial anchor — rare, at a controlled interval.
+  if (index > 0 && index % EDITORIAL_ANCHOR_INTERVAL === 0) {
+    return { span: 2, aspect: AspectRatio.marketplace, kind: 'editorial' };
+  }
+
+  // 2×1 cinematic — video or multi-layer collage looks get a wide feature.
+  const isVideo = look.mediaType === 'video' || isVideoUri(look.mediaUrl);
+  const isMultiLayer = look.compositionDocument != null;
+  if (isVideo || isMultiLayer) {
+    return { span: 2, aspect: AspectRatio.wide, kind: 'cinematic' };
+  }
+
+  // 1×1 standard image look. 4:5 is the marketplace default; the tile honours
+  // real media dimensions once exposed by the service.
+  return { span: 1, aspect: AspectRatio.marketplace, kind: 'standard' };
+}
+
+// ── LookTile ─────────────────────────────────────────────────────────────────
+// Lightweight inline tile for the Explore canvas. Overlay density is kept low:
+// only creator identity, a media-type / multi-layer cue, and one shoppable
+// marker — enough to decide whether to open, nothing more.
+//
+// No gradient, no statistics pill, no social icons, no entrance animations.
+// FlashList recycles cells, so the tile is pure and animation-free.
+function LookTile({
   look,
+  template,
   onPress,
-  index,
   colors,
   styles,
-  reducedMotion,
 }: {
   look: LookApiItem;
+  template: LookTemplate;
   onPress: () => void;
-  index: number;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
-  reducedMotion: boolean;
 }) {
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const isVideo = look.mediaType === 'video' || isVideoUri(look.mediaUrl);
+  const isMultiLayer = look.compositionDocument != null;
+  const isShoppable = look.tags.length > 0;
+  const creatorHandle = look.creator.username ?? 'unknown';
 
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 80).springify()}>
-      <AnimatedPressable style={styles.card} onPress={onPress} activeOpacity={0.92} accessibilityRole="button" accessibilityLabel={`Look by ${look.creator.username ?? 'unknown'}`}>
-        <View style={styles.imageWrap}>
-          <SharedTransitionView style={styles.imageShared} sharedTransitionTag={`look-${look.id}`}>
-            <CachedImage
-              uri={look.mediaUrl}
-              style={styles.image}
-              containerStyle={{ width: '100%', height: '100%' }}
-              contentFit="cover"
-              emptyLabel={look.title || look.caption}
-              emptyIcon="image-outline"
-            />
-          </SharedTransitionView>
+    <Pressable
+      style={styles.tile}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Look by ${creatorHandle}`}
+      accessibilityHint="Opens the look detail"
+    >
+      <View style={[styles.tileMedia, { aspectRatio: template.aspect }]}>
+        <ExpoImage
+          source={{ uri: look.mediaUrl }}
+          style={styles.tileImage}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={`look-${look.id}`}
+          transition={180}
+        />
 
-          {look.tags.map((tag) => {
-            const isActive = activeTag === tag.id;
-            return (
-              <View
-                key={tag.id}
-                style={[styles.tagWrap, { left: `${tag.x * 100}%`, top: `${tag.y * 100}%` }]}
-                onStartShouldSetResponder={() => true}
-                onResponderGrant={() => {
-                  setActiveTag(isActive ? null : tag.id);
-                }}
-                hitSlop={16}
-                accessibilityRole="button"
-                accessibilityLabel={tag.label || 'Tagged item'}
-                accessibilityHint="Toggles the product tag label"
-              >
-                <View style={styles.tagDot} />
-                {isActive && (
-                  <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(180)} style={styles.tagPill}>
-                    <Text style={styles.tagPillText} numberOfLines={1}>{tag.label || 'Untitled'}</Text>
-                  </Reanimated.View>
-                )}
-              </View>
-            );
-          })}
-
-          {look.tags.length > 0 && (
-            <View style={styles.tagBadge}>
-              <Ionicons name="pricetag" size={10} color={colors.brand} />
-              <Text style={styles.tagBadgeText}>{look.tags.length}</Text>
-            </View>
-          )}
-
-          <LinearGradient
-            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.gradient}
-          />
-
-          <View style={styles.overlayInfo}>
-            <Text style={styles.overlayTitle} numberOfLines={2}>{look.caption || look.title}</Text>
-            <Text style={styles.overlayCreator}>@{look.creator.username ?? 'unknown'}</Text>
-          </View>
-
-          <View style={styles.overlayStats}>
-            <View style={styles.overlayStatBtn}>
-              <Ionicons name={look.likedByViewer ? 'heart' : 'heart-outline'} size={14} color={look.likedByViewer ? colors.danger : '#fff'} />
-              <Text style={styles.overlayStatCount}>{look.likeCount}</Text>
-            </View>
-            <View style={styles.overlayStatBtn}>
-              <Ionicons name="chatbubble-outline" size={13} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.overlayStatCount}>{look.commentCount}</Text>
-            </View>
-            <View style={styles.overlayStatBtn}>
-              <Ionicons name={look.savedByViewer ? 'bookmark' : 'bookmark-outline'} size={13} color={look.savedByViewer ? colors.brand : 'rgba(255,255,255,0.9)'} />
-            </View>
-          </View>
+        {/* Creator identity — small, bottom-left, low density */}
+        <View style={styles.creatorOverlay}>
+          <Text style={styles.creatorText} numberOfLines={1}>
+            @{creatorHandle}
+          </Text>
         </View>
-      </AnimatedPressable>
-    </Reanimated.View>
+
+        {/* Media-type / multi-layer cue — top-right, small icon only */}
+        {(isVideo || isMultiLayer) && (
+          <View style={styles.mediaCueBadge}>
+            <Ionicons
+              name={isVideo ? 'play' : 'layers'}
+              size={12}
+              color={colors.textInverse}
+            />
+          </View>
+        )}
+
+        {/* Shoppable / provenance marker — bottom-right, distinct from likes */}
+        {isShoppable && (
+          <View style={styles.shoppableMarker}>
+            <Ionicons name="pricetag" size={11} color={colors.textInverse} />
+          </View>
+        )}
+      </View>
+    </Pressable>
   );
 }
 
+// ── LooksTab ─────────────────────────────────────────────────────────────────
 export default function LooksTab() {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
+  const { width: windowWidth } = useWindowDimensions();
+
   const [looks, setLooks] = useState<LookApiItem[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const reducedMotion = useReducedMotion();
 
+  // Initial / refresh load. Resets the cursor and replaces the list.
   const loadLooks = useCallback(async (isRefresh: boolean = false) => {
     if (isRefresh) {
       setIsRefreshing(true);
@@ -143,6 +161,7 @@ export default function LooksTab() {
     try {
       const res = await fetchLooksFromApi({ status: 'published' });
       setLooks(res.items ?? []);
+      setCursor(res.nextCursor ?? null);
     } catch {
       if (!isRefresh && looks.length === 0) {
         setLoadError('Looks could not be loaded.\nCheck your connection and try again.');
@@ -163,10 +182,28 @@ export default function LooksTab() {
     loadLooks(true);
   }, [loadLooks]);
 
+  // Cursor-based pagination. The service returns nextCursor; when present we
+  // fetch the next page and append. Otherwise onEndReached stays undefined.
+  const loadMore = useCallback(async () => {
+    if (!cursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const res = await fetchLooksFromApi({ status: 'published', cursor });
+      setLooks((prev) => [...prev, ...(res.items ?? [])]);
+      setCursor(res.nextCursor ?? null);
+    } catch {
+      // Silent fail on pagination — the user still has the loaded pages.
+      setCursor(null);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [cursor, isLoadingMore]);
+
   const handleCreateLook = useCallback(() => {
     navigation.navigate('CreatorStudio', { type: 'look' });
   }, [navigation]);
 
+  // ── Loading / error / empty states (preserved) ────────────────────────────
   if (isLoading) {
     return (
       <View style={styles.loadingWrap}>
@@ -216,235 +253,236 @@ export default function LooksTab() {
     );
   }
 
+  // ── FlashList v2 masonry canvas ───────────────────────────────────────────
+  const keyExtractor = useCallback((item: LookApiItem) => `look-${item.id}`, []);
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: LookApiItem; index: number }) => {
+      const template = resolveLookTemplate(item, index);
+      return (
+        <View
+          style={[
+            styles.tileCell,
+            { paddingHorizontal: styles.tileCell.paddingHorizontal / 2 },
+          ]}
+        >
+          <LookTile
+            look={item}
+            template={template}
+            onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
+            colors={colors}
+            styles={styles}
+          />
+        </View>
+      );
+    },
+    [colors, styles, navigation],
+  );
+
+  // Deterministic span: editorial anchors + cinematic (video / multi-layer)
+  // looks span both columns. Everything else is a single-column tile.
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number }, item: LookApiItem, index: number) => {
+      const template = resolveLookTemplate(item, index);
+      layout.span = template.span;
+    },
+    [],
+  );
+
+  const ListHeaderComponent = useMemo(
+    () => (
+      <View style={styles.headerWrap}>
+        <DiscoverySectionHeader kicker="Community" title="Looks" />
+        {loadError && looks.length > 0 && (
+          <View style={styles.refreshErrorBanner}>
+            <Text style={styles.refreshErrorText}>
+              Looks could not be refreshed. Showing the last loaded posts.
+            </Text>
+            <Pressable
+              onPress={() => loadLooks(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Retry refresh"
+            >
+              <Text style={styles.retryLink}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+    ),
+    [loadError, looks.length, loadLooks, styles],
+  );
+
+  const ListFooterComponent = useMemo(
+    () =>
+      isLoadingMore ? (
+        <View style={styles.footer}>
+          <ActivityIndicator color={colors.textMuted} />
+        </View>
+      ) : null,
+    [isLoadingMore, colors.textMuted],
+  );
+
+  // Column width for CDN downscaling (kept for future derivative sizing).
+  void windowWidth;
+
+  // Only wire onEndReached when there is a cursor to consume — avoids
+  // no-op fetches at the end of a finite feed.
+  const onEndReached = cursor ? loadMore : undefined;
+
   return (
-    <FlatList
+    <FlashList
+      data={looks}
+      masonry
+      numColumns={2}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      onEndReached={onEndReached}
+      onEndReachedThreshold={0.5}
+      overrideItemLayout={overrideItemLayout}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.scrollContent}
+      ListHeaderComponent={ListHeaderComponent}
+      ListFooterComponent={ListFooterComponent}
       refreshControl={
         <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.brand} />
       }
-      ListHeaderComponent={
-        <View>
-          <DiscoverySectionHeader kicker="Community" title="Looks" />
-          {loadError && looks.length > 0 && (
-            <View style={styles.refreshErrorBanner}>
-              <Text style={styles.refreshErrorText}>Looks could not be refreshed. Showing the last loaded posts.</Text>
-              <Pressable
-                onPress={() => loadLooks(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Retry refresh"
-              >
-                <Text style={styles.retryLink}>Retry</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-      }
-      data={looks}
-      keyExtractor={(item) => item.id}
-      // Performance: looks feeds can grow long; clip off-screen cards and
-      // cap the render batch to keep scroll at 58+ fps.
-      removeClippedSubviews
-      windowSize={7}
-      maxToRenderPerBatch={4}
-      initialNumToRender={6}
-      renderItem={({ item, index }) => (
-        <LookCard
-          look={item}
-          onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
-          index={index}
-          colors={colors}
-          styles={styles}
-          reducedMotion={reducedMotion}
-        />
-      )}
     />
   );
 }
 
+// ── Styles ───────────────────────────────────────────────────────────────────
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  loadingWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-  },
-  scrollContent: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
-  },
-  errorWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
-  errorSubtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    marginTop: Space.sm,
-    paddingHorizontal: Space.lg,
-    paddingVertical: 10,
-    backgroundColor: colors.brand,
-    borderRadius: Radius.xxl,
-  },
-  retryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: '#fff',
-  },
-  refreshErrorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: 10,
-    marginBottom: Space.md,
-    gap: Space.sm,
-  },
-  refreshErrorText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
-  retryLink: {
-    fontSize: Type.captionElevated.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.sm,
-    marginBottom: Space.lg,
-    overflow: 'hidden',
-  },
-  imageWrap: {
-    width: '100%',
-    height: SCREEN_W * 1.1,
-    position: 'relative',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  imageShared: {
-    ...StyleSheet.absoluteFill,
-  },
-  gradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 140,
-  },
-  overlayInfo: {
-    position: 'absolute',
-    bottom: 44,
-    left: Space.md,
-    right: 100,
-  },
-  overlayTitle: {
-    fontFamily: Typography.family.bold,
-    fontSize: 18,
-    color: '#fff',
-    letterSpacing: -0.3,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  overlayCreator: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: Space.xs,
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  overlayStats: {
-    position: 'absolute',
-    bottom: Space.sm,
-    right: Space.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  overlayStatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  overlayStatCount: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-  tagWrap: {
-    position: 'absolute',
-    zIndex: 3,
-  },
-  tagDot: {
-    width: 14,
-    height: 14,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.25)',
-  },
-  tagPill: {
-    position: 'absolute',
-    left: 20,
-    top: -6,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: Radius.lg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tagPillText: {
-    color: '#fff',
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    marginLeft: 6,
-  },
-  tagBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    gap: 4,
-    zIndex: 2,
-  },
-  tagBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-  },
+    loadingWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 80,
+    },
+    scrollContent: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.xl,
+    },
+    headerWrap: {
+      paddingBottom: Space.md,
+    },
+    errorWrap: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 80,
+      paddingHorizontal: Space.md,
+      gap: Space.sm,
+    },
+    errorTitle: {
+      fontSize: 18,
+      fontFamily: Typography.family.bold,
+      color: colors.textPrimary,
+    },
+    errorSubtitle: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+    retryBtn: {
+      marginTop: Space.sm,
+      paddingHorizontal: Space.lg,
+      paddingVertical: 10,
+      backgroundColor: colors.brand,
+      borderRadius: Radius.xxl,
+    },
+    retryBtnText: {
+      fontSize: Type.body.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textInverse,
+    },
+    refreshErrorBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.md,
+      paddingVertical: 10,
+      marginBottom: Space.md,
+      gap: Space.sm,
+    },
+    refreshErrorText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
+    },
+    retryLink: {
+      fontSize: Type.captionElevated.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.brand,
+    },
+    footer: {
+      paddingVertical: Space.md,
+      alignItems: 'center',
+    },
+    // ── Tile ──
+    tileCell: {
+      paddingHorizontal: Space.sm,
+      paddingBottom: Space.sm,
+      width: '100%',
+    },
+    tile: {
+      width: '100%',
+      borderRadius: Radius.lg,
+      overflow: 'hidden',
+      backgroundColor: colors.surfaceAlt,
+    },
+    tileMedia: {
+      width: '100%',
+      position: 'relative',
+    },
+    tileImage: {
+      width: '100%',
+      height: '100%',
+    },
+    // Creator identity — small, bottom-left. Low-density overlay.
+    creatorOverlay: {
+      position: 'absolute',
+      bottom: Space.xs,
+      left: Space.xs,
+      right: Space.xl,
+      backgroundColor: colors.overlay,
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xxs,
+      alignSelf: 'flex-start',
+    },
+    creatorText: {
+      color: colors.textInverse,
+      fontSize: Type.meta.size,
+      fontFamily: Typography.family.semibold,
+      letterSpacing: Type.meta.letterSpacing,
+    },
+    // Media-type / multi-layer cue — top-right, small icon only.
+    mediaCueBadge: {
+      position: 'absolute',
+      top: Space.xs,
+      right: Space.xs,
+      width: 22,
+      height: 22,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.overlay,
+    },
+    // Shoppable / provenance marker — bottom-right, distinct from likes.
+    shoppableMarker: {
+      position: 'absolute',
+      bottom: Space.xs,
+      right: Space.xs,
+      width: 20,
+      height: 20,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.overlay,
+    },
   });
 }
