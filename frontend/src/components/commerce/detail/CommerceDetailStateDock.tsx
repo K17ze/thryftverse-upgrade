@@ -194,7 +194,7 @@ export function CommerceDetailStateDock({
             >
               <Ionicons name="ribbon-outline" size={CommerceLayout.dockProtectionIcon} color={colors.textSecondary} />
               <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
-                Specialist item — enquire for details
+                Contact seller for details
               </Text>
             </View>
           );

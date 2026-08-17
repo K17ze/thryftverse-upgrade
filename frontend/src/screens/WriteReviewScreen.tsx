@@ -300,7 +300,7 @@ export default function WriteReviewScreen() {
         {!existingReview && (
           <View style={styles.footer}>
             <AppButton
-              title={isSubmitting ? 'Submitting...' : 'Submit Review'}
+              title={isSubmitting ? 'Submitting...' : 'Submit review'}
               onPress={handleSubmit}
               disabled={!canSubmit}
               variant="primary"

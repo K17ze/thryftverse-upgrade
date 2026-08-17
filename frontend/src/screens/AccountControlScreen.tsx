@@ -173,7 +173,7 @@ export default function AccountControlScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Continue to account deletion"
         >
-          <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Continue</Text>
+          <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Review deletion details</Text>
         </AnimatedPressable>
       </View>
       </View>
@@ -232,7 +232,7 @@ export default function AccountControlScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Continue to final confirmation"
         >
-          <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Continue</Text>
+          <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Continue to confirm</Text>
         </AnimatedPressable>
       </View>
       </View>

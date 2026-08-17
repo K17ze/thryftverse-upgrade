@@ -1971,7 +1971,7 @@ function LookComposerInner() {
                 onPress={() => { haptic.medium(); setShowAIEffects(true); }}
                 style={[styles.aiEffectsBtn, { borderColor: colors.border }]}
                 accessibilityLabel="AI Effects"
-                accessibilityHint="Opens the AI effects browser to browse and apply AI-powered effects"
+                accessibilityHint="Opens the effects browser to browse and apply photo effects"
                 scale={0.97}
               >
                 <Ionicons name="bulb-outline" size={18} color={colors.textPrimary} />
@@ -2090,7 +2090,7 @@ function LookComposerInner() {
         onClose={() => setShowBackground(false)}
       />
       {/* ── AI Effects browser sheet ──────────────────────────────────── */}
-      {/* Bottom sheet for browsing and applying AI-powered effects from
+      {/* Bottom sheet for browsing and applying photo effects from
           the AIEffectRegistry. Each effect is a composed stack of real
           Skia render nodes. When applied, the effect is stored as a
           filter node in the selected media layer's effect stack. */}

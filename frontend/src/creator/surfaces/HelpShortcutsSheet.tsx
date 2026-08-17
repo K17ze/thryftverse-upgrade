@@ -137,12 +137,12 @@ export function HelpShortcutsSheet({ visible, onClose }: HelpShortcutsSheetProps
           <PressScale
             onPress={handleClose}
             style={[styles.gotItBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Got it"
+            accessibilityLabel="Close"
             accessibilityHint="Closes the help and shortcuts sheet"
             accessibilityRole="button"
           >
             <Text style={[styles.gotItText, { color: colors.surface }]}>
-              Got it
+              Close
             </Text>
           </PressScale>
         </View>

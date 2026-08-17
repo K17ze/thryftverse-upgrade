@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   AccessibilityInfo,
+  BackHandler,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -161,6 +162,18 @@ export default function PosterViewerScreen() {
 
   const storyId = route.params?.storyId;
   const startFrameIndex = route.params?.startFrameIndex ?? 0;
+
+  // Android hardware back button — dismiss the viewer (matches close button
+  // and swipe-down dismiss). Without this, the hardware back does nothing
+  // inside the GestureHandlerRootView-wrapped story viewer.
+  React.useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      haptic.light();
+      navigation.goBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [navigation, haptic]);
 
   React.useEffect(() => {
     let mounted = true;

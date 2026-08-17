@@ -480,7 +480,7 @@ export default function VerificationResponseScreen() {
         {/* Submit button */}
         <View style={styles.footer}>
           <AppButton
-            title={isSubmitting ? 'Submitting...' : 'Submit Evidence'}
+            title={isSubmitting ? 'Submitting...' : 'Submit evidence'}
             onPress={handleSubmit}
             disabled={!canSubmit}
             variant="primary"

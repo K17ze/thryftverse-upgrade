@@ -239,12 +239,12 @@ export function CoOwnFirstTradeGuide({
                   />
                 )}
                 <AppButton
-                  title="Got it"
+                  title="Close guide"
                   variant={onContinueToTrade ? 'secondary' : 'primary'}
                   size="md"
                   onPress={handleNext}
                   style={styles.gotItBtn}
-                  accessibilityLabel="Complete guide"
+                  accessibilityLabel="Close guide"
                 />
               </View>
             ) : (

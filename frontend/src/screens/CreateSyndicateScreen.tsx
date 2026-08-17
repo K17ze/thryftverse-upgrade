@@ -837,7 +837,7 @@ export default function CreateCoOwnScreen() {
           />
         ) : (
           <AppButton
-            title="Continue"
+            title="Next step"
             icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
             onPress={handleNext}
             variant="primary"

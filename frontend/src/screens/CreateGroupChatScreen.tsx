@@ -649,7 +649,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           variant="primary"
           size="md"
           align="center"
-          title={`Continue${selectedIds.length > 0 ? ` · ${selectedIds.length}` : ''}`}
+          title={`Next step${selectedIds.length > 0 ? ` · ${selectedIds.length}` : ''}`}
           onPress={handleContinueToDetails}
           disabled={selectedIds.length < MIN_MEMBERS}
           accessibilityLabel={`Continue to group details with ${selectedIds.length} member${selectedIds.length === 1 ? '' : 's'}`}

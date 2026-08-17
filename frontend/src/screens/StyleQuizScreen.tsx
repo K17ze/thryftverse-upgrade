@@ -185,7 +185,7 @@ export default function StyleQuizScreen() {
       <View style={styles.completeIconWrap}>
         <Ionicons name="checkmark-circle" size={64} color={colors.success} />
       </View>
-      <Text style={styles.stepTitle}>You're all set</Text>
+      <Text style={styles.stepTitle}>Quiz complete</Text>
       <Text style={styles.stepSub}>Your Explore feed will be tailored to your preferences.</Text>
       <View style={styles.summaryCard}>
         <SummaryRow label="Shopping for" value={selectedGender || '—'} />

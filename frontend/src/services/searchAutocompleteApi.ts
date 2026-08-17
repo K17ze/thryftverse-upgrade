@@ -1,5 +1,5 @@
 /**
- * Search Autocomplete API — AI-powered autocomplete service (mock-ready)
+ * Search Autocomplete API — autocomplete suggestion service (mock-ready)
  *
  * This module provides the contract + heuristic implementation for
  * ThryftVerse's search autocomplete.

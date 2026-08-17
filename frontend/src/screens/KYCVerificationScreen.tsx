@@ -400,7 +400,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
         <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
           {step < TOTAL_STEPS ? (
             <AppButton
-              title={step === 4 && !isBusiness ? 'Skip & continue' : 'Continue'}
+              title={step === 4 && !isBusiness ? 'Skip & continue' : 'Next step'}
               variant="primary"
               size="lg"
               onPress={handleNext}

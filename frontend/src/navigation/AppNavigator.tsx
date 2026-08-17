@@ -141,7 +141,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ItemDetail" getComponent={() => require('../screens/ItemDetailScreen').default} />
       <Stack.Screen name="Closet" getComponent={() => require('../screens/ClosetScreen').default} />
       <Stack.Screen name="CollectionDetail" getComponent={() => require('../screens/CollectionDetailScreen').default} />
-      <Stack.Screen name="PosterViewer" getComponent={() => require('../screens/PosterViewerScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="PosterViewer" getComponent={() => require('../screens/PosterViewerScreen').default} options={{ ...modalScreenOptions, headerShown: false }} />
       <Stack.Screen name="CreatePoster" getComponent={() => require('../screens/CreatePosterRedirect').CreatePosterRedirect} options={modalScreenOptions} />
       <Stack.Screen name="PosterStoryActivity" getComponent={() => require('../screens/PosterStoryActivityScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="PosterArchive" getComponent={() => require('../screens/PosterArchiveScreen').default} options={modalScreenOptions} />

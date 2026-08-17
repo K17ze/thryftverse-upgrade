@@ -357,7 +357,7 @@ export default function SellerFulfilmentScreen() {
 
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Dispatch item" onBack={() => navigation.goBack()} />}
+      header={<FlagshipHeader title="Ship this order" onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
@@ -592,6 +592,7 @@ export default function SellerFulfilmentScreen() {
                   </Pressable>
                 </View>
 
+                <Text style={styles.waitingStateLabel}>Waiting for carrier scan</Text>
                 <Text style={styles.autoScanHint}>
                   The carrier's first scan will automatically update the order to "in transit". You don't need to mark it shipped manually.
                 </Text>
@@ -713,12 +714,13 @@ export default function SellerFulfilmentScreen() {
       {/* ─── Footer: integrated recovery (only after label is generated) ─── */}
       {canDispatch && isIntegrated && generatedLabelUrl && (
         <View style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
+          <Text style={styles.recoveryStateLabel}>Still no carrier scan</Text>
           <Pressable
             style={[styles.recoveryBtn, isDispatching && styles.dispatchBtnDisabled]}
             onPress={() => {
               Alert.alert(
-                'Already dropped off?',
-                'If you\'ve handed the parcel to the carrier but tracking hasn\'t updated yet, mark it as handed over. The carrier scan will confirm tracking automatically.',
+                'Still no carrier scan?',
+                'If you\'ve handed the parcel to the carrier but tracking hasn\'t updated yet, mark it as handed over. The carrier scan will confirm tracking automatically. You can also check the label, contact the carrier, or report a drop-off issue.',
                 [
                   { text: 'Not yet', style: 'cancel' },
                   { text: 'I dropped it off', style: 'default', onPress: handleDroppedOffRecovery },
@@ -727,7 +729,7 @@ export default function SellerFulfilmentScreen() {
             }}
             disabled={isDispatching}
             accessibilityRole="button"
-            accessibilityLabel="Mark as dropped off — tracking hasn't updated"
+            accessibilityLabel="Still no carrier scan — mark as dropped off"
           >
             {isDispatching ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -1005,6 +1007,12 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.size + 4,
       marginTop: Space.xs,
     },
+    waitingStateLabel: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      marginTop: Space.sm,
+    },
     // ─── Manual shipping ───
     manualIntro: {
       fontSize: Type.caption.size,
@@ -1140,6 +1148,13 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
+    },
+    recoveryStateLabel: {
+      fontSize: Type.bodyEmphasis.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.textPrimary,
+      marginBottom: Space.sm,
+      textAlign: 'center',
     },
   });
 }

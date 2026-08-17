@@ -1,5 +1,5 @@
 /**
- * AI Photo Enhancement API — mock-ready service for AI-powered listing photo
+ * AI Photo Enhancement API — mock-ready service for listing photo
  * enhancement (background removal, AI shadows, auto-crop, colour correction,
  * background replacement, lighting fix).
  *

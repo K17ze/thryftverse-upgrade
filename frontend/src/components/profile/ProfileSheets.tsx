@@ -216,11 +216,11 @@ export function ProfileReportSheet({ visible, onDismiss, isPending, onSubmit }: 
           activeOpacity={0.85}
           disabled={!canSubmit || isPending}
           accessibilityRole="button"
-          accessibilityLabel="Submit"
+          accessibilityLabel="Submit report"
         >
           {isPending ? <ActivityIndicator size="small" color={colors.textInverse} /> : (
             <Text style={[styles.submitBtnText, { color: colors.textInverse }]}>
-              Submit
+              Submit report
             </Text>
           )}
         </AnimatedPressable>

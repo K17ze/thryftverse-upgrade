@@ -401,7 +401,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             />
           ) : (
             <AppButton
-              title={isSubmitting ? 'Submitting...' : 'Submit Request'}
+              title={isSubmitting ? 'Submitting...' : 'Submit support request'}
               onPress={handleSubmit}
               disabled={!canSubmit}
               variant="primary"

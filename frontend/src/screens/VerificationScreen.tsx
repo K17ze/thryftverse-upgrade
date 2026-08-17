@@ -462,7 +462,7 @@ export default function VerificationScreen({ navigation }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Continue to document upload"
               >
-                <Text style={styles.flowPrimaryBtnText}>Continue</Text>
+                <Text style={styles.flowPrimaryBtnText}>Continue to document</Text>
               </AnimatedPressable>
             </View>
           ) : null}
@@ -590,7 +590,7 @@ export default function VerificationScreen({ navigation }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel="Continue to review"
                 >
-                  <Text style={styles.flowPrimaryBtnText}>Continue</Text>
+                  <Text style={styles.flowPrimaryBtnText}>Continue to review</Text>
                 </AnimatedPressable>
               </View>
             </View>
@@ -659,7 +659,7 @@ export default function VerificationScreen({ navigation }: Props) {
                   {isSubmittingKyc ? (
                     <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
-                    <Text style={styles.flowPrimaryBtnText}>Submit</Text>
+                    <Text style={styles.flowPrimaryBtnText}>Submit verification</Text>
                   )}
                 </AnimatedPressable>
               </View>
