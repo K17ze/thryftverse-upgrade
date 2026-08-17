@@ -70,12 +70,8 @@ import type { CreatorInitialMedia } from '../navigation/types';
 // The entry screen renders <CreatorCamera /> and receives captures.
 
 // Shutter constants kept in sync with ShutterButton.tsx (78pt outer, 60pt inner).
-const SHUTTER_SIZE = 78;
-const SHUTTER_INNER = 60;
 const CORNER_SIZE = 32;
 const CORNER_STROKE = 2;
-const GALLERY_THUMB_SIZE = 44;
-const CONTROL_RAIL_ICON = 22;
 // Zoom is normalized 0..1 per Expo Camera contract. UI labels (1×, 2×, 3×)
 // are digital zoom multipliers mapped honestly to the normalized range.
 const ZOOM_STEPS = [
@@ -85,9 +81,6 @@ const ZOOM_STEPS = [
 ] as const;
 const FOCUS_RETICLE_SIZE = 70;
 const RECORDING_MAX_DURATION = 15000; // 15s max for video
-const RECORDING_RING_SIZE = SHUTTER_SIZE + 12;
-const RECORDING_RING_STROKE = 4;
-const MODE_SWITCHER_HEIGHT = 36;
 // Press-and-hold threshold for video recording (ms)
 const HOLD_THRESHOLD_MS = 350;
 
@@ -246,7 +239,6 @@ export default function CreatorCamera({
 
   const isPoster = captureMode === 'poster';
   const isVisualSearch = captureMode === 'search';
-  const modeLabel = isVisualSearch ? 'Search' : isPoster ? 'Story' : 'Look';
   const zoomLabel = ZOOM_STEPS[zoomIndex].label;
   const zoomNormalized = ZOOM_STEPS[zoomIndex].normalized;
 
@@ -1163,15 +1155,6 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* Mode indicator — only when an external bottom overlay is supplied.
-          The internal CreatorModeSwitch already labels the active mode, so
-          the pill is redundant when the switch is rendered. */}
-      {renderBottomOverlay && (
-        <View style={styles.modePill} pointerEvents="none">
-          <Text style={styles.modeText}>{modeLabel}</Text>
-        </View>
-      )}
-
       {/* Optional bottom overlay (e.g. mode switcher) */}
       {renderBottomOverlay?.()}
 
@@ -1305,69 +1288,6 @@ const styles = StyleSheet.create({
   // are kept as literal whites. Semantic colours (danger, antiqueGold) and
   // non-overlay surfaces (review overlay, primary button) use theme tokens
   // via inline overrides above.
-  // Permission states — superseded by the extracted PermissionState.tsx
-  // component. Retained for reference but not rendered here; live permission
-  // colours live in PermissionState.tsx (createStyles(colors) factory).
-  permissionOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: '#000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  permissionContent: {
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 40,
-  },
-  permissionIconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.xs,
-  },
-  permissionTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 18,
-    color: '#fff',
-    marginTop: Space.xs,
-  },
-  permissionText: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  permissionBtn: {
-    marginTop: Space.md,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: Radius.xxl,
-    backgroundColor: '#fff',
-  },
-  permissionBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    color: '#000',
-  },
-  galleryFallbackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  galleryFallbackText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-  },
   btnPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.97 }],
@@ -1422,13 +1342,6 @@ const styles = StyleSheet.create({
     right: 0,
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  // Focus reticle — SvgCircle-based with spring scale + color transition
-  focusReticle: {
-    position: 'absolute',
-    width: FOCUS_RETICLE_SIZE,
-    height: FOCUS_RETICLE_SIZE,
-    pointerEvents: 'none',
   },
   // Pinch zoom indicator — subtle pill at bottom center
   zoomIndicator: {
@@ -1560,63 +1473,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Vertical controls rail — transparent, icon + label only (Snapchat/iOS Camera pattern)
-  controlsRail: {
-    position: 'absolute',
-    right: 8,
-    gap: 16,
-    alignItems: 'center',
-  },
-  railBtn: {
-    width: 48,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  railLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.85)',
-  },
-  zoomLabel: {
-    fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
-    color: '#fff',
-  },
-  // Recent photos carousel
-  recentCarousel: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  recentCarouselContent: {
-    paddingHorizontal: Space.md,
-    gap: 8,
-  },
-  recentThumbWrap: {
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  recentThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.lg,
-  },
-  // Mode pill — transparent, text only
-  modePill: {
-    position: 'absolute',
-    bottom: 120,
-    alignSelf: 'center',
-    paddingHorizontal: Space.md,
-    paddingVertical: 6,
-  },
-  modeText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.captionElevated.size,
-    color: '#fff',
-  },
   // Bottom bar — compact: shutter (78pt) + gallery (44pt) + spacer.
   // Reduced from 120pt to 100pt minHeight so the viewfinder dominates more.
   bottomBar: {
@@ -1631,29 +1487,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     minHeight: 100,
   },
-  galleryBtn: {
-    alignItems: 'center',
-    gap: 4,
-    width: 56,
-    minHeight: 56,
-    justifyContent: 'center',
-  },
-  galleryThumb: {
-    width: GALLERY_THUMB_SIZE,
-    height: GALLERY_THUMB_SIZE,
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.9)',
-  },
-  galleryThumbPlaceholder: {
-    width: GALLERY_THUMB_SIZE,
-    height: GALLERY_THUMB_SIZE,
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   bottomSpacer: {
     width: 56,
     minHeight: 56,
@@ -1666,78 +1499,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-  },
-  bottomLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-    color: 'rgba(255,255,255,0.85)',
-  },
-  // Shutter — superseded by the extracted ShutterButton.tsx component.
-  // These styles are retained for reference but are not rendered here; the
-  // live shutter/recording colours live in ShutterButton.tsx + RecordingRing.tsx.
-  shutterOuter: {
-    width: SHUTTER_SIZE,
-    height: SHUTTER_SIZE,
-    borderRadius: SHUTTER_SIZE / 2,
-    borderWidth: 5,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  shutterInner: {
-    width: SHUTTER_INNER,
-    height: SHUTTER_INNER,
-    borderRadius: SHUTTER_INNER / 2,
-    backgroundColor: '#fff',
-  },
-  shutterInnerRecording: {
-    width: SHUTTER_INNER * 0.6,
-    height: SHUTTER_INNER * 0.6,
-    borderRadius: Radius.sm,
-    // Superseded — live recording colour is colors.danger in ShutterButton.tsx
-  },
-  // Recording ring — wraps the shutter with SVG progress
-  recordingRingWrap: {
-    position: 'absolute',
-    top: -(RECORDING_RING_SIZE - SHUTTER_SIZE) / 2,
-    left: -(RECORDING_RING_SIZE - SHUTTER_SIZE) / 2,
-    width: RECORDING_RING_SIZE,
-    height: RECORDING_RING_SIZE,
-  },
-  // Camera mode switcher — Photo / Video / Boomerang
-  modeSwitcher: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Space.xl,
-    height: MODE_SWITCHER_HEIGHT,
-    alignItems: 'center',
-  },
-  modeTab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.sm,
-    height: MODE_SWITCHER_HEIGHT,
-  },
-  modeTabText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.6)',
-  },
-  modeTabTextActive: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
-  },
-  modeUnderline: {
-    position: 'absolute',
-    bottom: 2,
-    width: 24,
-    height: 3,
-    borderRadius: Radius.full,
-    // backgroundColor applied inline via colors.antiqueGold (theme token)
   },
   // Recording badge — timer + red dot at top
   recordingBadge: {

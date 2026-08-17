@@ -422,12 +422,8 @@ export function AudioBrowserSheet({
             </>
           ) : (
             <View style={styles.noTrackState}>
-              <Ionicons name="musical-notes" size={28} color={colors.textMuted} />
               <Text style={[styles.noTrackText, { color: colors.textMuted }]}>
                 No track selected
-              </Text>
-              <Text style={[styles.noTrackHint, { color: colors.textMuted }]}>
-                Choose a sound from the library to mix it with your video.
               </Text>
             </View>
           )}
@@ -456,14 +452,8 @@ function LibraryTabBody({ colors }: { colors: ThemeColors }) {
   const styles = useSheetStyles(colors);
   return (
     <View style={styles.emptyBody}>
-      <View style={[styles.emptyIconWrap, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="musical-notes-outline" size={28} color={colors.textMuted} />
-      </View>
-      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-        No sounds available yet
-      </Text>
-      <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-        Audio library coming soon.
+      <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
+        No sounds available
       </Text>
     </View>
   );
@@ -492,14 +482,8 @@ function OriginalAudioTabBody({
   if (!hasOriginalAudio) {
     return (
       <View style={styles.emptyBody}>
-        <View style={[styles.emptyIconWrap, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons name="mic-off-outline" size={28} color={colors.textMuted} />
-        </View>
-        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+        <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
           No original audio
-        </Text>
-        <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-          This video has no recorded audio to mix.
         </Text>
       </View>
     );
@@ -518,9 +502,6 @@ function OriginalAudioTabBody({
         <View style={styles.toggleTextWrap}>
           <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>
             Keep Original Audio
-          </Text>
-          <Text style={[styles.toggleHint, { color: colors.textMuted }]}>
-            Mix the video's recorded sound into the final clip.
           </Text>
         </View>
         <View
@@ -782,20 +763,9 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.sm,
     },
-    emptyIconWrap: {
-      width: 56,
-      height: 56,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
       fontSize: Type.bodyEmphasis.size,
-    },
-    emptySubtitle: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
     },
     originalBody: {
       paddingVertical: Space.sm,
@@ -817,10 +787,6 @@ function createStyles(colors: ThemeColors) {
     toggleTitle: {
       fontFamily: Typography.family.semibold,
       fontSize: Type.body.size,
-    },
-    toggleHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
     },
     switchTrack: {
       width: 46,
@@ -889,11 +855,6 @@ function createStyles(colors: ThemeColors) {
     noTrackText: {
       fontFamily: Typography.family.medium,
       fontSize: Type.body.size,
-    },
-    noTrackHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      textAlign: 'center',
     },
     // ── Slider ──
     sliderRow: {

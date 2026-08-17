@@ -247,7 +247,6 @@ export function CaptureToolsSheet({
         <ToggleRow
           icon="grid-outline"
           label="Grid"
-          description="Rule-of-thirds overlay"
           active={showGrid}
           onPress={handleGridToggle}
           colors={colors}
@@ -259,7 +258,6 @@ export function CaptureToolsSheet({
           <ToggleRow
             icon="hand-right-outline"
             label="Hands-free"
-            description="3s countdown then auto-record"
             active={handsFreeMode}
             onPress={handleHandsFreeToggle}
             colors={colors}
@@ -275,9 +273,6 @@ export function CaptureToolsSheet({
               <Ionicons name="speedometer-outline" size={ROW_ICON_SIZE} color={colors.textSecondary} />
               <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>Speed</Text>
             </View>
-            <Text style={[styles.rowHint, { color: colors.textMuted }]}>
-              Applied at playback
-            </Text>
             <View style={styles.segmentWrap}>
               <CreatorSegmentControl
                 segments={SPEED_MODES.map((s) => ({ label: s.label, value: s.value }))}
@@ -294,7 +289,7 @@ export function CaptureToolsSheet({
           <NavRow
             icon={greenScreenActive ? 'color-fill' : 'color-fill-outline'}
             label="Green Screen"
-            value={greenScreenActive ? 'On (post-capture)' : 'Off'}
+            value={greenScreenActive ? 'On' : 'Off'}
             active={greenScreenActive}
             onPress={handleGreenScreenOpen}
             colors={colors}
@@ -355,7 +350,7 @@ export function CaptureToolsSheet({
             description={
               multiCaptureMode
                 ? `${multiCaptureCount + (hasCapturedUri ? 1 : 0)} photo${multiCaptureCount + (hasCapturedUri ? 1 : 0) !== 1 ? 's' : ''} selected`
-                : 'Capture multiple photos in sequence'
+                : undefined
             }
             active={multiCaptureMode}
             onPress={handleMultiCaptureToggle}

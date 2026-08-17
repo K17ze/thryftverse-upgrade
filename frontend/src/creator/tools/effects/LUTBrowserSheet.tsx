@@ -180,13 +180,7 @@ export function LUTBrowserSheet({
               {selectedLut.description}
             </Text>
           </View>
-        ) : (
-          <View style={styles.descriptionWrap}>
-            <Text style={[styles.descriptionBody, { color: colors.textMuted }]}>
-              Tap a grade to preview it on your media. Tap again to deselect.
-            </Text>
-          </View>
-        )}
+        ) : null}
 
         {/* ── Intensity slider ────────────────────────────────────── */}
         <View style={[styles.sliderWrap, !hasSelection && styles.sliderDisabled]}>

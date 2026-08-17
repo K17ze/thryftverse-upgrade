@@ -351,11 +351,6 @@ export function StickerBrowserSheet({
             </View>
           ) : gridData.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons
-                name="search-outline"
-                size={28}
-                color={colors.textMuted}
-              />
               <Text style={styles.emptyText}>
                 {isSearching ? 'No stickers match your search' : 'No stickers here'}
               </Text>

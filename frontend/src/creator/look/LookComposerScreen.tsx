@@ -1686,11 +1686,7 @@ function LookComposerInner() {
         {/* Empty canvas hint */}
         {!hasContent && !isLoadingSourceLook && !isLoadingDraft && entryComplete && !selectedLayer && (
           <View style={styles.canvasEmptyHint} pointerEvents="none">
-            <Ionicons name="images-outline" size={40} color="rgba(255,255,255,0.2)" />
-            <Text style={styles.canvasEmptyHintTitle}>Start your look</Text>
-            <Text style={styles.canvasEmptyHintBody}>
-              Add photos, items, or text to compose your collage
-            </Text>
+            <Text style={styles.canvasEmptyHintTitle}>Add photos to start</Text>
           </View>
         )}
 
@@ -1915,7 +1911,7 @@ function LookComposerInner() {
                 )}
                 {mediaLayers.length === 0 && (
                   <Text style={[styles.layoutEmptyText, { color: colors.textMuted }]}>
-                    Add photos to arrange them with layout presets
+                    Add photos first
                   </Text>
                 )}
               </LayoutPanel>
@@ -1968,16 +1964,16 @@ function LookComposerInner() {
                   live inside the effects surface. */}
               <PressScale
                 onPress={() => { haptic.medium(); setShowAIEffects(true); }}
-                style={[styles.aiEffectsBtn, { backgroundColor: colors.brandSubtle, borderColor: colors.brand }]}
+                style={[styles.aiEffectsBtn, { borderColor: colors.border }]}
                 accessibilityLabel="AI Effects"
                 accessibilityHint="Opens the AI effects browser to browse and apply AI-powered effects"
                 scale={0.97}
               >
-                <Ionicons name="sparkles" size={18} color={colors.brand} />
-                <Text style={[styles.aiEffectsBtnText, { color: colors.brand }]}>
+                <Ionicons name="sparkles" size={18} color={colors.textPrimary} />
+                <Text style={[styles.aiEffectsBtnText, { color: colors.textPrimary }]}>
                   AI Effects
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </PressScale>
               <View style={[styles.effectsAdjustWrap, { borderTopColor: colors.border }]}>
                 <View style={styles.effectsAutoRow}>
@@ -2587,13 +2583,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
     color: 'rgba(255,255,255,0.4)',
-    marginTop: Space.sm,
-  },
-  canvasEmptyHintBody: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.25)',
-    textAlign: 'center',
   },
   // ── AI Effects button (inside the effects surface) ──
   aiEffectsBtn: {

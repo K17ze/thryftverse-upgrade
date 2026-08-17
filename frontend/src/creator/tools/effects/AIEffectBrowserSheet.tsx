@@ -164,11 +164,7 @@ export function AIEffectBrowserSheet({
               {selectedEffect.description}
             </Text>
           </View>
-        ) : (
-          <Text style={[styles.hint, { color: colors.textMuted }]}>
-            Choose an effect to preview it on your photo.
-          </Text>
-        )}
+        ) : null}
 
         {/* ── Effect grid ─────────────────────────────────────────── */}
         <View style={styles.gridWrap}>
@@ -285,12 +281,6 @@ function useSheetStyles(colors: ThemeColors) {
           fontFamily: FontFamily.regular,
           fontSize: FontSize.caption,
           lineHeight: FontSize.caption + 4,
-        } as ViewStyle,
-        hint: {
-          paddingHorizontal: Space.md,
-          paddingBottom: Space.sm,
-          fontFamily: FontFamily.regular,
-          fontSize: FontSize.caption,
         } as ViewStyle,
         gridWrap: {
           flex: 1,

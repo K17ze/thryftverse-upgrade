@@ -1,33 +1,21 @@
-feat(creator): human flow reconstruction — camera-first entry, mode switch, simplified chrome, rail dedup
+refactor(creator): anti-slop visual deletion pass — remove decorative chrome, dead code, excessive copy
 
-Reconstructs the creator interaction architecture per the Human Flow Reconstruction spec:
+Per the Visual Language Anti-Slop spec:
+- Canvas/content must dominate visual mass
+- No card-on-card composition
+- Short labels, no explanatory paragraphs
+- Brand color for selection/Next/active only, not decoration
+- Animation for causality/continuity/state only
 
-Camera-first entry (HFR 01-04):
-- CreatorEntryScreen: deleted 2x2 tile dashboard, camera is now root state
-- CreatorModeSwitch: minimal Look/Poster/Search switch with AsyncStorage persistence
-- Direct gallery→editor and capture→editor (no intermediate action pages)
-- Drafts moved to small affordance in camera top bar
-- Items and Templates removed from entry, accessible only inside editor
-
-Simplified camera chrome (HFR 05):
-- CaptureToolsSheet: secondary tools (timer, grid, hands-free, speed, green screen, effects, multi) behind one Tools button
-- ControlsRail: simplified to only Flash + Flip (was 286 lines, now 103)
-- Default camera shows: Close, Flash, Gallery, Shutter, Flip, mode switch
-
-Look flow reconstruction (HFR 06-08):
-- Bottom-surface state machine: only one of tools/items/layout/effects renders at a time
-- Removed permanent AutoLayoutBar, LayoutPreviewRail, LookSourceTray
-- Layout and Items are now contextual surfaces accessed from tool rail
-- AI effects folded under Effects (no standalone AI destination)
-- Slide-up surface transitions with Reanimated
-- Auto-layout still applies on multi-image import (no UI needed)
-
-Poster flow reconstruction (HFR 09-12):
-- Single-photo Poster has no forced timeline (canvas is dominant)
-- Timeline auto-expands for video/multi-clip or explicit Edit Clip
-- InCanvasCropOverlay is sole canonical crop UX (CreatorCropSheet removed)
-- Templates demoted to More/project surfaces
-- Bottom-surface state machine for Poster (tools/timeline/effects)
+Cleaned files:
+- CreatorCamera: removed redundant modePill + 130 lines of dead styles + 6 dead constants
+- CaptureToolsSheet: shortened all tool descriptions to essential labels
+- LookComposerScreen: simplified empty states to minimal text, neutralized decorative brand color
+- PosterComposerScreen: simplified empty state to minimal text
+- AudioBrowserSheet: removed "coming soon", decorative icons, explanatory hints
+- LUTBrowserSheet: removed unselected-state hint paragraph
+- AIEffectBrowserSheet: removed unselected-state hint
+- StickerBrowserSheet: removed decorative empty-state icon
 
 Generated with [Devin](https://devin.ai)
 

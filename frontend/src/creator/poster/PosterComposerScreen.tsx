@@ -1429,11 +1429,7 @@ function PosterComposerInner() {
           {/* Empty frame hint */}
           {!hasContent && !isLoadingDraft && entryComplete && !selectedLayer && (
             <View style={styles.canvasEmptyHint} pointerEvents="none">
-              <Ionicons name="add-circle-outline" size={40} color="rgba(255,255,255,0.25)" />
-              <Text style={styles.canvasEmptyHintTitle}>Start your story</Text>
-              <Text style={styles.canvasEmptyHintBody}>
-                Use the tools below to add text, stickers, and media
-              </Text>
+              <Text style={styles.canvasEmptyHintTitle}>Add content to start</Text>
             </View>
           )}
 
@@ -2655,13 +2651,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.bodyStrong.size,
     color: 'rgba(255,255,255,0.45)',
-    marginTop: Space.sm,
-  },
-  canvasEmptyHintBody: {
-    fontFamily: FontFamily.regular,
-    fontSize: TypographyV2.body.size,
-    color: 'rgba(255,255,255,0.3)',
-    textAlign: 'center',
   },
   // ── Safe zone overlay ──
   safeZoneOverlay: {
