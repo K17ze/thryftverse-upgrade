@@ -44,7 +44,6 @@ import Reanimated, {
   withSpring,
   withTiming,
   withDelay,
-  withRepeat,
   withSequence,
   runOnJS,
   interpolate,

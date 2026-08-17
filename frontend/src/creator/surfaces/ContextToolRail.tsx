@@ -104,13 +104,15 @@ const RailToolButton = React.memo(function RailToolButton({
   tool,
   onToolUsed,
 }: RailToolButtonProps) {
+  const haptic = useHaptic();
   const handlePress = useCallback(() => {
     if (tool.disabled) return;
+    haptic.light();
     tool.onPress();
     // Record usage for personalization (pinning / recent tools).
     // Fire-and-forget — the hook persists asynchronously.
     if (onToolUsed) onToolUsed(tool.id);
-  }, [tool, onToolUsed]);
+  }, [tool, onToolUsed, haptic]);
 
   // Determine whether to show the label. Universally familiar tools
   // (close, back, play, etc.) are icon-only; ambiguous creative tools

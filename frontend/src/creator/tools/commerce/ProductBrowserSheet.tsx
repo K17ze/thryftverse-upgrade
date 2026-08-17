@@ -17,11 +17,17 @@ import {
   ScrollView,
   TextInput,
   FlatList,
-  ActivityIndicator,
+  type DimensionValue,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
@@ -154,6 +160,72 @@ function listingToProductRef(item: ListingSearchResult): ProductRef {
     brand: item.brand ?? undefined,
     size: item.size ?? undefined,
   };
+}
+
+// ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
+function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
+  const { colors } = useAppTheme();
+  const reduceMotion = useReducedMotion();
+  const shimmerSV = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    shimmerSV.value = 0;
+    shimmerSV.value = withTiming(1, { duration: 1200 });
+  }, [reduceMotion, shimmerSV]);
+
+  const style = useAnimatedStyle(() => ({
+    backgroundColor: colors.surfaceAlt,
+    opacity: 0.5 + 0.3 * shimmerSV.value,
+  }));
+
+  return (
+    <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
+  );
+}
+
+// ── ProductTileSkeleton — matches a single product row (thumb + text + price) ──
+function ProductTileSkeleton() {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'transparent' }}>
+      <SkeletonBlock width={48} height={48} radius={Radius.sm} />
+      <View style={{ flex: 1, gap: Space.xs }}>
+        <SkeletonBlock width={'70%'} height={Type.body.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={'40%'} height={Type.caption.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={36} height={Type.caption.size + 2} radius={Radius.sm} />
+      </View>
+    </View>
+  );
+}
+
+// ── SearchLoadingSkeleton — 3 product tile skeletons in a row (inline) ──
+function SearchLoadingSkeleton() {
+  return (
+    <View style={{ paddingVertical: Space.sm, gap: 0 }}>
+      {[0, 1, 2].map((i) => (
+        <ProductTileSkeleton key={i} />
+      ))}
+    </View>
+  );
+}
+
+// ── ProductGridSkeleton — full loading state (2 cols × 3 rows of tiles) ──
+function ProductGridSkeleton() {
+  return (
+    <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
+      {[0, 1, 2].map((row) => (
+        <View key={row} style={{ flexDirection: 'row', gap: Space.sm, marginBottom: Space.md }}>
+          {[0, 1].map((col) => (
+            <View key={col} style={{ flex: 1, gap: Space.xs }}>
+              <SkeletonBlock width={'100%'} height={120} radius={Radius.md} />
+              <SkeletonBlock width={'80%'} height={Type.body.size + 2} radius={Radius.sm} />
+              <SkeletonBlock width={40} height={Type.caption.size + 2} radius={Radius.sm} />
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 // ── Component ──────────────────────────────────────────────────────
@@ -411,7 +483,11 @@ export function ProductBrowserSheet({
               autoFocus
               accessibilityLabel="Search listings"
             />
-            {isSearchLoading && <ActivityIndicator size="small" color={colors.brand} />}
+            {isSearchLoading && (
+              <View style={{ flex: 1 }}>
+                <SearchLoadingSkeleton />
+              </View>
+            )}
           </View>
         )}
 
@@ -430,9 +506,7 @@ export function ProductBrowserSheet({
             </Pressable>
           </View>
         ) : activeLoading ? (
-          <View style={styles.loadingBody}>
-            <ActivityIndicator size="large" color={colors.brand} />
-          </View>
+          <ProductGridSkeleton />
         ) : (
           <FlatList
             data={activeResults}
@@ -593,10 +667,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
     },
     // ── States ──
-    loadingBody: {
-      paddingVertical: Space.xl,
-      alignItems: 'center',
-    },
     emptyState: {
       paddingVertical: Space.xl,
       alignItems: 'center',

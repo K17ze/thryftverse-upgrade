@@ -1,7 +1,7 @@
 /**
  * CreatorAnimations — shared animated primitives for the creator studio.
  *
- * PressScale: wraps any Pressable with spring-based press feedback (scale 0.96–0.97).
+ * PressScale: wraps any Pressable with spring-based press feedback (scale 0.97–0.98).
  * SheetContainer: animated bottom-sheet wrapper with slide-up spring, backdrop fade,
  *   16px top corner radius, and 32px grabber handle.
  *
@@ -12,11 +12,13 @@
  *   - reduced-motion fallback: instant
  */
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Pressable, PressableProps, ViewStyle } from 'react-native';
+import { View, StyleSheet, Pressable, PressableProps, ViewStyle, Dimensions } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
@@ -31,7 +33,7 @@ const TIMING_SHEET = { duration: 280, easing: Easing.out(Easing.cubic) };
 
 // ── PressScale ─────────────────────────────────────────────────────
 // Wraps a Pressable with spring-based scale-on-press feedback.
-// iconOnly → scale 0.96, text → scale 0.97, opacity 0.7
+// iconOnly → scale 0.97, text → scale 0.98, opacity 0.7
 
 interface PressScaleProps extends Omit<PressableProps, 'style'> {
   children: React.ReactNode;
@@ -55,7 +57,7 @@ export function PressScale({
 }: PressScaleProps) {
   const reduceMotion = useReducedMotion();
   const pressedSV = useSharedValue(0);
-  const defaultScale = scale ?? 0.96;
+  const defaultScale = scale ?? 0.97;
 
   const animatedStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
@@ -116,10 +118,13 @@ export function SheetContainer({
   const translateY = useSharedValue(1000);
   const backdropOpacity = useSharedValue(0);
   const mountedRef = useRef(false);
+  const sheetHeightRef = useRef(Dimensions.get('window').height * maxHeight);
+  const isDismissingRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
       mountedRef.current = true;
+      isDismissingRef.current = false;
       if (reduceMotion) {
         translateY.value = 0;
         backdropOpacity.value = 1;
@@ -138,6 +143,45 @@ export function SheetContainer({
     }
   }, [visible, reduceMotion, translateY, backdropOpacity]);
 
+  // ── Swipe-down-to-dismiss ──────────────────────────────────────────
+  // The sheet follows the finger (translateY) during the pan. On release,
+  // if the user has dragged past a threshold (100pt or 25% of sheet height),
+  // the sheet dismisses via onClose(). Otherwise it springs back to 0.
+  // Reduced motion: instant dismiss on any downward swipe.
+  const DISMISS_THRESHOLD = Math.max(100, sheetHeightRef.current * 0.25);
+
+  const panGesture = Gesture.Pan()
+    .activeOffsetY(10)
+    .onUpdate((e) => {
+      // Only follow downward drags; clamp at 0 so the sheet can't be
+      // dragged up beyond its resting position.
+      translateY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (isDismissingRef.current) return;
+      const dragged = e.translationY;
+      if (dragged > DISMISS_THRESHOLD) {
+        isDismissingRef.current = true;
+        if (reduceMotion) {
+          translateY.value = 1000;
+          backdropOpacity.value = 0;
+          runOnJS(onClose)();
+        } else {
+          translateY.value = withTiming(1000, { duration: 180, easing: Easing.in(Easing.ease) });
+          backdropOpacity.value = withTiming(0, { duration: 160 });
+          // Fire onClose after the dismiss animation completes.
+          setTimeout(() => {
+            runOnJS(onClose)();
+          }, 200);
+        }
+      } else {
+        // Spring back to rest.
+        translateY.value = reduceMotion
+          ? withTiming(0, { duration: 0 })
+          : withSpring(0, { damping: 28, stiffness: 380 });
+      }
+    });
+
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
   }));
@@ -155,26 +199,31 @@ export function SheetContainer({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Close sheet" accessibilityHint="Dismisses the sheet" accessibilityRole="button" />
       </Reanimated.View>
 
-      {/* Sheet */}
-      <Reanimated.View
-        style={[
-          sheetStyles.sheet,
-          {
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: Radius.xl,
-            borderTopRightRadius: Radius.xl,
-            maxHeight: `${maxHeight * 100}%`,
-            paddingBottom: Math.max(insets.bottom, Space.lg),
-          },
-          sheetStyle,
-        ]}
-      >
-        {/* Grabber handle */}
-        <View style={sheetStyles.handleContainer}>
-          <View style={[sheetStyles.handle, { backgroundColor: colors.borderSubtle }]} />
-        </View>
-        {children}
-      </Reanimated.View>
+      {/* Sheet — swipe-down-to-dismiss via GestureDetector */}
+      <GestureDetector gesture={panGesture}>
+        <Reanimated.View
+          style={[
+            sheetStyles.sheet,
+            {
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: Radius.xl,
+              borderTopRightRadius: Radius.xl,
+              maxHeight: `${maxHeight * 100}%`,
+              paddingBottom: Math.max(insets.bottom, Space.lg),
+            },
+            sheetStyle,
+          ]}
+          onLayout={(e) => {
+            sheetHeightRef.current = e.nativeEvent.layout.height;
+          }}
+        >
+          {/* Grabber handle — primary gesture anchor (whole sheet is pannable) */}
+          <View style={sheetStyles.handleContainer}>
+            <View style={[sheetStyles.handle, { backgroundColor: colors.borderSubtle }]} />
+          </View>
+          {children}
+        </Reanimated.View>
+      </GestureDetector>
     </View>
   );
 }

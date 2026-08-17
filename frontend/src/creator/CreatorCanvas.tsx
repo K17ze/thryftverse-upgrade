@@ -11,7 +11,6 @@ import Reanimated, {
   runOnJS,
   withTiming,
   withSpring,
-  withRepeat,
   cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
@@ -339,25 +338,31 @@ export function CreatorCanvas({
 // Not just a pulsing icon — a proper designed empty surface.
 function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['colors'] }) {
   const reducedMotion = useReducedMotion();
-  const scaleSV = useSharedValue(1);
+  const scaleSV = useSharedValue(reducedMotion ? 1 : 0.9);
+  const opacitySV = useSharedValue(reducedMotion ? 1 : 0);
 
   useEffect(() => {
     if (reducedMotion) {
-      // WCAG 2.2 §2.3.3 — no repeating pulse animation when Reduce Motion is on
+      // WCAG 2.2 §2.3.3 — instant, no animation when Reduce Motion is on
       cancelAnimation(scaleSV);
+      cancelAnimation(opacitySV);
       scaleSV.value = 1;
+      opacitySV.value = 1;
       return;
     }
-    scaleSV.value = withRepeat(
-      withTiming(1.06, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true,
-    );
-    return () => cancelAnimation(scaleSV);
-  }, [scaleSV, reducedMotion]);
+    // One-time entrance: fade in + scale from 0.9 → 1.0, then stop.
+    // No continuous pulsing (AGENTS.md §17).
+    scaleSV.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
+    opacitySV.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+    return () => {
+      cancelAnimation(scaleSV);
+      cancelAnimation(opacitySV);
+    };
+  }, [scaleSV, opacitySV, reducedMotion]);
 
   const animatedIconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleSV.value }],
+    opacity: opacitySV.value,
   }));
 
   return (

@@ -34,10 +34,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withRepeat,
   withTiming,
-  withSequence,
-  Easing,
   cancelAnimation,
   useReducedMotion,
 } from 'react-native-reanimated';
@@ -126,7 +123,6 @@ export function VoiceoverRecorderSheet({
   const [meteringAvailable, setMeteringAvailable] = useState(true);
 
   // Reanimated shared values
-  const pulseSV = useSharedValue(0);
   const ringOpacitySV = useSharedValue(0);
 
   // Timer + metering intervals
@@ -168,7 +164,6 @@ export function VoiceoverRecorderSheet({
     }
     stopTimer();
     stopMetering();
-    cancelAnimation(pulseSV);
     cancelAnimation(ringOpacitySV);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -212,28 +207,18 @@ export function VoiceoverRecorderSheet({
     meteringUnsubscribeRef.current = recorder.setMeteringListener(listener);
   }, [stopMetering]);
 
-  // ── Pulse animation ───────────────────────────────────────────────
+  // ── Static recording indicator ────────────────────────────────────
+  // Per AGENTS.md §17, continuous pulsing is prohibited. The recording
+  // state is already communicated by the timer and the "REC" label, so
+  // the ring is a static solid element (no pulse animation).
   const startPulse = useCallback(() => {
-    if (reducedMotion) {
-      ringOpacitySV.value = 0.4;
-      return;
-    }
-    ringOpacitySV.value = 0.6;
-    pulseSV.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1000, easing: Easing.out(Easing.ease) }),
-        withTiming(0, { duration: 1000, easing: Easing.in(Easing.ease) }),
-      ),
-      -1, // infinite
-      false, // no reverse — the sequence itself is the loop
-    );
-  }, [reducedMotion, pulseSV, ringOpacitySV]);
+    ringOpacitySV.value = 0.5;
+  }, [ringOpacitySV]);
 
   const stopPulse = useCallback(() => {
-    cancelAnimation(pulseSV);
     cancelAnimation(ringOpacitySV);
     ringOpacitySV.value = 0;
-  }, [pulseSV, ringOpacitySV]);
+  }, [ringOpacitySV]);
 
   // ── Recording actions ─────────────────────────────────────────────
   const handleStartRecording = useCallback(async () => {
@@ -320,12 +305,10 @@ export function VoiceoverRecorderSheet({
   }, [haptic, onClose, reducedMotion]);
 
   // ── Animated styles ───────────────────────────────────────────────
+  // Static ring — solid appearance, no continuous pulse (AGENTS.md §17).
   const ringStyle = useAnimatedStyle(() => {
-    const scale = 1 + 0.5 * pulseSV.value;
-    const opacity = ringOpacitySV.value * (1 - 0.5 * pulseSV.value);
     return {
-      transform: [{ scale }],
-      opacity,
+      opacity: ringOpacitySV.value,
     };
   });
 

@@ -4,9 +4,9 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
+  type DimensionValue,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +43,64 @@ import {
 
 type FolderFilter = 'all' | 'unfiled' | { folderId: string };
 type SortBy = 'recent' | 'name' | 'type';
+
+// ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
+// A single shimmering placeholder block. The sweep runs once (0→1)
+// then holds — no continuous pulse. Uses colors.surfaceAlt.
+function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
+  const { colors } = useAppTheme();
+  const reduceMotion = useReducedMotion();
+  const shimmerSV = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    shimmerSV.value = 0;
+    shimmerSV.value = withTiming(1, { duration: 1200 });
+  }, [reduceMotion, shimmerSV]);
+
+  const style = useAnimatedStyle(() => ({
+    backgroundColor: colors.surfaceAlt,
+    opacity: 0.5 + 0.3 * shimmerSV.value,
+  }));
+
+  return (
+    <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
+  );
+}
+
+// ── DraftListSkeleton — matches draft row layout (thumbnail + 2 text lines) ──
+function DraftListSkeleton() {
+  return (
+    <View style={{ flex: 1, backgroundColor: undefined }}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <View
+          key={i}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Space.md,
+            padding: Space.md,
+            borderBottomWidth: Stroke.hairline,
+            borderBottomColor: 'transparent',
+          }}
+        >
+          {/* Thumbnail rectangle */}
+          <SkeletonBlock width={100} height={100} radius={Radius.lg} />
+          {/* Two text lines */}
+          <View style={{ flex: 1, gap: Space.xs }}>
+            <SkeletonBlock width={'60%'} height={Type.bodyEmphasis.size + 4} radius={Radius.sm} />
+            <SkeletonBlock width={'40%'} height={Type.caption.size + 2} radius={Radius.sm} />
+          </View>
+          {/* Action icons placeholder */}
+          <View style={{ flexDirection: 'row', gap: Space.xs }}>
+            <SkeletonBlock width={Control.hit} height={Control.hit} radius={Radius.sm} />
+            <SkeletonBlock width={Control.hit} height={Control.hit} radius={Radius.sm} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 const SORT_OPTIONS: { key: SortBy; label: string }[] = [
   { key: 'recent', label: 'Recent' },
@@ -376,8 +434,20 @@ export function CreatorDraftListScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Drafts</Text>
+          <View style={styles.organizeBtn} />
+        </View>
+        <DraftListSkeleton />
       </View>
     );
   }

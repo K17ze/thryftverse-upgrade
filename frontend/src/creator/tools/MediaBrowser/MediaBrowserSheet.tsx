@@ -43,6 +43,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Modal,
+  type DimensionValue,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
@@ -141,6 +142,44 @@ const THUMB_SIZE = Math.floor(
 
 // Max video duration accepted by the downstream editor/upload pipeline.
 const MAX_VIDEO_DURATION_MS = 60_000;
+
+// ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
+function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
+  const { colors } = useAppTheme();
+  const reduceMotion = useReducedMotion();
+  const shimmerSV = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    shimmerSV.value = 0;
+    shimmerSV.value = withTiming(1, { duration: 1200 });
+  }, [reduceMotion, shimmerSV]);
+
+  const style = useAnimatedStyle(() => ({
+    backgroundColor: colors.surfaceAlt,
+    opacity: 0.5 + 0.3 * shimmerSV.value,
+  }));
+
+  return (
+    <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
+  );
+}
+
+// ── MediaGridSkeleton — 3 columns of square thumbnail skeletons ──────
+function MediaGridSkeleton() {
+  const rows = 4;
+  return (
+    <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
+      {Array.from({ length: rows }).map((_, r) => (
+        <View key={r} style={{ flexDirection: 'row', gap: Space.xs, marginBottom: Space.xs }}>
+          {Array.from({ length: GRID_COLUMNS }).map((_, c) => (
+            <SkeletonBlock key={c} width={THUMB_SIZE} height={THUMB_SIZE} radius={Radius.md} />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
 
 // ── Duration formatting ─────────────────────────────────────────────
 
@@ -867,7 +906,7 @@ export function MediaBrowserSheet({
           </PressScale>
         </View>
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={colors.brand} />
+          <MediaGridSkeleton />
         </View>
       </SheetContainer>
     );
@@ -1013,9 +1052,7 @@ export function MediaBrowserSheet({
             styles={styles}
           />
         ) : isLoading ? (
-          <View style={styles.centerState}>
-            <ActivityIndicator size="large" color={colors.brand} />
-          </View>
+          <MediaGridSkeleton />
         ) : filteredAssets.length === 0 ? (
           <View style={styles.centerState}>
             <StaticStateIcon name="images-outline" size={40} color={colors.textMuted} />

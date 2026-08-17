@@ -1,65 +1,57 @@
-feat(creator): flagship visual quality pass — all creator tool sheets and editor surfaces
+feat(creator): flagship interaction quality pass — motion, skeletons, transitions, green screen
 
-Upgrades 21 creator components from generic component-library quality to
-flagship 2026 product quality. Six parallel batches covering the entire
-creator department:
+Four parallel batches addressing the highest-impact interaction, motion,
+and state-coverage gaps identified by audit against August 2026
+competitor benchmarks (Instagram Edits, Snapchat, CapCut).
 
-Common patterns fixed across all files:
-- Pill tab indicators → text-only tabs with 2pt spring-animated underline
-- Generic pill buttons → 50pt premium buttons (Radius.lg, semibold, brand color)
-- Tiny labels (<10pt) → 10.5pt minimum
-- Card-on-card compositions → flattened with hairline separators
-- Inline magic numbers → design tokens (Space, Radius, Type, Stroke, Control)
-- Decorative empty states → minimal text-only
-- Debug-looking handles → refined L-shaped brackets with shadows
-- Close buttons < 44pt → 44pt minimum
+Batch A — Motion & haptic fixes:
+- PressScale default scale 0.96 → 0.97 (AGENTS.md §17 spec compliance)
+- Removed prohibited continuous pulse animations (withRepeat) from
+  VoiceoverRecorderSheet (recording indicator now static),
+  CreatorCanvas empty state (now one-time entrance fade+scale),
+  CreatorAssetPicker (removed unused import)
+- Added haptic.light() to RailToolButton press in ContextToolRail
+- Added swipe-to-dismiss gesture to SheetContainer using
+  Gesture.Pan with 100pt/25% threshold, spring-back, reduced-motion
+  support
 
-Batch 1 — Text/Stickers/Captions:
-- TextEditorSheet: alignment/animation toggles → underline tabs, 44pt close,
-  premium confirm button with checkmark
-- StickerBrowserSheet: category tabs → underline, minimal empty state
-- CaptionEditorSheet: font chips → underline tabs, flattened rows, premium
-  buttons with chevrons, minimal empty state
+Batch B — Skeleton loading states (AGENTS.md §14):
+- CreatorDraftListScreen: spinner → 5 draft row skeletons matching
+  final layout (thumbnail + title + meta lines)
+- CutoutPreviewSheet: 2 spinners → cutout preview rectangle skeleton
+  with shimmer
+- ProductBrowserSheet: search spinner → 3 tile skeleton rows;
+  full-screen spinner → 2×3 product grid skeleton
+- MediaBrowserSheet: 2 full-screen spinners → 3×4 media grid
+  thumbnail skeleton matching actual grid geometry
+- All skeletons use one-time shimmer sweep (not continuous pulse),
+  colors.surfaceAlt, respect reduced motion
 
-Batch 2 — Audio:
-- AudioBrowserSheet: pill tabs → underline, premium Done button
-- VoiceoverRecorderSheet: premium Done button, minimal empty states
-- AudioMixPanel: removed decorative track icon circles, minimal empty state
+Batch C — Green screen background picker (only genuine AI slop stub):
+- GreenScreenSheet: replaced non-functional placeholder with real
+  expo-image-picker integration (launchImageLibraryAsync,
+  mediaTypes: 'images', quality: 0.9)
+- Shows thumbnail preview of selected background, remove button
+- Permission handling with truthful Alert guidance
+- Premium button styling (50pt, Radius.lg), flattened layout
 
-Batch 3 — Drawing + Color:
-- DrawingWorkspace: emoji category tabs → underline, premium Done button
-- DrawingPaletteBar: flattened palette rows, magic numbers → tokens
-- GradientEditor: refined active control, hardcoded colors → theme tokens
+Batch D — Camera→editor transition (perceptual continuity):
+- New CreatorEntryEditorCrossfade component: 200ms opacity crossfade
+  between camera and editor, media appears to stay in place,
+  reduced-motion instant swap, pointer events routed to destination
+- Integrated into LookComposerScreen and PosterComposerScreen
+- CreatorCamera: mode-switch framing guide now crossfades (opacity
+  dip 1→0→1, 200ms) when switching Look/Poster/Search, masking the
+  bracket reposition as a smooth transition
 
-Batch 4 — Editor surfaces:
-- CreatorLayersSheet: flattened layer rows, magic numbers → tokens
-- CreatorSettingsSheet: 44pt close, premium save button, tokens
-- CreatorTemplateBrowser: category chips → underline tabs, flattened cards
-- CreatorDraftListScreen: folder/sort chips → underline tabs, flattened rows
-
-Batch 5 — Crop/Cutout/Background:
-- InCanvasCropOverlay: L-shaped corner brackets, underline aspect ratio tabs
-- CutoutPreviewSheet: premium footer buttons, underline mode selector
-- CreatorCutoutSheet: underline tool selector, premium footer
-- CreatorCropSheet: underline ratio presets, refined handles, premium footer
-- BackgroundSheet: underline type chips, premium footer, minimal empties
-
-Batch 6 — Camera + Timeline + Misc:
-- GalleryCarousel: 10.5pt label, design tokens
-- ShutterButton: 10.5pt speed badge, design tokens
-- PermissionState: minimal empty state, premium button
-- GreenScreenSheet: underline chips, premium buttons, flattened info banner
-- CaptureToolsSheet: underline timer chips
-- KeyframeEditor: underline property selector, flattened panels
-- SpeedCurveEditor: underline preset/easing selectors, flattened panels
-- ProductBrowserSheet: underline tabs, premium retry button
-- LookSourceTray: minimal empty state, 10.5pt labels
-- AIEffectBrowserSheet: premium apply/remove buttons
-- LUTBrowserSheet: premium apply button
-- CreatorFolderOrganizeSheet: underline chips, flattened rows, 44pt buttons
-- AccessibilityMoveSheet: underline toggle, flattened, premium buttons
-- AccessibilityZOrderSheet: minimal empty, flattened, text-only selection
-- HelpShortcutsSheet: removed decorative key caps, flattened entries
+Audit findings (3 parallel subagents):
+- AI slop: CLEAN — no fake functionality, all features real or
+  honestly disabled. Only stub was GreenScreenSheet (now fixed).
+- Visual quality: AutoAdjust already integrated, text animations
+  already exist, canvas gestures (pinch/long-press/double-tap)
+  already implemented
+- Interaction: 4 confirmed gaps fixed (PressScale, pulses, haptics,
+  swipe-to-dismiss), skeleton states added, transition smoothed
 
 Generated with [Devin](https://devin.ai)
 

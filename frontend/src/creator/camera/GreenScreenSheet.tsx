@@ -19,7 +19,10 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Type, FontFamily, Control, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -84,8 +87,58 @@ export function GreenScreenSheet({
   const [feather, setFeather] = useState(
     initialSettings?.feather ?? DEFAULT_FEATHER,
   );
+  const [isPickingBackground, setIsPickingBackground] = useState(false);
 
   if (!visible) return null;
+
+  // ── Background image picker ────────────────────────────────────────
+  // Opens the native media library via expo-image-picker. Permission is
+  // requested first; if denied, an alert guides the user to settings
+  // (AGENTS.md §11 — truthful, no fake success). The selected image URI
+  // is stored in `backgroundUri` so it flows into GreenScreenSettings on
+  // apply.
+  const handlePickBackground = async () => {
+    if (isPickingBackground) return;
+    setIsPickingBackground(true);
+    haptic.light();
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Photo access needed',
+          'Allow photo library access to pick a background image.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                void ImagePicker.requestMediaLibraryPermissionsAsync();
+              },
+            },
+          ],
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: false,
+        quality: 0.9,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        haptic.medium();
+        setBackgroundUri(result.assets[0].uri);
+      }
+    } catch {
+      Alert.alert('Could not open photo library', 'Please try again.');
+    } finally {
+      setIsPickingBackground(false);
+    }
+  };
+
+  const handleRemoveBackground = () => {
+    haptic.light();
+    setBackgroundUri('');
+  };
 
   const handleApply = () => {
     haptic.light();
@@ -131,26 +184,58 @@ export function GreenScreenSheet({
             </Text>
           </View>
 
-          {/* Background selector placeholder */}
+          {/* Background image picker */}
           <Text style={[styles.label, { color: colors.textSecondary }]}>
             Background
           </Text>
-          <Pressable
-            style={[styles.bgButton, { borderColor: colors.borderSubtle }]}
-            onPress={() => {
-              haptic.light();
-              // Background picker would open here — stub uses a placeholder
-            }}
-          >
-            <Ionicons
-              name="image-outline"
-              size={24}
-              color={colors.textMuted}
-            />
-            <Text style={[styles.bgButtonText, { color: colors.textMuted }]}>
-              {backgroundUri ? 'Background selected' : 'Select background image'}
-            </Text>
-          </Pressable>
+          {backgroundUri ? (
+            <View style={styles.bgPreviewRow}>
+              <PressScale
+                accessibilityLabel="Change background image"
+                accessibilityRole="button"
+                onPress={handlePickBackground}
+                style={[
+                  styles.bgThumbWrap,
+                  { borderColor: colors.borderSubtle },
+                ]}
+              >
+                <Image
+                  source={{ uri: backgroundUri }}
+                  style={styles.bgThumb}
+                  contentFit="cover"
+                  transition={150}
+                />
+              </PressScale>
+              <PressScale
+                accessibilityLabel="Remove background image"
+                accessibilityRole="button"
+                onPress={handleRemoveBackground}
+                style={styles.bgRemoveBtn}
+              >
+                <Text
+                  style={[styles.bgRemoveText, { color: colors.textSecondary }]}
+                >
+                  Remove
+                </Text>
+              </PressScale>
+            </View>
+          ) : (
+            <PressScale
+              accessibilityLabel="Choose background image"
+              accessibilityRole="button"
+              onPress={handlePickBackground}
+              style={[
+                styles.bgChooseBtn,
+                { borderColor: colors.borderSubtle },
+              ]}
+            >
+              <Text
+                style={[styles.bgChooseText, { color: colors.textPrimary }]}
+              >
+                Choose Background
+              </Text>
+            </PressScale>
+          )}
 
           {/* Key color presets — underline selection */}
           <Text style={[styles.label, { color: colors.textSecondary }]}>
@@ -353,18 +438,42 @@ const styles = StyleSheet.create({
     letterSpacing: Type.caption.letterSpacing,
     textTransform: 'uppercase',
   },
-  bgButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
+  bgChooseBtn: {
     height: 50,
-    paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
-    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  bgButtonText: {
-    fontFamily: FontFamily.regular,
+  bgChooseText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+  },
+  bgPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+  },
+  bgThumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    borderWidth: Stroke.hairline,
+  },
+  bgThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  bgRemoveBtn: {
+    minHeight: Control.hit,
+    paddingHorizontal: Space.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bgRemoveText: {
+    fontFamily: FontFamily.medium,
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
   },

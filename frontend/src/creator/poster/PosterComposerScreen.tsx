@@ -39,6 +39,7 @@ import { isCutoutSupportedAsync, type CutoutResult } from '../core/cutout/Cutout
 import { CreatorTemplateBrowser } from '../CreatorTemplateBrowser';
 import { CreatorPreviewOverlay } from '../CreatorPreviewOverlay';
 import { CreatorEntryScreen } from '../CreatorEntryScreen';
+import { CreatorEntryEditorCrossfade } from '../CreatorEntryEditorCrossfade';
 import { PressScale } from '../CreatorAnimations';
 import { LiquidGlassBackdrop } from '../../components/LiquidGlassBackdrop';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -1348,18 +1349,22 @@ function PosterComposerInner() {
     }
   }, [selectedLayer, hasVideoContent]);
 
-  if (showEntryScreen) {
-    return (
-      <CreatorEntryScreen
-        documentType="poster"
-        onClose={handleEntryClose}
-        onMediaSelected={handleEntryMediaSelected}
-        onBlankStart={handleEntryBlankStart}
-      />
-    );
-  }
+  // ── Camera → Editor crossfade ─────────────────────────────────────
+  // Per the human-flow reconstruction spec, the captured/selected media
+  // should appear to stay in place while editor chrome fades in around it.
+  // Both the entry (camera) and editor are mounted simultaneously during a
+  // 200ms crossfade so the media reads as continuous. See
+  // CreatorEntryEditorCrossfade for the transition implementation.
+  const entryContent = showEntryScreen ? (
+    <CreatorEntryScreen
+      documentType="poster"
+      onClose={handleEntryClose}
+      onMediaSelected={handleEntryMediaSelected}
+      onBlankStart={handleEntryBlankStart}
+    />
+  ) : null;
 
-  return (
+  const editorContent = (
     <View style={styles.container}>
       {/* ── Crash recovery banner ────────────────────────────────────── */}
       {hasPendingRecovery && (
@@ -2388,6 +2393,14 @@ function PosterComposerInner() {
         </View>
       )}
     </View>
+  );
+
+  return (
+    <CreatorEntryEditorCrossfade
+      showEntry={showEntryScreen}
+      entryElement={entryContent}
+      editorElement={editorContent}
+    />
   );
 }
 

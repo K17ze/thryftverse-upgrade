@@ -33,7 +33,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   Dimensions,
   Image as RNImage,
   Pressable,
@@ -41,6 +40,7 @@ import {
   type LayoutChangeEvent,
   type GestureResponderEvent,
   type PanResponderGestureState,
+  type DimensionValue,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,7 +50,9 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
   runOnJS,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -81,6 +83,44 @@ type ModeId = BrushMode | 'restore';
 const CHECKER_SIZE = 16;
 const CHECKER_LIGHT = '#E8E8E8';
 const CHECKER_DARK = '#C8C8C8';
+
+// ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
+function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
+  const { colors } = useAppTheme();
+  const reduceMotion = useReducedMotion();
+  const shimmerSV = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    shimmerSV.value = 0;
+    shimmerSV.value = withTiming(1, { duration: 1200 });
+  }, [reduceMotion, shimmerSV]);
+
+  const style = useAnimatedStyle(() => ({
+    backgroundColor: colors.surfaceAlt,
+    opacity: 0.5 + 0.3 * shimmerSV.value,
+  }));
+
+  return (
+    <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
+  );
+}
+
+// ── CutoutPreviewSkeleton — placeholder rectangle matching the preview area ──
+function CutoutPreviewSkeleton({ width, height }: { width: number; height: number }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: Space.sm }}>
+      <SkeletonBlock width={width} height={height} radius={Radius.md} />
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary, marginTop: Space.md }}>
+        Removing background…
+      </Text>
+      <Text style={{ fontFamily: Typography.family.regular, fontSize: Type.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs }}>
+        Detecting the subject and generating an alpha mask.
+      </Text>
+    </View>
+  );
+}
 
 function Checkerboard({ size }: { size: { width: number; height: number } }) {
   const cols = Math.ceil(size.width / CHECKER_SIZE);
@@ -411,14 +451,8 @@ export function CutoutPreviewSheet({
         )}
 
         {supported === true && processing && (
-          <View style={styles.messageContainer}>
-            <ActivityIndicator size="large" color={colors.brand} />
-            <Text style={[styles.messageTitle, { color: colors.textPrimary, marginTop: Space.md }]}>
-              Removing background…
-            </Text>
-            <Text style={[styles.messageBody, { color: colors.textSecondary }]}>
-              Detecting the subject and generating an alpha mask.
-            </Text>
+          <View style={styles.previewContainer}>
+            <CutoutPreviewSkeleton width={previewSize.width} height={previewSize.height} />
           </View>
         )}
 
@@ -717,9 +751,9 @@ export function CutoutPreviewSheet({
 
         {/* Spacer when probing capability (supported === null) */}
         {supported === null && (
-          <View style={styles.messageContainer}>
-            <ActivityIndicator size="large" color={colors.brand} />
-            <Text style={[styles.messageBody, { color: colors.textSecondary, marginTop: Space.md }]}>
+          <View style={styles.previewContainer}>
+            <CutoutPreviewSkeleton width={previewSize.width} height={previewSize.height} />
+            <Text style={[styles.messageBody, { color: colors.textSecondary, textAlign: 'center', marginTop: Space.md }]}>
               Checking device capabilities…
             </Text>
           </View>

@@ -163,6 +163,12 @@ export default function CreatorCamera({
   const [countdown, setCountdown] = useState<number | null>(null);
   const reviewOpacity = useSharedValue(0);
   const captureFlash = useSharedValue(0);
+  // ── Framing-guide crossfade on mode switch ──
+  // The corner brackets reposition when the capture mode changes (Look 4:5,
+  // Poster 9:16, Search square). A brief opacity dip (1→0→1, 200ms total)
+  // masks the instantaneous reposition so the reframing reads as a smooth
+  // crossfade rather than a jump. Respects reduced motion (instant).
+  const bracketOpacity = useSharedValue(1);
   // ── Multi-capture mode (Snapchat Multi Snap pattern) ──
   // Every capture is retained as a CreatorInitialMedia entry. Poster maps
   // captures to frames; Look maps captures to layers.
@@ -237,6 +243,26 @@ export default function CreatorCamera({
     setCaptureMode(next);
   }, []);
 
+  // ── Framing-guide crossfade on mode switch ──
+  // When the capture mode changes, briefly dip the corner-bracket opacity
+  // (1→0→1 over 200ms) so the reposition reads as a smooth reframing.
+  // Skipped on first mount (no mode change) and under reduced motion.
+  const firstModeRef = useRef(true);
+  useEffect(() => {
+    if (firstModeRef.current) {
+      firstModeRef.current = false;
+      return;
+    }
+    if (reducedMotion) {
+      bracketOpacity.value = 1;
+      return;
+    }
+    bracketOpacity.value = withSequence(
+      withTiming(0, { duration: 100, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1, { duration: 100, easing: Easing.inOut(Easing.ease) }),
+    );
+  }, [captureMode, reducedMotion, bracketOpacity]);
+
   const isPoster = captureMode === 'poster';
   const isVisualSearch = captureMode === 'search';
   const zoomLabel = ZOOM_STEPS[zoomIndex].label;
@@ -246,6 +272,9 @@ export default function CreatorCamera({
 
   // ── Quick-review overlay opacity ──
   const reviewOpacityStyle = useAnimatedStyle(() => ({ opacity: reviewOpacity.value }));
+
+  // ── Framing-guide opacity (crossfade on mode switch) ──
+  const bracketOpacityStyle = useAnimatedStyle(() => ({ opacity: bracketOpacity.value }));
 
   // ── Flip rotation: rotateY 0→180→360 for double-tap camera switch ──
   const cameraFlipStyle = useAnimatedStyle(() => ({
@@ -965,22 +994,26 @@ export default function CreatorCamera({
       )}
 
       {/* Corner brackets — mode-specific framing guide */}
-      {/* Visual Search: square crop area. Look (4:5): squarer. Poster (9:16): taller. */}
-      {(() => {
-        const bracketTop = isVisualSearch ? '22%' : isPoster ? '14%' : '16%';
-        const bracketBottom = isVisualSearch ? '32%' : isPoster ? '30%' : '30%';
-        const bracketLeft = isVisualSearch ? '20%' : isPoster ? '8%' : '10%';
-        const bracketRight = isVisualSearch ? '20%' : isPoster ? '8%' : '10%';
-        const bracketColor = isVisualSearch ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.85)';
-        return (
-          <>
-            <View style={[styles.bracketTL, { top: bracketTop, left: bracketLeft, borderColor: bracketColor }]} />
-            <View style={[styles.bracketTR, { top: bracketTop, right: bracketRight, borderColor: bracketColor }]} />
-            <View style={[styles.bracketBL, { bottom: bracketBottom, left: bracketLeft, borderColor: bracketColor }, renderBottomOverlay && styles.bracketBottomWithDeck]} />
-            <View style={[styles.bracketBR, { bottom: bracketBottom, right: bracketRight, borderColor: bracketColor }, renderBottomOverlay && styles.bracketBottomWithDeck]} />
-          </>
-        );
-      })()}
+      {/* Visual Search: square crop area. Look (4:5): squarer. Poster (9:16): taller.
+          The bracket group crossfades (opacity dip) when the mode changes so the
+          reposition reads as a smooth reframing rather than a jump. */}
+      <Reanimated.View style={bracketOpacityStyle} pointerEvents="none">
+        {(() => {
+          const bracketTop = isVisualSearch ? '22%' : isPoster ? '14%' : '16%';
+          const bracketBottom = isVisualSearch ? '32%' : isPoster ? '30%' : '30%';
+          const bracketLeft = isVisualSearch ? '20%' : isPoster ? '8%' : '10%';
+          const bracketRight = isVisualSearch ? '20%' : isPoster ? '8%' : '10%';
+          const bracketColor = isVisualSearch ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.85)';
+          return (
+            <>
+              <View style={[styles.bracketTL, { top: bracketTop, left: bracketLeft, borderColor: bracketColor }]} />
+              <View style={[styles.bracketTR, { top: bracketTop, right: bracketRight, borderColor: bracketColor }]} />
+              <View style={[styles.bracketBL, { bottom: bracketBottom, left: bracketLeft, borderColor: bracketColor }, renderBottomOverlay && styles.bracketBottomWithDeck]} />
+              <View style={[styles.bracketBR, { bottom: bracketBottom, right: bracketRight, borderColor: bracketColor }, renderBottomOverlay && styles.bracketBottomWithDeck]} />
+            </>
+          );
+        })()}
+      </Reanimated.View>
 
       {/* Center crosshair */}
       <View style={styles.crosshair} pointerEvents="none">
