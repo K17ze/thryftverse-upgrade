@@ -153,7 +153,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Pressable>
 
       {/* Default Carrier */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={FadeInDown.duration(300)}>
         <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
           {isHydrating ? (
             <FlagshipState variant="loading" />
@@ -184,7 +184,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Shipping Options */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={FadeInDown.duration(300)}>
         <PremiumListSection title="Shipping Options">
           <SettingsCell
             icon="gift-outline"
@@ -210,7 +210,7 @@ export default function PostageScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* Footer note */}
-      <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={FadeInDown.duration(300)}>
         <Text style={styles.footerNote}>
           These are your default settings. Override postage for individual items when
           listing.

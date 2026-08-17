@@ -243,7 +243,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
 
             {/* Paused alerts */}
             {alerts.filter((a) => !a.active && !a.triggeredAt).length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
                 <Text style={styles.sectionTitle}>Paused</Text>
                 {alerts.filter((a) => !a.active && !a.triggeredAt).map((alert, idx) => {
                   const isAbove = alert.condition === 'above';
@@ -313,7 +313,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
 
             {/* Triggered alerts */}
             {alerts.filter((a) => a.triggeredAt).length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
                 <Text style={styles.sectionTitle}>Triggered</Text>
                 {alerts.filter((a) => a.triggeredAt).map((alert, idx) => {
                   const isAbove = alert.condition === 'above';

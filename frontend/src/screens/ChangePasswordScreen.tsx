@@ -146,7 +146,7 @@ export default function ChangePasswordScreen() {
       </Text>
 
       {/* Flat form — no card wrapper. Fields carry their own boundary. */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <FlagshipFormSection variant="flat">
           <PremiumTextField
             label="Current password"
@@ -231,7 +231,7 @@ export default function ChangePasswordScreen() {
       </FlagshipFormSection>
 
       {/* Sessions note — flat info row, no card, no border. */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.sessionsNote}>
           <Ionicons
             name="information-circle-outline"

@@ -67,7 +67,7 @@ export default function CategoryTreeScreen() {
         </View>
 
         {/* Premium full-width View All */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <AnimatedPressable
             style={styles.viewAllRow}
             onPress={() => navigation.navigate('Browse', { categoryId: resolvedPrefix.toLowerCase(), title: `All ${resolvedPrefix}` })}
@@ -79,7 +79,7 @@ export default function CategoryTreeScreen() {
         </Reanimated.View>
 
         {/* 2-column VisualCategoryTile grid */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(150)} style={styles.gridWrap}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.gridWrap}>
           <View style={styles.grid}>
             {sections.map((section, index) => (
               <VisualCategoryTile

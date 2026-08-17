@@ -197,7 +197,7 @@ export default function CreateLookScreen() {
 
           {/* Caption */}
           <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(60)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
             style={styles.section}
           >
             <Text style={styles.sectionLabel}>Caption</Text>
@@ -218,7 +218,7 @@ export default function CreateLookScreen() {
           {/* Outfit Pieces */}
           {tags.length > 0 && (
             <Reanimated.View
-              entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(100)}
+              entering={reducedMotion ? undefined : FadeInDown.duration(300)}
               style={styles.section}
             >
               <Text style={styles.sectionLabel}>Outfit Pieces</Text>
@@ -228,7 +228,7 @@ export default function CreateLookScreen() {
 
           {/* Audience */}
           <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(140)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
             style={styles.section}
           >
             <Text style={styles.sectionLabel}>Audience</Text>
@@ -268,7 +268,7 @@ export default function CreateLookScreen() {
 
           {/* Publish Button */}
           <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(180)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
             style={styles.publishSection}
           >
             <AnimatedPressable
@@ -280,7 +280,7 @@ export default function CreateLookScreen() {
               accessibilityLabel="Publish look"
             >
               {isPublishing ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
                 <Text style={styles.publishBtnText}>Publish Look</Text>
               )}
@@ -372,7 +372,7 @@ function createStyles(colors: ThemeColors) {
   },
   audienceBtnActive: {
     borderColor: colors.brand,
-    backgroundColor: 'rgba(99,102,241,0.06)',
+    backgroundColor: colors.brandSubtle,
   },
   audienceBtnText: {
     fontSize: Type.body.size,
@@ -400,7 +400,7 @@ function createStyles(colors: ThemeColors) {
   publishBtnText: {
     fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.bold,
-    color: '#fff',
+    color: colors.textInverse,
   },
   });
 }

@@ -116,7 +116,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
             </View>
           </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={FadeInDown.duration(300)}>
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>TRANSACTION LEDGER</Text>
             <View style={styles.card}>
               {transactions.map((tx, idx) => (

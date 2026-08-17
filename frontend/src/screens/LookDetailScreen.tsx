@@ -317,7 +317,7 @@ export default function LookDetailScreen() {
         </Reanimated.View>
 
         {/* Info — editorial chapter: eyebrow, caption, creator attribution */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(80)} style={styles.infoSection}>
+        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)} style={styles.infoSection}>
           <Text style={styles.eyebrow}>Look</Text>
           {look.caption ? (
             <Text style={styles.caption}>{look.caption}</Text>
@@ -340,7 +340,7 @@ export default function LookDetailScreen() {
         </Reanimated.View>
 
         {/* Social Actions */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(120)}>
+        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
           <LookSocialActions
             lookId={look.id}
             initialLikeCount={look.likeCount}
@@ -360,7 +360,7 @@ export default function LookDetailScreen() {
 
         {/* Tagged Products Tray — editorial shop-the-look rail */}
         {look.tags.length > 0 && (
-          <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(160)} style={styles.traySection}>
+          <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)} style={styles.traySection}>
             <View style={styles.trayHeader}>
               <Text style={styles.trayTitle}>Shop the look</Text>
               <Text style={styles.trayCount}>{look.tags.length} pieces</Text>

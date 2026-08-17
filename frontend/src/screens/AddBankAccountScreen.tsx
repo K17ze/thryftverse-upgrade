@@ -202,7 +202,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             ) : null}
 
             {/* Form section */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
                 ACCOUNT DETAILS
               </Text>
@@ -257,7 +257,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             </Reanimated.View>
 
             {/* Security note */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <View style={styles.secureRow}>
                 <Ionicons name="shield-checkmark-outline" size={14} color={colors.brand} />
                 <Text style={[styles.secureText, { color: colors.brand }]}>
@@ -267,7 +267,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             </Reanimated.View>
 
             {/* Info card */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <View style={[styles.infoCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                 <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
                 <Text style={[styles.infoText, { color: colors.textMuted }]}>
@@ -277,7 +277,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
             </Reanimated.View>
 
             {/* Save button */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <AppButton
                 title={isSaving ? 'Saving...' : 'Save bank account'}
                 onPress={handleSaveBank}

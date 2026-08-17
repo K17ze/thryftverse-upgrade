@@ -430,7 +430,7 @@ export default function CreatorAnalyticsDashboardScreen() {
 
         {/* ── 2. ENGAGEMENT BREAKDOWN — horizontal bars ───────────── */}
         <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
           style={styles.section}
         >
           <View style={styles.sectionHeader}>
@@ -456,7 +456,7 @@ export default function CreatorAnalyticsDashboardScreen() {
 
         {/* ── 3. TIMELINE — daily views bar chart ─────────────────── */}
         <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(140)}
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
           style={styles.section}
         >
           <View style={styles.sectionHeader}>
@@ -476,7 +476,7 @@ export default function CreatorAnalyticsDashboardScreen() {
 
         {/* ── 4. TOP CONTENT — derived from timeline ──────────────── */}
         <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}
+          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
           style={styles.section}
         >
           <View style={styles.sectionHeader}>

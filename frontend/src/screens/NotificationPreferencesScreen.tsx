@@ -147,7 +147,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Master toggle ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Push notifications" noCard>
           <SettingsRow
             icon="notifications-outline"
@@ -162,7 +162,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Category toggles ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Categories" noCard>
           <SettingsRow
             icon="pricetags-outline"
@@ -226,7 +226,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Quiet Hours ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Quiet hours" noCard>
           <SettingsRow
             icon="moon-outline"
@@ -312,7 +312,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Notification preview ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Privacy" noCard>
           <SettingsRow
             icon="eye-off-outline"

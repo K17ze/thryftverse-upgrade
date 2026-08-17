@@ -163,7 +163,7 @@ export default function EditTab() {
 
       {/* New Arrivals */}
       {newestListings.length > 0 && (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(80)} style={{ marginTop: Space.lg }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
           <DiscoverySectionHeader
             kicker="Fresh listings"
             title="New Arrivals"
@@ -187,7 +187,7 @@ export default function EditTab() {
 
       {/* Price Drops */}
       {priceDropListings.length > 0 && (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(120)} style={{ marginTop: Space.lg }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
           <DiscoverySectionHeader
             kicker="Reduced"
             title="Price Drops"
@@ -210,7 +210,7 @@ export default function EditTab() {
       )}
 
       {/* Style Quiz */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(160)} style={{ marginTop: Space.lg }}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
           kicker="Personalise"
           title="Find Your Aesthetic"

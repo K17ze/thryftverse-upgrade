@@ -505,7 +505,7 @@ export default function WalletConvertScreen() {
 
             {/* Amount input */}
             <Reanimated.View
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)}
+              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
             >
               <View style={styles.amountWrap}>
                 <Text style={styles.amountSuffix}>1ZE</Text>
@@ -539,7 +539,7 @@ export default function WalletConvertScreen() {
             {/* Live calculation summary */}
             {izeValue > 0 && !exceedsBalance && (
               <Reanimated.View
-                entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}
+                entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
               >
                 <View
                   style={[

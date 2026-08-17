@@ -60,6 +60,7 @@ import {
   FontFamily,
   FontSize,
   LetterSpacing,
+  Type,
 } from '../../../theme/designTokens';
 
 export interface SpeedCurveEditorProps {
@@ -348,18 +349,15 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
               accessibilityRole="button"
               accessibilityLabel={`${preset.name} preset${active ? ', selected' : ''}`}
               accessibilityHint={`Applies the ${preset.name} speed curve`}
-              style={[
-                styles.presetChip,
-                {
-                  backgroundColor: active ? colors.brand : colors.surfaceAlt,
-                  borderColor: active ? colors.brand : 'transparent',
-                },
-              ]}
+              style={styles.presetChip}
             >
               <Text
                 style={[
                   styles.presetLabel,
-                  { color: active ? colors.textInverse : colors.textSecondary },
+                  {
+                    color: active ? colors.brand : colors.textSecondary,
+                    textDecorationLine: active ? 'underline' : 'none',
+                  },
                 ]}
               >
                 {preset.name}
@@ -369,11 +367,11 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
         })}
       </ScrollView>
 
-      {/* ── Curve canvas ── */}
+      {/* ── Curve canvas — flat with hairline top/bottom separators ── */}
       <View
         style={[
           styles.canvasWrap,
-          { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
+          { borderTopColor: colors.borderSubtle, borderBottomColor: colors.borderSubtle },
         ]}
       >
         {/* Skia canvas for the curve + grid */}

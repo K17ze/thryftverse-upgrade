@@ -223,7 +223,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* ── What happens ── */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
           <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>What happens when you delete</Text>
           <View style={[styles.consequenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {consequences.map((item, i) => (
@@ -249,7 +249,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* ── Confirmation form ── */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
           <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>
             Confirm your identity
           </Text>
@@ -381,7 +381,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* ── Actions — destructive separated ── */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(180)}>
+        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
           <View style={styles.actionSection}>
             {/* Secondary — keep account */}
             <AppButton

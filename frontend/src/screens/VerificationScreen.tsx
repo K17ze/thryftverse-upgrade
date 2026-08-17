@@ -349,7 +349,7 @@ export default function VerificationScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── VERIFICATION STEPS ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Verification steps">
         <SettingsRow
           icon="mail-outline"

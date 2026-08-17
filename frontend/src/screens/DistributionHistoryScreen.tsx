@@ -178,7 +178,7 @@ export default function DistributionHistoryScreen() {
           </Reanimated.View>
 
           {/* DRIP enrollment card — flagship treatment with count badge and status indicators */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={[styles.dripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.dripHeader}>
                 <View style={[styles.dripIcon, { backgroundColor: colors.brand }]}>

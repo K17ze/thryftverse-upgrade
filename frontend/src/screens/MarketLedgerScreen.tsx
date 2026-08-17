@@ -314,7 +314,7 @@ export default function MarketLedgerScreen() {
       </Reanimated.View>
 
       {/* Phase 4: Ledger summary with mark-used + window labels */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <CoOwnLedgerSummary
           issuedCount={filteredEntries.filter((e) => e.action === 'buy-units' && e.channel === 'co-own').length}
           boughtCount={filteredEntries.filter((e) => e.action === 'buy-units').length}
@@ -328,7 +328,7 @@ export default function MarketLedgerScreen() {
       </Reanimated.View>
 
       {/* Filter */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.filterWrap}>
           <AppSegmentControl
             options={FILTER_OPTIONS}

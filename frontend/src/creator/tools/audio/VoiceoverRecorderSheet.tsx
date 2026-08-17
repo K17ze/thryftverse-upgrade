@@ -667,7 +667,7 @@ const WaveformVisualization = React.memo(function WaveformVisualization({
         justifyContent: 'center',
         height: maxHeight,
         width: '100%',
-        gap: 2,
+        gap: Space.xxs,
       }}
     >
       {bars.map((level, i) => {
@@ -732,11 +732,6 @@ function UnavailableState({
 }): React.ReactElement {
   return (
     <View style={styles.emptyBody}>
-      <View
-        style={[styles.emptyIconWrap, { backgroundColor: colors.surfaceAlt }]}
-      >
-        <Ionicons name="mic-off-outline" size={28} color={colors.textMuted} />
-      </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
         Voiceover recording unavailable
       </Text>
@@ -759,11 +754,6 @@ function DeniedState({
 }): React.ReactElement {
   return (
     <View style={styles.emptyBody}>
-      <View
-        style={[styles.emptyIconWrap, { backgroundColor: colors.surfaceAlt }]}
-      >
-        <Ionicons name="mic-outline" size={28} color={colors.textMuted} />
-      </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
         Microphone access denied
       </Text>
@@ -820,9 +810,9 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
     },
     recordingDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
+      width: Space.sm,
+      height: Space.sm,
+      borderRadius: Radius.full,
     },
     recordingLabel: {
       fontFamily: Typography.family.semibold,
@@ -888,13 +878,12 @@ function createStyles(colors: ThemeColors) {
     doneBtn: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.sm,
+      height: 50,
+      borderRadius: Radius.lg,
       paddingHorizontal: Space.lg,
-      borderRadius: Radius.md,
-      minHeight: Control.hit,
     },
     doneBtnText: {
-      fontFamily: Typography.family.semibold,
+      fontFamily: FontFamily.semibold,
       fontSize: Type.bodyEmphasis.size,
     },
     // ── Empty states ──
@@ -902,13 +891,6 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xl,
       alignItems: 'center',
       gap: Space.sm,
-    },
-    emptyIconWrap: {
-      width: 56,
-      height: 56,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
     },
     emptyTitle: {
       fontFamily: Typography.family.semibold,

@@ -19,7 +19,6 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
   Dimensions,
   ViewStyle,
 } from 'react-native';
@@ -86,6 +85,8 @@ const HANDLE_HIT = Control.hit;
 const MIN_CROP = 0.05;
 /** Spring config for ratio-preset snap. */
 const SNAP_SPRING = { damping: 26, stiffness: 380, mass: 0.8 } as const;
+/** Spring for the underline tab indicator. */
+const UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 const TIMING_FADE = { duration: 180, easing: Easing.out(Easing.ease) } as const;
 
 // ── Handle identifiers ───────────────────────────────────────────────
@@ -125,6 +126,13 @@ export function InCanvasCropOverlay({
   // Selected preset id (JS state — only changes on tap, not during drag)
   const [selectedPresetId, setSelectedPresetId] = React.useState<string>('free');
 
+  // Underline indicator for aspect-ratio tabs (spring-animated, brand color).
+  // Tab layouts are measured onLayout so the underline can slide to the
+  // selected tab's exact position/width.
+  const tabLayouts = React.useRef<Map<string, { x: number; width: number }>>(new Map());
+  const underlineXSV = useSharedValue(0);
+  const underlineWSV = useSharedValue(0);
+
   // ── Initialize / reset crop region when layer bounds change ───────
   useEffect(() => {
     if (!visible) return;
@@ -134,6 +142,12 @@ export function InCanvasCropOverlay({
     cropH.value = layerBounds.height;
     lockedRatioSV.value = null;
     setSelectedPresetId('free');
+    // Reset underline to the 'free' tab (instant, not animated).
+    const freeLayout = tabLayouts.current.get('free');
+    if (freeLayout) {
+      underlineXSV.value = freeLayout.x;
+      underlineWSV.value = freeLayout.width;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, layerBounds.x, layerBounds.y, layerBounds.width, layerBounds.height]);
 
@@ -164,6 +178,18 @@ export function InCanvasCropOverlay({
       haptic.selection();
       setSelectedPresetId(preset.id);
       lockedRatioSV.value = preset.ratio;
+
+      // Animate underline indicator to the selected tab.
+      const layout = tabLayouts.current.get(preset.id);
+      if (layout) {
+        if (reduceMotion) {
+          underlineXSV.value = layout.x;
+          underlineWSV.value = layout.width;
+        } else {
+          underlineXSV.value = withSpring(layout.x, UNDERLINE_SPRING);
+          underlineWSV.value = withSpring(layout.width, UNDERLINE_SPRING);
+        }
+      }
 
       if (preset.ratio == null) {
         // Free — restore to full layer bounds
@@ -407,6 +433,12 @@ export function InCanvasCropOverlay({
     left: (cropX.value + cropW.value) * SCREEN_W,
   }));
 
+  // Underline indicator position/width (spring-animated on tab change).
+  const underlineStyle = useAnimatedStyle(() => ({
+    left: underlineXSV.value,
+    width: underlineWSV.value,
+  }));
+
   if (!visible && !mountedRef.current) return null;
 
   // ── Handle position helper ───────────────────────────────────────
@@ -432,26 +464,61 @@ export function InCanvasCropOverlay({
     }
   };
 
-  // Visible handle glyph style
-  const cornerHandleStyle: ViewStyle = {
+  // Visible handle glyphs — refined L-shaped corner brackets and subtle
+  // rounded edge bars. White with a subtle shadow for visibility over any
+  // underlying content. Stroke.emphasis (2pt) per stroke grammar: handles
+  // are selection/focus indicators.
+  const HANDLE_SHADOW: ViewStyle = {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 2,
+    elevation: 2,
+  };
+
+  const cornerBracket = (borders: ViewStyle): ViewStyle => ({
     width: HANDLE_VISIBLE,
     height: HANDLE_VISIBLE,
-    borderRadius: 2,
-    backgroundColor: '#fff',
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(0,0,0,0.25)',
-  };
+    borderColor: '#fff',
+    ...HANDLE_SHADOW,
+    ...borders,
+  });
+
+  const cornerHandleTL: ViewStyle = cornerBracket({
+    borderTopWidth: Stroke.emphasis,
+    borderLeftWidth: Stroke.emphasis,
+    borderTopLeftRadius: 3,
+  });
+  const cornerHandleTR: ViewStyle = cornerBracket({
+    borderTopWidth: Stroke.emphasis,
+    borderRightWidth: Stroke.emphasis,
+    borderTopRightRadius: 3,
+  });
+  const cornerHandleBL: ViewStyle = cornerBracket({
+    borderBottomWidth: Stroke.emphasis,
+    borderLeftWidth: Stroke.emphasis,
+    borderBottomLeftRadius: 3,
+  });
+  const cornerHandleBR: ViewStyle = cornerBracket({
+    borderBottomWidth: Stroke.emphasis,
+    borderRightWidth: Stroke.emphasis,
+    borderBottomRightRadius: 3,
+  });
+
+  // Edge handles — subtle rounded bars (not basic rectangles).
   const edgeHandleStyle: ViewStyle = {
     width: HANDLE_VISIBLE + 6,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
+    ...HANDLE_SHADOW,
   };
   const edgeHandleStyleV: ViewStyle = {
     width: 4,
     height: HANDLE_VISIBLE + 6,
-    borderRadius: 2,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
+    ...HANDLE_SHADOW,
   };
 
   return (
@@ -476,25 +543,25 @@ export function InCanvasCropOverlay({
             <View style={StyleSheet.absoluteFill} accessibilityLabel="Move crop region" accessibilityRole="adjustable" />
           </GestureDetector>
 
-          {/* Corner handles */}
+          {/* Corner handles — L-shaped brackets */}
           <GestureDetector gesture={tlGesture}>
             <View style={handleWrap('tl')} accessibilityLabel="Top-left crop handle" accessibilityRole="adjustable">
-              <View style={cornerHandleStyle} />
+              <View style={cornerHandleTL} />
             </View>
           </GestureDetector>
           <GestureDetector gesture={trGesture}>
             <View style={handleWrap('tr')} accessibilityLabel="Top-right crop handle" accessibilityRole="adjustable">
-              <View style={cornerHandleStyle} />
+              <View style={cornerHandleTR} />
             </View>
           </GestureDetector>
           <GestureDetector gesture={blGesture}>
             <View style={handleWrap('bl')} accessibilityLabel="Bottom-left crop handle" accessibilityRole="adjustable">
-              <View style={cornerHandleStyle} />
+              <View style={cornerHandleBL} />
             </View>
           </GestureDetector>
           <GestureDetector gesture={brGesture}>
             <View style={handleWrap('br')} accessibilityLabel="Bottom-right crop handle" accessibilityRole="adjustable">
-              <View style={cornerHandleStyle} />
+              <View style={cornerHandleBR} />
             </View>
           </GestureDetector>
 
@@ -543,33 +610,34 @@ export function InCanvasCropOverlay({
           </Pressable>
         </View>
 
-        {/* ── Aspect ratio rail (bottom) ───────────────────────────── */}
+        {/* ── Aspect ratio rail (bottom) — text-only tabs with underline ── */}
         <View style={[styles.ratioRailWrap, { bottom: insets.bottom + Space.md }]}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.ratioRail}
-          >
+          <View style={styles.ratioRail}>
             {aspectRatios.map((preset) => {
               const active = selectedPresetId === preset.id;
               return (
                 <Pressable
                   key={preset.id}
                   onPress={() => applyPreset(preset)}
-                  style={[
-                    styles.ratioPill,
-                    {
-                      backgroundColor: active ? colors.brand : colors.overlay,
-                      borderColor: active ? colors.brand : 'transparent',
-                    },
-                  ]}
+                  onLayout={(e) => {
+                    tabLayouts.current.set(preset.id, {
+                      x: e.nativeEvent.layout.x,
+                      width: e.nativeEvent.layout.width,
+                    });
+                    if (selectedPresetId === preset.id) {
+                      underlineXSV.value = e.nativeEvent.layout.x;
+                      underlineWSV.value = e.nativeEvent.layout.width;
+                    }
+                  }}
+                  style={styles.ratioTab}
                   accessibilityLabel={`Aspect ratio ${preset.label}`}
                   accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                 >
                   <Text
                     style={[
                       styles.ratioText,
-                      { color: active ? colors.textInverse : '#fff' },
+                      { color: active ? '#fff' : 'rgba(255,255,255,0.55)' },
                     ]}
                   >
                     {preset.label}
@@ -577,7 +645,12 @@ export function InCanvasCropOverlay({
                 </Pressable>
               );
             })}
-          </ScrollView>
+            {/* Spring-animated underline indicator (brand color, 2pt) */}
+            <Reanimated.View
+              style={[styles.ratioUnderline, underlineStyle, { backgroundColor: colors.brand }]}
+              pointerEvents="none"
+            />
+          </View>
         </View>
       </Reanimated.View>
     </GestureHandlerRootView>
@@ -638,15 +711,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    gap: Space.sm,
+    gap: Space.md,
+    position: 'relative',
   },
-  ratioPill: {
-    paddingHorizontal: Space.smMd,
+  ratioTab: {
+    paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    minWidth: 52,
     alignItems: 'center',
+  },
+  ratioUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    height: Stroke.emphasis,
+    borderRadius: 1,
   },
   ratioText: {
     fontSize: Type.caption.size,

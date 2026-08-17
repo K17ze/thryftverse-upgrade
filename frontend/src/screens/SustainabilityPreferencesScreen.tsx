@@ -132,7 +132,7 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Sustainability goals ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Sustainability goals" noCard>
           <View style={styles.goalRow}>
             <Text style={[styles.goalLabel, { color: colors.textPrimary }]}>Carbon saving target</Text>
@@ -192,7 +192,7 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Shipping & packaging ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Shipping & packaging" noCard>
           <SettingsRow
             icon="bicycle-outline"
@@ -214,7 +214,7 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Display & tracking ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Display & tracking" noCard>
           <SettingsRow
             icon="ribbon-outline"

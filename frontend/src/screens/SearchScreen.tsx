@@ -289,7 +289,7 @@ export default function SearchScreen() {
               )}
             </Reanimated.View>
           ) : (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(100)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               {renderTabContent()}
             </Reanimated.View>
           )}

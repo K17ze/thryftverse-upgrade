@@ -258,7 +258,7 @@ export default function EditProfileScreen() {
         </Text>
 
         {/* ── Profile fields ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Profile</Text>
 
           <ProfileEditField
@@ -281,7 +281,7 @@ export default function EditProfileScreen() {
         </Reanimated.View>
 
         {/* ── About fields ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>About</Text>
 
           <ProfileEditField
@@ -308,7 +308,7 @@ export default function EditProfileScreen() {
         </Reanimated.View>
 
         {/* ── Private details — integrated as form fields, not settings dump ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)} style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Private details</Text>
 
           <View style={styles.detailCard}>
@@ -350,7 +350,7 @@ export default function EditProfileScreen() {
         </Reanimated.View>
 
         {/* ── Security — stronger hierarchy with icon chips ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Security</Text>
 
           <View style={styles.detailCard}>
@@ -386,7 +386,7 @@ export default function EditProfileScreen() {
         </Reanimated.View>
 
         {/* ── Account — prominent, not buried ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)} style={styles.sectionGroup}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
           <Text style={styles.sectionLabel}>Account</Text>
 
           <Pressable

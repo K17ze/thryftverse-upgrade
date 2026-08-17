@@ -324,7 +324,7 @@ export default function PulseTab() {
       )}
 
       {/* Live Pulse Banner */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(40)}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
         <AnimatedPressable style={styles.pulseBanner} onPress={handleViewAll} activeOpacity={0.92}>
           <View style={styles.pulseDot}>
             <View style={styles.pulseRing} />
@@ -339,7 +339,7 @@ export default function PulseTab() {
       </Reanimated.View>
 
       {/* Activity feed */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(80)} style={{ marginTop: Space.lg }}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
           kicker="Updates"
           title="Live Feed"
@@ -352,7 +352,7 @@ export default function PulseTab() {
       </Reanimated.View>
 
       {/* Style Quiz (merged from EditTab) */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(120)} style={{ marginTop: Space.lg }}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
           kicker="Personalise"
           title="Find Your Aesthetic"

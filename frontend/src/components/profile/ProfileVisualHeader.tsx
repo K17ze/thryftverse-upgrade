@@ -67,7 +67,7 @@ export function ProfileVisualHeader({
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(30)} style={styles.root}>
+    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)} style={styles.root}>
       {/* Cover with gradient scrim */}
       {!hideCover && (
       <View style={styles.coverWrap}>

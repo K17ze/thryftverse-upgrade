@@ -203,12 +203,12 @@ export default function BuyoutScreen() {
         ) : null}
 
         {/* Title */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{asset.title}</Text>
         </Reanimated.View>
 
         {/* Position summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.positionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.positionRow}>
               <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Your units</Text>
@@ -226,7 +226,7 @@ export default function BuyoutScreen() {
         </Reanimated.View>
 
         {/* Status message */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(150)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           {ownsAll ? (
             <View style={[styles.statusCard, { backgroundColor: colors.success + '12', borderColor: colors.success + '40' }]}>
               <View style={[styles.statusIconWrap, { backgroundColor: colors.success + '22' }]}>
@@ -252,7 +252,7 @@ export default function BuyoutScreen() {
 
         {/* Buyout offer form */}
         {!ownsAll && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Offer price (£)</Text>
               <TextInput

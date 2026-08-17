@@ -50,6 +50,7 @@ import {
   FontFamily,
   FontSize,
   LetterSpacing,
+  Type,
 } from '../../../theme/designTokens';
 
 export interface KeyframeEditorProps {
@@ -175,7 +176,7 @@ export function KeyframeEditor({
 
   return (
     <View style={styles.container}>
-      {/* Property selector */}
+      {/* Property selector — underline tabs */}
       <View style={styles.propertyRow} accessibilityRole="tablist">
         {PROPERTIES.map((prop) => {
           const active = prop === activeProperty;
@@ -186,18 +187,15 @@ export function KeyframeEditor({
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
               accessibilityLabel={`${KEYFRAME_PROPERTY_LABELS[prop]} property`}
-              style={[
-                styles.propertyButton,
-                {
-                  backgroundColor: active ? colors.brand : colors.surfaceAlt,
-                  borderColor: active ? colors.brand : 'transparent',
-                },
-              ]}
+              style={styles.propertyButton}
             >
               <Text
                 style={[
                   styles.propertyLabel,
-                  { color: active ? colors.textInverse : colors.textSecondary },
+                  {
+                    color: active ? colors.brand : colors.textSecondary,
+                    textDecorationLine: active ? 'underline' : 'none',
+                  },
                 ]}
               >
                 {KEYFRAME_PROPERTY_LABELS[prop]}
@@ -207,12 +205,9 @@ export function KeyframeEditor({
         })}
       </View>
 
-      {/* Timeline strip */}
+      {/* Timeline strip — flat with hairline top/bottom separators */}
       <View
-        style={[
-          styles.timelineWrap,
-          { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
-        ]}
+        style={[styles.timelineWrap, { borderTopColor: colors.borderSubtle, borderBottomColor: colors.borderSubtle }]}
       >
         <Pressable
           onPress={handleTrackPress}
@@ -249,10 +244,10 @@ export function KeyframeEditor({
         </Pressable>
       </View>
 
-      {/* Inspector for the selected keyframe */}
+      {/* Inspector for the selected keyframe — flat with hairline separator */}
       {selected && (
         <View
-          style={[styles.inspector, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={[styles.inspector, { borderTopColor: colors.borderSubtle }]}
         >
           <View style={styles.inspectorRow}>
             <Text style={[styles.inspectorLabel, { color: colors.textSecondary }]}>Value</Text>
@@ -261,7 +256,7 @@ export function KeyframeEditor({
                 onPress={() =>
                   onUpdateKeyframe(selected.id, { value: roundToStep(selected.value - stepFor(activeProperty), activeProperty) })
                 }
-                style={[styles.stepButton, { backgroundColor: colors.surfaceAlt }]}
+                style={styles.stepButton}
                 accessibilityRole="button"
                 accessibilityLabel="Decrease value"
                 hitSlop={Control.hit / 2}
@@ -275,7 +270,7 @@ export function KeyframeEditor({
                 onPress={() =>
                   onUpdateKeyframe(selected.id, { value: roundToStep(selected.value + stepFor(activeProperty), activeProperty) })
                 }
-                style={[styles.stepButton, { backgroundColor: colors.surfaceAlt }]}
+                style={styles.stepButton}
                 accessibilityRole="button"
                 accessibilityLabel="Increase value"
                 hitSlop={Control.hit / 2}
@@ -300,17 +295,15 @@ export function KeyframeEditor({
                     accessibilityRole="radio"
                     accessibilityState={{ checked: active }}
                     accessibilityLabel={KEYFRAME_EASING_LABELS[ease]}
-                    style={[
-                      styles.easingButton,
-                      {
-                        backgroundColor: active ? colors.brand : colors.surfaceAlt,
-                      },
-                    ]}
+                    style={styles.easingButton}
                   >
                     <Text
                       style={[
                         styles.easingLabel,
-                        { color: active ? colors.textInverse : colors.textSecondary },
+                        {
+                          color: active ? colors.brand : colors.textSecondary,
+                          textDecorationLine: active ? 'underline' : 'none',
+                        },
                       ]}
                     >
                       {KEYFRAME_EASING_LABELS[ease]}
@@ -398,19 +391,17 @@ const styles = StyleSheet.create({
   propertyButton: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-    borderWidth: Stroke.standard,
     minHeight: Control.hit,
     justifyContent: 'center',
   },
   propertyLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSize.caption,
+    fontSize: Type.body.size,
     letterSpacing: LetterSpacing.normal,
   },
   timelineWrap: {
-    borderRadius: Radius.md,
-    borderWidth: Stroke.hairline,
+    borderTopWidth: Stroke.hairline,
+    borderBottomWidth: Stroke.hairline,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.xs,
   },
@@ -434,9 +425,8 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   inspector: {
-    borderRadius: Radius.md,
-    borderWidth: Stroke.hairline,
-    padding: Space.sm,
+    borderTopWidth: Stroke.hairline,
+    paddingTop: Space.sm,
     gap: Space.sm,
   },
   inspectorRow: {
@@ -447,7 +437,7 @@ const styles = StyleSheet.create({
   },
   inspectorLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSize.caption,
+    fontSize: Type.body.size,
     letterSpacing: LetterSpacing.normal,
   },
   valueControls: {
@@ -458,13 +448,12 @@ const styles = StyleSheet.create({
   stepButton: {
     width: Control.chrome,
     height: Control.chrome,
-    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   valueText: {
     fontFamily: FontFamily.semibold,
-    fontSize: FontSize.body,
+    fontSize: Type.bodyEmphasis.size,
     letterSpacing: LetterSpacing.normal,
     minWidth: 56,
     textAlign: 'center',
@@ -472,20 +461,19 @@ const styles = StyleSheet.create({
   easingRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.xs,
+    gap: Space.md,
     flex: 1,
     justifyContent: 'flex-end',
   },
   easingButton: {
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
     minHeight: Control.hit,
     justifyContent: 'center',
   },
   easingLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSize.caption,
+    fontSize: Type.body.size,
     letterSpacing: LetterSpacing.normal,
   },
   deleteButton: {
@@ -494,12 +482,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     paddingVertical: Space.sm,
-    borderRadius: Radius.sm,
-    minHeight: Control.hit,
+    borderRadius: Radius.lg,
+    minHeight: 50,
   },
   deleteLabel: {
     fontFamily: FontFamily.semibold,
-    fontSize: FontSize.body,
+    fontSize: Type.bodyEmphasis.size,
     color: '#FFFFFF',
     letterSpacing: LetterSpacing.normal,
   },

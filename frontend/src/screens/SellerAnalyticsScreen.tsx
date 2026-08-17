@@ -310,7 +310,7 @@ export default function SellerAnalyticsScreen() {
         </Reanimated.View>
 
         {/* ── Period selector — segmented control (7d / 30d / 90d / 1y) ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.periodSegmentRow}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.periodSegmentRow}>
           {PERIOD_OPTIONS.map((opt) => {
             const isActive = period === opt.key;
             return (
@@ -334,7 +334,7 @@ export default function SellerAnalyticsScreen() {
         </Reanimated.View>
 
         {/* ── Supporting KPIs as flat rows ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.kpiList}>
             {kpiRows.map((kpi) => (
               <View key={kpi.label} style={styles.kpiRow}>
@@ -349,7 +349,7 @@ export default function SellerAnalyticsScreen() {
         </Reanimated.View>
 
         {/* ── Top listings — horizontal scroll of compact cards ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Top listings</Text>
           </View>
@@ -405,7 +405,7 @@ export default function SellerAnalyticsScreen() {
 
         {/* ── Needs attention — flat rows with images ── */}
         {needsAttention.length > 0 ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleRow}>
                 <Ionicons name="alert-circle-outline" size={15} color={colors.warning} />

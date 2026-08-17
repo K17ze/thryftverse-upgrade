@@ -184,7 +184,7 @@ export default function PersonalisationScreen() {
         </Reanimated.View>
 
         {/* Visual shopping-audience selection */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)} style={styles.section}>
+        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Shop for</Text>
           <AudiencePreferenceGrid
             selectedGenders={genderFilter}
@@ -193,7 +193,7 @@ export default function PersonalisationScreen() {
         </Reanimated.View>
 
         {/* Discovery preference rows */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
+        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Discovery preferences</Text>
           <View style={styles.discoveryGroup}>
             <DiscoveryPreferenceRow
@@ -222,7 +222,7 @@ export default function PersonalisationScreen() {
         </Reanimated.View>
 
         {/* Optional reset action */}
-        <Reanimated.View entering={FadeInDown.duration(300).delay(180)}>
+        <Reanimated.View entering={FadeInDown.duration(300)}>
           <Pressable
             style={styles.resetBtn}
             onPress={handleReset}

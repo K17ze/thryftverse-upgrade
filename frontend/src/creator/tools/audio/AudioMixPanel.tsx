@@ -416,18 +416,6 @@ export function AudioMixPanel({
         ) : (
           /* ── Empty state (truthful) ── */
           <View style={styles.emptyBody}>
-            <View
-              style={[
-                styles.emptyIconWrap,
-                { backgroundColor: colors.surfaceAlt },
-              ]}
-            >
-              <Ionicons
-                name="options-outline"
-                size={28}
-                color={colors.textMuted}
-              />
-            </View>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
               No audio tracks
             </Text>
@@ -484,23 +472,11 @@ function TrackRow({
       {/* ── Track header: icon + name + controls ── */}
       <View style={styles.trackHeader}>
         <View style={styles.trackInfo}>
-          <View
-            style={[
-              styles.trackIconWrap,
-              {
-                backgroundColor:
-                  track.type === 'voiceover'
-                    ? colors.brandSubtle
-                    : colors.surfaceAlt,
-              },
-            ]}
-          >
-            <Ionicons
-              name={iconName}
-              size={16}
-              color={track.type === 'voiceover' ? colors.brand : colors.textSecondary}
-            />
-          </View>
+          <Ionicons
+            name={iconName}
+            size={16}
+            color={track.type === 'voiceover' ? colors.brand : colors.textSecondary}
+          />
           <View style={styles.trackMeta}>
             <Text
               style={[styles.trackName, { color: colors.textPrimary }]}
@@ -633,13 +609,6 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       paddingRight: Space.sm,
     },
-    trackIconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: Radius.sm,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
     trackMeta: {
       flex: 1,
       gap: 1,
@@ -717,13 +686,6 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xl,
       alignItems: 'center',
       gap: Space.sm,
-    },
-    emptyIconWrap: {
-      width: 56,
-      height: 56,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
     },
     emptyTitle: {
       fontFamily: Typography.family.semibold,

@@ -99,7 +99,7 @@ export default function AboutScreen({ navigation }: Props) {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={FadeInDown.duration(300)}>
           <Text style={styles.sectionLabel}>Legal</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable
@@ -153,7 +153,7 @@ export default function AboutScreen({ navigation }: Props) {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={FadeInDown.duration(300)}>
           <Text style={styles.sectionLabel}>Support</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable

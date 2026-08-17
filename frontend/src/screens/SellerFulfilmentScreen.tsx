@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
@@ -26,11 +25,17 @@ import { CachedImage } from '../components/CachedImage';
 import {
   normaliseOrderStatus,
   humaniseStatus,
+  resolveCapabilities,
   type FulfilmentSnapshot,
 } from '../components/orders/orderCapabilities';
+import {
+  classifyShippingError,
+  SHIPPING_ERROR_RECOVERY,
+  getDropOffUrl,
+  getProviderMetadata,
+} from '../services/shippingProviderRegistry';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type SellerFulfilmentRoute = RouteProp<{ SellerFulfilment: { orderId: string } }, 'SellerFulfilment'>;
 
@@ -53,24 +58,6 @@ const MANUAL_CARRIERS = [
   'FedEx',
 ];
 
-// Ship-by policy: fallback deadline when the backend hasn't provided one.
-// Depop uses 2 business days; Vinted uses 3–5 calendar days. We default to
-// 3 calendar days from purchase, which the backend can override via
-// order.shipByDate or fulfilmentSnapshot.shipByDate.
-const FALLBACK_SHIP_BY_DAYS = 3;
-
-// Drop-off finder URLs by carrier — opens the carrier's locator page.
-const DROP_OFF_URLS: Record<string, string> = {
-  'royal mail': 'https://www.royalmail.com/find-a-post-office',
-  'dpd': 'https://www.dpd.co.uk/pickup/',
-  'evri': 'https://www.evri.com/find-a-parcelshop/',
-  'hermes': 'https://www.evri.com/find-a-parcelshop/',
-  'yodel': 'https://www.yodel.co.uk/parcel-shops',
-  'ups': 'https://www.ups.com/dropoff/',
-  'dhl': 'https://www.dhl.com/en/express/locations.html',
-  'fedex': 'https://www.fedex.com/locate/',
-};
-
 function formatShipByDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -86,18 +73,16 @@ function daysUntil(iso: string | null | undefined): number | null {
   return Math.ceil(ms / (24 * 60 * 60 * 1000));
 }
 
-function deriveShipByDate(order: CommerceOrder): string | null {
-  // Priority: explicit shipByDate → snapshot shipByDate → fallback from createdAt
+/**
+ * Ship-by deadline is server truth only.
+ * No client-invented fallback. If the server hasn't provided a deadline,
+ * we return null and show "Deadline unavailable" rather than inventing one.
+ */
+function getShipByDate(order: CommerceOrder): string | null {
   if (order.shipByDate) return order.shipByDate;
   const snap = order.fulfilmentSnapshot;
   if (snap?.shipByDate) return snap.shipByDate;
-  if (order.createdAt) {
-    const created = new Date(order.createdAt);
-    if (!Number.isNaN(created.getTime())) {
-      const deadline = new Date(created.getTime() + FALLBACK_SHIP_BY_DAYS * 24 * 60 * 60 * 1000);
-      return deadline.toISOString();
-    }
-  }
+  return null;
   return null;
 }
 
@@ -110,7 +95,6 @@ export default function SellerFulfilmentScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const reducedMotionEnabled = useReducedMotion();
 
   const { orderId } = route.params;
 
@@ -161,7 +145,21 @@ export default function SellerFulfilmentScreen() {
 
   const isSeller = currentUser?.id === order?.sellerId;
   const normalised = normaliseOrderStatus(order?.status ?? '');
-  const canDispatch = isSeller && normalised === 'paid';
+
+  // Dispatch eligibility comes from the canonical capability resolver,
+  // never from a local `status === 'paid'` check.
+  const capabilities = useMemo(() => {
+    if (!order) return null;
+    return resolveCapabilities({
+      status: order.status,
+      role: isSeller ? 'seller' : 'buyer',
+      hasOpenResolution: false,
+      hasReview: false,
+      hasTracking: Boolean(order.trackingNumber),
+      fulfilmentSnapshot: order.fulfilmentSnapshot ?? null,
+    });
+  }, [order, isSeller]);
+  const canDispatch = capabilities?.canDispatch ?? false;
 
   // Determine shipping mode from the immutable fulfilment snapshot.
   // Integrated = buyer purchased a carrier-managed service (label/QR available).
@@ -172,7 +170,7 @@ export default function SellerFulfilmentScreen() {
   const isIntegrated = deliveryMode === 'integrated';
   const isManualMode = deliveryMode === 'manual' || (!isIntegrated && deliveryMode === 'unknown');
 
-  const shipByDate = order ? deriveShipByDate(order) : null;
+  const shipByDate = order ? getShipByDate(order) : null;
   const shipByLabel = formatShipByDate(shipByDate);
   const shipByDaysLeft = daysUntil(shipByDate);
   const shipByUrgent = shipByDaysLeft != null && shipByDaysLeft <= 1;
@@ -208,17 +206,9 @@ export default function SellerFulfilmentScreen() {
       }
     } catch (error) {
       if (!isMountedRef.current) return;
-      // Typed error branches — not one generic catch.
-      const msg = parseApiError(error).message;
-      if (msg.includes('carrier') || msg.includes('provider')) {
-        setLabelError('This carrier\'s label service is unavailable right now. Try again, or enter tracking manually below.');
-      } else if (msg.includes('address') || msg.includes('destination')) {
-        setLabelError('The buyer\'s address needs updating before a label can be generated. Message the buyer to resolve.');
-      } else if (msg.includes('parcel') || msg.includes('weight') || msg.includes('size')) {
-        setLabelError('The parcel details don\'t match the carrier\'s limits. Check the size/weight above.');
-      } else {
-        setLabelError('Label generation requires carrier integration. Enter tracking manually below to confirm dispatch.');
-      }
+      // Typed error classification via provider registry — no free-text matching.
+      const errorCode = classifyShippingError(error);
+      setLabelError(SHIPPING_ERROR_RECOVERY[errorCode]);
     } finally {
       if (isMountedRef.current) setIsGeneratingLabel(false);
     }
@@ -250,8 +240,8 @@ export default function SellerFulfilmentScreen() {
   }, [generatedLabelUrl, show]);
 
   const handleFindDropOff = useCallback(() => {
-    const carrier = (snapshot?.carrierId ?? shippingProvider ?? '').toLowerCase();
-    const url = DROP_OFF_URLS[carrier];
+    const carrierId = snapshot?.carrierId ?? shippingProvider ?? null;
+    const url = getDropOffUrl(carrierId);
     if (!url) {
       show('Drop-off finder not available for this carrier. Check the carrier\'s website.', 'info');
       return;
@@ -301,11 +291,13 @@ export default function SellerFulfilmentScreen() {
     }
   }, [canDispatch, isDispatching, orderId, trackingNumber, shippingProvider, show, navigation]);
 
-  // Integrated dispatch: the carrier's first scan drives state, but we allow
-  // the seller to confirm dispatch after generating a label (the backend
-  // marks shipped and the first-scan webhook advances to in-transit).
-  const handleIntegratedDispatch = useCallback(async () => {
-    if (!canDispatch || isDispatching) return;
+  // Integrated shipping: the carrier's first scan is authoritative.
+  // The seller does NOT confirm dispatch — the scan webhook advances state.
+  // This is a recovery action for when the seller has dropped off the parcel
+  // but the carrier scan hasn't appeared after a reasonable delay.
+  // It does NOT claim carrier acceptance — it only signals "I handed it over".
+  const handleDroppedOffRecovery = useCallback(async () => {
+    if (isDispatching) return;
     setIsDispatching(true);
     haptics.heavyPress();
     try {
@@ -313,7 +305,7 @@ export default function SellerFulfilmentScreen() {
         trackingNumber: trackingNumber.trim() || undefined,
         shippingProvider: serviceName ?? undefined,
       });
-      show('Item dispatched. The carrier scan will update tracking automatically.', 'success');
+      show('Marked as handed over. The carrier scan will confirm tracking.', 'success');
       navigation.goBack();
     } catch (error) {
       show(parseApiError(error).message, 'error');
@@ -373,8 +365,7 @@ export default function SellerFulfilmentScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + insets.bottom }]}
       >
         {/* ─── 1. Ship-by deadline headline ─── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <View style={[
+        <View style={[
             styles.deadlineHeader,
             shipByOverdue
               ? { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }
@@ -382,27 +373,18 @@ export default function SellerFulfilmentScreen() {
                 ? { backgroundColor: `${colors.warning}10`, borderColor: `${colors.warning}30` }
                 : { backgroundColor: colors.surface, borderColor: colors.border },
           ]}>
-            <View style={[
-              styles.deadlineIcon,
-              shipByOverdue || shipByUrgent
-                ? { backgroundColor: shipByOverdue ? `${colors.danger}20` : `${colors.warning}20` }
-                : { backgroundColor: `${colors.brand}15` },
-            ]}>
-              <Ionicons
-                name={shipByOverdue ? 'alert-circle' : 'time-outline'}
-                size={20}
-                color={shipByOverdue ? colors.danger : shipByUrgent ? colors.warning : colors.brand}
-              />
-            </View>
             <View style={styles.deadlineText}>
-              <Text style={styles.deadlineEyebrow}>
-                {shipByOverdue ? 'OVERDUE' : 'SHIP BY'}
-              </Text>
               <Text style={[
                 styles.deadlineDate,
-                { color: shipByOverdue ? colors.danger : colors.textPrimary },
+                { color: shipByOverdue ? colors.danger : shipByUrgent ? colors.warning : colors.textPrimary },
               ]}>
-                {shipByLabel ?? 'No deadline set'}
+                {shipByLabel
+                  ? shipByOverdue
+                    ? `Past dispatch deadline · ${shipByLabel}`
+                    : shipByUrgent
+                      ? `Ship by ${shipByLabel}`
+                      : `Ship by ${shipByLabel}`
+                  : 'Dispatch deadline unavailable'}
               </Text>
               {shipByDaysLeft != null && !shipByOverdue && (
                 <Text style={styles.deadlineSub}>
@@ -415,16 +397,14 @@ export default function SellerFulfilmentScreen() {
               )}
               {shipByOverdue && (
                 <Text style={styles.deadlineSub}>
-                  This order is past the dispatch deadline. Dispatch immediately or the buyer may cancel.
+                  Dispatch immediately or the buyer may cancel.
                 </Text>
               )}
             </View>
           </View>
-        </Reanimated.View>
 
         {/* ─── 2. Item summary ─── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
-          <View style={styles.itemRow}>
+        <View style={styles.itemRow}>
             {order.listingImageUrl ? (
               <CachedImage uri={order.listingImageUrl} style={styles.itemImage} contentFit="cover" />
             ) : (
@@ -437,18 +417,12 @@ export default function SellerFulfilmentScreen() {
               <Text style={styles.itemMeta}>ORDER #{shortOrderId} · {statusLabel}</Text>
               <Text style={styles.itemPrice}>{itemPrice}</Text>
             </View>
-          </View>
-        </Reanimated.View>
+        </View>
 
         {/* ─── 3. Buyer-selected service (immutable snapshot) ─── */}
         {serviceName ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
-            <View style={styles.serviceCard}>
-              <View style={styles.serviceHeader}>
-                <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.serviceEyebrow}>BUYER-SELECTED SERVICE</Text>
-              </View>
-              <Text style={styles.serviceName}>{serviceName}</Text>
+          <View style={styles.serviceCard}>
+            <Text style={styles.serviceName}>{serviceName}</Text>
               <View style={styles.serviceMetaRow}>
                 {etaWindow && (
                   <View style={styles.serviceMetaItem}>
@@ -473,19 +447,21 @@ export default function SellerFulfilmentScreen() {
                 <Text style={styles.destinationText}>To: {snapshot.destinationSummary}</Text>
               )}
             </View>
-          </Reanimated.View>
         ) : null}
 
         {/* ─── 4. Escrow narrative ─── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(150)}>
-          {(() => {
+        {(() => {
             const isHeld = normalised === 'paid' || normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery';
             if (!isHeld) return null;
-            const shippedAt = order.shippedAt ? new Date(order.shippedAt).getTime() : null;
-            const autoReleaseMs = 14 * 24 * 60 * 60 * 1000;
-            const releaseTime = shippedAt ? shippedAt + autoReleaseMs : null;
+            // Escrow release timing is server-derived, not client-invented.
+            // If the server provides an estimatedReleaseAt, show it.
+            // If not, show no countdown — do not invent a 14-day fallback.
+            const releaseAt = (order as any)?.moneyProjection?.estimatedReleaseAt;
+            const releaseTime = releaseAt ? new Date(releaseAt).getTime() : null;
             const now = Date.now();
-            const daysLeft = releaseTime ? Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000)) : null;
+            const daysLeft = releaseTime && !Number.isNaN(releaseTime)
+              ? Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000))
+              : null;
             return (
               <View style={styles.escrowBanner}>
                 <Ionicons name="lock-closed" size={14} color={colors.success} />
@@ -493,7 +469,7 @@ export default function SellerFulfilmentScreen() {
                   <Text style={styles.escrowTitle}>Funds held in escrow</Text>
                   <Text style={styles.escrowSub}>
                     {normalised === 'paid'
-                      ? 'Buyer\'s payment is safely held. Dispatch your item to start the release countdown.'
+                      ? 'Buyer\'s payment is safely held. Dispatch your item to start the release process.'
                       : 'Buyer\'s payment is held until they confirm receipt.'}
                   </Text>
                   {daysLeft != null && daysLeft > 0 && (
@@ -505,13 +481,12 @@ export default function SellerFulfilmentScreen() {
               </View>
             );
           })()}
-        </Reanimated.View>
 
         <View style={styles.sectionDivider} />
 
         {/* ─── 5. Integrated shipping: label / QR / drop-off ─── */}
         {isIntegrated && canDispatch && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <>
             <Text style={styles.sectionLabel}>Dispatch steps</Text>
 
             {/* Step 1: Get label */}
@@ -621,12 +596,12 @@ export default function SellerFulfilmentScreen() {
                 </Text>
               </>
             )}
-          </Reanimated.View>
+          </>
         )}
 
         {/* ─── 6. Manual shipping: tracking input ─── */}
         {isManualMode && canDispatch && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <>
             <Text style={styles.sectionLabel}>Arrange shipping</Text>
             <Text style={styles.manualIntro}>
               The buyer paid for tracked shipping. Arrange a tracked service, enter the details below, then confirm dispatch.
@@ -688,7 +663,7 @@ export default function SellerFulfilmentScreen() {
             <Text style={styles.hintText}>
               A valid tracking number is required to confirm dispatch. The buyer will receive it automatically.
             </Text>
-          </Reanimated.View>
+          </>
         )}
 
         {/* ─── 7. Cannot dispatch ─── */}
@@ -702,71 +677,66 @@ export default function SellerFulfilmentScreen() {
         )}
       </ScrollView>
 
-      {/* ─── Footer: confirm dispatch ─── */}
-      {canDispatch && (
+      {/* ─── Footer: manual dispatch (integrated shipping has no manual confirm) ─── */}
+      {canDispatch && !isIntegrated && (
         <View style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
-          {isIntegrated ? (
-            <Pressable
-              style={[styles.dispatchBtn, isDispatching && styles.dispatchBtnDisabled]}
-              onPress={() => {
-                if (!generatedLabelUrl) {
-                  // No label yet — prompt to generate first
-                  Alert.alert(
-                    'Generate a label first',
-                    'You need a shipping label before confirming dispatch. Tap "Get shipping label" above.',
-                    [{ text: 'OK' }]
-                  );
-                  return;
-                }
-                Alert.alert(
-                  'Confirm dispatch?',
-                  'The carrier scan will update tracking automatically. The buyer will be notified that their item is on the way.',
-                  [
-                    { text: 'Not yet', style: 'cancel' },
-                    { text: 'Confirm dispatch', style: 'default', onPress: handleIntegratedDispatch },
-                  ]
-                );
-              }}
-              disabled={isDispatching}
-              accessibilityRole="button"
-              accessibilityLabel="Confirm dispatch"
-            >
-              {isDispatching ? (
-                <ActivityIndicator size="small" color={colors.textInverse} />
-              ) : (
-                <Text style={styles.dispatchBtnText}>
-                  {generatedLabelUrl ? 'Confirm dispatch' : 'Get label to dispatch'}
-                </Text>
-              )}
-            </Pressable>
-          ) : (
-            <Pressable
-              style={[styles.dispatchBtn, isDispatching && styles.dispatchBtnDisabled]}
-              onPress={() => {
-                Alert.alert(
-                  'Confirm dispatch?',
-                  trackingNumber.trim()
-                    ? `The order will be dispatched with ${shippingProvider} tracking number ${trackingNumber.trim()}. The buyer will be notified.`
-                    : 'Enter a tracking number and carrier to confirm dispatch.',
-                  [
-                    { text: 'Not yet', style: 'cancel' },
-                    ...(trackingNumber.trim() && shippingProvider.trim()
-                      ? [{ text: 'Confirm dispatch', style: 'default' as const, onPress: handleManualDispatch }]
-                      : []),
-                  ]
-                );
-              }}
-              disabled={isDispatching}
-              accessibilityRole="button"
-              accessibilityLabel="Add tracking and confirm dispatch"
-            >
-              {isDispatching ? (
-                <ActivityIndicator size="small" color={colors.textInverse} />
-              ) : (
-                <Text style={styles.dispatchBtnText}>Add tracking & confirm dispatch</Text>
-              )}
-            </Pressable>
-          )}
+          <Pressable
+            style={[styles.dispatchBtn, isDispatching && styles.dispatchBtnDisabled]}
+            onPress={() => {
+              Alert.alert(
+                'Confirm dispatch?',
+                trackingNumber.trim()
+                  ? `The order will be dispatched with ${shippingProvider} tracking number ${trackingNumber.trim()}. The buyer will be notified.`
+                  : 'Enter a tracking number and carrier to confirm dispatch.',
+                [
+                  { text: 'Not yet', style: 'cancel' },
+                  ...(trackingNumber.trim() && shippingProvider.trim()
+                    ? [{ text: 'Confirm dispatch', style: 'default' as const, onPress: handleManualDispatch }]
+                    : []),
+                ]
+              );
+            }}
+            disabled={isDispatching}
+            accessibilityRole="button"
+            accessibilityLabel="Add tracking and confirm dispatch"
+          >
+            {isDispatching ? (
+              <ActivityIndicator size="small" color={colors.textInverse} />
+            ) : (
+              <Text style={styles.dispatchBtnText}>Add tracking & confirm dispatch</Text>
+            )}
+          </Pressable>
+        </View>
+      )}
+
+      {/* ─── Footer: integrated recovery (only after label is generated) ─── */}
+      {canDispatch && isIntegrated && generatedLabelUrl && (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
+          <Pressable
+            style={[styles.recoveryBtn, isDispatching && styles.dispatchBtnDisabled]}
+            onPress={() => {
+              Alert.alert(
+                'Already dropped off?',
+                'If you\'ve handed the parcel to the carrier but tracking hasn\'t updated yet, mark it as handed over. The carrier scan will confirm tracking automatically.',
+                [
+                  { text: 'Not yet', style: 'cancel' },
+                  { text: 'I dropped it off', style: 'default', onPress: handleDroppedOffRecovery },
+                ]
+              );
+            }}
+            disabled={isDispatching}
+            accessibilityRole="button"
+            accessibilityLabel="Mark as dropped off — tracking hasn't updated"
+          >
+            {isDispatching ? (
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            ) : (
+              <>
+                <Ionicons name="help-circle-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.recoveryBtnText}>I dropped it off but tracking hasn't updated</Text>
+              </>
+            )}
+          </Pressable>
         </View>
       )}
     </FlagshipScreen>
@@ -789,23 +759,9 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
       marginBottom: Space.md,
     },
-    deadlineIcon: {
-      width: Space.xl + Space.sm,
-      height: Space.xl + Space.sm,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     deadlineText: {
       flex: 1,
       gap: 2,
-    },
-    deadlineEyebrow: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textMuted,
-      letterSpacing: LetterSpacing.caps,
-      textTransform: 'uppercase',
     },
     deadlineDate: {
       fontSize: Type.bodyLarge.size,
@@ -862,19 +818,6 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
       padding: Space.md,
       marginBottom: Space.sm,
-    },
-    serviceHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginBottom: Space.xs,
-    },
-    serviceEyebrow: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textMuted,
-      letterSpacing: LetterSpacing.caps,
-      textTransform: 'uppercase',
     },
     serviceName: {
       fontSize: Type.bodyEmphasis.size,
@@ -1179,6 +1122,23 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.bodyLarge.size,
       fontFamily: Typography.family.bold,
       color: colors.textInverse,
+    },
+    recoveryBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.sm + 2,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      minHeight: Control.hit,
+    },
+    recoveryBtnText: {
+      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      color: colors.textSecondary,
     },
   });
 }

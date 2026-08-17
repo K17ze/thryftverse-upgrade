@@ -228,7 +228,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
 
         {/* ── Status-specific content ── */}
         {effectiveStatus === 'unverified' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <FlagshipFormSection
               variant="flat"
               title="Build buyer trust"
@@ -253,7 +253,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
         )}
 
         {effectiveStatus === 'in_review' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <FlagshipFormSection
               variant="flat"
               title="What we are checking"
@@ -276,7 +276,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
         )}
 
         {effectiveStatus === 'verified' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <FlagshipFormSection
               variant="flat"
               title="Your verification benefits"
@@ -293,7 +293,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
         )}
 
         {effectiveStatus === 'rejected' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <FlagshipFormSection
               variant="flat"
               title="Verification declined"
@@ -318,7 +318,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
         )}
 
         {/* ── Timeline ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <FlagshipFormSection
             variant="flat"
             title="Verification timeline"

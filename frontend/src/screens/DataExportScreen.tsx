@@ -105,7 +105,7 @@ export default function DataExportScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── What's included ── */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
         <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>
           What's included
         </Text>
@@ -138,7 +138,7 @@ export default function DataExportScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── State-specific content ── */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
         {/* Loading state */}
         {exportState === 'loading' ? (
           <View style={[styles.stateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -217,7 +217,7 @@ export default function DataExportScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Actions ── */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.actionSection, { paddingBottom: insets.bottom + Space.lg }]}>
           {exportState === 'loading' ? (
             <AppButton

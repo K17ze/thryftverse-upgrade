@@ -87,7 +87,7 @@ export default function SuccessScreen() {
             <Ionicons name="checkmark" size={48} color={colors.background} />
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(80)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <Text style={styles.title}>Payment Successful</Text>
             <Text style={styles.subtitle}>
               Your order has been placed.{ '\n' }
@@ -101,7 +101,7 @@ export default function SuccessScreen() {
 
           {/* Order Context Card */}
           {!isLoading && !hasError && order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(120)} style={styles.orderCardWrap}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.orderCardWrap}>
               <ElevatedSurface variant="surface" style={styles.orderCard}>
                 {order.listingImageUrl && (
                   <CachedImage
@@ -121,7 +121,7 @@ export default function SuccessScreen() {
 
           {/* What happens next — timeline */}
           {!isLoading && !hasError && order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)} style={styles.timelineWrap}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.timelineWrap}>
               <Text style={styles.timelineTitle}>What happens next?</Text>
               <View style={styles.timeline}>
                 <TimelineStep
@@ -156,7 +156,7 @@ export default function SuccessScreen() {
 
           {/* Support Action */}
           <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)}
+            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
             style={styles.supportRowWrap}
           >
             <AnimatedPressable
@@ -179,7 +179,7 @@ export default function SuccessScreen() {
         </View>
       </ScrollView>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(240)} style={styles.footer}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.footer}>
         <FlagshipActionCluster
           actions={[
             { label: 'View Order', onPress: handleViewOrder, variant: 'primary' },

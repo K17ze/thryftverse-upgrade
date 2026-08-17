@@ -426,7 +426,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
         {/* -- Presets section -- */}
         {(phase === 'populated' || phase === 'applied') && presets.length > 0 && (
           <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(280).delay(60)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
             style={styles.presetsSection}
           >
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>

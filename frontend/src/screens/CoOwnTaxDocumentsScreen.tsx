@@ -170,7 +170,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
             </Reanimated.View>
 
             {/* Summary breakdown */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Summary</Text>
               </View>
@@ -201,7 +201,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
 
             {/* Purchases breakdown */}
             {doc.purchases.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Purchases by asset</Text>
                 </View>
@@ -221,7 +221,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
 
             {/* Sales breakdown */}
             {doc.sales.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Sales by asset</Text>
                 </View>
@@ -241,7 +241,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
 
             {/* Distributions breakdown */}
             {doc.distributions.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(320)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Distributions by asset</Text>
                 </View>
@@ -260,7 +260,7 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
             )}
 
             {/* Disclaimer */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(400)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <View style={styles.disclaimerCard}>
                 <View style={styles.disclaimerIconWrap}>
                   <Ionicons name="information-circle" size={18} color={colors.textSecondary} />

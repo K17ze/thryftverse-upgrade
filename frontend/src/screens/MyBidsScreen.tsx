@@ -308,7 +308,7 @@ export default function MyBidsScreen() {
 
       {/* State rail — separated bid filters and watching */}
       <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(350).delay(0)}
+        entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
       >
         <ScrollView
           horizontal

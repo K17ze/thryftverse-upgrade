@@ -222,7 +222,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           <>
             {/* Active orders */}
             {activeOrders.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Active</Text>
                   <View style={styles.sectionCount}>
@@ -291,7 +291,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
 
             {/* Inactive orders */}
             {inactiveOrders.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
+              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Cancelled</Text>
                   <View style={styles.sectionCount}>

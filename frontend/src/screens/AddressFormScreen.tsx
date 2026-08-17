@@ -491,7 +491,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           </Reanimated.View>
 
           {/* 3. Recipient section */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={styles.section}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.section}>
             <Text style={styles.sectionLabel}>Full name</Text>
             <TextInput
               ref={nameRef}
@@ -518,7 +518,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           <View style={styles.separator} />
 
           {/* 4. Address section */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.section}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.section}>
             <Text style={styles.sectionLabel}>Address line 1</Text>
             <TextInput
               ref={streetRef}
@@ -542,7 +542,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             )}
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)} style={styles.section}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.section}>
             <Text style={styles.sectionLabel}>Address line 2 (optional)</Text>
             <TextInput
               ref={apartmentRef}
@@ -561,7 +561,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           <View style={styles.separator} />
 
           {/* 5. Location section */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)} style={styles.section}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.section}>
             <Text style={styles.sectionLabel}>City / town</Text>
             <TextInput
               ref={cityRef}
@@ -669,7 +669,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           </View>
 
           {/* 6. Default-address note */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)} style={styles.defaultNote}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.defaultNote}>
             <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
             <Text style={styles.defaultNoteText}>
               This will be used as your default delivery address.

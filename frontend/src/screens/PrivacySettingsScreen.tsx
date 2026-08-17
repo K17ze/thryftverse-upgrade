@@ -96,7 +96,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         </View>
       </Reanimated.View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <SettingsSection title="Visibility" noCard>
         <SettingsRow
           icon="eye-outline"
@@ -124,7 +124,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <SettingsSection title="Shop activity" noCard>
         <SettingsRow
           icon="bag-outline"
@@ -138,7 +138,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <SettingsSection title="Messaging" noCard>
         <SettingsRow
           icon="chatbubble-ellipses-outline"
@@ -151,7 +151,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <SettingsSection title="Blocked users" noCard>
         <SettingsRow
           icon="ban-outline"
@@ -170,7 +170,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           This section makes safety actionable rather than buried. Research
           (TechVinta 2026): "surface a Report link on every surface" and
           "buyer/seller protection" are core trust pillars. */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(280)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.safetyTipsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.safetyTipsHeader}>
             <View style={[styles.safetyTipsIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
@@ -201,7 +201,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         </View>
       </Reanimated.View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <SettingsSection title="Data & analytics" noCard>
         <SettingsRow
           icon="analytics-outline"
@@ -215,7 +215,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
       </SettingsSection>
       </Reanimated.View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(360)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
       <SettingsSection title="Legal" noCard>
         <SettingsRow
           icon="document-text-outline"

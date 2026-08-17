@@ -72,29 +72,15 @@ export interface CommerceDetailStateDockProps {
    * disclosure"). Used for blocked-state explanation. */
   subtitle?: string;
   /** Optional product thumbnail rendered on the left edge. Anchors the
-   * user to the product when they've scrolled past the hero image.
-   * Research (ecomsdesignpro): "A small thumbnail helps, especially
-   * when users scroll far past the hero image." */
+   *  user to the product when they've scrolled past the hero image. */
   thumbnailUri?: string;
   /** Optional shipping hint shown below the price (e.g. "+ £3.99 shipping"
-   *  or "Free shipping"). Competitor pattern (Vinted/Depop): shipping
-   *  context next to the price in the dock reduces checkout abandonment. */
+   *  or "Free shipping"). */
   shippingHint?: string;
-  /** When true, renders a buyer protection strip above the dock with a
-   *  shield icon and "Buyer protection" text. Per Design.md trust/commerce
-   *  card micro spec: "Buyer protection strip: colors.surface background,
-   *  Radius.lg, shield icon 20pt, Type.captionElevated text, placed above
-   *  the action dock." Only render when protection is actually available. */
+  /** When true, renders a buyer protection strip above the dock. Only
+   *  render when protection is actually available. */
   showProtectionStrip?: boolean;
-  /** Detected commerce tier for category-adaptive trust strip copy. When
-   *  set to a non-standard tier, the dock shows a tier-appropriate hint
-   *  instead of the default "Buyer protection" strip. The copy is
-   *  descriptive of the tier, not a promise of a specific service that
-   *  may not be backed by real backend capabilities:
-   *    - brokered: "Brokered asset — enquire to arrange viewing"
-   *    - authenticated_luxury: "High-value item — authentication may be available"
-   *    - specialist: "Specialist item — enquire for details"
-   *  The standard tier falls back to the showProtectionStrip behaviour. */
+  /** Detected commerce tier for category-adaptive trust strip copy. */
   commerceTier?: 'standard' | 'authenticated_luxury' | 'specialist' | 'brokered';
   /** Primary action (max 1). Required when no blocked state is shown. */
   primaryAction?: CommerceDetailStateDockAction;
@@ -172,23 +158,9 @@ export function CommerceDetailStateDock({
       ]}
     >
       {/* ── Trust strip (top section of the unified dock) ──
-          Per Design.md trust/commerce card micro spec: shield icon,
-          Type.captionElevated text, placed at the top of the action dock.
-          Research (Vinted/Depop): trust signal at the payment decision
-          point increases conversion more than any other single change.
-          Flattened per AGENTS.md §4 — no separate surface; a hairline
+          Flattened into the dock surface — no separate surface; a hairline
           borderBottom divides it from the action row.
-
-          The strip copy is tier-adaptive and descriptive of the tier,
-          not a promise of a specific service that may not be backed by
-          real backend capabilities:
-            - brokered: "Brokered asset — enquire to arrange viewing"
-              (describes the transaction mode, not a service promise)
-            - authenticated_luxury: "High-value item — authentication
-              may be available"
-            - specialist: "Specialist item — enquire for details"
-            - standard / unset: "Buyer protection" (only when
-              showProtectionStrip is true) */}
+          Copy is tier-adaptive and descriptive, not a service promise. */}
       {(() => {
         if (stateBadge) return null;
         if (commerceTier === 'brokered') {
@@ -406,9 +378,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   // ── Buyer protection strip ──
-  // Per Design.md: colors.surface background, Radius.lg, shield icon,
-  // Type.captionElevated text. Sits above the dock as a trust signal
-  // at the payment decision point.
+  // Flattened into the dock surface with a hairline divider.
   protectionStrip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -463,9 +433,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   // Product thumbnail — tokenized via CommerceLayout.dockThumbnailSize.
-  // Research (ecomdesignpro 2026): "40-48px with 8px radius, optional
-  // on mobile." Radius.md (8px) matches the primary action radius for
-  // visual coherence within the dock.
+  // Radius.md (8px) matches the primary action radius for visual coherence.
   thumbnail: {
     width: CommerceLayout.dockThumbnailSize,
     height: CommerceLayout.dockThumbnailSize,
@@ -475,8 +443,6 @@ const styles = StyleSheet.create({
   value: {
     // Per Design.md: price-list (20px) is the correct size for dock
     // values. price-large (28px) is reserved for checkout totals.
-    // Research (ecomdesignpro 2026): "Keep the bar short, usually 64
-    // to 80 px tall" — a 28px price dominates a 72px dock.
     fontSize: Type.priceList.size,
     lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,

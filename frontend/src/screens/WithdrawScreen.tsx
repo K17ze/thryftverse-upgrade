@@ -578,7 +578,7 @@ export default function WithdrawScreen() {
             </Text>
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <FlagshipFormSection variant="flat" title="Withdrawal details">
               <FlagshipMetricLine label="Reference" value={shortRef} />
               <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} separated />
@@ -588,7 +588,7 @@ export default function WithdrawScreen() {
             </FlagshipFormSection>
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={styles.flatNote}>
               <Ionicons name="time-outline" size={16} color={colors.textMuted} />
               <Text style={[styles.flatNoteText, { color: colors.textMuted }]}>
@@ -661,7 +661,7 @@ export default function WithdrawScreen() {
             </FlagshipFormSection>
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={styles.flatNote}>
               <Ionicons name="lock-closed" size={16} color={colors.textMuted} />
               <Text style={[styles.flatNoteText, { color: colors.textMuted }]}>
@@ -740,7 +740,7 @@ export default function WithdrawScreen() {
             />
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={styles.amountWrap}>
             <Text style={styles.currencySymbol}>{currencySymbol}</Text>
             <TextInput
@@ -761,7 +761,7 @@ export default function WithdrawScreen() {
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
           </Reanimated.View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <FlagshipFormSection variant="flat" title="Transfer to">
               <FlagshipNavigationRow
                 title={bankCopy.name}

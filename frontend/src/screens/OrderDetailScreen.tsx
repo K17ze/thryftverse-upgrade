@@ -28,10 +28,10 @@ import {
   getOrder,
   getOrderParcelEvents,
   cancelOrder,
-  shipOrder,
   deliverOrder,
   refundOrder,
 } from '../services/commerceApi';
+import { buildTrackingUrl } from '../services/shippingProviderRegistry';
 import { parseApiError } from '../lib/apiClient';
 import { getListingCoverUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
@@ -906,19 +906,10 @@ export default function OrderDetailScreen() {
     }
   }, [orderMutation, orderId, show, refreshOrder]);
 
-  const handleShip = useCallback(async () => {
-    if (orderMutation) return;
-    setOrderMutation('ship');
-    try {
-      await shipOrder(orderId);
-      show('Order marked as shipped', 'success');
-      await refreshOrder(false);
-    } catch (error) {
-      show(parseApiError(error).message, 'error');
-    } finally {
-      if (isMountedRef.current) setOrderMutation(null);
-    }
-  }, [orderMutation, orderId, show, refreshOrder]);
+  // handleShip was removed — the 'dispatch' action navigates to
+  // SellerFulfilment (guided flow), never calls shipOrder() directly.
+  // Per HC-P0-02: "Delete dead direct shipping handler if no canonical
+  // action uses it."
 
   const handleDeliver = useCallback(async () => {
     if (orderMutation) return;
@@ -950,18 +941,10 @@ export default function OrderDetailScreen() {
 
   // --- Track on carrier site (declared early so footer can reference) ---
   const carrierTrackingUrl = useMemo(() => {
-    if (!backendOrder?.trackingNumber || !backendOrder?.shippingProvider) return null;
-    const tn = backendOrder.trackingNumber;
-    const carrier = backendOrder.shippingProvider.toLowerCase();
-    // Map common carriers to their public tracking pages
-    if (carrier.includes('royal mail')) return `https://www.royalmail.com/track-your-item/?trackNumber=${encodeURIComponent(tn)}`;
-    if (carrier.includes('dpd')) return `https://www.dpd.co.uk/tracking?trackingRef=${encodeURIComponent(tn)}`;
-    if (carrier.includes('evri') || carrier.includes('hermes')) return `https://www.evri.com/track-a-parcel/${encodeURIComponent(tn)}`;
-    if (carrier.includes('yodel')) return `https://www.yodel.co.uk/track?trackingReference=${encodeURIComponent(tn)}`;
-    if (carrier.includes('ups')) return `https://www.ups.com/track?tracknum=${encodeURIComponent(tn)}`;
-    if (carrier.includes('dhl')) return `https://www.dhl.com/en/express/tracking.html?AWB=${encodeURIComponent(tn)}`;
-    if (carrier.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(tn)}`;
-    return null;
+    // Carrier tracking URLs come from the provider registry, not screen-local
+    // string matching. Per HC-P0-01 §9: "move tracking/drop-off URLs into
+    // provider registry".
+    return buildTrackingUrl(backendOrder?.shippingProvider, backendOrder?.trackingNumber);
   }, [backendOrder?.trackingNumber, backendOrder?.shippingProvider]);
 
   const handleTrackOnCarrierSite = useCallback(async () => {
@@ -1149,7 +1132,7 @@ export default function OrderDetailScreen() {
       primary: buildAction(primary),
       secondary: buildAction(secondary) ?? undefined,
     };
-  }, [backendOrder, isKnown, capabilities, carrierTrackingUrl, handleTrackOnCarrierSite, handleDeliver, handleCancel, handleShip, navigation, orderId, isBuyer, counterparty, openTicket, orderMutation, mutationLocked]);
+  }, [backendOrder, isKnown, capabilities, carrierTrackingUrl, handleTrackOnCarrierSite, handleDeliver, handleCancel, navigation, orderId, isBuyer, counterparty, openTicket, orderMutation, mutationLocked]);
 
   // --- Copy tracking number ---
   const handleCopyTracking = useCallback(async (trackingNumber: string) => {
@@ -1545,10 +1528,13 @@ export default function OrderDetailScreen() {
                   : 'Your payment is safely held. Confirm receipt to release funds to the seller.'}
               </Text>
               {(() => {
-                if (!backendOrder?.shippedAt) return null;
-                const shippedTime = new Date(backendOrder.shippedAt).getTime();
-                const autoReleaseMs = 14 * 24 * 60 * 60 * 1000; // 14 days
-                const releaseTime = shippedTime + autoReleaseMs;
+                // Escrow release timing is server-derived, not client-invented.
+                // If the server provides an estimatedReleaseAt, show it.
+                // If not, show no countdown — do not invent a 14-day fallback.
+                const releaseAt = (backendOrder as any)?.moneyProjection?.estimatedReleaseAt;
+                if (!releaseAt) return null;
+                const releaseTime = new Date(releaseAt).getTime();
+                if (Number.isNaN(releaseTime)) return null;
                 const now = Date.now();
                 if (now >= releaseTime) return null;
                 const daysLeft = Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000));

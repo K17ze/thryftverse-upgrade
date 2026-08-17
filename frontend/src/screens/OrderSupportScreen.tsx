@@ -179,7 +179,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       >
           {/* Order Context Card */}
           {order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <ElevatedSurface variant="surface" style={styles.orderCard}>
                 <View style={styles.orderRow}>
                   {order.listingImageUrl && (
@@ -201,7 +201,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
 
           {/* Existing Open Ticket */}
           {openTicket && !isSubmitted && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(20)}>
+            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
               <ElevatedSurface variant="surface" style={styles.existingTicketCard}>
                 <View style={styles.existingTicketRow}>
                   <Ionicons name="help-circle-outline" size={22} color={colors.brand} />
@@ -220,7 +220,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             </Reanimated.View>
           )}
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <Meta color={colors.textMuted} style={styles.sectionLabel}>SELECT TOPIC</Meta>
             <View style={styles.topicsCard}>
               {availableTopics.map((topic) => {
@@ -282,7 +282,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
               other: 'Describe the issue in detail below. Our support team will review and respond.',
             };
             return (
-              <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+              <Reanimated.View entering={FadeInDown.duration(300)}>
                 <View style={styles.guidanceCard}>
                   <View style={styles.guidanceHeader}>
                     <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
@@ -302,7 +302,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
             );
           })()}
 
-          <Reanimated.View entering={FadeInDown.duration(300).delay(80)}>
+          <Reanimated.View entering={FadeInDown.duration(300)}>
             <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
             <View style={styles.detailsCard}>
               <AppInput
@@ -320,7 +320,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
 
           {/* Evidence upload */}
           {!isSubmitted && (
-            <Reanimated.View entering={FadeInDown.duration(300).delay(100)}>
+            <Reanimated.View entering={FadeInDown.duration(300)}>
               <Meta color={colors.textMuted} style={styles.sectionLabel}>EVIDENCE (OPTIONAL)</Meta>
               <View style={styles.evidenceCard}>
                 {evidenceUris.length > 0 && (
@@ -384,7 +384,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           )}
 
           {!isSubmitted && (
-            <Reanimated.View entering={FadeInDown.duration(300).delay(120)} style={styles.honestNote}>
+            <Reanimated.View entering={FadeInDown.duration(300)} style={styles.honestNote}>
               <Ionicons name="time-outline" size={16} color={colors.textMuted} />
               <Caption color={colors.textMuted} style={styles.honestNoteText}>
                 Our support team reviews requests as quickly as possible. For urgent issues, contact us through the Help & Support page.

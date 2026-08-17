@@ -286,7 +286,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Agent management — flat rows, no card ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.sectionLabelWrap}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>AGENT MANAGEMENT</Text>
         </View>
@@ -355,7 +355,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           <ActivityIndicator size="small" color={colors.textSecondary} />
         </View>
       ) : (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.sectionLabelWrap}>
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PROVIDERS</Text>
           </View>
@@ -606,7 +606,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       )}
 
       {/* ── Security note (truthful) ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.securityNote}>
           <View style={styles.securityHeader}>
             <Ionicons name="shield-checkmark-outline" size={18} color={colors.textSecondary} />

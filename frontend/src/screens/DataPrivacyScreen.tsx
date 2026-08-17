@@ -134,7 +134,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Data actions — export & delete ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Your data rights" noCard>
           <SettingsRow
             icon="download-outline"
@@ -155,7 +155,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Privacy controls ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Privacy controls" noCard>
           <SettingsRow
             icon="megaphone-outline"
@@ -184,7 +184,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Data retention ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.infoBlock}>
           <View style={styles.infoHeader}>
             <Ionicons name="time-outline" size={18} color={colors.textSecondary} />
@@ -197,7 +197,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Third-party sharing ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Third-party sharing" noCard>
           <SettingsRow
             icon="share-outline"
@@ -217,7 +217,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Cookie preferences ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Cookie preferences" noCard>
           <SettingsRow
             icon="document-text-outline"
@@ -231,7 +231,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Legal ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(360)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Legal" noCard>
           <SettingsRow
             icon="shield-checkmark-outline"

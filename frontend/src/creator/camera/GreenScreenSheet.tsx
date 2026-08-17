@@ -21,7 +21,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, FontFamily, Control } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, Control, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -117,8 +117,8 @@ export function GreenScreenSheet({
         </View>
 
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
-          {/* Info banner */}
-          <View style={[styles.infoBanner, { backgroundColor: colors.surfaceAlt }]}>
+          {/* Info banner — flat, hairline separator */}
+          <View style={styles.infoBanner}>
             <Ionicons
               name="information-circle-outline"
               size={20}
@@ -152,127 +152,112 @@ export function GreenScreenSheet({
             </Text>
           </Pressable>
 
-          {/* Key color presets */}
+          {/* Key color presets — underline selection */}
           <Text style={[styles.label, { color: colors.textSecondary }]}>
             Key Color
           </Text>
-          <View style={styles.sliderRow}>
-            {KEY_COLOR_PRESETS.map((preset) => (
-              <PressScale
-                key={preset.value}
-                accessibilityLabel={`Select ${preset.label} key color`}
-                accessibilityRole="button"
-                onPress={() => {
-                  haptic.selection();
-                  setKeyColor(preset.value);
-                }}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor:
-                      keyColor === preset.value ? colors.brand : colors.surfaceAlt,
-                    borderColor:
-                      keyColor === preset.value ? colors.brand : colors.borderSubtle,
-                  },
-                ]}
-              >
-                <View style={[styles.colorSwatch, { backgroundColor: preset.value }]} />
-                <Text
-                  style={[
-                    styles.chipText,
-                    {
-                      color:
-                        keyColor === preset.value ? colors.textInverse : colors.textSecondary,
-                    },
-                  ]}
+          <View style={styles.chipRow}>
+            {KEY_COLOR_PRESETS.map((preset) => {
+              const isActive = keyColor === preset.value;
+              return (
+                <PressScale
+                  key={preset.value}
+                  accessibilityLabel={`Select ${preset.label} key color`}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    haptic.selection();
+                    setKeyColor(preset.value);
+                  }}
+                  style={styles.chip}
                 >
-                  {preset.label}
-                </Text>
-              </PressScale>
-            ))}
+                  <View style={[styles.colorSwatch, { backgroundColor: preset.value }]} />
+                  <Text
+                    style={[
+                      styles.chipText,
+                      {
+                        color: isActive ? colors.brand : colors.textSecondary,
+                        textDecorationLine: isActive ? 'underline' : 'none',
+                      },
+                    ]}
+                  >
+                    {preset.label}
+                  </Text>
+                </PressScale>
+              );
+            })}
           </View>
 
-          {/* Tolerance control */}
+          {/* Tolerance control — underline selection */}
           <Text style={[styles.label, { color: colors.textSecondary }]}>
             Tolerance: {tolerance.toFixed(2)}
           </Text>
-          <View style={styles.sliderRow}>
-            {[0.2, 0.3, 0.4, 0.5, 0.6].map((t) => (
-              <PressScale
-                key={t}
-                accessibilityLabel={`Set tolerance to ${t.toFixed(1)}`}
-                accessibilityRole="button"
-                onPress={() => {
-                  haptic.selection();
-                  setTolerance(t);
-                }}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor:
-                      tolerance === t ? colors.brand : colors.surfaceAlt,
-                    borderColor:
-                      tolerance === t ? colors.brand : colors.borderSubtle,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    {
-                      color:
-                        tolerance === t ? colors.textInverse : colors.textSecondary,
-                    },
-                  ]}
+          <View style={styles.chipRow}>
+            {[0.2, 0.3, 0.4, 0.5, 0.6].map((t) => {
+              const isActive = tolerance === t;
+              return (
+                <PressScale
+                  key={t}
+                  accessibilityLabel={`Set tolerance to ${t.toFixed(1)}`}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    haptic.selection();
+                    setTolerance(t);
+                  }}
+                  style={styles.chip}
                 >
-                  {t.toFixed(1)}
-                </Text>
-              </PressScale>
-            ))}
+                  <Text
+                    style={[
+                      styles.chipText,
+                      {
+                        color: isActive ? colors.brand : colors.textSecondary,
+                        textDecorationLine: isActive ? 'underline' : 'none',
+                      },
+                    ]}
+                  >
+                    {t.toFixed(1)}
+                  </Text>
+                </PressScale>
+              );
+            })}
           </View>
 
-          {/* Feather control */}
+          {/* Feather control — underline selection */}
           <Text style={[styles.label, { color: colors.textSecondary }]}>
             Edge Feather: {feather}px
           </Text>
-          <View style={styles.sliderRow}>
-            {[1, 2, 4, 8].map((f) => (
-              <PressScale
-                key={f}
-                accessibilityLabel={`Set feather to ${f} pixels`}
-                accessibilityRole="button"
-                onPress={() => {
-                  haptic.selection();
-                  setFeather(f);
-                }}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor:
-                      feather === f ? colors.brand : colors.surfaceAlt,
-                    borderColor:
-                      feather === f ? colors.brand : colors.borderSubtle,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    {
-                      color:
-                        feather === f ? colors.textInverse : colors.textSecondary,
-                    },
-                  ]}
+          <View style={styles.chipRow}>
+            {[1, 2, 4, 8].map((f) => {
+              const isActive = feather === f;
+              return (
+                <PressScale
+                  key={f}
+                  accessibilityLabel={`Set feather to ${f} pixels`}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    haptic.selection();
+                    setFeather(f);
+                  }}
+                  style={styles.chip}
                 >
-                  {f}px
-                </Text>
-              </PressScale>
-            ))}
+                  <Text
+                    style={[
+                      styles.chipText,
+                      {
+                        color: isActive ? colors.brand : colors.textSecondary,
+                        textDecorationLine: isActive ? 'underline' : 'none',
+                      },
+                    ]}
+                  >
+                    {f}px
+                  </Text>
+                </PressScale>
+              );
+            })}
           </View>
         </ScrollView>
 
         {/* Footer actions */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { borderTopColor: colors.borderSubtle }]}>
           <PressScale
             accessibilityLabel="Cancel green screen"
             accessibilityRole="button"
@@ -347,8 +332,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs,
-    padding: Space.sm,
-    borderRadius: Radius.md,
+    paddingBottom: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   infoIcon: {
     marginTop: 2,
@@ -371,10 +357,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    height: 48,
+    height: 50,
     paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
     borderStyle: 'dashed',
   },
   bgButtonText: {
@@ -382,32 +368,32 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
   },
-  sliderRow: {
+  chipRow: {
     flexDirection: 'row',
-    gap: Space.xs,
+    gap: Space.md,
     flexWrap: 'wrap',
+    alignItems: 'center',
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xxs,
-    paddingHorizontal: Space.sm,
+    gap: Space.xs,
+    paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    minWidth: 44,
+    minHeight: Control.hit,
+    justifyContent: 'center',
   },
   colorSwatch: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    borderWidth: 1,
+    borderWidth: Stroke.hairline,
     borderColor: 'rgba(255,255,255,0.2)',
   },
   chipText: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
   },
   footer: {
     flexDirection: 'row',
@@ -415,22 +401,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.1)',
   },
   actionButton: {
     flex: 1,
-    height: 48,
-    borderRadius: Radius.md,
+    height: 50,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   applyButton: {
     borderWidth: 0,
   },
   actionText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
   },
 });

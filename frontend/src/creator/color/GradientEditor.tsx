@@ -50,6 +50,9 @@ import type { GradientDefinition, GradientStop, CreatorColor } from './ColorType
 const MIN_STOPS = 2;
 const MAX_STOPS = 4;
 const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+// Canvas-specific geometry — these describe the gradient bar and draggable
+// stop thumbs. No design token maps to them; they are interaction geometry,
+// not layout spacing or type scale.
 const STOP_THUMB_SIZE = 24;
 const GRADIENT_BAR_HEIGHT = 40;
 
@@ -448,8 +451,10 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
   const layoutRef = useRef({ width });
+  // Canvas-specific interaction geometry — no design token maps to these.
   const THUMB_SIZE = 20;
   const HEIGHT = 28;
+  const TRACK_HEIGHT = Space.xs;
 
   const thumbX = useSharedValue((angle / 360) * width);
 
@@ -509,7 +514,7 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
           text: `${Math.round(angle)} degrees`,
         }}
       >
-        <View style={[styles.angleTrack, { backgroundColor: colors.border }]} />
+        <View style={[styles.angleTrack, { backgroundColor: colors.border, height: TRACK_HEIGHT }]} />
         <Reanimated.View
           style={[
             styles.angleThumb,
@@ -571,7 +576,7 @@ const styles = StyleSheet.create({
   thumbsOverlay: {
     position: 'relative',
     height: STOP_THUMB_SIZE,
-    marginTop: 4,
+    marginTop: Space.xs,
   },
   stopThumb: {
     position: 'absolute',
@@ -629,12 +634,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 4,
+    // Track height is set inline via TRACK_HEIGHT; borderRadius keeps the bar
+    // a pill — canvas-specific, no token.
     borderRadius: 2,
   },
   angleThumb: {
     position: 'absolute',
-    top: 4,
+    top: Space.xs,
     borderWidth: Stroke.emphasis,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -663,12 +669,12 @@ function useGradientEditorStyles(colors: ThemeColors) {
           borderRadius: Radius.md,
           overflow: 'hidden',
           borderWidth: Stroke.hairline,
-          borderColor: 'rgba(0,0,0,0.1)',
+          borderColor: colors.borderSubtle,
         },
         thumbsOverlay: {
           position: 'relative',
           height: STOP_THUMB_SIZE,
-          marginTop: 4,
+          marginTop: Space.xs,
         },
         stopControls: {
           flexDirection: 'row',
@@ -687,7 +693,7 @@ function useGradientEditorStyles(colors: ThemeColors) {
           opacity: 0.4,
         },
         controlBtnActive: {
-          backgroundColor: 'rgba(0,0,0,0.05)',
+          backgroundColor: colors.brandSubtle,
         },
         angleRow: {
           flexDirection: 'row',

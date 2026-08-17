@@ -139,7 +139,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Celebration Header */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(0)} style={styles.heroSection}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.heroSection}>
           <View style={styles.iconCircle}>
             <Ionicons name="checkmark" size={64} color={colors.brand} />
           </View>
@@ -153,7 +153,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Published status */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(80)} style={styles.statusRow}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.statusRow}>
           <PremiumStatusPill tone={statusTone} label={statusLabel} icon="checkmark-circle" />
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
@@ -163,7 +163,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Product preview card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(160)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <ElevatedSurface variant="elevated" style={styles.summaryCard}>
           {listingPhoto ? (
             <CachedImage
@@ -198,7 +198,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
         {/* Smart Sell demo banner (truthful UI) */}
         {smartSellEnabled && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(200)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <ElevatedSurface variant="surface" style={styles.smartSellBanner}>
               <Ionicons name="trending-up-outline" size={18} color={colors.brand} />
               <View style={styles.smartSellBannerBody}>
@@ -212,7 +212,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         )}
 
         {/* Actions */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(240)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <ElevatedSurface variant="surface" style={{ marginBottom: Space.xl }}>
         {listingId ? (
           <AnimatedPressable
@@ -330,7 +330,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Tips for selling — first-listing guidance */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(320)} style={styles.tipsCard}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
             <Ionicons name="bulb-outline" size={14} color={colors.brand} />
             <Text style={styles.tipsTitle}>Tips for selling faster</Text>
@@ -354,7 +354,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Support link */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400).delay(380)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <AnimatedPressable
             style={styles.supportLink}
             activeOpacity={0.8}

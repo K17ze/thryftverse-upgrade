@@ -265,7 +265,7 @@ export default function CorporateActionDetailScreen() {
 
         {/* Title (from backend if available) */}
         {fetchedAction && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(30)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{displayTitle}</Text>
             </View>
@@ -273,7 +273,7 @@ export default function CorporateActionDetailScreen() {
         )}
 
         {/* Description */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>About this event</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
@@ -283,7 +283,7 @@ export default function CorporateActionDetailScreen() {
         </Reanimated.View>
 
         {/* Key dates */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Key dates</Text>
             <View style={styles.dateRow}>
@@ -312,7 +312,7 @@ export default function CorporateActionDetailScreen() {
         </Reanimated.View>
 
         {/* Effect */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Effect on your position</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
@@ -332,7 +332,7 @@ export default function CorporateActionDetailScreen() {
         </Reanimated.View>
 
         {/* Status */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Status</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
@@ -349,7 +349,7 @@ export default function CorporateActionDetailScreen() {
 
         {/* Governance voting — flagship treatment with tally bars, quorum, voting power */}
         {isGovernanceAction && actionId && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(300)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.voteHeaderRow}>
                 <View style={[styles.voteHeaderIcon, { backgroundColor: colors.brand }]}>

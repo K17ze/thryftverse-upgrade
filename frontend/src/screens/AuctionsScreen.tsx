@@ -610,7 +610,7 @@ export default function AuctionsScreen() {
         />
       </Reanimated.View>
 
-      <Reanimated.View entering={FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={FadeInDown.duration(300)}>
       <View style={styles.searchWrap}>
         <AppInput
           value={searchQuery}

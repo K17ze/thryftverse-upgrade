@@ -93,7 +93,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         )}
 
         {/* Issue category */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(50)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Issue category</Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.map((cat) => {
@@ -126,7 +126,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Description */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)} style={{ marginTop: Space.lg }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
           <AppInput
             label="Description"
             placeholder="Describe what happened and what you need..."
@@ -140,7 +140,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* Note — trust card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(150)} style={styles.note}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.note}>
           <View style={[styles.noteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[styles.noteIconWrap, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="information-circle" size={16} color={colors.textSecondary} />

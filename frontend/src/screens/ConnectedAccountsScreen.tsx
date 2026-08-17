@@ -167,7 +167,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
             onCtaPress={() => { setIsLoading(true); void load(); }}
           />
         ) : accounts.length === 0 ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(100)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={styles.emptyCard}>
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="link-outline" size={36} color={colors.textMuted} />
@@ -225,7 +225,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         )}
 
         {/* Security note — elevated with icon and card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.securityNote}>
             <View style={styles.securityIconWrap}>
               <Ionicons name="shield-checkmark" size={20} color={colors.success} />

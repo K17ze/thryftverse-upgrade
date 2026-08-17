@@ -118,7 +118,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* FAQ Banner */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <SettingsInfoBanner
             text="Search our FAQs below for quick answers to common questions."
             icon="help-circle-outline"
@@ -127,7 +127,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </Reanimated.View>
 
         {/* FAQ Search */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <View style={styles.searchWrap}>
             <Ionicons name="search-outline" size={18} color={colors.textMuted} />
             <TextInput

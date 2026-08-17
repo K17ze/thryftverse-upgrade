@@ -1,6 +1,5 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Linking } from 'react-native';
 import Reanimated, {
   SharedValue,
@@ -8,7 +7,7 @@ import Reanimated, {
   interpolate,
   Extrapolation,
 } from 'react-native-reanimated';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Radius, Type, Space, FontFamily } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 
 export interface PermissionStateProps {
@@ -71,9 +70,6 @@ export function PermissionState({
   return (
     <View style={styles.overlay}>
       <Reanimated.View style={[styles.content, entranceStyle]}>
-        <View style={styles.iconWrap}>
-          <Ionicons name="camera-outline" size={48} color={colors.textPrimary} />
-        </View>
         <Text style={styles.title}>
           {isDenied ? 'Camera access needed' : 'Access your camera'}
         </Text>
@@ -92,7 +88,6 @@ export function PermissionState({
           style={({ pressed }) => [styles.galleryFallbackBtn, pressed && styles.btnPressed]}
           onPress={onGallery}
         >
-          <Ionicons name="images-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.galleryFallbackText}>Use gallery instead</Text>
         </Pressable>
       </Reanimated.View>
@@ -109,57 +104,49 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   content: {
     alignItems: 'center',
-    gap: 12,
+    gap: Space.smMd,
     paddingHorizontal: 40,
   },
-  iconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.xs,
-  },
   title: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 18,
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.subtitle.letterSpacing,
     color: colors.textPrimary,
     marginTop: Space.xs,
   },
   text: {
-    fontFamily: Typography.family.regular,
+    fontFamily: FontFamily.regular,
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
   },
   btn: {
     marginTop: Space.md,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: Radius.xxl,
-    backgroundColor: colors.textPrimary,
+    height: 50,
+    paddingHorizontal: Space.xl,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   btnText: {
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     fontSize: Type.bodyEmphasis.size,
-    color: colors.background,
+    color: colors.textInverse,
   },
   galleryFallbackBtn: {
-    flexDirection: 'row',
+    marginTop: Space.sm,
+    height: 44,
+    paddingHorizontal: Space.md,
     alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surface,
+    justifyContent: 'center',
   },
   galleryFallbackText: {
     color: colors.textSecondary,
     fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
   },
   btnPressed: {
     opacity: 0.7,

@@ -183,7 +183,7 @@ export default function BundleBagScreen() {
           </Reanimated.View>
 
           {/* Bundle tier hints */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.tiersRow}>
             {BUNDLE_TIERS.map((tier) => {
               const achieved = selectedItems.length >= tier.itemCount;

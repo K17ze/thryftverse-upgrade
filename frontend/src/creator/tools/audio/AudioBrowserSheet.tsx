@@ -27,6 +27,7 @@ import {
   Pressable,
   ScrollView,
   PanResponder,
+  LayoutAnimation,
   type LayoutChangeEvent,
   type GestureResponderEvent,
   type PanResponderGestureState,
@@ -123,7 +124,10 @@ export function AudioBrowserSheet({
   const handleTabSwitch = useCallback(
     (key: TabKey) => {
       if (key === activeTab) return;
-      if (!reducedMotion) haptic.selection();
+      if (!reducedMotion) {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+        haptic.selection();
+      }
       setActiveTab(key);
     },
     [activeTab, haptic, reducedMotion],
@@ -237,6 +241,11 @@ export function AudioBrowserSheet({
             // The Original Audio tab is only meaningful when the video has
             // original audio; otherwise it is truthfully disabled.
             const tabDisabled = tab.key === 'original' && !hasOriginalAudio;
+            const tabColor = isActive
+              ? colors.brand
+              : tabDisabled
+                ? colors.textMuted
+                : colors.textSecondary;
             return (
               <Pressable
                 key={tab.key}
@@ -245,23 +254,23 @@ export function AudioBrowserSheet({
                 accessibilityLabel={tab.label}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive, disabled: tabDisabled }}
-                style={[styles.tab, isActive && { borderColor: colors.brand, backgroundColor: colors.brandSubtle }]}
+                style={styles.tab}
               >
-                <Ionicons
-                  name={tab.icon}
-                  size={16}
-                  color={isActive ? colors.brand : tabDisabled ? colors.textMuted : colors.textSecondary}
-                />
                 <Text
                   style={[
                     styles.tabLabel,
-                    {
-                      color: isActive ? colors.brand : tabDisabled ? colors.textMuted : colors.textSecondary,
-                    },
+                    { color: tabColor },
+                    isActive && styles.tabLabelActive,
                   ]}
                 >
                   {tab.label}
                 </Text>
+                <View
+                  style={[
+                    styles.tabUnderline,
+                    { backgroundColor: isActive ? colors.brand : 'transparent' },
+                  ]}
+                />
               </Pressable>
             );
           })}
@@ -737,25 +746,28 @@ function createStyles(colors: ThemeColors) {
     // ── Tabs ──
     tabBar: {
       flexDirection: 'row',
-      gap: Space.xs,
+      gap: Space.lg,
       paddingVertical: Space.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
       marginBottom: Space.md,
     },
     tab: {
-      flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-      paddingVertical: Space.sm - 2,
-      paddingHorizontal: Space.md,
-      borderRadius: Radius.full,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'transparent',
+      paddingVertical: Space.xs,
     },
     tabLabel: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.bodyEmphasis.size,
+    },
+    tabLabelActive: {
+      fontFamily: Typography.family.semibold,
+    },
+    tabUnderline: {
+      height: Stroke.emphasis,
+      borderRadius: Stroke.emphasis / 2,
+      width: 24,
+      marginTop: Space.xxs,
     },
     // ── Empty / original bodies ──
     emptyBody: {
@@ -923,12 +935,11 @@ function createStyles(colors: ThemeColors) {
     doneBtn: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.md,
-      borderRadius: Radius.md,
-      minHeight: Control.hit + 8,
+      height: 50,
+      borderRadius: Radius.lg,
     },
     doneBtnText: {
-      fontFamily: Typography.family.semibold,
+      fontFamily: FontFamily.semibold,
       fontSize: Type.bodyEmphasis.size,
     },
   });

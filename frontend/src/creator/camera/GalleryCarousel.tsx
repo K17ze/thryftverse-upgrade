@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   recentCarouselContent: {
     paddingHorizontal: Space.md,
-    gap: 8,
+    gap: Space.sm,
   },
   recentThumbWrap: {
     borderRadius: Radius.lg,
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   },
   galleryBtn: {
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     width: 56,
     minHeight: 56,
     justifyContent: 'center',
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   },
   bottomLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: 9,
+    fontSize: 10.5,
     color: 'rgba(255,255,255,0.7)',
   },
   btnPressed: {

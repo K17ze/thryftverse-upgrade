@@ -206,7 +206,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
         </Reanimated.View>
 
         {/* What's covered */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={styles.sectionTitle}>What's covered</Text>
             <View style={styles.coverageList}>
@@ -232,7 +232,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
         {/* Claims history */}
         {protection && protection.claims.length > 0 && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={styles.sectionTitle}>Claims history</Text>
               {protection.claims.map((claim, idx) => (
@@ -255,7 +255,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
         {/* Claim form */}
         {isCovered && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             {!showClaimForm ? (
               <AppButton
                 title="File a claim"

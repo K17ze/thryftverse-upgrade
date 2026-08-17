@@ -26,7 +26,7 @@
  *   - Horizontal category tab strip
  *   - Grid fills remaining space (FlashList virtualized)
  */
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,7 @@ import {
   Pressable,
   FlatList,
   Dimensions,
+  Animated,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
@@ -134,6 +135,38 @@ export function StickerBrowserSheet({
   );
   const [query, setQuery] = useState('');
   const searchRef = useRef<TextInput>(null);
+
+  // ── Tab underline animation ─────────────────────────────────────────
+  const tabLayouts = useRef<Array<{ x: number; width: number }>>([]);
+  const underlineLeft = useRef(new Animated.Value(0)).current;
+  const underlineWidth = useRef(new Animated.Value(0)).current;
+
+  const animateUnderlineTo = useCallback(
+    (index: number) => {
+      const layout = tabLayouts.current[index];
+      if (!layout) return;
+      Animated.parallel([
+        Animated.spring(underlineLeft, {
+          toValue: layout.x,
+          useNativeDriver: false,
+          stiffness: 300,
+          damping: 30,
+        }),
+        Animated.spring(underlineWidth, {
+          toValue: layout.width,
+          useNativeDriver: false,
+          stiffness: 300,
+          damping: 30,
+        }),
+      ]).start();
+    },
+    [underlineLeft, underlineWidth],
+  );
+
+  useEffect(() => {
+    const idx = categories.findIndex((c) => c.id === activeCategoryId);
+    if (idx >= 0) animateUnderlineTo(idx);
+  }, [activeCategoryId, categories, animateUnderlineTo]);
 
   // ── Search results (cross-category) ────────────────────────────────
   const searchResults = useMemo<StickerDef[]>(() => {

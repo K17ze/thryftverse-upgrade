@@ -171,7 +171,7 @@ export default function CreateCollectionScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Cover mosaic preview — auto-generated from selected items */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)} style={styles.coverPreviewSection}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.coverPreviewSection}>
           <View style={[styles.coverPreview, { backgroundColor: colors.surfaceAlt }]}>
             {mosaicImages.length > 0 ? (
               renderMosaic()
@@ -193,7 +193,7 @@ export default function CreateCollectionScreen() {
           </View>
         </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.card}>
           <Text style={styles.label}>Name</Text>
           <AppInput
             value={name}
@@ -206,7 +206,7 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{name.length}/40</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.card}>
           <Text style={styles.label}>Description</Text>
           <AppInput
             value={description}
@@ -220,7 +220,7 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{description.length}/200</Text>
         </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)} style={styles.card}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleIconWrap}>
               <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={colors.textSecondary} />
@@ -248,7 +248,7 @@ export default function CreateCollectionScreen() {
         </Reanimated.View>
 
         {/* Item selection from saved items */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(160)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.itemSectionHeader}>
             <Text style={styles.label}>Select items</Text>
             {selectedIds.size > 0 && (
@@ -316,7 +316,7 @@ export default function CreateCollectionScreen() {
           )}
         </Reanimated.View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(200)} style={styles.footer}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.footer}>
           <AppButton
             title={isSubmitting ? 'Creating...' : 'Create Collection'}
             onPress={handleCreate}

@@ -7,7 +7,7 @@ import Reanimated, {
   withSpring,
   withSequence,
 } from 'react-native-reanimated';
-import { Radius, Typography, Type } from '../../theme/designTokens';
+import { Radius, Typography, Type, Space } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -168,14 +168,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -4,
     alignSelf: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: Space.xs,
+    paddingVertical: Space.xxs,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.7)',
   },
   speedBadgeText: {
     fontFamily: Typography.family.bold,
-    fontSize: 10,
+    fontSize: 10.5,
     color: '#fff',
   },
 });

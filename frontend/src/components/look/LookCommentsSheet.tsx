@@ -388,7 +388,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.xxl,
     borderWidth: 1,
     borderColor: colors.brand,
-    backgroundColor: 'rgba(99,102,241,0.06)',
+    backgroundColor: colors.brandSubtle,
   },
   signInBtnText: {
     fontSize: Type.body.size,

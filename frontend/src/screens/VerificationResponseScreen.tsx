@@ -325,7 +325,7 @@ export default function VerificationResponseScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Demand details */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(0)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.demandCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
             <View style={styles.demandTypeRow}>
               <View style={[styles.demandTypeIcon, { backgroundColor: colors.surfaceAlt }]}>
@@ -375,7 +375,7 @@ export default function VerificationResponseScreen() {
         </Reanimated.View>
 
         {/* Evidence photo upload */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(40)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
             EVIDENCE PHOTOS
           </Text>
@@ -449,7 +449,7 @@ export default function VerificationResponseScreen() {
         </Reanimated.View>
 
         {/* Evidence notes */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
             NOTES (OPTIONAL)
           </Text>
@@ -471,7 +471,7 @@ export default function VerificationResponseScreen() {
         </Reanimated.View>
 
         {/* Liability warning */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(80)}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={[styles.warningBox, { backgroundColor: colors.warning + '0F', borderColor: colors.warning + '33' }]}>
             <Ionicons name="shield-outline" size={18} color={colors.warning} />
             <Text style={[styles.warningText, { color: colors.textSecondary }]}>

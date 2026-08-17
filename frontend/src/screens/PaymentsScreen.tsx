@@ -349,7 +349,7 @@ export default function PaymentsScreen({ navigation }: Props) {
       ) : (
         <>
           {/* Primary Payment Method Summary */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             {defaultMethod ? (
               <View style={[styles.primaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.primaryCardHeader}>
@@ -403,7 +403,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Preferences */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <PremiumListSection title="Preferences">
               <SettingsCell
                 icon="wallet-outline"
@@ -420,7 +420,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Cards */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <PremiumListSection title="Cards">
               {renderPaymentMethodRows(
                 cardMethods,
@@ -450,7 +450,7 @@ export default function PaymentsScreen({ navigation }: Props) {
           </Reanimated.View>
 
           {/* Security Note */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={[styles.trustNote, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
               <Text style={styles.trustNoteText}>

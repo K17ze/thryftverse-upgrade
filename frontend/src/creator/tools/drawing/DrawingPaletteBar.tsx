@@ -323,12 +323,12 @@ export function DrawingPaletteBar({
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   onPress={() => handleSelectPalette(pal.name)}
-                  style={[
-                    styles.paletteRow,
-                    active ? { borderColor: colors.brand } : {},
-                  ]}
+                  style={styles.paletteRow}
                 >
-                  <Text style={styles.paletteRowLabel} numberOfLines={1}>
+                  <Text
+                    style={[styles.paletteRowLabel, active && { color: colors.brand }]}
+                    numberOfLines={1}
+                  >
                     {pal.label}
                   </Text>
                   <View style={styles.paletteRowSwatches}>
@@ -451,18 +451,16 @@ function createStyles(colors: ThemeColors) {
     } as ViewStyle,
     paletteList: {
       paddingVertical: Space.sm,
-      gap: Space.sm,
     } as ViewStyle,
+    // Flattened row — no inner card background; hairline separator between rows.
     paletteRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.md,
-      borderRadius: Radius.lg,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: Stroke.standard,
-      borderColor: 'transparent',
+      paddingHorizontal: Space.xs,
+      borderBottomWidth: Stroke.hairline,
+      borderColor: colors.borderSubtle,
     } as ViewStyle,
     paletteRowLabel: {
       flex: 1,
@@ -473,8 +471,9 @@ function createStyles(colors: ThemeColors) {
     } as TextStyle,
     paletteRowSwatches: {
       flexDirection: 'row',
-      gap: 4,
+      gap: Space.xs,
     } as ViewStyle,
+    // Preview swatch thumbnail — canvas-specific size; no design token maps to it.
     paletteRowSwatch: {
       width: 20,
       height: 20,

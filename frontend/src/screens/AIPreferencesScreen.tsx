@@ -145,7 +145,7 @@ export default function AIPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Master toggle ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(60)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Master control" noCard>
           <SettingsRow
             icon="power-outline"
@@ -160,7 +160,7 @@ export default function AIPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Feature toggles ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(120)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Features" noCard>
           <SettingsRow
             icon="bulb-outline"
@@ -216,7 +216,7 @@ export default function AIPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Transparency ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(180)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Transparency" noCard>
           <SettingsRow
             icon="git-network-outline"
@@ -230,7 +230,7 @@ export default function AIPreferencesScreen({ navigation }: Props) {
       </Reanimated.View>
 
       {/* ── Data usage — inline explanation ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(240)}>
+      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.dataUsageBlock}>
           <View style={styles.dataUsageHeader}>
             <Ionicons name="server-outline" size={18} color={colors.textSecondary} />

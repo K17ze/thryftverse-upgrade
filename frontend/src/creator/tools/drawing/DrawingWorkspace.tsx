@@ -35,6 +35,7 @@ import Reanimated, {
   useSharedValue,
   runOnJS,
   withTiming,
+  withSpring,
   Easing,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
@@ -50,8 +51,10 @@ import {
   useFont,
 } from '@shopify/react-native-skia';
 
-import { Space, Radius, FontFamily, Type, Elevation } from '../../../theme/designTokens';
+import { Space, Radius, FontFamily, Type, Elevation, Stroke as StrokeToken, Control } from '../../../theme/designTokens';
+import { Motion, REDUCED_SPRING } from '../../../theme/motionTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
+import { useHaptic } from '../../../hooks/useHaptic';
 import { PressScale } from '../../CreatorAnimations';
 import {
   CreatorSlider,
@@ -150,6 +153,10 @@ const EMOJI_MAX_SPACING = 80;
 const MIN_SIZE = 4;
 const MAX_SIZE = 40;
 const MAX_UNDO_LEVELS = 50;
+
+// Canvas top offset — clears the floating top bar (insets.top + bar height).
+// Canvas-specific layout value; no design token maps to this clearance.
+const CANVAS_TOP_OFFSET = 120;
 
 const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
 
@@ -408,6 +415,42 @@ export function DrawingWorkspace({
     jitter: 0,
   });
   const [activeEmojiCategory, setActiveEmojiCategory] = useState<string>('faces');
+
+  // ── Emoji category underline indicator (spring-animated, brand color) ──
+  const haptic = useHaptic();
+  const emojiTabLayouts = useRef<{ x: number; width: number }[]>([]);
+  const emojiUnderlineXSV = useSharedValue(0);
+  const emojiUnderlineWSV = useSharedValue(0);
+  const emojiSpringCfg = reduceMotion ? REDUCED_SPRING : Motion.spring.indicator;
+
+  const applyEmojiUnderline = useCallback(
+    (idx: number) => {
+      const lay = emojiTabLayouts.current[idx];
+      if (!lay) return;
+      if (reduceMotion) {
+        emojiUnderlineXSV.value = lay.x;
+        emojiUnderlineWSV.value = lay.width;
+      } else {
+        emojiUnderlineXSV.value = withSpring(lay.x, emojiSpringCfg);
+        emojiUnderlineWSV.value = withSpring(lay.width, emojiSpringCfg);
+      }
+    },
+    [reduceMotion, emojiSpringCfg, emojiUnderlineXSV, emojiUnderlineWSV],
+  );
+
+  const handleSelectEmojiCategory = useCallback(
+    (idx: number, id: string) => {
+      haptic.selection();
+      setActiveEmojiCategory(id);
+      applyEmojiUnderline(idx);
+    },
+    [haptic, applyEmojiUnderline],
+  );
+
+  const emojiUnderlineStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: emojiUnderlineXSV.value }],
+    width: emojiUnderlineWSV.value,
+  }));
 
   // Recent color history (persisted via AsyncStorage, spec §4).
   const { recents, commitColor: commitRecentColor } = useCreatorColorHistory();
@@ -756,25 +799,33 @@ export function DrawingWorkspace({
           {/* ── Emoji brush panel (replaces color/size when emoji mode active) ── */}
           {brushType === 'emoji' ? (
             <View style={styles.emojiPanel}>
-              {/* Emoji category tabs */}
+              {/* Emoji category tabs — text-only with spring-animated underline */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.emojiTabsContent}
                 style={styles.emojiTabs}
               >
-                {EMOJI_CATEGORIES.map((cat) => {
+                {EMOJI_CATEGORIES.map((cat, idx) => {
                   const active = cat.id === activeEmojiCategory;
                   return (
                     <PressScale
                       key={cat.id}
                       accessibilityLabel={`${cat.name} emoji category`}
                       accessibilityRole="button"
-                      onPress={() => setActiveEmojiCategory(cat.id)}
-                      style={active ? [styles.emojiTab, styles.emojiTabActive] : styles.emojiTab}
+                      accessibilityState={{ selected: active }}
+                      onPress={() => handleSelectEmojiCategory(idx, cat.id)}
+                      onLayout={(e) => {
+                        emojiTabLayouts.current[idx] = {
+                          x: e.nativeEvent.layout.x,
+                          width: e.nativeEvent.layout.width,
+                        };
+                        if (active) applyEmojiUnderline(idx);
+                      }}
+                      style={styles.emojiTab}
                     >
                       <Text
-                        style={active ? [styles.emojiTabLabel, styles.emojiTabLabelActive] : styles.emojiTabLabel}
+                        style={[styles.emojiTabLabel, active && styles.emojiTabLabelActive]}
                         numberOfLines={1}
                       >
                         {cat.name}
@@ -782,6 +833,11 @@ export function DrawingWorkspace({
                     </PressScale>
                   );
                 })}
+                {/* Spring-animated underline indicator (brand color, 2pt) */}
+                <Reanimated.View
+                  style={[styles.emojiTabUnderline, { backgroundColor: colors.brand }, emojiUnderlineStyle]}
+                  pointerEvents="none"
+                />
               </ScrollView>
 
               {/* Emoji grid for the active category */}
@@ -850,7 +906,7 @@ export function DrawingWorkspace({
                     style={{
                       width: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
                       height: Math.max(MIN_SIZE, Math.min(MAX_SIZE, brushSize)) / 2,
-                      borderRadius: 999,
+                      borderRadius: Radius.full,
                       backgroundColor: brushType === 'eraser' ? colors.border : brushColor,
                     }}
                   />
@@ -880,7 +936,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
     canvasFrame: {
       alignSelf: 'center',
-      marginTop: 120,
+      marginTop: CANVAS_TOP_OFFSET,
       borderRadius: Radius.md,
       overflow: 'hidden',
       ...Elevation.floating,
@@ -914,23 +970,23 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       gap: Space.xs,
     },
     doneButton: {
-      height: 44,
+      height: 50,
       paddingHorizontal: Space.lg,
-      borderRadius: Radius.full,
+      borderRadius: Radius.lg,
       alignItems: 'center',
       justifyContent: 'center',
     },
     doneText: {
       fontSize: Type.bodyEmphasis.size,
       fontFamily: FontFamily.semibold,
-      letterSpacing: 0.12,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
     },
     panel: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      borderTopWidth: 1,
+      borderTopWidth: StrokeToken.standard,
       borderTopLeftRadius: Radius.xl,
       borderTopRightRadius: Radius.xl,
       paddingHorizontal: Space.md,
@@ -948,13 +1004,13 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       width: 32,
       height: 32,
       borderRadius: Radius.full,
-      borderWidth: 2,
+      borderWidth: StrokeToken.emphasis,
     },
     expandColorBtn: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: StrokeToken.standard,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -967,10 +1023,10 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       gap: Space.sm,
     },
     sizeDotWrap: {
-      width: 36,
-      height: 36,
+      width: Control.chrome,
+      height: Control.chrome,
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: StrokeToken.standard,
       borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
@@ -983,30 +1039,34 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       flexGrow: 0,
     },
     emojiTabsContent: {
-      gap: Space.xs,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
       paddingRight: Space.md,
+      position: 'relative',
     },
+    // Text-only tab — no pill background; selection shown via underline only.
     emojiTab: {
-      height: 32,
-      paddingHorizontal: Space.sm,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: 1,
-      borderColor: colors.borderSubtle,
+      height: Control.hit,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    emojiTabActive: {
-      backgroundColor: colors.brand,
-      borderColor: colors.brand,
+    emojiTabUnderline: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      height: StrokeToken.emphasis,
+      borderRadius: StrokeToken.emphasis,
     },
     emojiTabLabel: {
-      fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
+      fontFamily: FontFamily.regular,
+      fontSize: Type.bodyEmphasis.size,
+      lineHeight: Type.bodyEmphasis.lineHeight,
       color: colors.textSecondary,
     },
     emojiTabLabelActive: {
-      color: colors.textInverse,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
     },
     emojiGrid: {
       flexDirection: 'row',
@@ -1014,20 +1074,22 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       gap: Space.xs,
     },
     emojiCell: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       borderRadius: Radius.sm,
-      borderWidth: 2,
+      borderWidth: StrokeToken.emphasis,
       alignItems: 'center',
       justifyContent: 'center',
     },
     emojiCellText: {
+      // Emoji glyph size — canvas-specific, not a type token.
       fontSize: 28,
       lineHeight: 32,
     },
     emojiSizePreview: {
+      // Emoji glyph preview — canvas-specific, not a type token.
       fontSize: 24,
-      width: 36,
+      width: Control.chrome,
       textAlign: 'center',
     },
   });

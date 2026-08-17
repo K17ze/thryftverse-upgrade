@@ -218,11 +218,7 @@ export function CaptureToolsSheet({
                 <PressScale
                   key={opt.value}
                   onPress={() => handleTimerSelect(opt.value)}
-                  style={
-                    isActive
-                      ? [styles.chip, { backgroundColor: colors.brandSubtle, borderColor: colors.brand }]
-                      : styles.chip
-                  }
+                  style={styles.chip}
                   accessibilityLabel={`Timer ${opt.label}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
@@ -230,7 +226,10 @@ export function CaptureToolsSheet({
                   <Text
                     style={[
                       styles.chipText,
-                      { color: isActive ? colors.brand : colors.textSecondary },
+                      {
+                        color: isActive ? colors.brand : colors.textSecondary,
+                        textDecorationLine: isActive ? 'underline' : 'none',
+                      },
                     ]}
                   >
                     {opt.label}
@@ -585,11 +584,8 @@ function useSheetStyles(colors: ThemeColors) {
           marginTop: Space.sm,
         },
         chip: {
-          paddingHorizontal: Space.md,
-          paddingVertical: Space.sm,
-          borderRadius: Radius.full,
-          borderWidth: Stroke.hairline,
-          borderColor: colors.borderSubtle,
+          paddingHorizontal: Space.sm,
+          paddingVertical: Space.xs,
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: Control.hit,
