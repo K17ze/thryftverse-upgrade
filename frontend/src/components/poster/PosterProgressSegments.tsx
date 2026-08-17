@@ -40,9 +40,9 @@ interface PosterProgressSegmentsProps {
 /**
  * Segmented story progress bar.
  *
- * Benchmark (Instagram/Snapchat 2026): thin segments across the top, one per
- * frame. Filled segments are full-opacity white, the active segment fills
- * left-to-right, and upcoming segments are dim.
+ * Thin segments across the top, one per frame. Filled segments are
+ * full-opacity white, the active segment fills left-to-right, and
+ * upcoming segments are dim.
  *
  * Design constraints:
  * - 2px height (matches Instagram/Snapchat thin-segment convention)

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -39,6 +39,7 @@ import { Space, FontFamily, DockConstants, LetterSpacing, Numeric } from '../the
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useHaptic } from '../hooks/useHaptic';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import {
   CoOwnTradeComposer,
@@ -80,8 +81,7 @@ export default function TradeScreen() {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
-  const isCompact = screenWidth < 360;
+  const { isVeryCompact: isCompact } = useBreakpoint();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const { isOffline } = useConnectivity();
 

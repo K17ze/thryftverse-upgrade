@@ -297,12 +297,10 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     marginTop: Space.sm,
   },
-  // Per Design.md + research (Depop/Vinted/Vestiaire 2025-2026):
-  // the in-page product price is the primary price anchor — larger
-  // than a line item (priceList 20px) but smaller than a checkout
-  // total (priceLarge 28px). 22px matches the media-tone variant
-  // and aligns with benchmark apps where the in-page price is
-  // typically 20-24px. The dock carries its own priceList (20px)
+  // Per Design.md: the in-page product price is the primary price
+  // anchor — larger than a line item (priceList 20px) but smaller
+  // than a checkout total (priceLarge 28px). 22px matches the
+  // media-tone variant. The dock carries its own priceList (20px)
   // value, so the identity price remains the visual anchor while
   // the dock is the actionable repetition.
   primaryValue: {

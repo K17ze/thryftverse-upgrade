@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -9,6 +9,7 @@ import { Space, Radius, Type, Typography, Numeric } from '../theme/designTokens'
 import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useToast } from '../context/ToastContext';
 import { cancelCoOwnOrderReservation, placeCoOwnOrder } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -48,8 +49,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   } = route.params;
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const isCompactDock = width < 360;
+  const { isVeryCompact: isCompactDock } = useBreakpoint();
   const haptic = useHaptic();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);

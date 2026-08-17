@@ -1,11 +1,11 @@
 /**
  * SustainabilityTags — multi-select chip selector for sustainability attributes.
  *
- * 2026 research shows sustainability tags are a top-3 purchase driver for
- * Gen-Z marketplace buyers. This selector lets a seller tag a listing with
- * eco-attributes (Pre-loved, Vintage, Sustainable brand, Upcycled,
- * Carbon-neutral shipping, Plastic-free packaging) and surfaces a short
- * "Sustainability impact" summary when tags are active.
+ * Sustainability tags shown where relevant to listing. This selector lets
+ * a seller tag a listing with eco-attributes (Pre-loved, Vintage,
+ * Sustainable brand, Upcycled, Carbon-neutral shipping, Plastic-free
+ * packaging) and surfaces a short "Sustainability impact" summary when
+ * tags are active.
  *
  * Design (AGENTS.md §4):
  *   - Chip layout with icon + label; selected = filled brand, unselected = outlined.

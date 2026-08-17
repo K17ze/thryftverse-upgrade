@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, useWindowDimensions, Modal, TextInput, Image, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Modal, TextInput, Image, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,7 +52,6 @@ import {
   CommerceDetailMediaRail,
   CommerceDetailOfflineBanner,
   CommerceDetailFreshnessBanner,
-  COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
 import { RecommendationRail, FullscreenMediaViewer } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
@@ -85,6 +84,7 @@ import {
 import { AppButton } from '../components/ui/AppButton';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -105,9 +105,7 @@ export default function AssetDetailScreen() {
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
-  const isCompact = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
-  const isVeryCompact = screenWidth < 340;
+  const { isCommerceCompact: isCompact, isVeryCompact } = useBreakpoint();
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const isCoOwnWatched = useStore((state) => state.isCoOwnWatched);

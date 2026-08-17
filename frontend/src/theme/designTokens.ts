@@ -569,7 +569,7 @@ export const FeedLayout = {
   headerCollapsed: 52,
   /** Grid gap between masonry columns */
   gridGap: Space.smMd,
-  /** Poster rail card width (Instagram stories benchmark: 72-80pt) */
+  /** Poster rail card width */
   posterCardWidth: 76,
   /** Poster rail card height (9:16-ish aspect) */
   posterCardHeight: 135,

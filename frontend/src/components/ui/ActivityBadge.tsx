@@ -1,7 +1,6 @@
 /**
- * ActivityBadge — Real-time social proof & scarcity indicators
- * Exceeds flagship benchmarks by providing contextual urgency signals
- * that Depop/Vinted do not offer.
+ * ActivityBadge — Real-time social proof & scarcity indicators.
+ * Contextual urgency signals for activity badges.
  */
 
 import React from 'react';

@@ -6,7 +6,6 @@ import {
   RefreshControl,
   Pressable,
   Text,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -21,6 +20,7 @@ import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { haptics } from '../utils/haptics';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useCurrencyContext } from '../context/CurrencyContext';
@@ -64,7 +64,6 @@ import {
   CommerceDetailOfflineBanner,
   CommerceDetailFreshnessBanner,
   CommerceDetailUnavailableInline,
-  COMMERCE_DETAIL_COMPACT_WIDTH,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
@@ -153,8 +152,7 @@ export default function AuctionDetailScreen() {
   const upsertConversation = useStore((state) => state.upsertConversation);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
 
-  const { width: screenWidth } = useWindowDimensions();
-  const isCompact = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
+  const { isCommerceCompact: isCompact } = useBreakpoint();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
 

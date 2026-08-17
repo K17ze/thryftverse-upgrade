@@ -82,12 +82,12 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
   });
 
   // ── 2. Responsive viewport handling ──
-  // Each screen must adapt to 320/360/390/430 widths.
+  // Each screen adapts to 320/360/390/430 widths via the centralized
+  // useBreakpoint hook (hooks/useBreakpoint.ts).
   describe('responsive viewport handling', () => {
-    it('ItemDetailScreen uses useWindowDimensions for responsive layout', () => {
+    it('ItemDetailScreen uses useBreakpoint for responsive layout', () => {
       const src = readScreen('ItemDetailScreen.tsx');
-      expect(src).toContain('useWindowDimensions');
-      expect(src).toContain('COMMERCE_DETAIL_COMPACT_WIDTH');
+      expect(src).toContain('useBreakpoint');
     });
 
     it('ItemDetailScreen adapts media stage height to viewport', () => {
@@ -95,14 +95,14 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
       expect(src).toContain('heightFraction');
     });
 
-    it('AuctionDetailScreen uses useWindowDimensions for responsive layout', () => {
+    it('AuctionDetailScreen uses useBreakpoint for responsive layout', () => {
       const src = readScreen('AuctionDetailScreen.tsx');
-      expect(src).toContain('useWindowDimensions');
+      expect(src).toContain('useBreakpoint');
     });
 
     it('AssetDetailScreen uses compact flagship hero fractions', () => {
       const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).toContain('useWindowDimensions');
+      expect(src).toContain('useBreakpoint');
       expect(src).toContain('isVeryCompact ? 0.5');
       expect(src).toContain('isCompact ? 0.54');
       expect(src).toContain(': 0.58');

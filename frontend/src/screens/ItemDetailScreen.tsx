@@ -6,7 +6,6 @@ import {
   StatusBar,
   Pressable,
   RefreshControl,
-  useWindowDimensions,
 } from 'react-native';
 import Reanimated, {
   useAnimatedScrollHandler,
@@ -39,6 +38,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { Motion } from '../theme/motionTokens';
 import { enablePriceAlert, disablePriceAlert, getPriceAlertStatus } from '../services/priceAlertsApi';
 import { toIze, formatIzeAmount } from '../utils/currency';
@@ -77,7 +77,6 @@ import {
   CommerceDetailMediaRail,
   CommerceDetailUnavailableInline,
   CommerceDetailOfflineBanner,
-  COMMERCE_DETAIL_COMPACT_WIDTH,
   SellerInfoCard,
   ShippingReturnsInfo,
   MakeOfferSheet,
@@ -214,8 +213,7 @@ export default function ItemDetailScreen() {
   const route = useRoute<ItemDetailRoute>();
   const navigation = useNavigation<ItemDetailNav>();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const isCompactScreen = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
+  const { height: screenHeight, isCommerceCompact: isCompactScreen } = useBreakpoint();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
