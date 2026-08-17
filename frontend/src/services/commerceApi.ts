@@ -627,6 +627,39 @@ export async function shipOrder(orderId: string, input?: { trackingNumber?: stri
   );
 }
 
+/**
+ * Integrated shipping handoff assertion.
+ *
+ * For integrated shipping, the seller's drop-off assertion MUST NOT mutate
+ * the canonical order status to 'shipped'. The carrier's first scan is the
+ * authoritative event that advances the order to in-transit.
+ *
+ * This endpoint records the seller's handoff claim (timestamp, label/tracking
+ * context) but does NOT change `orders.status`. It is a non-state-advancing
+ * event overlay used for reconciliation when carrier scans are delayed.
+ *
+ * Per P0-1: "Integrated seller handoff does not set shipped."
+ */
+export async function assertHandoff(
+  orderId: string,
+  context?: { trackingNumber?: string; shippingProvider?: string; labelUrl?: string }
+) {
+  return fetchJson<{
+    ok: true;
+    orderId: string;
+    handoffClaimedAt: string;
+    /** Canonical order status — unchanged by this call. */
+    status: string;
+  }>(
+    `/orders/${encodeURIComponent(orderId)}/fulfilment/handoff-assertion`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(context ?? {}),
+    }
+  );
+}
+
 export async function deliverOrder(orderId: string) {
   return fetchJson<{ ok: true; orderId: string; status: string }>(`/orders/${encodeURIComponent(orderId)}/deliver`, {
     method: 'POST',

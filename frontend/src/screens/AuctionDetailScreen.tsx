@@ -13,13 +13,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeInDown } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useCurrencyContext } from '../context/CurrencyContext';
@@ -158,6 +159,7 @@ export default function AuctionDetailScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isCompact = screenWidth < COMMERCE_DETAIL_COMPACT_WIDTH;
   const { isOffline } = useConnectivity();
+  const reducedMotion = useReducedMotion();
 
   const serverNowRef = React.useRef<string | null>(null);
   const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } =
@@ -528,6 +530,22 @@ export default function AuctionDetailScreen() {
   const reserveStatus = detailInput ? resolveReserveStatus(detailInput) : 'none';
   const showBidControls = !isTerminal && !isSeller;
 
+  // ── P1-C: One dominant state sentence ──
+  // When the viewer is actively bidding (leading/outbid), the viewer-state
+  // sentence dominates and the countdown demotes to subordinate metadata.
+  // Otherwise the countdown is the dominant sentence in the headline aside.
+  const isActivelyBidding = viewerState === 'leading' || viewerState === 'outbid';
+  // Subordinate metadata shown beneath the dominant viewer-state sentence.
+  // Appends the countdown so the bidder still sees time remaining without
+  // it competing as a second prominent state element.
+  const viewerStateSubtitle = React.useMemo(() => {
+    if (!viewerContext) return null;
+    const parts: string[] = [];
+    if (viewerContext.subtitle) parts.push(viewerContext.subtitle);
+    if (isActivelyBidding && countdown.text) parts.push(countdown.text);
+    return parts.length > 0 ? parts.join('  ·  ') : null;
+  }, [viewerContext, isActivelyBidding, countdown.text]);
+
   // ── PRODUCT-01: unified view model + shared social state + seller trust + recommendations ──
   const viewModel = React.useMemo(() => {
     if (!auction) return null;
@@ -783,14 +801,6 @@ export default function AuctionDetailScreen() {
               <AuctionStateBadge
                 state={isLive ? 'live' : isUpcoming ? 'upcoming' : isCancelled ? 'cancelled' : isSettled ? 'settled' : 'ended'}
               />
-              {isLive && (
-                <View style={styles.livePollIndicator} accessibilityLabel={`Live auction · ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'} · updating in real time`}>
-                  <Reanimated.View style={styles.livePollDot} entering={FadeInDown.duration(300)} />
-                  <Text style={styles.livePollText}>
-                    {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
-                  </Text>
-                </View>
-              )}
             </View>
           }
           overlayBottomContent={
@@ -852,14 +862,17 @@ export default function AuctionDetailScreen() {
             must NOT show a second family/state chip (the media overlay
             already carries AuctionStateBadge). */}
         {/* ── Zone C — Auction transaction surface ──
-            One strong contained module: current bid + bid count + reserve
-            + countdown + viewer state. For LIVE state, the price and
-            countdown dominate with a live accent bar. Spec 02 §C
-            + spec 04 §3/§4: "Integrate viewer state into the transaction
-            surface rather than adding another full-width block." */}
+            P1-C: One dominant state sentence above the fold. When the
+            viewer is actively bidding (leading/outbid), the viewer-state
+            sentence dominates and the countdown demotes to subordinate
+            metadata. Otherwise the countdown is the dominant sentence.
+            Reserve status is factual only — no persuasive gap copy.
+            Urgency chrome is reduced: a single calm live accent bar
+            replaces the amber→red transition; the countdown owns
+            threshold colour. */}
         {!isTerminal && (
           <View style={isLive && styles.liveAccentWrap}>
-            {isLive && <View style={[styles.liveAccentBar, { backgroundColor: countdown.isFinalMinutes ? colors.danger : colors.warning }]} />}
+            {isLive && <View style={[styles.liveAccentBar, { backgroundColor: colors.brand }]} />}
             <CommerceDetailTransactionSurface
               family="auction"
               flush
@@ -867,70 +880,47 @@ export default function AuctionDetailScreen() {
               primaryLabel={priceLabel}
               primaryValue={priceText}
               headlineAside={
-                <AuctionCountdown
-                  text={countdown.text}
-                  urgent={countdown.isFinalMinutes && viewerState !== 'outbid'}
-                  stage={countdown.stage}
-                  progress={isLive ? countdownProgress : undefined}
-                  showProgress={isLive}
-                  prominent
-                />
+                !isActivelyBidding ? (
+                  <AuctionCountdown
+                    text={countdown.text}
+                    urgent={countdown.isFinalMinutes}
+                    stage={countdown.stage}
+                    progress={isLive && !reducedMotion ? countdownProgress : undefined}
+                    showProgress={isLive && !reducedMotion}
+                    prominent
+                  />
+                ) : undefined
               }
               viewerState={
                 viewerContext ? (
-                  <Text
-                    style={[
-                      styles.viewerStateLine,
-                      viewerContext.treatment === 'warning' && { color: colors.danger },
-                      viewerContext.treatment === 'calm' && { color: colors.success },
-                      viewerContext.treatment === 'seller' && { color: colors.brand },
-                      viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
-                    ]}
-                    numberOfLines={2}
-                    accessibilityLiveRegion="polite"
-                  >
-                    {viewerContext.title}
-                    {viewerContext.subtitle ? `  ·  ${viewerContext.subtitle}` : ''}
-                  </Text>
+                  <View>
+                    <Text
+                      style={[
+                        styles.viewerStateLine,
+                        viewerContext.treatment === 'warning' && { color: colors.danger },
+                        viewerContext.treatment === 'calm' && { color: colors.success },
+                        viewerContext.treatment === 'seller' && { color: colors.brand },
+                        viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
+                      ]}
+                      numberOfLines={2}
+                      accessibilityLiveRegion="polite"
+                    >
+                      {viewerContext.title}
+                    </Text>
+                    {viewerStateSubtitle ? (
+                      <Text
+                        style={[styles.viewerStateSubordinate, { color: colors.textSecondary }]}
+                        numberOfLines={1}
+                      >
+                        {viewerStateSubtitle}
+                      </Text>
+                    ) : null}
+                  </View>
                 ) : undefined
               }
               statusRow={reserveStatus !== 'none' ? (
                 <View style={styles.transactionStatusRow}>
-                  <View style={styles.transactionReserveRow}>
-                    <ReserveStatusBadge status={reserveStatus} showExplanation />
-                    {reserveStatus === 'not-met' && isLive && (
-                      <Text style={[styles.transactionReserveHint, { color: colors.textSecondary }]} numberOfLines={1}>
-                        Bidding continues until reserve is met
-                      </Text>
-                    )}
-                  </View>
-                  {/* ── Progressive reserve guidance (2026 Catawiki benchmark) ──
-                      Show how close the current bid is to the reserve price.
-                      Catawiki case study: progressive reserve transparency
-                      increased winning bids and platform profitability.
-                      Only shown when reserve is not met and current bid is
-                      at least 70% of the reserve. */}
-                  {reserveStatus === 'not-met' && isLive && auction.reservePriceGbp && auction.currentBidGbp > 0 && (() => {
-                    const ratio = auction.currentBidGbp / auction.reservePriceGbp;
-                    if (ratio < 0.7) return null;
-                    const remaining = auction.reservePriceGbp - auction.currentBidGbp;
-                    const remainingText = formatFromFiat(remaining, 'GBP');
-                    const guidance = ratio >= 0.9
-                      ? `Just ${remainingText} away from the reserve`
-                      : ratio >= 0.8
-                        ? `Close to the reserve — ${remainingText} more to meet it`
-                        : `Almost at reserve — ${remainingText} more needed`;
-                    return (
-                      <Text
-                        style={[styles.transactionReserveProgress, { color: colors.warning }]}
-                        numberOfLines={2}
-                        accessibilityRole="text"
-                        accessibilityLabel={guidance}
-                      >
-                        {guidance}
-                      </Text>
-                    );
-                  })()}
+                  <ReserveStatusBadge status={reserveStatus} showExplanation />
                 </View>
               ) : undefined}
             >
@@ -1952,26 +1942,14 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
-  transactionReserveRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    flexWrap: 'wrap',
-  },
-  transactionReserveHint: {
+  // Subordinate metadata beneath the dominant viewer-state sentence.
+  // P1-C: the countdown demotes here when the viewer is actively bidding
+  // so only one state element dominates at a time.
+  viewerStateSubordinate: {
     fontSize: TypographyV2.label.size,
     lineHeight: TypographyV2.label.lineHeight,
     fontFamily: FontFamily.regular,
-    flexShrink: 1,
-    fontVariant: ['tabular-nums'],
-  },
-  // Progressive reserve guidance — 2026 Catawiki benchmark pattern.
-  // Flat text, no card. Warning color signals "close but not there yet."
-  transactionReserveProgress: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    flexShrink: 1,
+    marginTop: Space.xs / 2,
     fontVariant: ['tabular-nums'],
   },
   transactionStatusRow: {
@@ -2039,28 +2017,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-  },
-  livePollIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: 3,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  livePollDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#ff3b30',
-  },
-  livePollText: {
-    color: '#ffffff',
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    fontVariant: ['tabular-nums'],
   },
   // ── Seller identity extension ──
   // Tight rhythm: the seller row follows the transaction surface

@@ -371,9 +371,29 @@ export function BidSheet({
 
         <View style={styles.divider} />
 
-        {/* ── Entry stage — large centered amount ── */}
+        {/* ── Entry stage — context first, then amount, then action ──
+            P1-C bid composer order: current bid → minimum next bid →
+            amount field → primary bid action. */}
         {stage === 'entry' && (
           <View style={styles.stageContent}>
+            {/* Current bid + minimum to lead — context before input */}
+            <View style={styles.bidContextStack}>
+              <View style={styles.bidContextRow}>
+                <Text style={styles.bidContextLabel}>Current bid</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
+              </View>
+              <View style={styles.bidContextRow}>
+                <Text style={styles.bidContextLabel}>Minimum to lead</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
+              </View>
+              <View style={styles.bidContextRow}>
+                <Text style={styles.bidContextLabel}>Time remaining</Text>
+                <Text style={[styles.bidContextValueSecondary, auction.effectiveState === 'live' && { color: themed.danger }]}>
+                  {auction.countdownText}
+                </Text>
+              </View>
+            </View>
+
             <Text style={styles.entryHeading}>PLACE YOUR BID</Text>
 
             {/* Large amount input — dominates the sheet */}
@@ -396,24 +416,6 @@ export function BidSheet({
               {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 2)}
             </Text>
 
-            {/* Minimum and current — stacked, not columns */}
-            <View style={styles.bidContextStack}>
-              <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>Minimum to lead</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
-              </View>
-              <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>Current value</Text>
-                <Text style={styles.bidContextValueSecondary}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
-              </View>
-              <View style={styles.bidContextRow}>
-                <Text style={styles.bidContextLabel}>Time remaining</Text>
-                <Text style={[styles.bidContextValueSecondary, auction.effectiveState === 'live' && { color: themed.danger }]}>
-                  {auction.countdownText}
-                </Text>
-              </View>
-            </View>
-
             {/* Quick adjustments */}
             <View style={styles.incrementRow}>
               {[0.01, 0.03, 0.05].map((pct) => (
@@ -433,7 +435,7 @@ export function BidSheet({
               ))}
             </View>
 
-            {/* Bid confidence indicator � shows if the current amount would lead */}
+            {/* Bid confidence indicator — shows if the current amount would lead */}
             {(() => {
               const bidGbp = gbpAmount ?? 0;
               const wouldLead = bidGbp >= currentMinimum && bidGbp > 0;
@@ -446,7 +448,7 @@ export function BidSheet({
                     color={wouldLead ? themed.success : themed.danger}
                   />
                   <Text style={[styles.confidenceText, { color: wouldLead ? themed.success : themed.danger }]}>
-                    {wouldLead ? 'This bid would put you in the lead' : 'Below minimum to lead � increase your bid'}
+                    {wouldLead ? 'This bid would put you in the lead' : 'Below minimum to lead — increase your bid'}
                   </Text>
                 </View>
               );
@@ -520,11 +522,21 @@ export function BidSheet({
               </View>
             </View>
 
-            <View style={styles.commitmentRow}>
-              <Ionicons name="information-circle-outline" size={14} color={themed.textSecondary} />
-              <Text style={styles.commitmentText}>
-                Bids are binding once accepted.
-              </Text>
+            {/* P1-C: Pre-submit confirmation must state amount, binding
+                nature, fees/total if applicable, and cancellation rule. */}
+            <View style={styles.commitmentBlock}>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="information-circle-outline" size={14} color={themed.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  Bids are binding once accepted.
+                </Text>
+              </View>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="lock-closed-outline" size={14} color={themed.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  You cannot cancel a bid after it is submitted.
+                </Text>
+              </View>
             </View>
 
             {error && (
@@ -952,11 +964,15 @@ const createStyles = (themed: {
     backgroundColor: themed.border,
     marginVertical: Space.xs,
   },
+  commitmentBlock: {
+    gap: Space.xs / 2,
+    paddingVertical: Space.xs,
+  },
   commitmentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.xs,
+    paddingVertical: Space.xs / 2,
   },
   commitmentText: {
     fontSize: Type.captionElevated.size,

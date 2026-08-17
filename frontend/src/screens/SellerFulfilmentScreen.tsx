@@ -18,7 +18,7 @@ import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from 
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { getOrder, shipOrder, type CommerceOrder } from '../services/commerceApi';
+import { getOrder, shipOrder, assertHandoff, type CommerceOrder } from '../services/commerceApi';
 import { parseApiError } from '../lib/apiClient';
 import { fetchJson } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
@@ -82,7 +82,6 @@ function getShipByDate(order: CommerceOrder): string | null {
   if (order.shipByDate) return order.shipByDate;
   const snap = order.fulfilmentSnapshot;
   if (snap?.shipByDate) return snap.shipByDate;
-  return null;
   return null;
 }
 
@@ -295,17 +294,19 @@ export default function SellerFulfilmentScreen() {
   // The seller does NOT confirm dispatch — the scan webhook advances state.
   // This is a recovery action for when the seller has dropped off the parcel
   // but the carrier scan hasn't appeared after a reasonable delay.
-  // It does NOT claim carrier acceptance — it only signals "I handed it over".
+  // It does NOT mutate the canonical order status — it only records the
+  // seller's handoff claim for reconciliation purposes.
   const handleDroppedOffRecovery = useCallback(async () => {
     if (isDispatching) return;
     setIsDispatching(true);
     haptics.heavyPress();
     try {
-      await shipOrder(orderId, {
+      await assertHandoff(orderId, {
         trackingNumber: trackingNumber.trim() || undefined,
         shippingProvider: serviceName ?? undefined,
+        labelUrl: generatedLabelUrl ?? undefined,
       });
-      show('Marked as handed over. The carrier scan will confirm tracking.', 'success');
+      show('Handoff recorded. Waiting for carrier scan to confirm tracking.', 'success');
       navigation.goBack();
     } catch (error) {
       show(parseApiError(error).message, 'error');

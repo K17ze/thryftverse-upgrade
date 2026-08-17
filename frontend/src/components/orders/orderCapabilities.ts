@@ -218,9 +218,9 @@ export type OrderAction =
  *  - Seller paid → primary is `dispatch` (guided fulfilment), NEVER a direct
  *    generic "mark shipped" mutation. The guided flow knows the buyer-selected
  *    service, deadline, and label/QR requirements.
- *  - Buyer in-transit → primary is `track_order`, NOT `confirm_delivery`.
- *    Confirming receipt releases escrowed funds — a high-consequence action
- *    that belongs as a demoted secondary, not the calm in-transit primary.
+ *  - Buyer in-transit → primary is `track_order`. Receipt confirmation is
+ *    NOT available during transit — it releases escrowed funds and must
+ *    only be available after authoritative delivery.
  *  - Buyer delivered → primary is `inspect` (check your item). Only after the
  *    inspection window does the review become primary. This mirrors Vinted's
  *    2-day buyer protection window after delivery.
@@ -244,9 +244,13 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   const canDispatch = ctx.role === 'seller' && isPaid && !submitting;
   const canTrack = isInTransit && ctx.hasTracking;
   const canInspect = ctx.role === 'buyer' && isDelivered && !ctx.hasReview && !submitting;
-  // Early receipt confirmation is a demoted secondary, available in-transit and
-  // after delivery. It releases funds — never the calm primary.
-  const canConfirmDelivery = ctx.role === 'buyer' && (isInTransit || isDelivered) && !submitting;
+  // Receipt confirmation releases escrowed funds — a high-consequence money
+  // action. It must NOT be available while the parcel is merely in transit.
+  // Only authoritative delivery (status='delivered') grants this capability
+  // by default. A server capability envelope may grant an exception with
+  // an explicit policy version/reason, but the client must never infer it
+  // from a transit status string.
+  const canConfirmDelivery = ctx.role === 'buyer' && isDelivered && !submitting;
   const canCancel = ctx.role === 'buyer' && (isCreated || isPaid) && !ctx.hasOpenResolution && !submitting;
   const canReportIssue = !isCancelled && !isCreated && !ctx.hasOpenResolution && !submitting;
   const shouldViewResolution = ctx.hasOpenResolution;
@@ -282,8 +286,8 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   if (canTrack && primaryAction !== 'track_order') {
     secondaryActions.push('track_order');
   }
-  // Early receipt confirmation — demoted. Available in-transit + delivered,
-  // but never the primary in-transit action.
+  // Receipt confirmation — only after authoritative delivery.
+  // It releases funds and is never available during transit.
   if (canConfirmDelivery && primaryAction !== 'confirm_delivery') {
     secondaryActions.push('confirm_delivery');
   }
@@ -383,4 +387,112 @@ export function getNextActionHint(
     IN_TRANSIT_STATUSES.has(key),
     key === 'delivered' || key === 'completed',
   );
+}
+
+// ─── Canonical order experience projection ───────────────────────────────────
+//
+// Per P0-3: "Create one domain projection: resolveOrderExperience(...)"
+// Screens consume the projection; they do not reinterpret status strings.
+// This eliminates the semantic duplication between orderCapabilities.ts
+// and OrderDetailScreen.tsx (local status normalization, labels, tones,
+// terminal sets, timeline mapping).
+
+export interface OrderExperienceContext {
+  status: string;
+  role: OrderRole;
+  hasOpenResolution: boolean;
+  hasReview: boolean;
+  hasTracking: boolean;
+  fulfilmentSnapshot?: FulfilmentSnapshot | null;
+  isSubmitting?: boolean;
+  /** Server-provided inspection window deadline (ISO). */
+  inspectionDeadlineAt?: string | null;
+  /** Server-provided estimated delivery date (ISO). */
+  estimatedDeliveryAt?: string | null;
+  /** Server-provided escrow release estimate (ISO). */
+  estimatedReleaseAt?: string | null;
+}
+
+export interface OrderExperience {
+  /** Canonical state key (normalised status). */
+  stateKey: string;
+  /** Human-readable display label. */
+  label: string;
+  /** Visual tone for badges/indicators. */
+  tone: StatusTone;
+  /** Whether this is a terminal state. */
+  terminal: boolean;
+  /** Passive explanation of the current state. */
+  explanation: string;
+  /** Next action hint for the viewer. */
+  nextActionHint: string | null;
+  /** Primary action for the viewer. */
+  primaryAction: OrderAction | null;
+  /** Secondary actions, ordered by relevance. */
+  secondaryActions: OrderAction[];
+  /** Capabilities (same as resolveCapabilities). */
+  capabilities: OrderCapability;
+  /** Server-derived inspection deadline (ISO), if available. */
+  inspectionDeadlineAt: string | null;
+  /** Server-derived estimated delivery (ISO), if available. */
+  estimatedDeliveryAt: string | null;
+  /** Server-derived escrow release estimate (ISO), if available. */
+  estimatedReleaseAt: string | null;
+  /** Whether the inspection window is open. */
+  inspectionWindowOpen: boolean;
+}
+
+function getExplanation(key: string, role: OrderRole): string {
+  if (key === 'created') return role === 'buyer' ? 'Payment pending.' : 'Awaiting buyer payment.';
+  if (key === 'paid') return role === 'seller' ? 'Buyer has paid. Dispatch your item.' : 'Payment received. Seller is preparing your order.';
+  if (key === 'shipped' || key === 'in transit') return 'Your parcel is on its way.';
+  if (key === 'out for delivery') return 'Your parcel is out for delivery today.';
+  if (key === 'delivered') return role === 'buyer' ? 'Your item has been delivered. Check it before confirming.' : 'Item delivered to buyer.';
+  if (key === 'completed') return 'Order complete.';
+  if (key === 'cancelled') return 'This order was cancelled.';
+  if (key === 'refunded') return 'This order was refunded.';
+  if (key === 'returned') return 'This order was returned.';
+  if (key === 'delivery failed') return 'Delivery was attempted but failed.';
+  return '';
+}
+
+/**
+ * The single canonical order experience projection.
+ *
+ * Every surface that renders order state — Order Detail, My Orders, Chat
+ * transaction strip, Seller Hub, notifications — MUST consume this
+ * projection. Screens must not independently normalize status strings,
+ * compute labels, tones, or terminal sets.
+ *
+ * Per P0-3: "No route screen may normalize status strings independently."
+ */
+export function resolveOrderExperience(ctx: OrderExperienceContext): OrderExperience {
+  const capabilities = resolveCapabilities(ctx);
+  const key = normaliseOrderStatus(ctx.status);
+  const terminal = TERMINAL_STATUSES.has(key);
+  const inspectionDeadlineAt = ctx.inspectionDeadlineAt ?? null;
+  const estimatedDeliveryAt = ctx.estimatedDeliveryAt ?? null;
+  const estimatedReleaseAt = ctx.estimatedReleaseAt ?? null;
+
+  // Inspection window is open only after delivery and before the deadline.
+  const isDelivered = key === 'delivered' || key === 'completed';
+  const inspectionWindowOpen = isDelivered && !ctx.hasReview && (
+    inspectionDeadlineAt == null || new Date(inspectionDeadlineAt).getTime() > Date.now()
+  );
+
+  return {
+    stateKey: key,
+    label: capabilities.statusLabel,
+    tone: capabilities.statusTone,
+    terminal,
+    explanation: getExplanation(key, ctx.role),
+    nextActionHint: capabilities.nextActionHint,
+    primaryAction: capabilities.primaryAction,
+    secondaryActions: capabilities.secondaryActions,
+    capabilities,
+    inspectionDeadlineAt,
+    estimatedDeliveryAt,
+    estimatedReleaseAt,
+    inspectionWindowOpen,
+  };
 }

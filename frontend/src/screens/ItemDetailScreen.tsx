@@ -232,6 +232,7 @@ export default function ItemDetailScreen() {
   const [overflowVisible, setOverflowVisible] = useState(false);
   const [makeOfferVisible, setMakeOfferVisible] = useState(false);
   const [conditionInfoVisible, setConditionInfoVisible] = useState(false);
+  const [priceHistoryExpanded, setPriceHistoryExpanded] = useState(false);
 
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
   const isFav = useStore((state) => state.isWishlisted(route.params?.itemId));
@@ -714,6 +715,24 @@ export default function ItemDetailScreen() {
     });
   }
 
+  // One inline insight for the consolidated disclosure — surface only
+  // the most material fact; the full breakdown expands on tap.
+  const priceInsightSummary = (() => {
+    if (hasDiscount && discountPercent && discountPercent > 0) {
+      return `Reduced ${Math.round(discountPercent)}%`;
+    }
+    if (soldComps && soldComps.sampleSize >= 2) {
+      return `${soldComps.sampleSize} similar sold`;
+    }
+    if (latestPriceEvent) {
+      return `Previous ${formatFromFiat(latestPriceEvent.previousPrice, latestPriceEvent.currency)}`;
+    }
+    if (daysListed != null && daysListed >= 3) {
+      return daysListed === 1 ? '1 day on market' : `${daysListed} days on market`;
+    }
+    return undefined;
+  })();
+
   // ── Purchase detail rows (compact summary + disclosure) ──
   const purchaseSummary = [
     commerce.shippingMethod,
@@ -873,7 +892,7 @@ export default function ItemDetailScreen() {
             family="direct"
             tone="canvas"
             density={isCompactScreen ? 'compact' : 'standard'}
-            eyebrow={item.brand ?? item.category ?? 'Direct listing'}
+            eyebrow={item.brand ?? item.category ?? undefined}
             title={displayTitle}
             primaryValue={formattedPrice}
             originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
@@ -885,10 +904,11 @@ export default function ItemDetailScreen() {
           {attributeLine ? (
             <View style={styles.attributeRow}>
               <View style={styles.attributeLeftCluster}>
-                {/* Condition chip — Vinted pattern: condition is the
-                    most important attribute for second-hand buyers, so
-                    it gets a distinct visual treatment instead of
-                    blending into muted text. */}
+                {/* Condition chip — condition gets a distinct visual
+                    treatment instead of blending into muted text. It
+                    is the most important attribute for second-hand
+                    buyers, so it earns its own affordance and a tap
+                    target that opens the definition. */}
                 {item.condition ? (
                   <Pressable
                     onPress={() => { haptic.light(); setConditionInfoVisible(true); }}
@@ -946,24 +966,17 @@ export default function ItemDetailScreen() {
         </View>
 
         {/* ── Zone C — Trust facts (max 3) ──
-            Cognitive layer: condition, seller rating, dispatch time.
-            These are the three facts a buyer needs to decide whether
-            to keep reading. Full commerce details (protection, returns,
+            Seller rating and dispatch time — the facts a buyer needs
+            to decide whether to keep reading. Condition is already
+            shown in the attribute row above, so it is not repeated
+            here. Full commerce details (protection, returns,
             authenticity) live in the Shipping & returns section below.
-            Per 2026 Apple HIG cognitive order: flat rows with hairline
-            separators — no chips, no cards. Each row is one fact with
-            an icon + label, separated by hairlines for clear scanning. */}
+            Flat rows with hairline separators — no chips, no cards.
+            Each row is one fact with an icon + label, separated by
+            hairlines for clear scanning. */}
         {(() => {
           const trustRows: { icon: keyof typeof Ionicons.glyphMap; label: string; dotColor?: string }[] = [];
-          // 1. Condition — the most important attribute for second-hand buyers
-          if (item.condition) {
-            trustRows.push({
-              icon: 'checkmark-circle-outline',
-              label: item.condition,
-              dotColor: conditionMeta?.color,
-            });
-          }
-          // 2. Seller rating — social proof
+          // 1. Seller rating — social proof
           if (seller?.rating != null && seller.rating > 0) {
             const ratingText = seller.reviewCount != null && seller.reviewCount > 0
               ? `★ ${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
@@ -973,7 +986,7 @@ export default function ItemDetailScreen() {
               label: ratingText,
             });
           }
-          // 3. Dispatch time — when will it arrive?
+          // 2. Dispatch time — when will it arrive?
           if (seller?.dispatchTimeLabel) {
             trustRows.push({
               icon: 'cube-outline',
@@ -1020,9 +1033,10 @@ export default function ItemDetailScreen() {
           {item.description ? (
             <View style={styles.descriptionWrap}>
               {/* Full-area tap target — the entire collapsed text is
-                  tappable, not just the "Read more" link. Research
-                  (Vestiaire): "buyers very often do not notice that
-                  description can be expanded by clicking 'see more'". */}
+                  tappable, not just the "Read more" link. Buyers often
+                  do not notice that a description can be expanded via
+                  a small "see more" link, so the whole collapsed block
+                  is the hit target. */}
               <Pressable
                 onPress={() => {
                   if (item.description && item.description.length > 120) {
@@ -1287,49 +1301,61 @@ export default function ItemDetailScreen() {
           </CommerceDetailSection>
         ) : null}
 
-        {/* ── Pricing insights ──
-            Only render facts that are genuinely supported. No fabricated
-            history. Placed after the seller section — interested buyers
-            who have scrolled this far benefit from price context. */}
+        {/* ── Price history & market ──
+            Consolidated disclosure: one inline insight surfaces the
+            most material fact (price drop, sold comparables, etc.);
+            the full breakdown expands on tap. Replaces the previous
+            stack of separate analytics modules. */}
         {priceInsightRows.length > 0 ? (
-          <CommerceDetailSection label="Pricing" divider variant="editorial">
-            {priceInsightRows.map((row) => (
-              <CommerceDetailMetricRow
-                key={row.label}
-                label={row.label}
-                value={row.value}
-                muted={row.muted}
-              />
-            ))}
-            {hasDiscount && discountPercent && discountPercent > 0 ? (
-              <Pressable
-                onPress={handleTogglePriceAlert}
-                disabled={priceAlertLoading}
-                style={({ pressed }) => [styles.alertRow, pressed && styles.pressed]}
-                accessibilityRole="switch"
-                accessibilityState={{
-                  checked: priceAlertEnabled,
-                  disabled: priceAlertLoading,
-                  busy: priceAlertLoading,
-                }}
-                accessibilityLabel={priceAlertEnabled ? 'Disable price drop alert' : 'Enable price drop alert'}
-              >
-                <View style={styles.alertRowLeft}>
-                  <Ionicons
-                    name={priceAlertEnabled ? 'notifications' : 'notifications-outline'}
-                    size={18}
-                    color={priceAlertEnabled ? colors.brand : colors.textSecondary}
+          <>
+            <CommerceDetailDisclosureRow
+              label={priceHistoryExpanded ? 'Hide price history' : 'Price history & market'}
+              summary={priceInsightSummary}
+              onPress={() => setPriceHistoryExpanded((prev) => !prev)}
+              leadingIcon="trending-up-outline"
+              accessibilityLabel="Toggle price history and market"
+            />
+            {priceHistoryExpanded ? (
+              <CommerceDetailSection label="Price history & market" variant="continuation">
+                {priceInsightRows.map((row) => (
+                  <CommerceDetailMetricRow
+                    key={row.label}
+                    label={row.label}
+                    value={row.value}
+                    muted={row.muted}
                   />
-                  <Text style={[styles.alertRowLabel, { color: colors.textSecondary }]}>
-                    Price drop alerts
-                  </Text>
-                </View>
-                <View style={[styles.toggleTrack, { borderColor: priceAlertEnabled ? colors.brand : colors.border, backgroundColor: priceAlertEnabled ? `${colors.brand}20` : colors.surfaceAlt }]}>
-                  <View style={[styles.toggleThumb, { backgroundColor: priceAlertEnabled ? colors.brand : colors.textMuted, alignSelf: priceAlertEnabled ? 'flex-end' : 'flex-start' }]} />
-                </View>
-              </Pressable>
+                ))}
+                {hasDiscount && discountPercent && discountPercent > 0 ? (
+                  <Pressable
+                    onPress={handleTogglePriceAlert}
+                    disabled={priceAlertLoading}
+                    style={({ pressed }) => [styles.alertRow, pressed && styles.pressed]}
+                    accessibilityRole="switch"
+                    accessibilityState={{
+                      checked: priceAlertEnabled,
+                      disabled: priceAlertLoading,
+                      busy: priceAlertLoading,
+                    }}
+                    accessibilityLabel={priceAlertEnabled ? 'Disable price drop alert' : 'Enable price drop alert'}
+                  >
+                    <View style={styles.alertRowLeft}>
+                      <Ionicons
+                        name={priceAlertEnabled ? 'notifications' : 'notifications-outline'}
+                        size={18}
+                        color={priceAlertEnabled ? colors.brand : colors.textSecondary}
+                      />
+                      <Text style={[styles.alertRowLabel, { color: colors.textSecondary }]}>
+                        Price drop alerts
+                      </Text>
+                    </View>
+                    <View style={[styles.toggleTrack, { borderColor: priceAlertEnabled ? colors.brand : colors.border, backgroundColor: priceAlertEnabled ? `${colors.brand}20` : colors.surfaceAlt }]}>
+                      <View style={[styles.toggleThumb, { backgroundColor: priceAlertEnabled ? colors.brand : colors.textMuted, alignSelf: priceAlertEnabled ? 'flex-end' : 'flex-start' }]} />
+                    </View>
+                  </Pressable>
+                ) : null}
+              </CommerceDetailSection>
             ) : null}
-          </CommerceDetailSection>
+          </>
         ) : null}
 
         <CommerceDetailSection label="Questions" variant="compact" divider>
@@ -1998,9 +2024,9 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     flexShrink: 1,
   },
-  // Condition chip — Vinted pattern: condition gets a distinct visual
-  // treatment (small surface-alt pill) instead of blending into muted
-  // text. It's the most important attribute for second-hand buyers.
+  // Condition chip — condition gets a distinct visual treatment
+  // (small surface-alt pill) instead of blending into muted text.
+  // It's the most important attribute for second-hand buyers.
   // Per Design.md: compact contained control, 32px visible chrome
   // inside 44px hit target. paddingVertical 5 gives a 26px visible
   // height with 12px caption text — premium pill proportion.
@@ -2051,10 +2077,10 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   // ── Trust facts (flat rows with hairline separators) ──
-  // Per 2026 Apple HIG cognitive order: flat rows, no chips, no cards.
-  // Each row is one fact with icon + label, separated by hairlines.
-  // This is the "content layer" — utility structure per AGENTS.md
-  // surface budget: flat canvas + hairlines are the default.
+  // Flat rows, no chips, no cards. Each row is one fact with icon +
+  // label, separated by hairlines. This is the "content layer" —
+  // utility structure per AGENTS.md surface budget: flat canvas +
+  // hairlines are the default.
   trustFactsSection: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -2163,8 +2189,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   // Gradient fade overlay at the bottom of collapsed description text.
-  // Visual signal that there's more content — replaces the bare text
-  // link that users miss (per Vestiaire research).
+  // Visual signal that there's more content below — replaces the bare
+  // text link that buyers often miss.
   descriptionFade: {
     position: 'absolute',
     left: 0,

@@ -78,7 +78,6 @@ import {
   CoOwnCandleChart,
   CoOwnSupplySheet,
   CoOwnOverflowSheet,
-  CoOwnAssetDossier,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnCandleRange,
@@ -97,15 +96,6 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 interface RecommendationItem {
   id: string;
   [key: string]: unknown;
-}
-
-function formatRightsVersion(raw: string): string {
-  // Already formatted
-  if (raw.includes('·')) return raw;
-  // Extract version number if present
-  const versionMatch = raw.match(/v\d+/i);
-  const version = versionMatch ? versionMatch[0].toLowerCase() : raw;
-  return version;
 }
 
 export default function AssetDetailScreen() {
@@ -526,6 +516,28 @@ export default function AssetDetailScreen() {
   });
   const hasIncompleteRights = rightsRows.some((r) => r.isTbc);
 
+  // ── Asset dossier summary (spec P1-B §2) ──
+  // The chapter summary shows only verified facts and missing critical
+  // evidence, so the user can judge completeness at a glance.
+  const dossierVerified: string[] = [];
+  if (asset.authenticityStatus === 'verified') dossierVerified.push('Authenticated');
+  if (asset.custodyInsured) dossierVerified.push('Insured custody');
+  if (asset.rights?.version) dossierVerified.push(`Rights v${asset.rights.version}`);
+  if (asset.appraisalValueGbp != null) dossierVerified.push('Appraised');
+  const dossierMissing: string[] = [];
+  if (asset.authenticityStatus !== 'verified') dossierMissing.push('authentication');
+  if (hasIncompleteRights) dossierMissing.push('rights');
+  if (asset.appraisalValueGbp == null) dossierMissing.push('valuation');
+  if (!asset.custodyInsured) dossierMissing.push('insurance');
+  const dossierSummary = dossierMissing.length > 0
+    ? `${dossierVerified.join(' · ')}${dossierVerified.length > 0 ? ' · ' : ''}${dossierMissing.length} pending`
+    : dossierVerified.join(' · ');
+
+  // Valuation updated label — spec P1-B §7 language.
+  const valuationUpdatedLabel = asset.appraisalValuedAt
+    ? `Valuation updated ${new Date(asset.appraisalValuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+    : null;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
@@ -559,18 +571,6 @@ export default function AssetDetailScreen() {
           />
         }
       >
-        <CommerceDetailOfflineBanner isOffline={isOffline} />
-
-        {/* ── Freshness indicator ──
-            Surfaces stale, reconnecting, and refresh-failed states for the
-            realtime market data on this screen. Same shared primitive as
-            AuctionDetailScreen. */}
-        <CommerceDetailFreshnessBanner
-          isRefreshing={refreshing}
-          isStale={dataStale && !refreshing}
-          onRetry={handleRefresh}
-        />
-
         {/* ── Zone A — Media stage (unobstructed) ──
             Spec 14 V3: media breathes first. No identity, no family
             badge, no taxonomy overlaid on photography. Back/share/save
@@ -741,70 +741,20 @@ export default function AssetDetailScreen() {
             Viewport 2 — Story, trust, holder position, market details
             ════════════════════════════════════════════════════════════ */}
 
-        {/* Short asset story — quiet editorial paragraph */}
-        {asset.provenance ? (
-          <View style={styles.assetStoryWrap}>
-            <Text
-              style={[styles.assetStoryText, { color: colors.textSecondary }]}
-              numberOfLines={3}
-            >
-              {asset.provenance}
-            </Text>
-            <Pressable
-              onPress={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
-              hitSlop={8}
-              style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.5 }]}
-              accessibilityRole="button"
-              accessibilityLabel="Read full asset story"
-            >
-              <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>
-                Read the full story
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-            </Pressable>
-          </View>
-        ) : null}
+        {/* ════════════════════════════════════════════════════════════
+            Viewer-aware composition (spec P1-B §5)
+            Holder: position → gain/loss → rights/distributions → market → trade
+            Non-holder: asset → market → thesis/evidence → trade
+            ════════════════════════════════════════════════════════════ */}
 
-        {/* Trust — flat factual line tapping into Due Diligence.
-            Spec 14 V3: `Authenticated · Insured custody · Rights v2`.
-            No trust score, no chip icons. One line, one tap target. */}
-        {(() => {
-          const trustFacts: string[] = [];
-          if (asset.authenticityStatus === 'verified') {
-            trustFacts.push('Authenticated');
-          }
-          if (asset.custodyInsured) {
-            trustFacts.push('Insured custody');
-          }
-          if (asset.rights?.version) {
-            trustFacts.push(`Rights v${asset.rights.version}`);
-          }
-          if (trustFacts.length === 0) return null;
-          return (
-            <Pressable
-              onPress={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
-              hitSlop={4}
-              style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.5 }]}
-              accessibilityRole="button"
-              accessibilityLabel={`Trust facts: ${trustFacts.join(', ')}. View due diligence.`}
-            >
-              <Text style={[styles.trustFactualText, { color: colors.textSecondary }]}>
-                {trustFacts.join(' · ')}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-            </Pressable>
-          );
-        })()}
-
-        {/* Holder position — quiet summary with P&L.
-            Spec 09: "Your position / 12 units · £1,248 value / Avg. entry
-            (avgEntryPriceGbp from the backend holdings contract).
-            Only show P&L if both entry and current value are known. */}
+        {/* ── Holder position — right after identity/market state ──
+            Spec P1-B §5: a holder needs position + gain/loss basis
+            before market detail. Spec §7 language: "Your position". */}
         {isHolder && yourUnits != null && viewerPct != null ? (
           <View style={styles.holderPositionSummary}>
             <View style={styles.holderPositionLeft}>
               <Text style={[styles.holderPositionText, { color: colors.textSecondary }]}>
-                Your settled position
+                Your position
               </Text>
               {avgEntryPriceGbp != null && (
                 <Text style={[styles.holderPositionText, { color: colors.textSecondary }]}>
@@ -832,12 +782,30 @@ export default function AssetDetailScreen() {
           </View>
         ) : null}
 
+        {/* ── Holder rights/distributions quick summary ──
+            Spec P1-B §5: rights/distributions come before market for
+            holders. Spec §7 language: "Voting rights", "Next
+            distribution". Taps open the full rights sheet. */}
+        {isHolder ? (
+          <Pressable
+            onPress={() => setRightsSheetVisible(true)}
+            hitSlop={4}
+            style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.5 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Voting rights and next distribution. Review rights."
+          >
+            <Text style={[styles.trustFactualText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {`Voting rights · Next distribution`}
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+
         {/* ════════════════════════════════════════════════════════════
-            Market details — progressive disclosure. First viewport shows
-            a summary; expert microstructure (chart, order book, bid/ask,
-            price alert) is revealed on demand. Spec 14 V3: last settled
-            price, bid/ask, spread, depth, chart, volume, NAV comparison,
-            price alert. This is NOT in the first viewport.
+            Market details — progressive disclosure. For non-holders this
+            comes before thesis/evidence (spec P1-B §5). For holders it
+            comes after position/rights. Lower-priority freshness and
+            connectivity notices live inside this chapter (spec P1-B §6).
             ════════════════════════════════════════════════════════════ */}
         <CommerceDetailDisclosureRow
           label={marketSectionExpanded ? 'Hide market details' : 'Market details'}
@@ -855,6 +823,17 @@ export default function AssetDetailScreen() {
           label="Market details"
           variant="continuation"
         >
+          {/* Connectivity + freshness notices sit inside the market
+              chapter, not stacked above media (spec P1-B §6).
+              Connectivity only matters when it prevents fresh
+              execution; staleness only when it affects action. */}
+          <CommerceDetailOfflineBanner isOffline={isOffline} />
+          <CommerceDetailFreshnessBanner
+            isRefreshing={refreshing}
+            isStale={dataStale && !refreshing}
+            onRetry={handleRefresh}
+          />
+
           {/* Last settled / reference price */}
           <CommerceDetailTransactionSurface
             family="co_own"
@@ -878,7 +857,7 @@ export default function AssetDetailScreen() {
                     ]}
                   />
                   <Text style={[styles.marketStatusText, { color: colors.textPrimary }]}>
-                    {reconciliationActive ? 'Orders paused · settling' : asset.isOpen ? 'Market open' : 'Closed'}
+                    {reconciliationActive ? 'Trading paused · settling' : asset.isOpen ? 'Market open' : 'Market closed'}
                   </Text>
                   {dataStale && dataStaleAgeLabel && (
                     <Text style={[styles.marketStatusStale, { color: colors.warning }]}>Stale {dataStaleAgeLabel}</Text>
@@ -987,13 +966,15 @@ export default function AssetDetailScreen() {
                 </Text>
               </View>
               <View style={styles.fundamentalsRow}>
-                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>Distribution</Text>
+                <Text style={[styles.fundamentalsLabel, { color: colors.textSecondary }]}>Next distribution</Text>
                 <Text style={[styles.fundamentalsValue, { color: colors.textPrimary }]}>Not scheduled</Text>
               </View>
             </View>
           ) : null}
 
-          {/* Market summary — best bid/ask/spread */}
+          {/* Market summary — best bid/ask. Tabular numerals, aligned
+              values, restrained colour (no green/red pill per row).
+              Spec P1-B §4. */}
           {orderBookError ? (
             <CommerceDetailUnavailableInline
               title="Live market unavailable"
@@ -1018,7 +999,9 @@ export default function AssetDetailScreen() {
             </View>
           )}
 
-          {/* Bids & asks — order book depth disclosure */}
+          {/* Bids & asks — order book depth disclosure.
+              State legend on first use (spec P1-B §4): explains the
+              bid/ask colour coding so the depth table is legible. */}
           {!orderBookError && orderBook ? (
             <>
               <CommerceDetailDisclosureRow
@@ -1028,24 +1011,38 @@ export default function AssetDetailScreen() {
                 leadingIcon="bar-chart-outline"
               />
               {orderBookExpanded ? (
-                <CoOwnOrderBook
-                  embedded
-                  bids={orderBook.bids.map((level) => ({
-                    price: level.unitPriceGbp,
-                    size: level.units,
-                    orderCount: level.orderCount,
-                  }))}
-                  asks={orderBook.asks.map((level) => ({
-                    price: level.unitPriceGbp,
-                    size: level.units,
-                    orderCount: level.orderCount,
-                  }))}
-                  visibleLevels={5}
-                  lastPrice={marketSnapshot?.lastExecutionPriceGbp ?? undefined}
-                  lastAgeSeconds={undefined}
-                  mode={asset.isOpen ? 'continuous' : 'closed'}
-                  onSelectLevel={handleSelectOrderBookLevel}
-                />
+                <>
+                  {/* State legend — bid (buy) / ask (sell) colour key.
+                      Restrained semantic dots, no coloured pill per row. */}
+                  <View style={styles.marketLegendRow}>
+                    <View style={styles.marketLegendItem}>
+                      <View style={[styles.marketLegendDot, { backgroundColor: colors.coownUp }]} />
+                      <Text style={[styles.marketLegendText, { color: colors.textMuted }]}>Bid (buy)</Text>
+                    </View>
+                    <View style={styles.marketLegendItem}>
+                      <View style={[styles.marketLegendDot, { backgroundColor: colors.coownDown }]} />
+                      <Text style={[styles.marketLegendText, { color: colors.textMuted }]}>Ask (sell)</Text>
+                    </View>
+                  </View>
+                  <CoOwnOrderBook
+                    embedded
+                    bids={orderBook.bids.map((level) => ({
+                      price: level.unitPriceGbp,
+                      size: level.units,
+                      orderCount: level.orderCount,
+                    }))}
+                    asks={orderBook.asks.map((level) => ({
+                      price: level.unitPriceGbp,
+                      size: level.units,
+                      orderCount: level.orderCount,
+                    }))}
+                    visibleLevels={5}
+                    lastPrice={marketSnapshot?.lastExecutionPriceGbp ?? undefined}
+                    lastAgeSeconds={undefined}
+                    mode={asset.isOpen ? 'continuous' : 'closed'}
+                    onSelectLevel={handleSelectOrderBookLevel}
+                  />
+                </>
               ) : null}
             </>
           ) : null}
@@ -1061,86 +1058,245 @@ export default function AssetDetailScreen() {
         </CommerceDetailSection>
         ) : null}
 
+        {/* ── Thesis / evidence (non-holder) or context (holder) ──
+            Non-holder: asset story + trust facts come AFTER market
+            (spec P1-B §5: asset → market → thesis/evidence → trade).
+            Holder: same content, placed after market as quiet context. */}
+
+        {/* Short asset story — quiet editorial paragraph */}
+        {asset.provenance ? (
+          <View style={styles.assetStoryWrap}>
+            <Text
+              style={[styles.assetStoryText, { color: colors.textSecondary }]}
+              numberOfLines={3}
+            >
+              {asset.provenance}
+            </Text>
+            <Pressable
+              onPress={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
+              hitSlop={8}
+              style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.5 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Read full asset story"
+            >
+              <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>
+                Read the full story
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Trust — flat factual line tapping into the dossier. */}
+        {(() => {
+          const trustFacts: string[] = [];
+          if (asset.authenticityStatus === 'verified') {
+            trustFacts.push('Authenticated');
+          }
+          if (asset.custodyInsured) {
+            trustFacts.push('Insured custody');
+          }
+          if (asset.rights?.version) {
+            trustFacts.push(`Rights v${asset.rights.version}`);
+          }
+          if (trustFacts.length === 0) return null;
+          return (
+            <Pressable
+              onPress={() => setDiligenceSectionExpanded(true)}
+              hitSlop={4}
+              style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.5 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Trust facts: ${trustFacts.join(', ')}. View asset dossier.`}
+            >
+              <Text style={[styles.trustFactualText, { color: colors.textSecondary }]}>
+                {trustFacts.join(' · ')}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+            </Pressable>
+          );
+        })()}
+
         {/* ════════════════════════════════════════════════════════════
-            Due diligence — progressive disclosure. One canonical route
-            for provenance, custody, valuation, rights, risk, audit docs.
+            Asset dossier — ONE consolidated chapter (spec P1-B §2).
+            Subsections: Ownership & rights, Valuation, Custody,
+            Insurance, Governance, Distributions, Risks, Documents &
+            audit trail. Summary shows verified facts + missing critical
+            evidence. Dead capability rows (buyout) are omitted unless
+            the viewer's position makes them relevant (spec P1-B §3).
             ════════════════════════════════════════════════════════════ */}
         <CommerceDetailDisclosureRow
-          label={diligenceSectionExpanded ? 'Hide due diligence' : 'Due diligence'}
-          summary="Provenance · custody · valuation · rights · risks"
+          label={diligenceSectionExpanded ? 'Hide asset dossier' : 'Asset dossier'}
+          summary={dossierSummary || undefined}
           onPress={() => setDiligenceSectionExpanded((prev) => !prev)}
           leadingIcon="document-text-outline"
-          accessibilityLabel="Toggle due diligence"
+          accessibilityLabel="Toggle asset dossier"
         />
         {diligenceSectionExpanded ? (
         <CommerceDetailSection
-          label="Due diligence"
+          label="Asset dossier"
           variant="continuation"
         >
-          {/* Stale market mark — show when no public market events have
-              been logged in >7 days. Fail closed (omit when null). */}
+          {/* Stale market mark — inside the relevant chapter (spec P1-B
+              §6: lower-priority notices sit inside the relevant chapter). */}
           {asset.staleMarkDays != null && asset.staleMarkDays > 7 && (
             <CommerceDetailMetricRow
               label="Market activity"
               value={`Pricing may be stale · ${asset.staleMarkDays}d since last market event`}
+              muted
             />
           )}
-          <CommerceDetailDisclosureRow
-            label="Due diligence"
-            summary="Provenance · authentication · custody · valuation · rights · risks · audit"
-            onPress={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
-            leadingIcon="document-text-outline"
-            accessibilityLabel="View due diligence"
+
+          {/* ── Ownership & rights ── */}
+          <View style={styles.dossierSubHeader}>
+            <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
+              Ownership & rights
+            </Text>
+          </View>
+          <CommerceDetailMetricRow
+            label="Rights version"
+            value={asset.rights?.version ? `v${asset.rights.version}` : 'Not published'}
+            muted={!asset.rights?.version}
           />
-          {/* Rights — kept accessible on the main screen for trading-blocked
-              states (rights incomplete). The full 13-row sheet opens here. */}
+          <CommerceDetailMetricRow
+            label="Transferable"
+            value={asset.rights ? (asset.rights.transferable ? 'Yes' : 'No') : 'To be confirmed'}
+            muted={!asset.rights}
+          />
           <CommerceDetailDisclosureRow
             label="Rights"
             count={CANONICAL_RIGHTS_LABELS.length}
-            summary={asset.rights?.version ? formatRightsVersion(`v${asset.rights.version}`) : undefined}
+            summary={hasIncompleteRights ? 'Pending' : undefined}
             onPress={() => setRightsSheetVisible(true)}
             leadingIcon="document-text-outline"
+            accessibilityLabel="Review rights"
           />
-          {/* Risks — quick access to the risk disclosure sheet. Full
-              risk detail also lives in the Due Diligence screen. */}
+
+          {/* ── Valuation ── */}
+          <View style={styles.dossierSubHeader}>
+            <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
+              Valuation
+            </Text>
+          </View>
+          <CommerceDetailMetricRow
+            label="NAV / unit"
+            value={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, 'GBP') : 'Not available'}
+            muted={navPerUnitGbp == null}
+          />
+          <CommerceDetailMetricRow
+            label="Reference vs NAV"
+            value={referenceVsNavPct != null
+              ? `${referenceVsNavPct >= 0 ? '+' : ''}${referenceVsNavPct.toFixed(1)}%`
+              : 'Not available'}
+            muted={referenceVsNavPct == null}
+          />
+          <CommerceDetailMetricRow
+            label="Appraisal"
+            value={asset.appraisalValueGbp != null ? formatFromFiat(asset.appraisalValueGbp, 'GBP') : 'Not available'}
+            muted={asset.appraisalValueGbp == null}
+          />
+          <CommerceDetailMetricRow
+            label={valuationUpdatedLabel ?? 'Valuation updated'}
+            value={asset.appraisalValuer ?? 'Independent appraisal'}
+            muted={!asset.appraisalValuer}
+          />
+
+          {/* ── Custody ── */}
+          <View style={styles.dossierSubHeader}>
+            <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
+              Custody
+            </Text>
+          </View>
+          <CommerceDetailMetricRow
+            label="Custodian"
+            value={asset.custodianName ?? 'Not disclosed'}
+            muted={!asset.custodianName}
+          />
+          <CommerceDetailMetricRow
+            label="Location"
+            value={asset.custodianLocation ?? 'Not disclosed'}
+            muted={!asset.custodianLocation}
+          />
+
+          {/* ── Insurance ── */}
+          <View style={styles.dossierSubHeader}>
+            <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
+              Insurance
+            </Text>
+          </View>
+          <CommerceDetailMetricRow
+            label="Insured"
+            value={asset.custodyInsured ? 'Yes' : 'Not insured'}
+            muted={!asset.custodyInsured}
+          />
+          {asset.custodyPolicyRef ? (
+            <CommerceDetailMetricRow label="Policy ref" value={asset.custodyPolicyRef} />
+          ) : null}
+
+          {/* ── Governance ── */}
+          <View style={styles.dossierSubHeader}>
+            <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
+              Governance
+            </Text>
+          </View>
+          <CommerceDetailMetricRow
+            label="Voting rights"
+            value={asset.rights?.votingRights ?? 'To be confirmed'}
+            muted={!asset.rights?.votingRights}
+          />
+          <CommerceDetailMetricRow
+            label="Exit & proceeds"
+            value={asset.rights?.exitRights ?? 'To be confirmed'}
+            muted={!asset.rights?.exitRights}
+          />
+
+          {/* ── Distributions ── */}
+          <View style={styles.dossierSubHeader}>
+            <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
+              Distributions
+            </Text>
+          </View>
+          <CommerceDetailMetricRow
+            label="Next distribution"
+            value={asset.rights?.economicRights ?? 'Not scheduled'}
+            muted={!asset.rights?.economicRights}
+          />
+
+          {/* ── Risks ── */}
+          <View style={styles.dossierSubHeader}>
+            <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
+              Risks
+            </Text>
+          </View>
           <CommerceDetailDisclosureRow
-            label="Risks"
+            label="Risk disclosure"
             onPress={() => setRiskDisclosureVisible(true)}
             leadingIcon="warning-outline"
             accessibilityLabel="View risks"
           />
 
-          {/* Full-asset buyout — truthful unavailable state.
-              Spec 03 §10: do not navigate to a Buyout flow that does
-              not exist. Show the capability honestly. */}
-          <CommerceDetailUnavailableInline
-            title="Full-asset buyout"
-            body="Not available"
-            icon="swap-horizontal-outline"
+          {/* ── Documents & audit trail ── */}
+          <View style={styles.dossierSubHeader}>
+            <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
+              Documents & audit trail
+            </Text>
+          </View>
+          <CommerceDetailDisclosureRow
+            label="Full due diligence"
+            summary="Provenance · authentication · audit"
+            onPress={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
+            leadingIcon="document-text-outline"
+            accessibilityLabel="View full due diligence"
           />
 
-          {/* Asset dossier — the single source of appraisal truth.
-              Provenance, condition, storage, and appraisal in one
-              flat panel. No separate valuation card. */}
-          <CoOwnAssetDossier
-            provenance={asset.provenance ? [{ event: 'Acquired', date: asset.updatedAt ?? '' }] : undefined}
-            condition={asset.conditionGrade ? {
-              grade: asset.conditionGrade,
-            } : undefined}
-            storage={asset.custodyInsured ? {
-              location: asset.custodianLocation ?? 'Insured custody',
-              custodian: asset.custodianName ?? 'Custodian',
-              insured: true,
-              policyRef: asset.custodyPolicyRef ?? undefined,
-            } : undefined}
-            appraisal={asset.appraisalValueGbp ? {
-              value: asset.appraisalValueGbp,
-              currency: 'GBP',
-              valuedAt: asset.appraisalValuedAt ?? asset.updatedAt ?? '',
-              method: 'Independent appraisal',
-              valuer: asset.appraisalValuer ?? undefined,
-            } : undefined}
-          />
+          {/* Full-asset buyout — omitted for non-holders (spec P1-B §3).
+              Only shown when the viewer's position makes it relevant. */}
+          {isHolder ? (
+            <CommerceDetailUnavailableInline
+              title="Full-asset buyout"
+              body="Not available"
+              icon="swap-horizontal-outline"
+            />
+          ) : null}
         </CommerceDetailSection>
         ) : null}
 
@@ -1210,7 +1366,7 @@ export default function AssetDetailScreen() {
                   Trading unavailable
                 </Text>
               }
-              subtitle="Complete rights disclosure"
+              subtitle="Rights review required"
               primaryAction={{
                 label: 'Review rights',
                 onPress: () => setRightsSheetVisible(true),
@@ -1871,6 +2027,47 @@ const styles = StyleSheet.create({
   // ── Discovery ──
   recommendationSection: {
     marginTop: Space.lg,
+  },
+  // ── Asset dossier subsection headers (spec P1-B §2) ──
+  // Quiet muted label with a hairline separator above, so each
+  // subsection (Ownership & rights, Valuation, Custody, etc.) reads
+  // as a distinct group without its own card surface.
+  dossierSubHeader: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.md,
+    paddingTop: Space.md,
+  },
+  dossierSubHeaderText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  // ── Market state legend (spec P1-B §4) ──
+  // Clear bid/ask colour key on first use of the depth table.
+  // Restrained semantic dots, no coloured pill per row.
+  marketLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.xs,
+  },
+  marketLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  marketLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  marketLegendText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });
 

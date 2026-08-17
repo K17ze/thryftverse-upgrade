@@ -397,27 +397,28 @@ function buildTimelineEntries(
 // Shown to buyers when status = 'delivered' (not yet 'completed').
 // Presents two clear paths: "Everything is OK" (confirm receipt, releases
 // escrow) or "Report an issue" (opens support with issue categories).
-// Includes a deadline countdown (2-day inspection window from delivery).
-const INSPECTION_WINDOW_DAYS = 2;
+// The inspection deadline is server-derived — the client does not invent
+// a 2-day window. Per P0-4: "The client may format time. It must not
+// invent a deadline that changes rights, money, delivery promise or
+// eligibility."
 
 function InspectionBanner({
-  deliveredAt,
+  inspectionDeadlineAt,
   onConfirmReceipt,
   onReportIssue,
 }: {
-  deliveredAt: string | null;
+  inspectionDeadlineAt: string | null;
   onConfirmReceipt: () => void;
   onReportIssue: () => void;
 }) {
   const { colors } = useAppTheme();
 
   const daysLeft = useMemo(() => {
-    if (!deliveredAt) return null;
-    const delivered = new Date(deliveredAt);
-    if (Number.isNaN(delivered.getTime())) return null;
-    const deadline = new Date(delivered.getTime() + INSPECTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    if (!inspectionDeadlineAt) return null;
+    const deadline = new Date(inspectionDeadlineAt);
+    if (Number.isNaN(deadline.getTime())) return null;
     return Math.ceil((deadline.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-  }, [deliveredAt]);
+  }, [inspectionDeadlineAt]);
 
   const expired = daysLeft != null && daysLeft <= 0;
 
@@ -838,14 +839,17 @@ export default function OrderDetailScreen() {
         : `${snapshot.etaMinDays} day${snapshot.etaMinDays === 1 ? '' : 's'}`)
     : null;
 
-  // Compute estimated delivery date from shippedAt + etaMaxDays
+  // Estimated delivery date is server-derived, not client-invented.
+  // Per P0-4: "The client may format time. It must not invent a deadline
+  // that changes rights, money, delivery promise or eligibility."
+  // The server provides estimatedDeliveryAt; the client only formats it.
   const estimatedDeliveryDate = useMemo(() => {
-    if (!backendOrder?.shippedAt || !snapshot?.etaMaxDays) return null;
-    const shipped = new Date(backendOrder.shippedAt);
-    if (Number.isNaN(shipped.getTime())) return null;
-    const eta = new Date(shipped.getTime() + snapshot.etaMaxDays * 24 * 60 * 60 * 1000);
-    return eta;
-  }, [backendOrder?.shippedAt, snapshot?.etaMaxDays]);
+    const serverEta = (backendOrder as any)?.estimatedDeliveryAt;
+    if (!serverEta) return null;
+    const d = new Date(serverEta);
+    if (Number.isNaN(d.getTime())) return null;
+    return d;
+  }, [(backendOrder as any)?.estimatedDeliveryAt]);
 
   const estimatedDeliveryLabel = estimatedDeliveryDate
     ? estimatedDeliveryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
@@ -1551,7 +1555,7 @@ export default function OrderDetailScreen() {
         {/* 4d. Buyer inspection window — shown when delivered but not yet completed */}
         {isBuyer && normalisedStatus === 'delivered' ? (
           <InspectionBanner
-            deliveredAt={backendOrder?.deliveredAt ?? null}
+            inspectionDeadlineAt={(backendOrder as any)?.inspectionDeadlineAt ?? null}
             onConfirmReceipt={() => {
               haptics.heavyPress();
               Alert.alert(
