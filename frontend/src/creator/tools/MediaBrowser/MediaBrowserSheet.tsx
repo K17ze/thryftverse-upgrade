@@ -56,6 +56,7 @@ import {
   Typography,
   Stroke,
   Control,
+  FontFamily,
 } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -123,11 +124,11 @@ interface MediaAsset {
 
 type MediaTab = 'recents' | 'albums' | 'photos' | 'videos';
 
-const MEDIA_TABS: { key: MediaTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
-  { key: 'recents', label: 'Recents', icon: 'time-outline' },
-  { key: 'albums', label: 'Albums', icon: 'folder-open-outline' },
-  { key: 'photos', label: 'Photos', icon: 'images-outline' },
-  { key: 'videos', label: 'Videos', icon: 'videocam-outline' },
+const MEDIA_TABS: { key: MediaTab; label: string }[] = [
+  { key: 'recents', label: 'Recents' },
+  { key: 'albums', label: 'Albums' },
+  { key: 'photos', label: 'Photos' },
+  { key: 'videos', label: 'Videos' },
 ];
 
 // ── Grid geometry ───────────────────────────────────────────────────
@@ -225,7 +226,7 @@ function MediaGridItem({
         />
         {asset.mediaType === 'video' && (
           <View style={styles.mediaGridVideoBadge}>
-            <Ionicons name="play" size={12} color="#fff" />
+            <Ionicons name="play" size={10} color="#fff" />
             {asset.durationMs != null && (
               <Text style={styles.mediaGridDuration}>
                 {formatDuration(asset.durationMs)}
@@ -234,15 +235,13 @@ function MediaGridItem({
           </View>
         )}
         {isSelected && (
-          <View style={styles.mediaGridSelectedOverlay}>
-            <Reanimated.View
-              style={[styles.mediaGridSelectionBadge, { backgroundColor: colors.brand }, badgeStyle]}
-            >
-              <Text style={[styles.mediaGridSelectionText, { color: colors.textInverse }]}>
-                {selectionOrder}
-              </Text>
-            </Reanimated.View>
-          </View>
+          <Reanimated.View
+            style={[styles.mediaGridSelectionBadge, { backgroundColor: colors.brand }, badgeStyle]}
+          >
+            <Text style={[styles.mediaGridSelectionText, { color: colors.textInverse }]}>
+              {selectionOrder}
+            </Text>
+          </Reanimated.View>
         )}
       </Reanimated.View>
     </Pressable>
@@ -330,13 +329,12 @@ function CameraTile({ onPress, colors, styles }: CameraTileProps) {
   return (
     <PressScale
       onPress={onPress}
-      style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
+      style={[styles.mediaGridCell, styles.cameraTile, { backgroundColor: colors.brandSubtle }]}
       accessibilityLabel="Take photo with camera"
       accessibilityHint="Opens the camera to capture a new photo"
       hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
     >
-      <Ionicons name="camera-outline" size={28} color={colors.textPrimary} />
-      <Text style={[styles.cameraTileLabel, { color: colors.textSecondary }]}>Camera</Text>
+      <Ionicons name="camera-outline" size={32} color={colors.brand} />
     </PressScale>
   );
 }
@@ -423,6 +421,73 @@ const previewStyles = StyleSheet.create({
   },
 });
 
+// ── AlbumRow — loads its own cover thumbnail (first asset in album) ──
+
+interface AlbumRowProps {
+  album: MediaLibrary.Album;
+  isActive: boolean;
+  onSelect: (albumId: string | null) => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}
+
+function AlbumRow({ album, isActive, onSelect, colors, styles }: AlbumRowProps) {
+  const [coverUri, setCoverUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    MediaLibrary.getAssetsAsync({ album: album.id, first: 1, mediaType: ['photo', 'video'] })
+      .then((result) => {
+        if (!cancelled && result.assets[0]) {
+          setCoverUri(result.assets[0].uri);
+        }
+      })
+      .catch(() => {
+        // Cover is optional — placeholder will render.
+      });
+    return () => { cancelled = true; };
+  }, [album.id]);
+
+  return (
+    <Pressable
+      style={styles.albumRow}
+      onPress={() => onSelect(album.id)}
+      accessibilityLabel={`${album.title} album, ${album.assetCount} items`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
+    >
+      <View style={[styles.albumThumb, { backgroundColor: colors.surfaceAlt }]}>
+        {coverUri ? (
+          <Image
+            source={{ uri: coverUri }}
+            style={styles.albumThumbImage}
+            contentFit="cover"
+            transition={120}
+            recyclingKey={album.id}
+          />
+        ) : (
+          <Ionicons name="images-outline" size={20} color={colors.textMuted} />
+        )}
+      </View>
+      <View style={styles.albumRowTextCol}>
+        <Text
+          style={[
+            styles.albumRowText,
+            { color: isActive ? colors.brand : colors.textPrimary },
+          ]}
+          numberOfLines={1}
+        >
+          {album.title}
+        </Text>
+        <Text style={[styles.albumRowSubtext, { color: colors.textMuted }]}>
+          {album.assetCount} items
+        </Text>
+      </View>
+      {isActive && <Ionicons name="checkmark" size={18} color={colors.brand} />}
+    </Pressable>
+  );
+}
+
 // ── AlbumListView — shown when "Albums" tab is active ───────────────
 
 interface AlbumListViewProps {
@@ -454,48 +519,39 @@ function AlbumListView({
   return (
     <ScrollView style={styles.albumList} contentContainerStyle={styles.albumListContent}>
       <Pressable
-        style={[styles.albumRow, activeAlbumId === null && { backgroundColor: colors.brandSubtle }]}
+        style={styles.albumRow}
         onPress={() => onSelectAlbum(null)}
         accessibilityLabel="All Photos album"
         accessibilityRole="button"
         accessibilityState={{ selected: activeAlbumId === null }}
       >
-        <View style={[styles.albumIcon, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons name="images-outline" size={20} color={colors.textSecondary} />
+        <View style={[styles.albumThumb, { backgroundColor: colors.brandSubtle }]}>
+          <Ionicons name="images-outline" size={20} color={colors.brand} />
         </View>
-        <Text
-          style={[
-            styles.albumRowText,
-            { color: activeAlbumId === null ? colors.brand : colors.textPrimary },
-          ]}
-        >
-          All Photos
-        </Text>
-        {activeAlbumId === null && <Ionicons name="checkmark" size={16} color={colors.brand} />}
-      </Pressable>
-      {albums.slice(0, 30).map((album) => (
-        <Pressable
-          key={album.id}
-          style={[styles.albumRow, activeAlbumId === album.id && { backgroundColor: colors.brandSubtle }]}
-          onPress={() => onSelectAlbum(album.id)}
-          accessibilityLabel={`${album.title} album`}
-          accessibilityRole="button"
-          accessibilityState={{ selected: activeAlbumId === album.id }}
-        >
-          <View style={[styles.albumIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="folder-outline" size={20} color={colors.textSecondary} />
-          </View>
+        <View style={styles.albumRowTextCol}>
           <Text
             style={[
               styles.albumRowText,
-              { color: activeAlbumId === album.id ? colors.brand : colors.textPrimary },
+              { color: activeAlbumId === null ? colors.brand : colors.textPrimary },
             ]}
-            numberOfLines={1}
           >
-            {album.title}
+            All Photos
           </Text>
-          {activeAlbumId === album.id && <Ionicons name="checkmark" size={16} color={colors.brand} />}
-        </Pressable>
+          <Text style={[styles.albumRowSubtext, { color: colors.textMuted }]}>
+            Everything in your library
+          </Text>
+        </View>
+        {activeAlbumId === null && <Ionicons name="checkmark" size={18} color={colors.brand} />}
+      </Pressable>
+      {albums.slice(0, 30).map((album) => (
+        <AlbumRow
+          key={album.id}
+          album={album}
+          isActive={activeAlbumId === album.id}
+          onSelect={onSelectAlbum}
+          colors={colors}
+          styles={styles}
+        />
       ))}
     </ScrollView>
   );
@@ -934,15 +990,10 @@ export function MediaBrowserSheet({
                 accessibilityState={{ selected: active }}
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
               >
-                <Ionicons
-                  name={tab.icon}
-                  size={16}
-                  color={active ? colors.textInverse : colors.textSecondary}
-                />
                 <Text
                   style={[
                     styles.tabLabel,
-                    { color: active ? colors.textInverse : colors.textSecondary },
+                    { color: active ? colors.textPrimary : colors.textSecondary },
                   ]}
                 >
                   {tab.label}
@@ -993,7 +1044,7 @@ export function MediaBrowserSheet({
             {/* Limited-access banner (iOS 14+ / Android 14+) */}
             {status.accessPrivileges === 'limited' && (
               <Pressable
-                style={[styles.limitedBanner, { borderColor: colors.border }]}
+                style={[styles.limitedBanner, { backgroundColor: colors.surfaceAlt }]}
                 onPress={async () => {
                   try {
                     await MediaLibrary.presentPermissionsPickerAsync();
@@ -1005,7 +1056,7 @@ export function MediaBrowserSheet({
                 accessibilityLabel="Limited photo access — tap to select more photos"
                 accessibilityRole="button"
               >
-                <Ionicons name="images-outline" size={16} color={colors.textSecondary} />
+                <Ionicons name="images-outline" size={18} color={colors.textSecondary} />
                 <Text style={[styles.limitedBannerText, { color: colors.textSecondary }]}>
                   Limited access — tap to add more photos
                 </Text>
@@ -1062,6 +1113,11 @@ export function MediaBrowserSheet({
             >
               {selectedCount > 0 ? `Add ${selectedCount}` : 'Add'}
             </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={selectedCount > 0 ? colors.textInverse : colors.textMuted}
+            />
           </PressScale>
         </View>
       </SheetContainer>
@@ -1086,7 +1142,7 @@ function createStyles(colors: ThemeColors) {
     },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
+      fontSize: Type.title.size,
       color: colors.textPrimary,
       flex: 1,
     },
@@ -1119,30 +1175,26 @@ function createStyles(colors: ThemeColors) {
     tabRow: {
       flexDirection: 'row',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
       position: 'relative',
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
     tabIndicator: {
       position: 'absolute',
-      top: Space.xs,
       bottom: 0,
-      borderRadius: Radius.md,
-      height: 36,
+      height: Stroke.emphasis,
+      borderRadius: Stroke.emphasis,
     },
     tab: {
       flex: 1,
-      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.xs,
-      paddingVertical: Space.sm,
+      paddingVertical: Space.smMd,
       zIndex: 1,
     },
     tabLabel: {
-      fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
+      fontFamily: Typography.family.semibold,
+      fontSize: Type.bodyEmphasis.size,
     },
 
     // ── Album list ──
@@ -1156,41 +1208,51 @@ function createStyles(colors: ThemeColors) {
     albumRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.smMd,
-      minHeight: 48,
-      borderRadius: Radius.md,
+      gap: Space.smMd,
+      paddingVertical: Space.xs,
+      minHeight: 56,
     },
-    albumIcon: {
-      width: 40,
-      height: 40,
+    albumThumb: {
+      width: 48,
+      height: 48,
       borderRadius: Radius.md,
       alignItems: 'center',
       justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    albumThumbImage: {
+      width: '100%',
+      height: '100%',
+    },
+    albumRowTextCol: {
+      flex: 1,
+      flexDirection: 'column',
+      gap: 1,
     },
     albumRowText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-      flex: 1,
+      fontSize: Type.bodyEmphasis.size,
+    },
+    albumRowSubtext: {
+      fontFamily: Typography.family.regular,
+      fontSize: Type.caption.size,
     },
 
     // ── Limited-access banner ──
     limitedBanner: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
+      gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderWidth: StyleSheet.hairlineWidth,
+      paddingVertical: Space.smMd,
       marginHorizontal: Space.md,
       marginBottom: Space.sm,
-      borderRadius: Radius.sm,
+      borderRadius: Radius.md,
     },
     limitedBannerText: {
       flex: 1,
-      fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontFamily: Typography.family.medium,
+      fontSize: Type.captionElevated.size,
     },
 
     // ── Media grid ──
@@ -1211,9 +1273,9 @@ function createStyles(colors: ThemeColors) {
       width: '100%',
       height: '100%',
     },
-    cameraTileLabel: {
-      fontFamily: Typography.family.medium,
-      fontSize: Type.meta.size,
+    cameraTile: {
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     mediaGridVideoBadge: {
       position: 'absolute',
@@ -1222,37 +1284,34 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 2,
-      backgroundColor: 'rgba(0,0,0,0.55)',
-      paddingHorizontal: Space.xs,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: Radius.sm,
     },
     mediaGridDuration: {
       color: '#fff',
       fontSize: 10,
-      fontFamily: Typography.family.medium,
-    },
-    mediaGridSelectedOverlay: {
-      ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.2)',
-      borderRadius: Radius.md,
-      justifyContent: 'center',
-      alignItems: 'center',
+      fontFamily: Typography.family.semibold,
+      letterSpacing: 0.2,
     },
     mediaGridSelectionBadge: {
-      width: 24,
-      height: 24,
+      position: 'absolute',
+      top: Space.xs,
+      right: Space.xs,
+      width: 20,
+      height: 20,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.25,
+      shadowOpacity: 0.3,
       shadowRadius: 3,
       elevation: 3,
     },
     mediaGridSelectionText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: 11,
       fontFamily: Typography.family.bold,
     },
     gridFooter: {
@@ -1302,13 +1361,15 @@ function createStyles(colors: ThemeColors) {
       borderTopWidth: StyleSheet.hairlineWidth,
     },
     confirmBtn: {
-      height: 48,
-      borderRadius: Radius.md,
+      height: 50,
+      borderRadius: Radius.lg,
+      flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
+      gap: Space.xxs,
     },
     confirmBtnText: {
-      fontFamily: Typography.family.semibold,
+      fontFamily: FontFamily.semibold,
       fontSize: Type.bodyEmphasis.size,
     },
   });

@@ -97,8 +97,9 @@ export const ToolButton = React.memo(function ToolButton({
     transform: [{ scale: toolScale.value }],
   }));
 
-  // Inactive tools: 0.6 opacity (per spec). Active/danger tools: full opacity.
-  const containerOpacity = isActive || tool.danger ? 1 : 0.6;
+  // Inactive tools: 0.75 opacity — clearly visible but hierarchically below
+  // primary tools. Active/danger tools: full opacity.
+  const containerOpacity = isActive || tool.danger ? 1 : 0.75;
 
   return (
     <PressScale
@@ -120,7 +121,7 @@ export const ToolButton = React.memo(function ToolButton({
       <GradientRing
         isActive={isActive}
         size={size + 6}
-        strokeWidth={3}
+        strokeWidth={2.5}
         borderRadius={(size + 6) / 2}
         style={styles.ringContainer}
       />
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: 6,
     borderRadius: Radius.full,
-    gap: 4,
+    gap: 6,
   },
   toolIconWrap: {
     alignItems: 'center',
@@ -191,15 +192,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ── Label typography ──
+  // 10.5pt is the flagship band for primary navigation controls (Instagram
+  // ~11pt, CapCut ~10-11pt). No letterSpacing at this size — it compresses
+  // legibility. Secondary tools use medium weight; primary tools use semibold
+  // for hierarchy.
   toolLabel: {
-    fontSize: 9,
+    fontSize: 10.5,
     fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
     marginTop: 2,
   },
   toolLabelPrimary: {
     fontFamily: Typography.family.semibold,
-    fontSize: 9.5,
+    fontSize: 10.5,
   },
 });
 

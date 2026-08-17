@@ -19,6 +19,26 @@ import { MediaBrowserSheet, type SelectedAsset } from './tools/MediaBrowser';
 import { CreatorDraftService, type DraftMeta } from './drafts';
 import { useHaptic } from '../hooks/useHaptic';
 
+// ── Relative time formatter for draft "Last edited" timestamps ────────
+// Compact, human wording. Falls back to a localized date for old entries.
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '';
+  const now = Date.now();
+  const diffMs = now - then;
+  const sec = Math.round(diffMs / 1000);
+  if (sec < 60) return 'just now';
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.round(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  const wk = Math.round(day / 7);
+  if (wk < 5) return `${wk}w ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
 // ── Creator Entry Screen (camera-root) ────────────────────────────────
 // Per the human-flow reconstruction spec: "Creation is a continuous state,
 // not a wizard." The camera is the ROOT creator state — the first and only
@@ -173,7 +193,9 @@ export function CreatorEntryScreen({
       />
 
       {/* "Aa" text-mode button — Instagram "Create" pattern, top-right.
-          Stays as a small top-right button on the camera. */}
+          Stays as a small top-right button on the camera. Refined chrome:
+          subtle dark fill + hairline border for definition over bright
+          previews, semibold "Aa" glyph for a premium affordance. */}
       <Pressable
         style={[styles.textModeBtn, { top: insets.top + 8, right: 12 }]}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -187,7 +209,8 @@ export function CreatorEntryScreen({
 
       {/* Drafts button — small affordance in the camera top bar, next to
           close (top-left). Only shown when draft resumption is supported
-          and drafts exist. Not a prominent section. */}
+          and drafts exist. Not a prominent section. A subtle brand-color
+          dot signals there is something to resume. */}
       {hasDrafts && (
         <Pressable
           style={[styles.draftsBtn, { top: insets.top + 8, left: 60 }]}
@@ -198,6 +221,7 @@ export function CreatorEntryScreen({
           accessibilityRole="button"
         >
           <Ionicons name="documents-outline" size={22} color="#fff" />
+          <View style={styles.draftsBadge} />
         </Pressable>
       )}
 
@@ -238,7 +262,7 @@ export function CreatorEntryScreen({
           showsVerticalScrollIndicator={false}
         >
           {drafts.length === 0 ? (
-            <Text style={styles.draftsEmpty}>No drafts yet.</Text>
+            <Text style={styles.draftsEmpty}>No drafts yet</Text>
           ) : (
             <View style={styles.draftsGrid}>
               {drafts.map((draft) => (
@@ -259,14 +283,19 @@ export function CreatorEntryScreen({
                     <View style={[styles.draftThumb, styles.draftThumbPlaceholder]}>
                       <Ionicons
                         name={draft.type === 'poster' ? 'film-outline' : 'square-outline'}
-                        size={24}
-                        color="rgba(255,255,255,0.3)"
+                        size={32}
+                        color="rgba(255,255,255,0.2)"
                       />
                     </View>
                   )}
                   <Text style={styles.draftTitle} numberOfLines={1}>
                     {draft.title}
                   </Text>
+                  {draft.updatedAt ? (
+                    <Text style={styles.draftTimestamp} numberOfLines={1}>
+                      Last edited {formatRelativeTime(draft.updatedAt)}
+                    </Text>
+                  ) : null}
                 </PressScale>
               ))}
             </View>
@@ -285,33 +314,52 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
 
-  // Camera view — "Aa" text-mode button (Instagram "Create" pattern)
+  // Camera view — "Aa" text-mode button (Instagram "Create" pattern).
+  // Refined chrome: subtle dark fill + hairline white/10 border for
+  // definition over bright previews. 44pt hit target, visible glyph only.
   textModeBtn: {
     position: 'absolute',
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 20,
   },
   textModeBtnLabel: {
     color: '#fff',
-    fontSize: 16,
-    fontFamily: Typography.family.bold,
+    fontSize: 17,
+    fontFamily: Typography.family.semibold,
   },
 
-  // Drafts button — small affordance in the camera top bar
+  // Drafts button — small affordance in the camera top bar.
+  // Same chrome treatment as the Aa button for consistent overlay controls.
   draftsBtn: {
     position: 'absolute',
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 20,
+  },
+  // Subtle brand-color dot — signals "there is something to resume".
+  draftsBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 7,
+    height: 7,
+    borderRadius: Radius.full,
+    backgroundColor: '#F4F0E8',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.4)',
   },
 
   // Drafts sheet
@@ -341,32 +389,43 @@ const styles = StyleSheet.create({
   draftsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
+    gap: Space.md,
     paddingHorizontal: Space.lg,
   },
   draftCard: {
-    width: 120,
+    width: 140,
     gap: Space.xs,
   },
   draftThumb: {
-    width: 120,
-    height: 150,
+    width: 140,
+    height: 175,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   draftThumbPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 0,
   },
   draftTitle: {
     fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.medium,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  draftTimestamp: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.4)',
   },
   draftsEmpty: {
     textAlign: 'center',
     paddingTop: Space.xl,
     fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.5)',
   },

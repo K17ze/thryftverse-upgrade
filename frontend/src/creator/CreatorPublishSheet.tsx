@@ -7,7 +7,6 @@ import {
   ScrollView,
   TextInput,
   Switch,
-  ActivityIndicator,
   LayoutAnimation,
   Platform,
   AppState,
@@ -24,7 +23,7 @@ import Reanimated, {
   useReducedMotion,
   Easing,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Elevation, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
@@ -499,7 +498,6 @@ interface SharingStateViewProps {
 function SharingStateView({
   colors,
   styles,
-  reduceMotion,
   progressAnimatedStyle,
   stage,
   uploadedBytes,
@@ -526,9 +524,6 @@ function SharingStateView({
         <Text style={localStyles.progressByteLabel}>
           {formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}
         </Text>
-      )}
-      {!reduceMotion && (
-        <ActivityIndicator size="small" color={colors.brand} style={{ marginTop: Space.sm }} />
       )}
     </View>
   );
@@ -993,8 +988,18 @@ function PublishReview({
         </View>
       )}
 
-      {/* Actions — Save as Draft + Publish */}
+      {/* Actions — Publish (primary) + Save draft (quiet secondary) */}
       <View style={styles.actionRow}>
+        <PressScale
+          onPress={handlePublishWithValidation}
+          style={styles.publishBtn}
+          accessibilityLabel={document.metadata.scheduledFor ? 'Schedule post' : 'Publish now'}
+          accessibilityHint={document.metadata.scheduledFor ? 'Schedules the post for the selected date' : 'Publishes the content immediately'}
+          scale={0.97}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+        >
+          <Text style={styles.publishBtnText}>{document.metadata.scheduledFor ? 'Schedule' : 'Publish now'}</Text>
+        </PressScale>
         <PressScale
           onPress={handleSaveDraft}
           style={styles.draftBtn}
@@ -1005,16 +1010,6 @@ function PublishReview({
         >
           <Ionicons name="save-outline" size={18} color={colors.textSecondary} />
           <Text style={styles.draftBtnText}>Save draft</Text>
-        </PressScale>
-        <PressScale
-          onPress={handlePublishWithValidation}
-          style={styles.publishBtn}
-          accessibilityLabel={document.metadata.scheduledFor ? 'Schedule post' : 'Publish now'}
-          accessibilityHint={document.metadata.scheduledFor ? 'Schedules the post for the selected date' : 'Publishes the content immediately'}
-          scale={0.96}
-          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-        >
-          <Text style={styles.publishBtnText}>{document.metadata.scheduledFor ? 'Schedule' : 'Publish now'}</Text>
         </PressScale>
       </View>
     </ScrollView>
@@ -1061,6 +1056,11 @@ function createStyles(colors: ThemeColorsType) {
     },
     previewPageWrapper: {
       marginHorizontal: Space.md,
+      borderRadius: Radius.lg,
+      overflow: 'hidden',
+      borderWidth: Stroke.standard,
+      borderColor: colors.borderSubtle,
+      ...Elevation.subtle,
     },
     sectionLabel: {
       fontFamily: Typography.family.semibold,
@@ -1080,19 +1080,21 @@ function createStyles(colors: ThemeColorsType) {
       minHeight: 60,
     },
     captionCard: {
-      backgroundColor: colors.surface,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
       borderRadius: Radius.lg,
       padding: Space.md,
-      borderWidth: 1,
-      borderColor: 'transparent',
+      backgroundColor: colors.background,
     },
     captionCardError: {
       borderColor: colors.danger,
     },
     captionInput: {
       fontSize: Type.body.size,
+      fontFamily: Typography.family.regular,
+      lineHeight: Type.body.lineHeight,
       color: colors.textPrimary,
-      minHeight: 80,
+      minHeight: 84,
       textAlignVertical: 'top',
       padding: 0,
     },
@@ -1118,6 +1120,7 @@ function createStyles(colors: ThemeColorsType) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      paddingVertical: Space.smMd,
     },
     toggleLabel: {
       fontFamily: Typography.family.medium,
@@ -1133,24 +1136,22 @@ function createStyles(colors: ThemeColorsType) {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      padding: Space.md,
+      paddingVertical: Space.smMd,
     },
     // ── Audience segmented control ──
     audienceSegmented: {
       flexDirection: 'row',
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.lg,
-      padding: 4,
+      padding: Space.xs,
       marginBottom: Space.sm,
       position: 'relative',
     },
     audienceSegmentIndicator: {
       position: 'absolute',
-      top: 4,
-      bottom: 4,
-      left: 4,
+      top: Space.xs,
+      bottom: Space.xs,
+      left: Space.xs,
       width: '33.33%',
       backgroundColor: colors.brand,
       borderRadius: Radius.md,
@@ -1160,7 +1161,7 @@ function createStyles(colors: ThemeColorsType) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
+      gap: Space.xs,
       paddingVertical: Space.sm,
       zIndex: 1,
     },
@@ -1185,19 +1186,15 @@ function createStyles(colors: ThemeColorsType) {
     },
     coverContainer: {
       paddingHorizontal: Space.md,
-      gap: 10,
+      gap: Space.sm,
       paddingBottom: Space.xs,
     },
     coverThumbWrap: {
       borderRadius: Radius.lg,
       overflow: 'hidden',
-      borderWidth: 2,
+      borderWidth: Stroke.emphasis,
       borderColor: 'transparent',
-      elevation: 2,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.08,
-      shadowRadius: 4,
+      ...Elevation.subtle,
     },
     coverThumbActive: {
       borderColor: colors.brand,
@@ -1220,11 +1217,11 @@ function createStyles(colors: ThemeColorsType) {
     schedulePill: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: Space.xs,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
     },
     schedulePillActive: {
@@ -1249,19 +1246,16 @@ function createStyles(colors: ThemeColorsType) {
       color: colors.textPrimary,
     },
     actionRow: {
-      flexDirection: 'row',
       gap: Space.sm,
-      marginTop: Space.md,
+      marginTop: Space.lg,
     },
     draftBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: Space.md,
+      justifyContent: 'center',
+      gap: Space.xs,
       height: 44,
       borderRadius: Radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
     },
     draftBtnText: {
       fontFamily: Typography.family.medium,
@@ -1269,8 +1263,8 @@ function createStyles(colors: ThemeColorsType) {
       color: colors.textSecondary,
     },
     publishBtn: {
-      flex: 1,
-      height: 44,
+      width: '100%',
+      height: 50,
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       justifyContent: 'center',
@@ -1279,7 +1273,8 @@ function createStyles(colors: ThemeColorsType) {
     publishBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
+      fontSize: Type.bodyEmphasis.size,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
     },
     centerState: {
       alignItems: 'center',
@@ -1297,20 +1292,18 @@ function createStyles(colors: ThemeColorsType) {
       color: colors.textSecondary,
       textAlign: 'center',
     },
-    // ── Progress bar ──
+    // ── Progress bar — calm, thin, full-width ──
     progressBarTrack: {
-      width: '80%',
-      height: 24,
-      borderRadius: Radius.lg,
+      width: '100%',
+      height: 4,
+      borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       overflow: 'hidden',
-      marginTop: Space.xs,
-      justifyContent: 'center',
-      position: 'relative',
+      marginTop: Space.sm,
     },
     progressBarFillContainer: {
       height: '100%',
-      borderRadius: Radius.lg,
+      borderRadius: Radius.full,
       overflow: 'hidden',
     },
     progressBarGradient: {
@@ -1334,8 +1327,8 @@ function createStyles(colors: ThemeColorsType) {
     retryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: Space.md + 4,
-      height: 40,
+      paddingHorizontal: Space.lg,
+      height: 44,
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       justifyContent: 'center',
@@ -1353,14 +1346,14 @@ function createStyles(colors: ThemeColorsType) {
       color: colors.textPrimary,
     },
     successBtnGroup: {
-      width: '80%',
+      width: '100%',
       gap: Space.sm,
-      marginTop: Space.sm,
+      marginTop: Space.md,
     },
     viewBtn: {
       width: '100%',
-      paddingVertical: Space.md,
-      borderRadius: Radius.lg,
+      height: 50,
+      borderRadius: Radius.md,
       backgroundColor: colors.brand,
       justifyContent: 'center',
       alignItems: 'center',
@@ -1368,17 +1361,18 @@ function createStyles(colors: ThemeColorsType) {
     viewBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
+      fontSize: Type.bodyEmphasis.size,
+      letterSpacing: Type.bodyEmphasis.letterSpacing,
     },
     createBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
+      gap: Space.xs,
       width: '100%',
-      paddingVertical: Space.md,
-      borderRadius: Radius.lg,
-      borderWidth: 1,
+      height: 44,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard,
       borderColor: colors.brand,
     },
     createBtnText: {

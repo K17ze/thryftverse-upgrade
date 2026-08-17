@@ -1,28 +1,55 @@
-fix(creator): restore proper camera chrome layout — Flash top-right, Flip bottom-right
+feat(creator): flagship visual quality pass — upload department (media browser, tool dock, publish sheet, entry)
 
-The HFR spec requires the default camera chrome to show:
-  Close · Flash · Gallery · Shutter · Flip · Mode switch · minimal Zoom
+Upgrades the creator upload/publish department from generic component-library
+quality to flagship 2026 product quality. Four surfaces rebuilt in parallel:
 
-The previous implementation placed Flash and Flip on a small vertical
-right rail (22pt icons with tiny labels), which:
-  - buried Flip in a low-prominence rail instead of the bottom bar
-  - put Flash in the wrong location (right rail, not top bar)
-  - used a bottom spacer where Flip should have been
-  - did not match the spec's canonical camera layout
+MediaBrowserSheet (gallery picker):
+- Tab bar: removed pill indicator + icons → text-only tabs with 2pt spring-
+  animated underline (Instagram/Apple Photos pattern)
+- Album list: replaced grey folder squares with real album cover thumbnails
+  (48×48 rounded), asset-count subtitles, brand-color selection state
+- Camera tile: 32pt brand-tinted icon on brandSubtle bg, no text label
+- Selection state: removed heavy dark overlay → clean 2pt brand ring + 20pt
+  corner order badge with shadow
+- Confirm button: 50pt height, Radius.lg, text + chevron-forward, semibold
+- Limited access banner: removed border, surfaceAlt bg, refined typography
+- Video badge: 10pt play icon, lighter bg, semibold duration
+- Header: title upgraded to Type.title.size
 
-This commit:
-  - Moves Flash to the top bar (right side, next to Tools) with an
-    active-state background so the user can read the toggle at a glance
-  - Moves Flip to the bottom bar (right side, next to shutter) as a
-    prominent 48pt circular button with a subtle dark backdrop
-  - Removes the ControlsRail vertical rail entirely (no longer needed)
-  - Removes the now-unused ControlsRail import
-  - Updates the header comment to reflect the new layout
+CreatorToolDock + ToolButton (bottom tool dock):
+- Label size: 9pt → 10.5pt (flagship navigation band)
+- Label typography: removed letterSpacing, semibold for primary, medium for
+  secondary — hierarchy via weight not size
+- Icon↔label gap: 4 → 6 (better breathing room)
+- Inactive opacity: 0.6 → 0.75 (no longer looks disabled)
+- Gradient ring: strokeWidth 3 → 2.5 (gentle highlight)
+- Primary tool: 44pt → 46pt, secondary: 36pt → 40pt
+- Secondary icon: 20pt → 22pt (optical balance)
+- Label color: textMuted → textSecondary (better contrast)
+- Dock padding: Space.sm → Space.md (premium feel)
+- Group divider: hairline width, 20pt height (subtle separator)
+- Expand toggle: 36pt → 44pt hit target
 
-The camera now matches the spec's canonical layout:
-  Top:    [×]                    [⚡] [⋯]
-  Bottom: [gallery]       ◎       [flip]
-  Below:        Look  Poster  Search
+CreatorPublishSheet (publish/upload flow):
+- Preview area: rounded corners, 1pt border, subtle elevation shadow
+- Caption input: clean 1pt border field, proper padding, explicit typography
+- Publish button: full-width 50pt, brand color, semibold bodyEmphasis —
+  dominates the bottom; Save draft is now a quiet secondary action below
+- Upload progress: removed ActivityIndicator, 4px thin full-width track
+  with Radius.full pill ends — calm, not alarming
+- Toggle rows: flattened — removed inconsistent card backgrounds
+- Spacing: all inline magic numbers → design tokens
+- Success buttons: 50pt primary, 44pt secondary, full-width group
+
+CreatorEntryScreen (camera entry polish):
+- "Aa" button: rgba(0,0,0,0.4) + 1pt white/10 border, 17pt semibold
+- Drafts button: consistent chrome + brand-color dot badge when drafts exist
+- Draft cards: 120×150 → 140×175, subtle border on thumbnails, softer
+  placeholder (32pt centered icon, no dark grey box)
+- Draft title: medium weight, 0.85 opacity
+- "Last edited" timestamp: relative time helper, meta size, recedes
+- Empty state: "No drafts yet" — no decorative elements
+- All overlay controls: consistent rgba(0,0,0,0.4) + border treatment
 
 Generated with [Devin](https://devin.ai)
 

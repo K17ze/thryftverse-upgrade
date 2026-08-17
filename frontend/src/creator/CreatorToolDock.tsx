@@ -170,18 +170,18 @@ export function CreatorToolDock({
   }, []);
 
   // ── Mode-aware visual hierarchy ────────────────────────────────────
-  // Instagram-style: primary tools are larger (44pt) with filled backgrounds
-  // and gradient rings; secondary tools are smaller (36pt), transparent.
+  // Instagram-style: primary tools are larger (46pt) with filled backgrounds
+  // and gradient rings; secondary tools are smaller (40pt), transparent.
   // Selection mode collapses to a single compact tier (44pt).
-  const primarySize = 44;
-  const secondarySize = 36;
+  const primarySize = 46;
+  const secondarySize = 40;
   const selectionSize = 44;
   const primaryIconSize = 24;
-  const secondaryIconSize = 20;
+  const secondaryIconSize = 22;
   const selectionIconSize = 22;
   const toolGap = isSelectionMode ? Space.xs : Space.sm;
 
-  const labelColor = colors.textMuted;
+  const labelColor = colors.textSecondary;
   const dangerIconColor = colors.danger;
   const dangerLabelColor = colors.danger;
 
@@ -269,8 +269,11 @@ export function CreatorToolDock({
         {primaryTools.map(renderTool)}
         {showSecondaryToggle && (
           <>
+            {/* Subtle visual separator between primary and secondary groups —
+                a short hairline, not a full divider line. */}
             <View style={[styles.groupDivider, { backgroundColor: floating ? colors.glassBorder : colors.border }]} />
-            {/* Expand/collapse toggle for secondary tools */}
+            {/* Expand/collapse toggle for secondary tools — refined chevron
+                with a generous 44pt hit area showing only a 20pt glyph. */}
             <PressScale
               onPress={toggleSecondary}
               style={styles.expandToggle}
@@ -311,7 +314,7 @@ export function CreatorToolDock({
           : {
               backgroundColor: colors.surface,
               borderTopColor: colors.border,
-              paddingTop: Space.sm,
+              paddingTop: Space.md,
               paddingBottom: Math.max(insets.bottom, Space.sm),
             },
         dockStyle,
@@ -601,9 +604,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs,
   },
   // ── Expand/collapse toggle for secondary tools ──
+  // 44pt hit target showing only a 20pt chevron — transparent by default
+  // per the containment rule (ordinary controls default to transparent).
   expandToggle: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.full,
@@ -620,10 +625,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
   },
-  // Thin vertical divider between primary and secondary tool groups.
+  // Subtle vertical separator between primary and secondary tool groups —
+  // a short hairline (20pt tall) rather than a full-height divider line.
   groupDivider: {
-    width: 1,
-    height: 24,
+    width: StyleSheet.hairlineWidth,
+    height: 20,
     marginHorizontal: Space.xs,
   },
   // Long-press tooltip label — centered below the dock (legacy fallback).
