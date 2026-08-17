@@ -110,7 +110,7 @@ type ItemDetailRoute = RouteProp<RootStackParamList, 'ItemDetail'>;
 type ItemDetailNav = NativeStackNavigationProp<RootStackParamList>;
 
 // ───────────────────────────────────────────────────────────────────────────
-// Image pagination dots — iOS Photos pattern.
+// Image pagination dots.
 // A row of dots below the carousel; the active dot stretches into a pill.
 // A single spring-driven SharedValue (activeIndex) interpolates each dot's
 // width so the pill stretch feels physical, not snapped.
@@ -339,7 +339,7 @@ export default function ItemDetailScreen() {
   // ── Image pagination ──
   // Spring-driven active index. The integer page comes from the media
   // stage's onViewableItemsChanged; we spring the float so each dot's
-  // width interpolates smoothly (iOS Photos pill-stretch pattern).
+  // width interpolates smoothly.
   const paginationIndex = useSharedValue(0);
 
   // ── Swipe-to-dismiss ──
@@ -756,7 +756,7 @@ export default function ItemDetailScreen() {
 
       {/* ── Collapsed scrolling header ──
           Quiet glyph hit targets, no large rounded-square containers.
-          Spec 02 shape system: separate hit area from visible shape.
+          Separate hit area from visible shape.
           Wrapped in a chrome-fade layer so the header recedes as the
           swipe-to-dismiss drag progresses. */}
       <Reanimated.View style={dismissChromeStyle}>
@@ -792,8 +792,7 @@ export default function ItemDetailScreen() {
         {/* ── Zone A — Media stage ──
             CommerceMediaStage handles paging/zoom/fullscreen only.
             CommerceDetailMediaRail overlays the max-3-visible-controls
-            (Back, Share, Save) + overflow (Fav, Watch, Report).
-            Spec 02 §A + spec 05 §1. */}
+            (Back, Share, Save) + overflow (Fav, Watch, Report). */}
         <CommerceMediaStage
           images={item.images}
           objectId={item.id}
@@ -854,16 +853,10 @@ export default function ItemDetailScreen() {
           showOverflow
         />
 
-        {/* ── Image pagination — iOS Photos pattern ──
-            A row of dots below the carousel; the active dot stretches
-            into a pill (6pt → 20pt) driven by a single spring. A "1 of N"
-            counter sits beside the dots for precise orientation. Only
-            rendered when there is more than one image. */}
         {/* ── Image pagination ──
-            iOS Photos pattern. For short galleries (≤5): dots only.
+            For short galleries (≤5): dots only.
             For long galleries (>5): `n / total` counter only.
-            Per spec 10 §2: "don't show dots + counter + thumbnails
-            simultaneously on phone." */}
+            Dots, counter and thumbnails are never shown simultaneously. */}
         {item.images && item.images.length > 1 && (
           item.images.length <= 5 ? (
             <PaginationDots
@@ -1028,7 +1021,7 @@ export default function ItemDetailScreen() {
 
         {/* ── Zone D — Description (progressive disclosure) ──
             Description + condition + category evidence + posted date.
-            Moved to cognitive layer 4: after trust facts, before shipping. */}
+            Sits after trust facts, before shipping. */}
         <CommerceDetailSection label="Item details" divider variant="editorial">
           {item.description ? (
             <View style={styles.descriptionWrap}>
@@ -1186,11 +1179,11 @@ export default function ItemDetailScreen() {
         </CommerceDetailSection>
 
         {/* ── Zone E — Seller row (compact, links to profile) ──
-            Per Phase 5 WP8: seller identity restored to the second viewport
-            (after description, before shipping). The buyer sees media,
-            identity, trust facts, description, then the seller — before
-            shipping and similar items. This is the evidence role: source
-            credibility immediately after the item evidence.
+            Seller identity sits in the second viewport (after description,
+            before shipping). The buyer sees media, identity, trust facts,
+            description, then the seller — before shipping and similar
+            items. This is the evidence role: source credibility immediately
+            after the item evidence.
             The seller section closes with a "More from this seller" rail. */}
         {seller && (
           <View style={[styles.sellerTrustSection, { borderTopColor: colors.borderSubtle }]}>
@@ -1282,7 +1275,7 @@ export default function ItemDetailScreen() {
         {/* ── Zone F — Shipping & returns (collapsed by default) ──
             Full commerce details: costs, delivery, protection, returns,
             authenticity. Progressive disclosure — summary visible, details
-            expand on tap. Moved to cognitive layer 6 (after seller). */}
+            expand on tap. Sits after the seller. */}
         {purchaseSummary ? (
           <CommerceDetailSection label="Buying this item" variant="continuation">
             <CommerceDetailDisclosureRow
@@ -1304,8 +1297,7 @@ export default function ItemDetailScreen() {
         {/* ── Price history & market ──
             Consolidated disclosure: one inline insight surfaces the
             most material fact (price drop, sold comparables, etc.);
-            the full breakdown expands on tap. Replaces the previous
-            stack of separate analytics modules. */}
+            the full breakdown expands on tap. */}
         {priceInsightRows.length > 0 ? (
           <>
             <CommerceDetailDisclosureRow
@@ -1385,8 +1377,7 @@ export default function ItemDetailScreen() {
 
         {/* More like this — visual-similar grid by category/brand.
             Contextual heading: prefer brand when available, fall back
-            to category, then to the generic label. Curation cue per
-            spec 04_DIRECT §4. */}
+            to category, then to the generic label. */}
         {(() => {
           const visualSimilar = backendListings
             .filter((l) =>
@@ -1467,8 +1458,7 @@ export default function ItemDetailScreen() {
       {/* ── Zone I — Sticky action dock ──
           Buyer: price + Buy now + Make offer.
           Seller: Manage listing.
-          Sold/unavailable: factual state + one next action.
-          Spec 05 §9. */}
+          Sold/unavailable: factual state + one next action. */}
       {(() => {
         if (capabilities.isOwner) {
           return (
@@ -1537,7 +1527,7 @@ export default function ItemDetailScreen() {
         }
 
         // ── Tier-adaptive dock actions ──
-        // The commerce ladder (Phase 6) introduces category-adaptive CTAs:
+        // Category-adaptive CTAs by commerce tier:
         //   - brokered: Enquire + Request viewing (no direct buy/offer)
         //   - specialist: Buy now + Enquire (expert review questions)
         //   - authenticated_luxury: Buy now + Make offer (authentication
@@ -1616,11 +1606,11 @@ export default function ItemDetailScreen() {
           label: t('product.buyNow'),
           onPress: () => {
             if (item) ProductAnalytics.checkoutStart(item.id);
-            // Per AGENTS.md §11: do not fire a success haptic before the
-            // purchase has actually completed. "Buy now" navigates to
-            // checkout — it does not complete the purchase. A medium
-            // impact acknowledges the primary-action press; the success
-            // pattern belongs in the Checkout confirmation flow.
+            // Do not fire a success haptic before the purchase has
+            // actually completed. "Buy now" navigates to checkout — it
+            // does not complete the purchase. A medium impact acknowledges
+            // the primary-action press; the success pattern belongs in the
+            // Checkout confirmation flow.
             haptic.medium();
             navigation.navigate('Checkout', { itemId: item.id });
           },
@@ -1997,11 +1987,10 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   editorialIdentityChapter: {
-    // Per Design.md spacing rhythm: between-group spacing after
-    // full-bleed media. 16px (Space.md) creates a deliberate chapter
-    // break without excessive white space. The media is the product;
-    // the canvas is the author — the transition should feel deliberate
-    // but not distant.
+    // Between-group spacing after full-bleed media. 16px (Space.md)
+    // creates a deliberate chapter break without excessive white space.
+    // The media is the product; the canvas is the author — the
+    // transition should feel deliberate but not distant.
     paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
@@ -2027,9 +2016,9 @@ const styles = StyleSheet.create({
   // Condition chip — condition gets a distinct visual treatment
   // (small surface-alt pill) instead of blending into muted text.
   // It's the most important attribute for second-hand buyers.
-  // Per Design.md: compact contained control, 32px visible chrome
-  // inside 44px hit target. paddingVertical 5 gives a 26px visible
-  // height with 12px caption text — premium pill proportion.
+  // Compact contained control, 32px visible chrome inside 44px hit
+  // target. paddingVertical 5 gives a 26px visible height with 12px
+  // caption text — premium pill proportion.
   conditionChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2078,9 +2067,8 @@ const styles = StyleSheet.create({
   },
   // ── Trust facts (flat rows with hairline separators) ──
   // Flat rows, no chips, no cards. Each row is one fact with icon +
-  // label, separated by hairlines. This is the "content layer" —
-  // utility structure per AGENTS.md surface budget: flat canvas +
-  // hairlines are the default.
+  // label, separated by hairlines. Flat canvas + hairlines are the
+  // default utility structure.
   trustFactsSection: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
@@ -2108,11 +2096,10 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   // ── Seller row ──
-  // Per Design.md between-group spacing: the seller row is a distinct
-  // group from the identity chapter. paddingVertical Space.md (16px)
-  // gives proper breathing room for avatar + name + rating + actions.
-  // The hairline top border separates it from the identity chapter
-  // without adding a card surface (per AGENTS.md surface budget).
+  // The seller row is a distinct group from the identity chapter.
+  // paddingVertical Space.md (16px) gives proper breathing room for
+  // avatar + name + rating + actions. The hairline top border separates
+  // it from the identity chapter without adding a card surface.
   // No padding here — SellerInfoCard handles its own internal padding.
   // This avoids double-padding that would push content inward.
   sellerTrustSection: {
@@ -2129,7 +2116,7 @@ const styles = StyleSheet.create({
   },
   // ── More from this seller rail ──
   // Bottom hairline closes the seller section before the purchase
-  // details section below (per §4 surface budget — flat canvas + hairlines).
+  // details section below — flat canvas + hairlines.
   moreFromSellerRailWrap: {
     paddingTop: Space.sm,
     paddingBottom: Space.sm,
@@ -2251,8 +2238,8 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
   },
   // ── More like this grid ──
-  // Per Design.md: discovery density, at least two meaningful media
-  // objects. 2-column grid with gap Space.sm (8px) between cards.
+  // Discovery density: at least two meaningful media objects.
+  // 2-column grid with gap Space.sm (8px) between cards.
   // Card internal gap 4px for text breathing room below image.
   moreLikeThisGrid: {
     flexDirection: 'row',

@@ -17,7 +17,6 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
-  FadeInDown,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -1922,8 +1921,7 @@ function CheckoutProgressOverlay({
   }));
 
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInDown.duration(220)}
+    <View
       pointerEvents="none"
       style={[
         progressOverlayStyles.overlay,
@@ -1949,7 +1947,7 @@ function CheckoutProgressOverlay({
           ]}
         />
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 

@@ -1,14 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -47,11 +45,9 @@ export function LookPreviewCard({
   index = 0,
 }: LookPreviewCardProps) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 60).springify()}>
-      <AnimatedPressable style={styles.card} onPress={onPress} {...PressPresets.card} accessibilityRole="none" accessibilityLabel={`Look: ${title} by ${creatorName}`} accessibilityHint="Opens look details">
+    <AnimatedPressable style={styles.card} onPress={onPress} {...PressPresets.card} accessibilityRole="none" accessibilityLabel={`Look: ${title} by ${creatorName}`} accessibilityHint="Opens look details">
         {/* Cover */}
         <View style={styles.coverWrap}>
           <CachedImage
@@ -103,7 +99,6 @@ export function LookPreviewCard({
           </AnimatedPressable>
         </View>
       </AnimatedPressable>
-    </Reanimated.View>
   );
 }
 

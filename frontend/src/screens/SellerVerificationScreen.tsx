@@ -6,10 +6,10 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Typography, Space, Radius, Type, LetterSpacing, Stroke, Control } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
@@ -17,7 +17,6 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   fetchSellerVerificationDemands,
   type SellerVerificationDemand,
@@ -59,7 +58,6 @@ export default function SellerVerificationScreen() {
   const currentUser = useStore((s) => s.currentUser);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [demands, setDemands] = useState<SellerVerificationDemand[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -110,7 +108,7 @@ export default function SellerVerificationScreen() {
     }
   }, [navigation, haptic]);
 
-  const renderDemand = useCallback((demand: SellerVerificationDemand, index: number) => {
+  const renderDemand = useCallback((demand: SellerVerificationDemand) => {
     const statusIcon = STATUS_ICONS[demand.status] ?? STATUS_ICONS.withdrawn;
     const statusColor = getStatusColor(demand.status, colors);
     const deadline = new Date(demand.deadline);
@@ -119,7 +117,7 @@ export default function SellerVerificationScreen() {
     const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
     return (
-      <Reanimated.View key={demand.id} entering={reducedMotionEnabled ? undefined : FadeInDown.duration(250).delay(index * 30)}>
+      <View key={demand.id}>
         <Pressable
           style={({ pressed }) => [
             styles.demandCard,
@@ -223,7 +221,7 @@ export default function SellerVerificationScreen() {
             </View>
           )}
         </Pressable>
-      </Reanimated.View>
+      </View>
     );
   }, [colors, styles, handleDemandPress]);
 
@@ -255,7 +253,7 @@ export default function SellerVerificationScreen() {
       header={<FlagshipHeader title="Verification Requests" onBack={() => navigation.goBack()} />}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
-      <Reanimated.ScrollView
+      <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -306,7 +304,7 @@ export default function SellerVerificationScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
                   Action required
                 </Text>
-                {pendingDemands.map((d, i) => renderDemand(d, i))}
+                {pendingDemands.map((d) => renderDemand(d))}
               </View>
             )}
 
@@ -316,12 +314,12 @@ export default function SellerVerificationScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
                   History
                 </Text>
-                {otherDemands.map((d, i) => renderDemand(d, i))}
+                {otherDemands.map((d) => renderDemand(d))}
               </View>
             )}
           </>
         )}
-      </Reanimated.ScrollView>
+      </ScrollView>
     </FlagshipScreen>
   );
 }

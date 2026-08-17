@@ -2,12 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { StyleSheet as RNStyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export type CoOwnAssetStatus = 'open' | 'closed' | 'paused';
 
@@ -42,7 +40,6 @@ export function CoOwnFeaturedAsset({
 }: CoOwnFeaturedAssetProps) {
   const { colors } = useAppTheme();
   const { width, height } = useWindowDimensions();
-  const reducedMotion = useReducedMotion();
   // Editorial hero: 60% of viewport height, capped at 420px for tablets
   const heroHeight = Math.min(height * 0.6, 420);
 
@@ -50,12 +47,11 @@ export function CoOwnFeaturedAsset({
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 3) * 60).duration(350)}>
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={`${title}, ${unitPriceLabel} per unit, ${availableUnits} of ${totalUnits} units available, ${statusLabel}`}
-      >
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${unitPriceLabel} per unit, ${availableUnits} of ${totalUnits} units available, ${statusLabel}`}
+    >
         <View style={styles.imageWrap}>
           {imageUri ? (
             <CachedImage uri={imageUri} style={[styles.image, { height: heroHeight }]} contentFit="cover" transition={300} />
@@ -109,8 +105,7 @@ export function CoOwnFeaturedAsset({
             ) : null}
           </View>
         </View>
-      </Pressable>
-    </Reanimated.View>
+    </Pressable>
   );
 }
 

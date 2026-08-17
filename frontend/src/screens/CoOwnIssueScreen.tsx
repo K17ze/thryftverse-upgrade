@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -14,7 +13,6 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useToast } from '../context/ToastContext';
 import { fetchCoOwnAssetById } from '../services/marketApi';
 import { haptics } from '../utils/haptics';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CoOwnStickyActionDock } from '../components/coown';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnIssue'>;
@@ -30,7 +28,6 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
-  const reducedMotionEnabled = useReducedMotion();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
@@ -81,19 +78,17 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Asset context — show title, not UUID */}
         {assetId && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-            <View style={[styles.assetContext, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
-              <Text style={[styles.assetContextLabel, { color: colors.textMuted }]}>Item:</Text>
-              <Text style={[styles.assetContextText, { color: colors.textPrimary }]} numberOfLines={1}>
-                {assetTitle ?? 'Loading...'}
-              </Text>
-            </View>
-          </Reanimated.View>
+          <View style={[styles.assetContext, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
+            <Text style={[styles.assetContextLabel, { color: colors.textMuted }]}>Item:</Text>
+            <Text style={[styles.assetContextText, { color: colors.textPrimary }]} numberOfLines={1}>
+              {assetTitle ?? 'Loading...'}
+            </Text>
+          </View>
         )}
 
         {/* Issue category */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Issue category</Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.map((cat) => {
@@ -123,10 +118,10 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
               );
             })}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Description */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
+        <View style={{ marginTop: Space.lg }}>
           <AppInput
             label="Description"
             placeholder="Describe what happened and what you need..."
@@ -137,10 +132,10 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
             textAlignVertical="top"
             containerStyle={{ marginBottom: 0 }}
           />
-        </Reanimated.View>
+        </View>
 
         {/* Note — trust card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.note}>
+        <View style={styles.note}>
           <View style={[styles.noteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[styles.noteIconWrap, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="information-circle" size={16} color={colors.textSecondary} />
@@ -154,7 +149,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
               </Text>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
       </ScrollView>
 
       {/* Sticky action dock */}

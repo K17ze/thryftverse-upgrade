@@ -11,8 +11,6 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
-  FadeInDown,
-  FadeOutRight,
   useAnimatedStyle,
   withTiming,
   useSharedValue,
@@ -34,7 +32,6 @@ import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { makeStableId } from '../utils/createStableId';
@@ -85,7 +82,6 @@ export default function BulkListingScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const reducedMotion = useReducedMotion();
   const currentUser = useStore((s) => s.currentUser);
   const { show } = useToast();
   const { isOffline } = useConnectivity();
@@ -259,7 +255,6 @@ export default function BulkListingScreen({ navigation }: Props) {
         expanded={expandedId === item.tempId}
         colors={colors}
         styles={styles}
-        reducedMotion={reducedMotion}
         onToggleExpand={() => setExpandedId((cur) => (cur === item.tempId ? null : item.tempId))}
         onTitleChange={(text) => updateItem(item.tempId, { title: text })}
         onPriceChange={(text) => {
@@ -270,7 +265,7 @@ export default function BulkListingScreen({ navigation }: Props) {
         onDelete={() => removeItem(item.tempId)}
       />
     ),
-    [expandedId, colors, styles, reducedMotion, updateItem, openEditSheet, removeItem],
+    [expandedId, colors, styles, updateItem, openEditSheet, removeItem],
   );
 
   const pickerOptions = pickerMode === 'Category' ? CATEGORY_OPTIONS : CONDITION_OPTIONS;
@@ -280,7 +275,7 @@ export default function BulkListingScreen({ navigation }: Props) {
   const renderHeader = () => {
     if (items.length === 0) return null;
     return (
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(280)} style={styles.bulkBarWrap}>
+      <View style={styles.bulkBarWrap}>
         <View style={styles.bulkBar}>
           <Pressable
             style={({ pressed }) => [styles.bulkAction, { borderColor: colors.border }, pressed && { opacity: 0.6 }]}
@@ -327,7 +322,7 @@ export default function BulkListingScreen({ navigation }: Props) {
             )}
           </View>
         )}
-      </Reanimated.View>
+      </View>
     );
   };
 
@@ -436,7 +431,6 @@ interface RowProps {
   expanded: boolean;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
-  reducedMotion: boolean;
   onToggleExpand: () => void;
   onTitleChange: (text: string) => void;
   onPriceChange: (text: string) => void;
@@ -450,7 +444,6 @@ const BulkRow = React.memo(function BulkRow({
   expanded,
   colors,
   styles,
-  reducedMotion,
   onToggleExpand,
   onTitleChange,
   onPriceChange,
@@ -469,11 +462,8 @@ const BulkRow = React.memo(function BulkRow({
     transform: [{ rotate: `${rotate.value * 180}deg` }],
   }));
 
-  const enter = reducedMotion ? undefined : FadeInDown.duration(240).delay(Math.min(index * 40, 240));
-  const exit = reducedMotion ? undefined : FadeOutRight.duration(180);
-
   return (
-    <Reanimated.View entering={enter} exiting={exit} style={styles.rowWrap}>
+    <View style={styles.rowWrap}>
       <Pressable
         style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
         onPress={onToggleExpand}
@@ -577,7 +567,7 @@ const BulkRow = React.memo(function BulkRow({
           </View>
         </View>
       )}
-    </Reanimated.View>
+    </View>
   );
 });
 

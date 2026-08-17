@@ -3,12 +3,10 @@ import { View, Text, StyleSheet } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { PremiumStatusPill } from '../ui/PremiumStatusPill';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface FlagshipOrderCardProps {
   imageUri?: string | null;
@@ -35,7 +33,6 @@ export function FlagshipOrderCard({
 }: FlagshipOrderCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const reducedMotion = useReducedMotion();
   const tone =
     status === 'delivered'
       ? 'delivered'
@@ -48,47 +45,45 @@ export function FlagshipOrderCard({
   const actorLabel = buyerName ? `To ${buyerName}` : sellerName ? `From ${sellerName}` : '';
 
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(index * 40).duration(350)}>
-      <AnimatedPressable onPress={onPress} style={styles.root} {...PressPresets.listRow}>
-        {/* Product Image */}
-        <View style={styles.imageWrap}>
-          {imageUri ? (
-            <CachedImage
-              uri={imageUri}
-              style={styles.image}
-              contentFit="cover"
-              transition={250}
-            />
-          ) : (
-            <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="cube-outline" size={28} color={colors.textMuted} />
-            </View>
-          )}
+    <AnimatedPressable onPress={onPress} style={styles.root} {...PressPresets.listRow}>
+      {/* Product Image */}
+      <View style={styles.imageWrap}>
+        {imageUri ? (
+          <CachedImage
+            uri={imageUri}
+            style={styles.image}
+            contentFit="cover"
+            transition={250}
+          />
+        ) : (
+          <View style={[styles.image, styles.imageFallback]}>
+            <Ionicons name="cube-outline" size={28} color={colors.textMuted} />
+          </View>
+        )}
+      </View>
+
+      {/* Content */}
+      <View style={styles.content}>
+        <View style={styles.topRow}>
+          <Text numberOfLines={1} style={styles.title}>
+            {listingTitle}
+          </Text>
+          <Text style={styles.price}>{price}</Text>
         </View>
 
-        {/* Content */}
-        <View style={styles.content}>
-          <View style={styles.topRow}>
-            <Text numberOfLines={1} style={styles.title}>
-              {listingTitle}
-            </Text>
-            <Text style={styles.price}>{price}</Text>
-          </View>
-
-          <View style={styles.middleRow}>
-            <PremiumStatusPill tone={tone} label={status.charAt(0).toUpperCase() + status.slice(1)} />
-            {actorLabel ? <Text style={styles.actor}>{actorLabel}</Text> : null}
-          </View>
-
-          {orderDate ? (
-            <Text style={styles.date}>{orderDate}</Text>
-          ) : null}
+        <View style={styles.middleRow}>
+          <PremiumStatusPill tone={tone} label={status.charAt(0).toUpperCase() + status.slice(1)} />
+          {actorLabel ? <Text style={styles.actor}>{actorLabel}</Text> : null}
         </View>
 
-        {/* Chevron */}
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={styles.chevron} />
-      </AnimatedPressable>
-    </Reanimated.View>
+        {orderDate ? (
+          <Text style={styles.date}>{orderDate}</Text>
+        ) : null}
+      </View>
+
+      {/* Chevron */}
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={styles.chevron} />
+    </AnimatedPressable>
   );
 }
 

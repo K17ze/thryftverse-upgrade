@@ -1,11 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 import type { CoOwnPositionState as CanonicalCoOwnPositionState } from '../../data/coOwnModels';
 
@@ -100,7 +98,6 @@ export function CoOwnPositionCard({
   settlementEtaLabel,
 }: CoOwnPositionCardProps) {
   const { colors } = useAppTheme();
-  const reducedMotion = useReducedMotion();
 
   const statusLabel = status === 'open' ? 'Active' : status === 'paused' ? 'Paused' : 'Closed';
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
@@ -129,7 +126,7 @@ export function CoOwnPositionCard({
   const outstandingLabel = (positionState?.outstandingUnits ?? outstandingUnits ?? totalUnits).toLocaleString('en-GB');
 
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 40).duration(250)}>
+    <View>
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
@@ -324,7 +321,7 @@ export function CoOwnPositionCard({
           </View>
         </View>
       </Pressable>
-    </Reanimated.View>
+    </View>
   );
 }
 

@@ -7,7 +7,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Reanimated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -118,38 +118,31 @@ export default function AgeVerificationScreen({ navigation }: Props) {
     }
   }, [haptic]);
 
-  const enterTitle = reducedMotion ? undefined : FadeInDown.delay(80).springify().damping(18).stiffness(200);
-  const enterSubtitle = reducedMotion ? undefined : FadeInDown.delay(160);
-  const enterButtons = reducedMotion ? undefined : FadeInDown.delay(240);
-
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <View style={styles.brandMark}>
-        <Reanimated.View
-          entering={reducedMotion ? undefined : FadeIn}
+        <View
           style={[styles.logoBadge, { backgroundColor: colors.brand }]}
         >
           <Ionicons name="storefront" size={28} color={colors.background} />
-        </Reanimated.View>
+        </View>
       </View>
 
       {!underAge ? (
         <View style={styles.content}>
-          <Reanimated.Text
-            entering={enterTitle}
+          <Text
             style={[styles.title, { color: colors.textPrimary }]}
             accessibilityRole="header"
           >
             Get started
-          </Reanimated.Text>
-          <Reanimated.Text
-            entering={enterSubtitle}
+          </Text>
+          <Text
             style={[styles.subtitle, { color: colors.textSecondary }]}
           >
             ThryftVerse is a marketplace for adults. Confirm you are at least 18 years old.
-          </Reanimated.Text>
+          </Text>
 
-          <Reanimated.View entering={enterButtons} style={styles.actions}>
+          <View style={styles.actions}>
             <AppButton
               title="I am 18 or older"
               variant="primary"
@@ -172,7 +165,7 @@ export default function AgeVerificationScreen({ navigation }: Props) {
               accessibilityRole="button"
               style={styles.button}
             />
-          </Reanimated.View>
+          </View>
         </View>
       ) : (
         <Reanimated.View

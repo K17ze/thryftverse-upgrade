@@ -36,11 +36,9 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
@@ -57,7 +55,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AgentActivity'>;
 
 export default function AgentActivityScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -159,7 +156,7 @@ export default function AgentActivityScreen({ navigation }: Props) {
           <ActivityIndicator size="small" color={colors.textSecondary} />
         </View>
       ) : entries.length === 0 ? (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={styles.emptyWrap}>
             <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="list-outline" size={28} color={colors.textMuted} />
@@ -171,9 +168,9 @@ export default function AgentActivityScreen({ navigation }: Props) {
               When you deploy agents, call tools, or approve actions, they will appear here as a transparent record.
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
       ) : (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={styles.sectionLabelWrap}>
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
               {entries.length} ENTR{entries.length === 1 ? 'Y' : 'IES'}
@@ -236,7 +233,7 @@ export default function AgentActivityScreen({ navigation }: Props) {
               );
             })}
           </ScrollView>
-        </Reanimated.View>
+        </View>
       )}
     </FlagshipScreen>
   );

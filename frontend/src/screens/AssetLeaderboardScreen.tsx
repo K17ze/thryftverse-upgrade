@@ -3,11 +3,9 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -44,7 +42,6 @@ export default function AssetLeaderboardScreen() {
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
 
   const [assets, setAssets] = React.useState<LeaderboardAsset[]>([]);
@@ -146,54 +143,50 @@ export default function AssetLeaderboardScreen() {
     metric: (asset: LeaderboardAsset & { allocatedPct?: number }) => { primary: string; secondary: string },
     sectionIndex: number
   ) => data.length > 0 ? (
-    <Reanimated.View
-      entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(sectionIndex * 60)}
-    >
-      <View style={[styles.section, sectionIndex > 0 && styles.sectionSeparated, sectionIndex > 0 && { borderTopColor: colors.border }]}>
-        <View style={styles.sectionHeader}>
-          <View style={[styles.sectionIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name={icon} size={15} color={colors.textSecondary} />
-          </View>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>{title}</Text>
+    <View style={[styles.section, sectionIndex > 0 && styles.sectionSeparated, sectionIndex > 0 && { borderTopColor: colors.border }]}>
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIcon, { backgroundColor: colors.surfaceAlt }]}>
+          <Ionicons name={icon} size={15} color={colors.textSecondary} />
         </View>
-
-        {data.map((asset, idx) => {
-          const metricValue = metric(asset);
-          return (
-            <AnimatedPressable
-              key={`${title}_${asset.id}`}
-              style={[styles.row, { borderColor: colors.border }, idx === data.length - 1 && styles.lastRow]}
-              onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-              scaleValue={0.985}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel={`${title}, rank ${idx + 1}, ${asset.title}, ${metricValue.primary}, ${metricValue.secondary}`}
-            >
-              <Text style={[styles.rank, { color: colors.textMuted }]} maxFontSizeMultiplier={1.2}>{idx + 1}</Text>
-              <CachedImage
-                uri={asset.image}
-                style={styles.thumb}
-                containerStyle={styles.thumbContainer}
-                contentFit="cover"
-                emptyLabel={asset.title}
-                emptyIcon="diamond-outline"
-              />
-              <View style={styles.rowBody}>
-                <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{asset.title}</Text>
-                <View style={styles.priceRow}>
-                  <Text style={[styles.rowPrice, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{format1ze(asset.unitPriceGBP)}</Text>
-                  <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{formatFromFiat(asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
-                </View>
-              </View>
-              <View style={styles.metricGroup}>
-                <Text style={[styles.metric, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.2}>{metricValue.primary}</Text>
-                <Text style={[styles.metricLabel, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{metricValue.secondary}</Text>
-              </View>
-            </AnimatedPressable>
-          );
-        })}
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>{title}</Text>
       </View>
-    </Reanimated.View>
+
+      {data.map((asset, idx) => {
+        const metricValue = metric(asset);
+        return (
+          <AnimatedPressable
+            key={`${title}_${asset.id}`}
+            style={[styles.row, { borderColor: colors.border }, idx === data.length - 1 && styles.lastRow]}
+            onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+            scaleValue={0.985}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={`${title}, rank ${idx + 1}, ${asset.title}, ${metricValue.primary}, ${metricValue.secondary}`}
+          >
+            <Text style={[styles.rank, { color: colors.textMuted }]} maxFontSizeMultiplier={1.2}>{idx + 1}</Text>
+            <CachedImage
+              uri={asset.image}
+              style={styles.thumb}
+              containerStyle={styles.thumbContainer}
+              contentFit="cover"
+              emptyLabel={asset.title}
+              emptyIcon="diamond-outline"
+            />
+            <View style={styles.rowBody}>
+              <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{asset.title}</Text>
+              <View style={styles.priceRow}>
+                <Text style={[styles.rowPrice, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{format1ze(asset.unitPriceGBP)}</Text>
+                <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{formatFromFiat(asset.unitPriceGBP, 'GBP', { displayMode: 'fiat' })}</Text>
+              </View>
+            </View>
+            <View style={styles.metricGroup}>
+              <Text style={[styles.metric, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.2}>{metricValue.primary}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{metricValue.secondary}</Text>
+            </View>
+          </AnimatedPressable>
+        );
+      })}
+    </View>
   ) : null;
 
   if (isLoading) {

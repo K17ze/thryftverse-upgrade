@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -13,7 +12,6 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
 import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type TopPerformerListing } from '../services/commerceApi';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
@@ -43,7 +41,6 @@ export default function SellerAnalyticsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
@@ -288,29 +285,27 @@ export default function SellerAnalyticsScreen() {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
         {/* ── Primary outcome: revenue hero ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <View style={styles.heroBlock}>
-            <Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>Revenue · Last {periodLabel}</Text>
-            <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
-              £{revenue.toFixed(2)}
+        <View style={styles.heroBlock}>
+          <Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>Revenue · Last {periodLabel}</Text>
+          <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
+            £{revenue.toFixed(2)}
+          </Text>
+          <View style={styles.heroTrendRow}>
+            <Ionicons
+              name={itemsSold > 0 ? 'trending-up' : 'remove'}
+              size={14}
+              color={itemsSold > 0 ? colors.success : colors.textMuted}
+            />
+            <Text style={[styles.heroTrendText, { color: itemsSold > 0 ? colors.success : colors.textMuted }]}>
+              {itemsSold > 0
+                ? `${trendPercentage}% conv · ${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
+                : 'No sales yet'}
             </Text>
-            <View style={styles.heroTrendRow}>
-              <Ionicons
-                name={itemsSold > 0 ? 'trending-up' : 'remove'}
-                size={14}
-                color={itemsSold > 0 ? colors.success : colors.textMuted}
-              />
-              <Text style={[styles.heroTrendText, { color: itemsSold > 0 ? colors.success : colors.textMuted }]}>
-                {itemsSold > 0
-                  ? `${trendPercentage}% conv · ${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
-                  : 'No sales yet'}
-              </Text>
-            </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* ── Period selector — segmented control (7d / 30d / 90d / 1y) ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.periodSegmentRow}>
+        <View style={styles.periodSegmentRow}>
           {PERIOD_OPTIONS.map((opt) => {
             const isActive = period === opt.key;
             return (
@@ -331,25 +326,23 @@ export default function SellerAnalyticsScreen() {
               </Pressable>
             );
           })}
-        </Reanimated.View>
+        </View>
 
         {/* ── Supporting KPIs as flat rows ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <View style={styles.kpiList}>
-            {kpiRows.map((kpi) => (
-              <View key={kpi.label} style={styles.kpiRow}>
-                <View style={styles.kpiLabelCol}>
-                  <Ionicons name={kpi.icon} size={16} color={colors.textSecondary} />
-                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{kpi.label}</Text>
-                </View>
-                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>{kpi.value}</Text>
+        <View style={styles.kpiList}>
+          {kpiRows.map((kpi) => (
+            <View key={kpi.label} style={styles.kpiRow}>
+              <View style={styles.kpiLabelCol}>
+                <Ionicons name={kpi.icon} size={16} color={colors.textSecondary} />
+                <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{kpi.label}</Text>
               </View>
-            ))}
-          </View>
-        </Reanimated.View>
+              <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>{kpi.value}</Text>
+            </View>
+          ))}
+        </View>
 
         {/* ── Top listings — horizontal scroll of compact cards ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Top listings</Text>
           </View>
@@ -401,11 +394,11 @@ export default function SellerAnalyticsScreen() {
               subtitle="Listings with views will appear here"
             />
           )}
-        </Reanimated.View>
+        </View>
 
         {/* ── Needs attention — flat rows with images ── */}
         {needsAttention.length > 0 ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleRow}>
                 <Ionicons name="alert-circle-outline" size={15} color={colors.warning} />
@@ -451,7 +444,7 @@ export default function SellerAnalyticsScreen() {
                 </Pressable>
               ))}
             </View>
-          </Reanimated.View>
+          </View>
         ) : null}
       </ScrollView>
     </FlagshipScreen>

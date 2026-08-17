@@ -1,11 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface FlagshipAssetCardProps {
   imageUri?: string | null;
@@ -35,57 +33,54 @@ export function FlagshipAssetCard({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const ownershipPct = totalUnits > 0 ? Math.round((yourUnits / totalUnits) * 100) : 0;
-  const reducedMotion = useReducedMotion();
 
   const statusColor =
     status === 'active' ? colors.success : status === 'pending' ? colors.textSecondary : status === 'sold' ? colors.textMuted : colors.textSecondary;
 
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(index * 50).duration(350)}>
-      <Pressable onPress={onPress} style={styles.root}>
-        <View style={styles.imageWrap}>
-          {imageUri ? (
-            <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
-          ) : (
-            <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="image-outline" size={28} color={colors.textMuted} />
-            </View>
-          )}
-          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-        </View>
-
-        <View style={styles.content}>
-          <Text numberOfLines={1} style={styles.name}>
-            {name}
-          </Text>
-
-          <View style={styles.priceRow}>
-            <Text style={styles.unitPrice} numberOfLines={1}>{unitPrice}</Text>
-            <Text style={styles.perUnit}>/ unit</Text>
+    <Pressable onPress={onPress} style={styles.root}>
+      <View style={styles.imageWrap}>
+        {imageUri ? (
+          <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
+        ) : (
+          <View style={[styles.image, styles.imageFallback]}>
+            <Ionicons name="image-outline" size={28} color={colors.textMuted} />
           </View>
-
-          <View style={styles.ownershipRow}>
-            <View style={styles.ownershipBarBg}>
-              <View
-                style={[
-                  styles.ownershipBarFill,
-                  { width: `${Math.min(ownershipPct, 100)}%`, backgroundColor: status === 'active' ? colors.brand : statusColor },
-                ]}
-              />
-            </View>
-            <Text style={styles.ownershipText}>
-              {yourUnits} / {totalUnits} ({ownershipPct}%)
-            </Text>
-          </View>
-        </View>
-
-        {onAction && actionLabel && (
-          <Pressable onPress={(e) => { e.stopPropagation(); onAction(); }} style={styles.actionBtn}>
-            <Text style={styles.actionLabel}>{actionLabel}</Text>
-          </Pressable>
         )}
-      </Pressable>
-    </Reanimated.View>
+        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+      </View>
+
+      <View style={styles.content}>
+        <Text numberOfLines={1} style={styles.name}>
+          {name}
+        </Text>
+
+        <View style={styles.priceRow}>
+          <Text style={styles.unitPrice} numberOfLines={1}>{unitPrice}</Text>
+          <Text style={styles.perUnit}>/ unit</Text>
+        </View>
+
+        <View style={styles.ownershipRow}>
+          <View style={styles.ownershipBarBg}>
+            <View
+              style={[
+                styles.ownershipBarFill,
+                { width: `${Math.min(ownershipPct, 100)}%`, backgroundColor: status === 'active' ? colors.brand : statusColor },
+              ]}
+            />
+          </View>
+          <Text style={styles.ownershipText}>
+            {yourUnits} / {totalUnits} ({ownershipPct}%)
+          </Text>
+        </View>
+      </View>
+
+      {onAction && actionLabel && (
+        <Pressable onPress={(e) => { e.stopPropagation(); onAction(); }} style={styles.actionBtn}>
+          <Text style={styles.actionLabel}>{actionLabel}</Text>
+        </Pressable>
+      )}
+    </Pressable>
   );
 }
 

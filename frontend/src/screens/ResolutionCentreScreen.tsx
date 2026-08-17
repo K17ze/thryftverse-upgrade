@@ -11,11 +11,9 @@ import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Typography, Radius, Type, Stroke } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import type { SupportTicket } from '../store/useStore';
@@ -60,7 +58,6 @@ export default function ResolutionCentreScreen() {
 
   const supportTickets = useStore((state) => state.supportTickets);
   const loadSupportTicketsFromApi = useStore((state) => state.loadSupportTicketsFromApi);
-  const reducedMotionEnabled = useReducedMotion();
 
   useFocusEffect(
     useCallback(() => {
@@ -92,10 +89,10 @@ export default function ResolutionCentreScreen() {
   // FlashList v2 performance: memoized renderItem prevents full re-render of
   // all visible ticket rows on every parent state change.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
-  const renderTicketItem = useCallback(({ item, index }: { item: SupportTicket; index: number }) => {
+  const renderTicketItem = useCallback(({ item }: { item: SupportTicket; index: number }) => {
     const statusCfg = statusConfig[item.status] ?? statusConfig.open;
     return (
-      <Reanimated.View entering={FadeInDown.duration(300).delay(Math.min(index, 8) * 40)}>
+      <View>
         <Pressable
           style={styles.ticketCard}
           onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
@@ -117,7 +114,7 @@ export default function ResolutionCentreScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </Pressable>
-      </Reanimated.View>
+      </View>
     );
   }, [statusConfig, navigation, styles, colors.textMuted]);
 
@@ -131,7 +128,6 @@ export default function ResolutionCentreScreen() {
       }
     >
       {/* Hero summary — open ticket count */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: openCount > 0 ? colors.brand : colors.surfaceAlt }]}>
@@ -147,7 +143,6 @@ export default function ResolutionCentreScreen() {
             </View>
           </View>
         </View>
-      </Reanimated.View>
 
       {/* Filter rail */}
       <ScrollView

@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -16,7 +15,6 @@ import { EmptyState } from '../components/EmptyState';
 import { useBackendData } from '../context/BackendDataContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -50,7 +48,6 @@ export default function BundleBagScreen() {
   const { listings, isSyncing, refreshListings } = useBackendData();
   const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const { show } = useToast();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -159,31 +156,28 @@ export default function BundleBagScreen() {
       ) : (
         <View style={styles.body}>
           {/* Hero summary — bundle status */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-            <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.heroRow}>
-                <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                  <Ionicons name="storefront" size={18} color={colors.textInverse} />
-                </View>
-                <View style={styles.heroText}>
-                  <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                    {selectedItems.length} selected
-                  </Text>
-                  <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                    {sellerListings.length} items from {sellerName ?? 'this seller'}
-                  </Text>
-                </View>
-                {discountPercent > 0 && (
-                  <View style={[styles.heroBadge, { backgroundColor: colors.brand + '18' }]}>
-                    <Text style={[styles.heroBadgeText, { color: colors.brand }]}>{discountPercent}% off</Text>
-                  </View>
-                )}
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="storefront" size={18} color={colors.textInverse} />
               </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                  {selectedItems.length} selected
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                  {sellerListings.length} items from {sellerName ?? 'this seller'}
+                </Text>
+              </View>
+              {discountPercent > 0 && (
+                <View style={[styles.heroBadge, { backgroundColor: colors.brand + '18' }]}>
+                  <Text style={[styles.heroBadgeText, { color: colors.brand }]}>{discountPercent}% off</Text>
+                </View>
+              )}
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* Bundle tier hints */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.tiersRow}>
             {BUNDLE_TIERS.map((tier) => {
               const achieved = selectedItems.length >= tier.itemCount;
@@ -204,7 +198,6 @@ export default function BundleBagScreen() {
               );
             })}
           </View>
-          </Reanimated.View>
 
           <FlashList
             data={sellerListings}

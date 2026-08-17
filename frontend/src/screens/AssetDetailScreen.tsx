@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, useWindowDimensions, Modal, TextInput, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, useWindowDimensions, Modal, TextInput, Image, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -532,6 +532,16 @@ export default function AssetDetailScreen() {
   const dossierSummary = dossierMissing.length > 0
     ? `${dossierVerified.join(' · ')}${dossierVerified.length > 0 ? ' · ' : ''}${dossierMissing.length} pending`
     : dossierVerified.join(' · ');
+
+  // Document references available on the asset (spec P1-B §2 Documents
+  // subsection). Only render the subsection when at least one document
+  // URL is published — no empty sections.
+  const dossierDocuments: { label: string; url: string; accessibilityLabel: string }[] = [];
+  if (asset.escrowTermsUrl) dossierDocuments.push({ label: 'Escrow terms', url: asset.escrowTermsUrl, accessibilityLabel: 'Open escrow terms' });
+  if (asset.safeguardingEvidenceUrl) dossierDocuments.push({ label: 'Safeguarding evidence', url: asset.safeguardingEvidenceUrl, accessibilityLabel: 'Open safeguarding evidence' });
+  if (asset.safeguardingTermsUrl) dossierDocuments.push({ label: 'Safeguarding terms', url: asset.safeguardingTermsUrl, accessibilityLabel: 'Open safeguarding terms' });
+  if (asset.buyerProtectionTermsUrl) dossierDocuments.push({ label: 'Buyer protection terms', url: asset.buyerProtectionTermsUrl, accessibilityLabel: 'Open buyer protection terms' });
+  const hasDocuments = dossierDocuments.length > 0;
 
   // Valuation updated label — spec P1-B §7 language.
   const valuationUpdatedLabel = asset.appraisalValuedAt
@@ -1118,11 +1128,12 @@ export default function AssetDetailScreen() {
 
         {/* ════════════════════════════════════════════════════════════
             Asset dossier — ONE consolidated chapter (spec P1-B §2).
-            Subsections: Ownership & rights, Valuation, Custody,
-            Insurance, Governance, Distributions, Risks, Documents &
-            audit trail. Summary shows verified facts + missing critical
-            evidence. Dead capability rows (buyout) are omitted unless
-            the viewer's position makes them relevant (spec P1-B §3).
+            Subsections: Ownership & rights, Valuation, Documents,
+            Custody / storage, Insurance, Governance / voting,
+            Distributions, Risks, Audit trail. Summary shows verified
+            facts + missing critical evidence. Dead capability rows
+            (buyout) are omitted — no "Not available" module shown to
+            every viewer regardless of relevance (spec P1-B §3).
             ════════════════════════════════════════════════════════════ */}
         <CommerceDetailDisclosureRow
           label={diligenceSectionExpanded ? 'Hide asset dossier' : 'Asset dossier'}
@@ -1200,10 +1211,32 @@ export default function AssetDetailScreen() {
             muted={!asset.appraisalValuer}
           />
 
-          {/* ── Custody ── */}
+          {/* ── Documents ──
+              Only rendered when at least one document URL is published
+              (spec P1-B §2). No empty subsections. */}
+          {hasDocuments ? (
+            <View style={styles.dossierSubHeader}>
+              <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
+                Documents
+              </Text>
+            </View>
+          ) : null}
+          {hasDocuments
+            ? dossierDocuments.map((doc) => (
+                <CommerceDetailDisclosureRow
+                  key={doc.label}
+                  label={doc.label}
+                  onPress={() => { void Linking.openURL(doc.url); }}
+                  leadingIcon="document-text-outline"
+                  accessibilityLabel={doc.accessibilityLabel}
+                />
+              ))
+            : null}
+
+          {/* ── Custody / storage ── */}
           <View style={styles.dossierSubHeader}>
             <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
-              Custody
+              Custody / storage
             </Text>
           </View>
           <CommerceDetailMetricRow
@@ -1232,10 +1265,10 @@ export default function AssetDetailScreen() {
             <CommerceDetailMetricRow label="Policy ref" value={asset.custodyPolicyRef} />
           ) : null}
 
-          {/* ── Governance ── */}
+          {/* ── Governance / voting ── */}
           <View style={styles.dossierSubHeader}>
             <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
-              Governance
+              Governance / voting
             </Text>
           </View>
           <CommerceDetailMetricRow
@@ -1274,10 +1307,13 @@ export default function AssetDetailScreen() {
             accessibilityLabel="View risks"
           />
 
-          {/* ── Documents & audit trail ── */}
+          {/* ── Audit trail ──
+              One disclosure into the full due-diligence surface
+              (provenance · authentication · audit). No duplicate
+              disclosure wrappers (spec P1-B §2). */}
           <View style={styles.dossierSubHeader}>
             <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
-              Documents & audit trail
+              Audit trail
             </Text>
           </View>
           <CommerceDetailDisclosureRow
@@ -1287,16 +1323,6 @@ export default function AssetDetailScreen() {
             leadingIcon="document-text-outline"
             accessibilityLabel="View full due diligence"
           />
-
-          {/* Full-asset buyout — omitted for non-holders (spec P1-B §3).
-              Only shown when the viewer's position makes it relevant. */}
-          {isHolder ? (
-            <CommerceDetailUnavailableInline
-              title="Full-asset buyout"
-              body="Not available"
-              icon="swap-horizontal-outline"
-            />
-          ) : null}
         </CommerceDetailSection>
         ) : null}
 

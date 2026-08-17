@@ -6,7 +6,6 @@ import {
   Pressable,
   useWindowDimensions,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -18,7 +17,6 @@ import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 
 interface RailCardProps {
@@ -113,7 +111,6 @@ export function RecommendationRail({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
-  const reducedMotion = useReducedMotion();
 
   if (section.items.length === 0) return null;
 
@@ -154,8 +151,7 @@ export function RecommendationRail({
   );
 
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInDown.duration(300).springify().damping(18)}
+    <View
       style={styles.container}
     >
       <View style={styles.header}>
@@ -205,7 +201,7 @@ export function RecommendationRail({
         renderItem={renderItem}
         ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
       />
-    </Reanimated.View>
+    </View>
   );
 }
 

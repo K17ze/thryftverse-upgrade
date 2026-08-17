@@ -8,7 +8,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -16,7 +15,6 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -36,7 +34,6 @@ const MOSAIC_SIZE = 72;
 export default function CreateCollectionScreen() {
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
@@ -171,7 +168,7 @@ export default function CreateCollectionScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Cover mosaic preview — auto-generated from selected items */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.coverPreviewSection}>
+        <View style={styles.coverPreviewSection}>
           <View style={[styles.coverPreview, { backgroundColor: colors.surfaceAlt }]}>
             {mosaicImages.length > 0 ? (
               renderMosaic()
@@ -191,9 +188,9 @@ export default function CreateCollectionScreen() {
               </Text>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.card}>
+        <View style={styles.card}>
           <Text style={styles.label}>Name</Text>
           <AppInput
             value={name}
@@ -204,9 +201,9 @@ export default function CreateCollectionScreen() {
             accessibilityLabel="Collection name input"
           />
           <Text style={styles.charCount}>{name.length}/40</Text>
-        </Reanimated.View>
+        </View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.card}>
+        <View style={styles.card}>
           <Text style={styles.label}>Description</Text>
           <AppInput
             value={description}
@@ -218,9 +215,9 @@ export default function CreateCollectionScreen() {
             accessibilityLabel="Collection description input"
           />
           <Text style={styles.charCount}>{description.length}/200</Text>
-        </Reanimated.View>
+        </View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.card}>
+        <View style={styles.card}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleIconWrap}>
               <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={colors.textSecondary} />
@@ -245,10 +242,10 @@ export default function CreateCollectionScreen() {
               </View>
             </AnimatedPressable>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Item selection from saved items */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={styles.itemSectionHeader}>
             <Text style={styles.label}>Select items</Text>
             {selectedIds.size > 0 && (
@@ -314,9 +311,9 @@ export default function CreateCollectionScreen() {
               })}
             </ScrollView>
           )}
-        </Reanimated.View>
+        </View>
 
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.footer}>
+        <View style={styles.footer}>
           <AppButton
             title={isSubmitting ? 'Creating...' : 'Create Collection'}
             onPress={handleCreate}
@@ -327,7 +324,7 @@ export default function CreateCollectionScreen() {
             hapticFeedback="medium"
             accessibilityLabel="Create collection"
           />
-        </Reanimated.View>
+        </View>
       </KeyboardAwareScrollView>
     </FlagshipScreen>
   );

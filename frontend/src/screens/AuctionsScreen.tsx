@@ -4,7 +4,6 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
@@ -37,7 +36,6 @@ import {
   type AuctionBidActivity,
 } from '../services/marketApi';
 import { t } from '../i18n';
-import { Motion } from '../constants/motion';
 import { Space, Radius, Type, Stroke, Control, Typography } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
@@ -703,54 +701,43 @@ export default function AuctionsScreen() {
     return auctions;
   }, [auctions, liveAuctions, upcomingAuctions, endedAuctions, statusFilter]);
 
-  const renderAuctionCard = useCallback(({ item, index }: { item: AuctionViewModel; index: number }) => {
+  const renderAuctionCard = useCallback(({ item }: { item: AuctionViewModel }) => {
     const sellerLabel = item.sellerDisplayName ?? `@${item.sellerUsername}`;
     return (
-      <Reanimated.View
-        entering={
-          reducedMotionEnabled
-            ? undefined
-            : FadeInDown
-                .duration(Motion.list.enterDuration)
-                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
+      <AuctionCard
+        id={item.id}
+        title={item.title}
+        image={item.image}
+        sellerName={sellerLabel}
+        sellerId={item.sellerId}
+        currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
+        bidCount={item.bidCount}
+        timeRemaining={formatCountdown(item.msToEnd ?? 0)}
+        progress={item.progress ?? 0}
+        isLive={item.lifecycle === 'live'}
+        isWatching={item.isWatched}
+        viewerState={item.viewerState}
+        timerUrgency={getTimerUrgency(item.msToEnd ?? 0)}
+        endingSoon={item.lifecycle === 'live' && item.msToEnd > 0 && item.msToEnd < 60 * 60 * 1000}
+        buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
+        onPress={() => navigateToDetail(item)}
+        onBid={() => openBidComposer(item)}
+        onBuyNow={() => void handleBuyNow(item)}
+        onToggleWatch={() => void handleToggleWatch(item)}
+        onPressSeller={() => openProfile(navigation, item.sellerId, currentUser?.id)}
+        onMessageSeller={() =>
+          navigation.navigate('Chat', {
+            conversationId: `${item.sellerId}_${item.listingId}`,
+            focusQuery: sellerLabel,
+            partnerUserId: item.sellerId,
+          })
         }
-      >
-        <AuctionCard
-          id={item.id}
-          title={item.title}
-          image={item.image}
-          sellerName={sellerLabel}
-          sellerId={item.sellerId}
-          currentBid={formatFromFiat(item.currentBid, 'GBP', { displayMode: 'fiat' })}
-          bidCount={item.bidCount}
-          timeRemaining={formatCountdown(item.msToEnd ?? 0)}
-          progress={item.progress ?? 0}
-          isLive={item.lifecycle === 'live'}
-          isWatching={item.isWatched}
-          viewerState={item.viewerState}
-          timerUrgency={getTimerUrgency(item.msToEnd ?? 0)}
-          endingSoon={item.lifecycle === 'live' && item.msToEnd > 0 && item.msToEnd < 60 * 60 * 1000}
-          buyNowPrice={item.buyNowPrice ? formatFromFiat(item.buyNowPrice, 'GBP', { displayMode: 'fiat' }) : undefined}
-          onPress={() => navigateToDetail(item)}
-          onBid={() => openBidComposer(item)}
-          onBuyNow={() => void handleBuyNow(item)}
-          onToggleWatch={() => void handleToggleWatch(item)}
-          onPressSeller={() => openProfile(navigation, item.sellerId, currentUser?.id)}
-          onMessageSeller={() =>
-            navigation.navigate('Chat', {
-              conversationId: `${item.sellerId}_${item.listingId}`,
-              focusQuery: sellerLabel,
-              partnerUserId: item.sellerId,
-            })
-          }
-          onViewBidHistory={() => void openBidHistory(item)}
-          isBuyNowLoading={buyNowAuctionId === item.id}
-          isBidSubmitting={isSubmittingBid}
-        />
-      </Reanimated.View>
+        onViewBidHistory={() => void openBidHistory(item)}
+        isBuyNowLoading={buyNowAuctionId === item.id}
+        isBidSubmitting={isSubmittingBid}
+      />
     );
   }, [
-    reducedMotionEnabled,
     formatFromFiat,
     navigateToDetail,
     openBidComposer,

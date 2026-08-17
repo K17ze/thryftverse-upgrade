@@ -39,11 +39,9 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
@@ -92,7 +90,6 @@ interface ProviderState {
 
 export default function AIAgentIntegrationScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -270,7 +267,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       )}
 
       {/* ── Summary — connected count as typography, no card ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.summaryWrap}>
           <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
             {connectedCount > 0
@@ -283,10 +279,8 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               : 'Connect an OpenAI, Anthropic, Gemini or custom endpoint'}
           </Text>
         </View>
-      </Reanimated.View>
 
       {/* ── Agent management — flat rows, no card ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.sectionLabelWrap}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>AGENT MANAGEMENT</Text>
         </View>
@@ -347,7 +341,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </Pressable>
-      </Reanimated.View>
 
       {/* ── Provider list ── */}
       {loading ? (
@@ -355,7 +348,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           <ActivityIndicator size="small" color={colors.textSecondary} />
         </View>
       ) : (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={styles.sectionLabelWrap}>
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PROVIDERS</Text>
           </View>
@@ -602,11 +595,10 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
               </View>
             );
           })}
-        </Reanimated.View>
+        </View>
       )}
 
       {/* ── Security note (truthful) ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.securityNote}>
           <View style={styles.securityHeader}>
             <Ionicons name="shield-checkmark-outline" size={18} color={colors.textSecondary} />
@@ -616,7 +608,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
             Your API keys are stored locally on this device only — they are never sent to ThryftVerse servers or shared with third parties. When hardware-backed secure storage (iOS Keychain / Android Keystore) is available, keys are stored encrypted at rest; otherwise they are held in process memory only for the current session and never written to plaintext app storage. Removing a key permanently deletes it from this device. When you test a key, a minimal live request (such as listing available models) is sent directly to the provider to confirm the key is authorised — the key is only saved after the provider confirms it, and the returned model list is cached so it stays current as the provider updates it.
           </Text>
         </View>
-      </Reanimated.View>
     </FlagshipScreen>
   );
 }

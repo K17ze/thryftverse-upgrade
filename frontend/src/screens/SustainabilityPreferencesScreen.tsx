@@ -24,11 +24,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -48,7 +46,6 @@ const RATIO_TARGETS = [25, 50, 75, 100];
 
 export default function SustainabilityPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -105,7 +102,6 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
       )}
 
       {/* ── Impact summary hero ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.success }]}>
@@ -129,10 +125,8 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </Reanimated.View>
 
       {/* ── Sustainability goals ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Sustainability goals" noCard>
           <View style={styles.goalRow}>
             <Text style={[styles.goalLabel, { color: colors.textPrimary }]}>Carbon saving target</Text>
@@ -189,10 +183,8 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
             </View>
           </View>
         </SettingsSection>
-      </Reanimated.View>
 
       {/* ── Shipping & packaging ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Shipping & packaging" noCard>
           <SettingsRow
             icon="bicycle-outline"
@@ -211,10 +203,8 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
 
       {/* ── Display & tracking ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Display & tracking" noCard>
           <SettingsRow
             icon="ribbon-outline"
@@ -240,7 +230,6 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
     </FlagshipScreen>
   );
 }

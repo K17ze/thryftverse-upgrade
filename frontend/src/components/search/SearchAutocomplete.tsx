@@ -7,10 +7,8 @@ import {
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
 import {
   Space,
@@ -81,7 +79,6 @@ export function SearchAutocomplete({
 }: SearchAutocompleteProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleSelect = useCallback(
@@ -244,10 +241,7 @@ export function SearchAutocomplete({
   };
 
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInDown.duration(150)}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <FlashList
         data={rows}
         renderItem={renderItem}
@@ -256,7 +250,7 @@ export function SearchAutocomplete({
         nestedScrollEnabled
         contentContainerStyle={styles.listContent}
       />
-    </Reanimated.View>
+    </View>
   );
 }
 

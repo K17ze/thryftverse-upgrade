@@ -6,10 +6,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { listUserTransactions, UserTransaction } from '../services/commerceApi';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BalanceHistory'>;
@@ -53,7 +51,6 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const [transactions, setTransactions] = React.useState<UserTransaction[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
     let cancelled = false;
@@ -98,32 +95,27 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
       ) : (
         <>
           {/* Hero summary — net flow + transaction count */}
-          <Reanimated.View entering={FadeInDown.duration(300)}>
-            <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.heroRow}>
-                <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                  <Ionicons name="receipt" size={18} color={colors.textInverse} />
-                </View>
-                <View style={styles.heroText}>
-                  <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                    {transactions.length} transaction{transactions.length === 1 ? '' : 's'}
-                  </Text>
-                  <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                    Last {transactions.length} record{transactions.length === 1 ? '' : 's'}
-                  </Text>
-                </View>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.heroRow}>
+              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="receipt" size={18} color={colors.textInverse} />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                  {transactions.length} transaction{transactions.length === 1 ? '' : 's'}
+                </Text>
+                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                  Last {transactions.length} record{transactions.length === 1 ? '' : 's'}
+                </Text>
               </View>
             </View>
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View>
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>TRANSACTION LEDGER</Text>
             <View style={styles.card}>
               {transactions.map((tx, idx) => (
-                <Reanimated.View
-                  key={tx.id}
-                  entering={FadeInDown.delay(Math.min(idx, 10) * 40).duration(300)}
-                >
+                <View key={tx.id}>
                   <View style={styles.txRow}>
                     <View style={[styles.txIcon, { backgroundColor: colorForType(tx.type, tx.lineType, colors) + '22' }]}>
                       <Ionicons name={iconForType(tx.type, tx.lineType)} size={18} color={colorForType(tx.type, tx.lineType, colors)} />
@@ -137,10 +129,10 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                     </Text>
                   </View>
                   {idx < transactions.length - 1 && <View style={styles.divider} />}
-                </Reanimated.View>
+                </View>
               ))}
             </View>
-          </Reanimated.View>
+          </View>
         </>
       )}
     </FlagshipScreen>

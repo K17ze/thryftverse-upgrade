@@ -1,12 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { CoOwnAssetStatus } from './CoOwnFeaturedAsset';
 
 export type CoOwnAssetTileVariant = 'discovery' | 'market';
@@ -59,7 +57,6 @@ export function CoOwnAssetTile({
   marketData,
 }: CoOwnAssetTileProps) {
   const { colors } = useAppTheme();
-  const reducedMotion = useReducedMotion();
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
 
   const statusLabel = status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Allocated';
@@ -68,7 +65,6 @@ export function CoOwnAssetTile({
   // Market variant — sortable market row
   if (variant === 'market') {
     return (
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 30).duration(250)}>
         <AnimatedPressable
           onPress={onPress}
           activeOpacity={0.92}
@@ -149,19 +145,17 @@ export function CoOwnAssetTile({
             </View>
           </View>
         </AnimatedPressable>
-      </Reanimated.View>
     );
   }
 
   // Discovery variant — art-directed tile (original)
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 40).duration(250)}>
-      <AnimatedPressable
-        onPress={onPress}
-        activeOpacity={0.92}
-        accessibilityRole="button"
-        accessibilityLabel={`${title}, ${unitPriceLabel} per unit, ${availableUnits} of ${totalUnits} units available, ${statusLabel}`}
-      >
+    <AnimatedPressable
+      onPress={onPress}
+      activeOpacity={0.92}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${unitPriceLabel} per unit, ${availableUnits} of ${totalUnits} units available, ${statusLabel}`}
+    >
         <View style={styles.imageWrap}>
           {imageUri ? (
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
@@ -190,8 +184,7 @@ export function CoOwnAssetTile({
             {availableUnits} left
           </Text>
         </View>
-      </AnimatedPressable>
-    </Reanimated.View>
+    </AnimatedPressable>
   );
 }
 

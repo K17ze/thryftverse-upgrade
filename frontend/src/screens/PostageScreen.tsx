@@ -6,14 +6,12 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { formatCountryPolicyScope } from '../utils/capabilityPolicy';
 import { CapabilityCarrier, getUserCountryCapabilities } from '../services/capabilitiesApi';
 import { SettingsCell } from '../components/SettingsCell';
@@ -53,7 +51,6 @@ export default function PostageScreen({ navigation }: Props) {
   const [carriers, setCarriers] = useState(CARRIERS);
   const [carrierScopeLabel, setCarrierScopeLabel] = useState<string | null>(null);
   const [isHydrating, setIsHydrating] = useState(true);
-  const reducedMotionEnabled = useReducedMotion();
 
   useEffect(() => {
     let cancelled = false;
@@ -112,7 +109,6 @@ export default function PostageScreen({ navigation }: Props) {
       }
     >
       {/* Hero summary — shipping setup status */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -128,7 +124,6 @@ export default function PostageScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </Reanimated.View>
 
       {/* Link to saved addresses */}
       <Pressable
@@ -153,7 +148,6 @@ export default function PostageScreen({ navigation }: Props) {
       </Pressable>
 
       {/* Default Carrier */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
         <PremiumListSection title="Default Carrier" subtitle={carrierScopeLabel ? `Region policy: ${carrierScopeLabel}` : undefined}>
           {isHydrating ? (
             <FlagshipState variant="loading" />
@@ -181,10 +175,8 @@ export default function PostageScreen({ navigation }: Props) {
             </>
           )}
         </PremiumListSection>
-      </Reanimated.View>
 
       {/* Shipping Options */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
         <PremiumListSection title="Shipping Options">
           <SettingsCell
             icon="gift-outline"
@@ -207,15 +199,12 @@ export default function PostageScreen({ navigation }: Props) {
             isLast
           />
         </PremiumListSection>
-      </Reanimated.View>
 
       {/* Footer note */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
         <Text style={styles.footerNote}>
           These are your default settings. Override postage for individual items when
           listing.
         </Text>
-      </Reanimated.View>
     </FlagshipScreen>
   );
 }

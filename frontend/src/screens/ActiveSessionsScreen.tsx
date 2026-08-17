@@ -1,11 +1,9 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, Platform, RefreshControl, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type , Typography, Stroke  } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
@@ -48,7 +46,6 @@ function platformIcon(platform: string): React.ComponentProps<typeof Ionicons>['
 export default function ActiveSessionsScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -157,7 +154,6 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Security overview */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
           <View style={[styles.trustSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.trustHeader}>
               <Ionicons name="checkmark-done-outline" size={20} color={colors.success} />
@@ -173,15 +169,12 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                   : 'Review the sessions below. If you don\u2019t recognise a device, end the session immediately.'}
             </Text>
           </View>
-        </Reanimated.View>
 
         {error && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
             <View style={[styles.errorBanner, { backgroundColor: colors.danger + '10', borderColor: colors.danger + '30' }]}>
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
               <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
             </View>
-          </Reanimated.View>
         )}
 
         {loading ? (
@@ -189,7 +182,6 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         ) : (
           <>
             {/* This device */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
               <SettingsSection title="This device" noCard>
                 {currentSessions.length > 0 ? (
                   currentSessions.map((session) => (
@@ -221,10 +213,8 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                   </View>
                 )}
               </SettingsSection>
-            </Reanimated.View>
 
             {/* Other devices */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
               <SettingsSection title="Other devices" noCard>
                 {otherSessions.length === 0 ? (
                   <View style={styles.emptyGroup}>
@@ -262,11 +252,10 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                   ))
                 )}
               </SettingsSection>
-            </Reanimated.View>
 
             {/* End all others */}
             {otherSessions.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)} style={styles.endAllContainer}>
+              <View style={styles.endAllContainer}>
                 <AppButton
                   title={revokingOthers ? 'Ending all…' : 'End all other sessions'}
                   onPress={handleEndAllOthers}
@@ -275,7 +264,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                   disabled={revokingOthers}
                   style={{ borderRadius: Radius.xl }}
                 />
-              </Reanimated.View>
+              </View>
             )}
           </>
         )}

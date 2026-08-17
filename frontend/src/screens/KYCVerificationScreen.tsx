@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import Reanimated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
@@ -24,7 +23,6 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import {
   createKycSession,
@@ -46,7 +44,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
   const updateCoOwnCompliance = useStore((state) => state.updateCoOwnCompliance);
@@ -247,8 +244,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
   if (submitted) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Verification" onBack={() => navigation.goBack()} />}>
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
+        <View
           style={styles.submittedWrap}
         >
           <View style={[styles.submittedIcon, { backgroundColor: colors.warning + '18' }]}>
@@ -273,7 +269,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
             accessibilityLabel="View verification status"
             hapticFeedback="light"
           />
-        </Reanimated.View>
+        </View>
       </FlagshipScreen>
     );
   }
@@ -337,7 +333,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               phone={phone}
               setPhone={setPhone}
               errors={errors1}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
           {step === 2 && (
@@ -352,7 +347,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               onCapture={capturePhoto}
               onClearFront={() => setDocumentFrontUri(null)}
               onClearBack={() => setDocumentBackUri(null)}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
           {step === 3 && (
@@ -363,7 +357,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               errors={errors3}
               onCapture={() => capturePhoto('selfie')}
               onClear={() => setSelfieUri(null)}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
           {step === 4 && (
@@ -379,7 +372,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               businessAddress={businessAddress}
               setBusinessAddress={setBusinessAddress}
               errors={errors4}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
           {step === 5 && (
@@ -400,7 +392,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
               setTermsAccepted={setTermsAccepted}
               errors={errors5}
               submitError={submitError}
-              reducedMotionEnabled={reducedMotionEnabled}
             />
           )}
         </ScrollView>
@@ -524,7 +515,6 @@ function StepIdentity({
   phone,
   setPhone,
   errors,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -537,7 +527,6 @@ function StepIdentity({
   phone: string;
   setPhone: (v: string) => void;
   errors: Record<string, string>;
-  reducedMotionEnabled: boolean;
 }) {
   const formatDob = (text: string) => {
     const digits = text.replace(/\D/g, '').slice(0, 8);
@@ -548,7 +537,7 @@ function StepIdentity({
   };
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Identity information</Text>
       <Text style={styles.stepSubtitle}>
         Enter your legal details exactly as they appear on your document.
@@ -601,7 +590,7 @@ function StepIdentity({
           Your information is encrypted and used only for identity verification.
         </Text>
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -617,7 +606,6 @@ function StepDocument({
   onCapture,
   onClearFront,
   onClearBack,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -629,12 +617,11 @@ function StepDocument({
   onCapture: (target: 'docFront' | 'docBack') => void;
   onClearFront: () => void;
   onClearBack: () => void;
-  reducedMotionEnabled: boolean;
 }) {
   const needsBack = documentType !== 'passport';
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Document verification</Text>
       <Text style={styles.stepSubtitle}>
         Choose your document type and capture a clear photo.
@@ -684,7 +671,7 @@ function StepDocument({
           icon="card-outline"
         />
       ) : null}
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -696,7 +683,6 @@ function StepSelfie({
   errors,
   onCapture,
   onClear,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -704,10 +690,9 @@ function StepSelfie({
   errors: Record<string, string>;
   onCapture: () => void;
   onClear: () => void;
-  reducedMotionEnabled: boolean;
 }) {
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Selfie verification</Text>
       <Text style={styles.stepSubtitle}>
         We'll verify your identity by comparing your selfie to your document photo.
@@ -731,7 +716,7 @@ function StepSelfie({
         icon="person-circle-outline"
         circular
       />
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -748,7 +733,6 @@ function StepBusiness({
   businessAddress,
   setBusinessAddress,
   errors,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -761,10 +745,9 @@ function StepBusiness({
   businessAddress: string;
   setBusinessAddress: (v: string) => void;
   errors: Record<string, string>;
-  reducedMotionEnabled: boolean;
 }) {
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Business information</Text>
       <Text style={styles.stepSubtitle}>
         Optional — tell us if you are selling as a business or an individual.
@@ -843,7 +826,7 @@ function StepBusiness({
           </Text>
         </View>
       )}
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -865,7 +848,6 @@ function StepReview({
   setTermsAccepted,
   errors,
   submitError,
-  reducedMotionEnabled,
 }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -883,7 +865,6 @@ function StepReview({
   setTermsAccepted: (v: boolean) => void;
   errors: Record<string, string>;
   submitError: string | null;
-  reducedMotionEnabled: boolean;
 }) {
   const docLabel =
     documentType === 'passport' ? 'Passport'
@@ -891,7 +872,7 @@ function StepReview({
     : 'National ID';
 
   return (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(250)} style={styles.stepWrap}>
+    <View style={styles.stepWrap}>
       <Text style={styles.stepTitle}>Review & submit</Text>
       <Text style={styles.stepSubtitle}>
         Confirm the information below before submitting.
@@ -966,7 +947,7 @@ function StepReview({
           Review typically takes within 24 hours. We'll notify you when it is complete.
         </Text>
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 

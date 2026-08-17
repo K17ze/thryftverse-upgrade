@@ -20,7 +20,6 @@ import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, Dimensions, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -29,7 +28,6 @@ import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { Listing } from '../../domain';
 import { filterImageUris } from '../../utils/media';
 import {
@@ -126,7 +124,6 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
   const haptic = useHaptic();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
-  const reducedMotionEnabled = useReducedMotion();
 
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
@@ -167,12 +164,8 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
     [haptic, toggleFav, item.id, isFav, show],
   );
 
-  const entering = reducedMotionEnabled
-    ? undefined
-    : FadeInDown.duration(280).delay(Math.min(index * 40, 320)).springify();
-
   return (
-    <Reanimated.View entering={entering} style={[styles.tileWrap, { width: tileWidth }]}>
+    <View style={[styles.tileWrap, { width: tileWidth }]}>
       <AnimatedPressable
         onPress={onPress}
         style={styles.tile}
@@ -276,7 +269,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
           </>
         ) : null}
       </AnimatedPressable>
-    </Reanimated.View>
+    </View>
   );
 });
 

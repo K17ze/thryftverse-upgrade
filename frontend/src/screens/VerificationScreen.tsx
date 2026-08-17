@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
@@ -39,7 +38,6 @@ import {
 } from '../services/complianceApi';
 import { parseApiError } from '../lib/apiClient';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadMedia } from '../services/mediaUpload';
@@ -60,7 +58,6 @@ const UK_COUNTRIES = ['GB', 'IE'];
 export default function VerificationScreen({ navigation }: Props) {
   const { show } = useToast();
   const { isOffline } = useConnectivity();
-  const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -328,7 +325,6 @@ export default function VerificationScreen({ navigation }: Props) {
         contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
       >
       {/* ── STATUS CARD ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={[styles.statusIconWrap, { backgroundColor: iconBgColor }]}>
             <Ionicons
@@ -346,10 +342,8 @@ export default function VerificationScreen({ navigation }: Props) {
             </Text>
           </View>
         </View>
-      </Reanimated.View>
 
       {/* ── VERIFICATION STEPS ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Verification steps">
         <SettingsRow
           icon="mail-outline"
@@ -381,7 +375,6 @@ export default function VerificationScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
 
       {/* ── KYC FLOW ── */}
       {kycStep !== 'status' ? (

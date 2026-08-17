@@ -30,7 +30,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated, { SlideInDown, FadeIn } from 'react-native-reanimated';
+import Reanimated, { SlideInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
@@ -210,14 +210,6 @@ export function ActionDock({
   if (animated && !reducedMotion) {
     return (
       <Reanimated.View entering={SlideInDown.duration(280)} style={styles.wrapper}>
-        {content}
-      </Reanimated.View>
-    );
-  }
-
-  if (animated && reducedMotion) {
-    return (
-      <Reanimated.View entering={FadeIn.duration(0)} style={styles.wrapper}>
         {content}
       </Reanimated.View>
     );

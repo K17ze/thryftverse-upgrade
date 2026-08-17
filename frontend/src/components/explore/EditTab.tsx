@@ -6,7 +6,6 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -18,7 +17,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../../context/ToastContext';
 import { useBackendData } from '../../context/BackendDataContext';
 import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
@@ -30,16 +28,14 @@ const { width: SCREEN_W } = Dimensions.get('window');
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 /* ── Sub-components ── */
-function TrendingRailItem({ item, index, onPress, styles, reducedMotion }: { item: { id: string; title: string; brand: string | null; price: number; image: string }; index: number; onPress: () => void; styles: ReturnType<typeof createStyles>; reducedMotion: boolean }) {
+function TrendingRailItem({ item, onPress, styles }: { item: { id: string; title: string; brand: string | null; price: number; image: string }; onPress: () => void; styles: ReturnType<typeof createStyles> }) {
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(350).delay(index * 60).springify()}>
-      <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
-        <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
-        <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
-        <Text style={styles.trendingTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.trendingPrice}>£{item.price}</Text>
-      </AnimatedPressable>
-    </Reanimated.View>
+    <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
+      <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+      <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
+      <Text style={styles.trendingTitle} numberOfLines={1}>{item.title}</Text>
+      <Text style={styles.trendingPrice}>£{item.price}</Text>
+    </AnimatedPressable>
   );
 }
 
@@ -51,7 +47,6 @@ export default function EditTab() {
   const haptic = useHaptic();
   const { show } = useToast();
   const { listings } = useBackendData();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [trending, setTrending] = React.useState<TrendingListing[]>([]);
   const [trendingLoading, setTrendingLoading] = React.useState(true);
@@ -147,14 +142,12 @@ export default function EditTab() {
             })}
           </View>
           <HorizontalRail contentContainerStyle={styles.trendingScroll}>
-            {trendingListings.map((item, i) => (
+            {trendingListings.map((item) => (
               <TrendingRailItem
                 key={item.id}
                 item={item}
-                index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
                 styles={styles}
-                reducedMotion={reducedMotionEnabled}
               />
             ))}
           </HorizontalRail>
@@ -171,14 +164,12 @@ export default function EditTab() {
             onAction={() => handleExploreCollection({ title: 'New Arrivals', source: { type: 'newest' } })}
           />
           <HorizontalRail contentContainerStyle={styles.trendingScroll}>
-            {newestListings.map((item, i) => (
+            {newestListings.map((item) => (
               <TrendingRailItem
                 key={item.id}
                 item={item}
-                index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
                 styles={styles}
-                reducedMotion={reducedMotionEnabled}
               />
             ))}
           </HorizontalRail>
@@ -195,14 +186,12 @@ export default function EditTab() {
             onAction={() => handleExploreCollection({ title: 'Price Drops', source: { type: 'price_drop' } })}
           />
           <HorizontalRail contentContainerStyle={styles.trendingScroll}>
-            {priceDropListings.map((item, i) => (
+            {priceDropListings.map((item) => (
               <TrendingRailItem
                 key={item.id}
                 item={item}
-                index={i}
                 onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
                 styles={styles}
-                reducedMotion={reducedMotionEnabled}
               />
             ))}
           </HorizontalRail>

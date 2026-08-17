@@ -20,12 +20,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
@@ -49,7 +47,6 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [doc, setDoc] = React.useState<CoOwnTaxDocument | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -136,41 +133,39 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
         ) : (
           <>
             {/* Hero — tax year with P&L as dominant number */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-              <View style={styles.heroCard}>
-                <View style={styles.heroTop}>
-                  <View style={[styles.heroIconWrap, { backgroundColor: colors.surfaceAlt }]}>
-                    <Ionicons name="document-text" size={22} color={colors.brand} />
-                  </View>
-                  <View style={styles.heroYearWrap}>
-                    <Text style={styles.heroYear}>Tax Year {doc.taxYear}</Text>
-                    <Text style={styles.heroPeriod}>
-                      {formatDate(doc.startDate)} – {formatDate(doc.endDate)}
-                    </Text>
-                  </View>
+            <View style={styles.heroCard}>
+              <View style={styles.heroTop}>
+                <View style={[styles.heroIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+                  <Ionicons name="document-text" size={22} color={colors.brand} />
                 </View>
-                {/* P&L as the dominant number */}
-                <View style={styles.heroPnlWrap}>
-                  <Text style={styles.heroPnlLabel}>Realized P&L</Text>
-                  <Text style={[styles.heroPnlValue, { color: pnlPositive ? colors.success : colors.danger }]}>
-                    {formatGbp(doc.summary.realizedPnlGbpMinor)}
+                <View style={styles.heroYearWrap}>
+                  <Text style={styles.heroYear}>Tax Year {doc.taxYear}</Text>
+                  <Text style={styles.heroPeriod}>
+                    {formatDate(doc.startDate)} – {formatDate(doc.endDate)}
                   </Text>
-                  <View style={[styles.heroPnlBadge, { backgroundColor: (pnlPositive ? colors.success : colors.danger) + '18' }]}>
-                    <Ionicons
-                      name={pnlPositive ? 'arrow-up' : 'arrow-down'}
-                      size={12}
-                      color={pnlPositive ? colors.success : colors.danger}
-                    />
-                    <Text style={[styles.heroPnlBadgeText, { color: pnlPositive ? colors.success : colors.danger }]}>
-                      {pnlPositive ? 'Profit' : 'Loss'}
-                    </Text>
-                  </View>
                 </View>
               </View>
-            </Reanimated.View>
+              {/* P&L as the dominant number */}
+              <View style={styles.heroPnlWrap}>
+                <Text style={styles.heroPnlLabel}>Realized P&L</Text>
+                <Text style={[styles.heroPnlValue, { color: pnlPositive ? colors.success : colors.danger }]}>
+                  {formatGbp(doc.summary.realizedPnlGbpMinor)}
+                </Text>
+                <View style={[styles.heroPnlBadge, { backgroundColor: (pnlPositive ? colors.success : colors.danger) + '18' }]}>
+                  <Ionicons
+                    name={pnlPositive ? 'arrow-up' : 'arrow-down'}
+                    size={12}
+                    color={pnlPositive ? colors.success : colors.danger}
+                  />
+                  <Text style={[styles.heroPnlBadgeText, { color: pnlPositive ? colors.success : colors.danger }]}>
+                    {pnlPositive ? 'Profit' : 'Loss'}
+                  </Text>
+                </View>
+              </View>
+            </View>
 
             {/* Summary breakdown */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+            <View>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Summary</Text>
               </View>
@@ -197,11 +192,11 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                   <Text style={styles.summaryValue}>{formatGbp(doc.summary.totalDistributionsGbpMinor)}</Text>
                 </View>
               </View>
-            </Reanimated.View>
+            </View>
 
             {/* Purchases breakdown */}
             {doc.purchases.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Purchases by asset</Text>
                 </View>
@@ -216,12 +211,12 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                     </View>
                   ))}
                 </View>
-              </Reanimated.View>
+              </View>
             )}
 
             {/* Sales breakdown */}
             {doc.sales.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Sales by asset</Text>
                 </View>
@@ -236,12 +231,12 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                     </View>
                   ))}
                 </View>
-              </Reanimated.View>
+              </View>
             )}
 
             {/* Distributions breakdown */}
             {doc.distributions.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Distributions by asset</Text>
                 </View>
@@ -256,23 +251,21 @@ export default function CoOwnTaxDocumentsScreen({ navigation }: Props) {
                     </View>
                   ))}
                 </View>
-              </Reanimated.View>
+              </View>
             )}
 
             {/* Disclaimer */}
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-              <View style={styles.disclaimerCard}>
-                <View style={styles.disclaimerIconWrap}>
-                  <Ionicons name="information-circle" size={18} color={colors.textSecondary} />
-                </View>
-                <View style={styles.disclaimerTextWrap}>
-                  <Text style={styles.disclaimerTitle}>For information only</Text>
-                  <Text style={styles.disclaimerText}>
-                    This statement does not constitute tax advice. Consult a qualified tax professional for guidance on your specific circumstances.
-                  </Text>
-                </View>
+            <View style={styles.disclaimerCard}>
+              <View style={styles.disclaimerIconWrap}>
+                <Ionicons name="information-circle" size={18} color={colors.textSecondary} />
               </View>
-            </Reanimated.View>
+              <View style={styles.disclaimerTextWrap}>
+                <Text style={styles.disclaimerTitle}>For information only</Text>
+                <Text style={styles.disclaimerText}>
+                  This statement does not constitute tax advice. Consult a qualified tax professional for guidance on your specific circumstances.
+                </Text>
+              </View>
+            </View>
 
             <Text style={styles.generatedAt}>Generated {formatDate(doc.generatedAt)}</Text>
 

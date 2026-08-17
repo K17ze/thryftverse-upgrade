@@ -11,9 +11,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { requestPasswordReset } from '../services/authApi';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { AppButton } from '../components/ui/AppButton';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 export default function ForgotPasswordScreen() {
@@ -25,7 +23,6 @@ export default function ForgotPasswordScreen() {
   const canSendReset = email.trim().length > 0;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleReset = async () => {
@@ -75,14 +72,13 @@ export default function ForgotPasswordScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.delay(0).duration(400)}>
+        <View>
           <Text style={styles.title}>Reset{'\n'}Password</Text>
-        </Reanimated.View>
+        </View>
 
         {isSent ? (
-          <Reanimated.View
+          <View
             style={styles.successState}
-            entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)}
           >
             <Ionicons name="mail-unread-outline" size={48} color={colors.success} />
             <Text style={styles.successText}>We have sent a password reset link to {email}.</Text>
@@ -93,11 +89,10 @@ export default function ForgotPasswordScreen() {
               size="lg"
               style={{ marginTop: Space.lg }}
             />
-          </Reanimated.View>
+          </View>
         ) : (
-          <Reanimated.View
+          <View
             style={styles.form}
-            entering={reducedMotionEnabled ? undefined : FadeInDown.delay(100).duration(400)}
           >
             <Text style={styles.subtitle}>Enter your email address and we'll send you a link to reset your password.</Text>
             <AppInput
@@ -117,9 +112,8 @@ export default function ForgotPasswordScreen() {
 
             {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
-            <Reanimated.View
+            <View
               style={styles.footer}
-              entering={reducedMotionEnabled ? undefined : FadeInDown.delay(200).duration(400)}
             >
               <AppButton
                 title={isSubmitting ? 'Sending...' : 'Send Reset Link'}
@@ -130,8 +124,8 @@ export default function ForgotPasswordScreen() {
                 size="lg"
                 style={{ marginTop: Space.lg }}
               />
-            </Reanimated.View>
-          </Reanimated.View>
+            </View>
+          </View>
         )}
 
       </KeyboardAwareScrollView>

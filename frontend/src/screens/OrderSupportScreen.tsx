@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -24,7 +23,6 @@ import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import * as ImagePicker from 'expo-image-picker';
@@ -58,7 +56,6 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [details, setDetails] = useState('');
@@ -179,7 +176,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       >
           {/* Order Context Card */}
           {order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+            <View>
               <ElevatedSurface variant="surface" style={styles.orderCard}>
                 <View style={styles.orderRow}>
                   {order.listingImageUrl && (
@@ -196,12 +193,12 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                   </View>
                 </View>
               </ElevatedSurface>
-            </Reanimated.View>
+            </View>
           )}
 
           {/* Existing Open Ticket */}
           {openTicket && !isSubmitted && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+            <View>
               <ElevatedSurface variant="surface" style={styles.existingTicketCard}>
                 <View style={styles.existingTicketRow}>
                   <Ionicons name="help-circle-outline" size={22} color={colors.brand} />
@@ -217,10 +214,10 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                   onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id })}
                 />
               </ElevatedSurface>
-            </Reanimated.View>
+            </View>
           )}
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <Meta color={colors.textMuted} style={styles.sectionLabel}>SELECT TOPIC</Meta>
             <View style={styles.topicsCard}>
               {availableTopics.map((topic) => {
@@ -265,7 +262,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                 );
               })}
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* What happens next — contextual guidance after topic selection */}
           {selectedTopic && !isSubmitted && (() => {
@@ -282,7 +279,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
               other: 'Describe the issue in detail below. Our support team will review and respond.',
             };
             return (
-              <Reanimated.View entering={FadeInDown.duration(300)}>
+              <View>
                 <View style={styles.guidanceCard}>
                   <View style={styles.guidanceHeader}>
                     <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
@@ -298,11 +295,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                     </View>
                   )}
                 </View>
-              </Reanimated.View>
+              </View>
             );
           })()}
 
-          <Reanimated.View entering={FadeInDown.duration(300)}>
+          <View>
             <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
             <View style={styles.detailsCard}>
               <AppInput
@@ -316,11 +313,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
               />
               <Text style={styles.charCount}>{details.length}/800</Text>
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* Evidence upload */}
           {!isSubmitted && (
-            <Reanimated.View entering={FadeInDown.duration(300)}>
+            <View>
               <Meta color={colors.textMuted} style={styles.sectionLabel}>EVIDENCE (OPTIONAL)</Meta>
               <View style={styles.evidenceCard}>
                 {evidenceUris.length > 0 && (
@@ -360,11 +357,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                   </Pressable>
                 )}
               </View>
-            </Reanimated.View>
+            </View>
           )}
 
           {isSubmitted && submittedTicketId && (
-            <Reanimated.View entering={FadeInDown.duration(300)} style={styles.successCard}>
+            <View style={styles.successCard}>
               <Ionicons name="checkmark-circle" size={32} color={colors.success} />
               <BodyEmphasis style={styles.successTitle}>Request received</BodyEmphasis>
               <Caption color={colors.textSecondary} style={styles.successSub}>
@@ -380,16 +377,16 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                 style={{ marginTop: Space.sm }}
                 onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: submittedTicketId })}
               />
-            </Reanimated.View>
+            </View>
           )}
 
           {!isSubmitted && (
-            <Reanimated.View entering={FadeInDown.duration(300)} style={styles.honestNote}>
+            <View style={styles.honestNote}>
               <Ionicons name="time-outline" size={16} color={colors.textMuted} />
               <Caption color={colors.textMuted} style={styles.honestNoteText}>
                 Our support team reviews requests as quickly as possible. For urgent issues, contact us through the Help & Support page.
               </Caption>
-            </Reanimated.View>
+            </View>
           )}
 
         <View style={styles.footer}>

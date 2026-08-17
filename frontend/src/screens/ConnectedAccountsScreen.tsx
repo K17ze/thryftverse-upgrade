@@ -20,11 +20,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
@@ -58,7 +56,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [accounts, setAccounts] = React.useState<ConnectedAccount[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -136,7 +133,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary — visual identity for the screen */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.heroCard}>
             <View style={styles.heroIconRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -152,7 +148,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
               </View>
             </View>
           </View>
-        </Reanimated.View>
 
         <Text style={styles.introText}>
           Manage the third-party accounts you use to sign in. Unlink an account as long as you have another way to access your ThryftVerse account.
@@ -167,7 +162,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
             onCtaPress={() => { setIsLoading(true); void load(); }}
           />
         ) : accounts.length === 0 ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <View style={styles.emptyCard}>
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="link-outline" size={36} color={colors.textMuted} />
@@ -177,7 +171,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                 You sign in with your email and password. Connect Google or Apple from the sign-in screen for faster access.
               </Text>
             </View>
-          </Reanimated.View>
         ) : (
           <View style={styles.accountsList}>
             {accounts.map((account, idx) => {
@@ -189,9 +182,8 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
               };
               const isUnlinking = unlinkingId === account.id;
               return (
-                <Reanimated.View
+                <View
                   key={account.id}
-                  entering={FadeInDown.duration(300).delay(idx * 60)}
                 >
                   <View style={styles.accountCard}>
                     <View style={styles.accountHeader}>
@@ -218,14 +210,13 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                       disabled={isUnlinking}
                     />
                   </View>
-                </Reanimated.View>
+                </View>
               );
             })}
           </View>
         )}
 
         {/* Security note — elevated with icon and card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
           <View style={styles.securityNote}>
             <View style={styles.securityIconWrap}>
               <Ionicons name="checkmark-done" size={20} color={colors.success} />
@@ -237,7 +228,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
               </Text>
             </View>
           </View>
-        </Reanimated.View>
 
         <View style={{ height: Space.xxl }} />
       </ScrollView>

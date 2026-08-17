@@ -17,7 +17,6 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -29,7 +28,6 @@ import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import {
   fetchUserListingsFromApi,
@@ -70,7 +68,6 @@ export default function InventoryManagementScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
 
@@ -571,8 +568,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
 
       {/* ── Bulk actions bar ── */}
       {selectionMode ? (
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(200)}
+        <View
           style={[styles.bulkBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}
         >
           <View style={styles.bulkBarInfo}>
@@ -615,7 +611,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
               <Text style={styles.bulkCancelText}>Cancel</Text>
             </Pressable>
           </View>
-        </Reanimated.View>
+        </View>
       ) : null}
     </FlagshipScreen>
   );

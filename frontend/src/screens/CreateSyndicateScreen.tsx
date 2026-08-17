@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -23,7 +22,6 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Type, Typography, DockConstants, Control, Stroke, LetterSpacing } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
@@ -54,7 +52,6 @@ export default function CreateCoOwnScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, goldRates } = useCurrencyContext();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -421,7 +418,7 @@ export default function CreateCoOwnScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* ── Stage 1: Select listing ── */}
         {stage === 'select' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+          <View>
             <CoOwnIssueStudioStep
               stepNumber={1}
               totalSteps={3}
@@ -468,12 +465,12 @@ export default function CreateCoOwnScreen() {
                 </View>
               )}
             </CoOwnIssueStudioStep>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── Stage 2: Configure units and price ── */}
         {stage === 'configure' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+          <View>
             <CoOwnIssueStudioStep
               stepNumber={2}
               totalSteps={3}
@@ -662,12 +659,12 @@ export default function CreateCoOwnScreen() {
                 </View>
               </View>
             </CoOwnIssueStudioStep>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── Stage 3: Review and issue ── */}
         {stage === 'review' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+          <View>
             <CoOwnIssueStudioStep
               stepNumber={3}
               totalSteps={3}
@@ -728,12 +725,12 @@ export default function CreateCoOwnScreen() {
               {/* Risk disclosure */}
               <CoOwnRiskDisclosure />
             </CoOwnIssueStudioStep>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── Stage 4: Recourse agreement — seller signs personal liability ── */}
         {stage === 'recourse' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+          <View>
             <CoOwnIssueStudioStep
               stepNumber={4}
               totalSteps={4}
@@ -808,7 +805,7 @@ export default function CreateCoOwnScreen() {
                 </Text>
               </Pressable>
             </CoOwnIssueStudioStep>
-          </Reanimated.View>
+          </View>
         )}
       </ScrollView>
 

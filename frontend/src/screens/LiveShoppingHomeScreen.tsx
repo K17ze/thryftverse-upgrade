@@ -9,10 +9,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Reanimated, {
-  FadeIn,
-  FadeInDown,
-} from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,7 +22,6 @@ import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import {
   fetchLiveSessions,
@@ -295,7 +290,6 @@ export default function LiveShoppingHomeScreen() {
   const styles = useStyles();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
   const { formatFromFiat } = useFormattedPrice();
   const { width } = useWindowDimensions();
 
@@ -528,17 +522,13 @@ export default function LiveShoppingHomeScreen() {
                 </View>
                 <View style={{ paddingHorizontal: Space.md, gap: Space.xs }}>
                   {upcomingSessions.map((session, index) => (
-                    <Reanimated.View
+                    <UpcomingRow
                       key={session.id}
-                      entering={reducedMotion ? undefined : FadeInDown.duration(260).delay(index * 50)}
-                    >
-                      <UpcomingRow
-                        session={session}
-                        onNotify={() => handleNotify(session.id)}
-                        notified={notifiedIds.has(session.id)}
-                        formatScheduled={formatScheduled}
-                      />
-                    </Reanimated.View>
+                      session={session}
+                      onNotify={() => handleNotify(session.id)}
+                      notified={notifiedIds.has(session.id)}
+                      formatScheduled={formatScheduled}
+                    />
                   ))}
                 </View>
               </View>

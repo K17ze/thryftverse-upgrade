@@ -20,12 +20,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { EmptyState } from '../components/EmptyState';
@@ -52,7 +50,6 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [alerts, setAlerts] = React.useState<CoOwnPriceAlert[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -170,17 +167,14 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
           <>
             {/* Active alerts — simple flat list with toggle + delete */}
             {alerts.filter((a) => a.active && !a.triggeredAt).length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <Text style={styles.sectionTitle}>Active</Text>
-                {alerts.filter((a) => a.active && !a.triggeredAt).map((alert, idx) => {
+                {alerts.filter((a) => a.active && !a.triggeredAt).map((alert) => {
                   const isAbove = alert.condition === 'above';
                   const badgeColor = isAbove ? colors.success : colors.danger;
                   const isToggling = togglingIds.has(alert.id);
                   return (
-                    <Reanimated.View
-                      key={alert.id}
-                      entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay((idx + 1) * 50)}
-                    >
+                    <View key={alert.id}>
                       <View style={styles.alertRow}>
                         <Pressable
                           style={({ pressed }) => [styles.alertInfo, pressed && { opacity: 0.85 }]}
@@ -235,24 +229,21 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           <Ionicons name="trash-outline" size={18} color={colors.danger} />
                         </Pressable>
                       </View>
-                    </Reanimated.View>
+                    </View>
                   );
                 })}
-              </Reanimated.View>
+              </View>
             )}
 
             {/* Paused alerts */}
             {alerts.filter((a) => !a.active && !a.triggeredAt).length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <Text style={styles.sectionTitle}>Paused</Text>
-                {alerts.filter((a) => !a.active && !a.triggeredAt).map((alert, idx) => {
+                {alerts.filter((a) => !a.active && !a.triggeredAt).map((alert) => {
                   const isAbove = alert.condition === 'above';
                   const isToggling = togglingIds.has(alert.id);
                   return (
-                    <Reanimated.View
-                      key={alert.id}
-                      entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay((idx + 1) * 50)}
-                    >
+                    <View key={alert.id}>
                       <View style={[styles.alertRow, { opacity: 0.6 }]}>
                         <Pressable
                           style={({ pressed }) => [styles.alertInfo, pressed && { opacity: 0.85 }]}
@@ -305,23 +296,20 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           <Ionicons name="trash-outline" size={18} color={colors.danger} />
                         </Pressable>
                       </View>
-                    </Reanimated.View>
+                    </View>
                   );
                 })}
-              </Reanimated.View>
+              </View>
             )}
 
             {/* Triggered alerts */}
             {alerts.filter((a) => a.triggeredAt).length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <Text style={styles.sectionTitle}>Triggered</Text>
-                {alerts.filter((a) => a.triggeredAt).map((alert, idx) => {
+                {alerts.filter((a) => a.triggeredAt).map((alert) => {
                   const isAbove = alert.condition === 'above';
                   return (
-                    <Reanimated.View
-                      key={alert.id}
-                      entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay((idx + 1) * 50)}
-                    >
+                    <View key={alert.id}>
                       <View style={[styles.alertRow, { opacity: 0.65 }]}>
                         <Pressable
                           style={({ pressed }) => [styles.alertInfo, pressed && { opacity: 0.85 }]}
@@ -355,10 +343,10 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           <Ionicons name="trash-outline" size={18} color={colors.danger} />
                         </Pressable>
                       </View>
-                    </Reanimated.View>
+                    </View>
                   );
                 })}
-              </Reanimated.View>
+              </View>
             )}
           </>
         )}

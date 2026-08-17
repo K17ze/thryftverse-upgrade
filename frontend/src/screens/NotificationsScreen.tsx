@@ -7,7 +7,6 @@ import {
   RefreshControl,
   Pressable,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -37,9 +36,7 @@ import {
 } from '../services/notificationsApi';
 import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { haptics } from '../utils/haptics';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { Motion } from '../constants/motion';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { isQuietHoursActive } from '../preferences/settingsPreferences';
@@ -379,7 +376,6 @@ export default function NotificationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
   const { quietHours } = useSettingsPreferences();
   const { colors } = useAppTheme();
@@ -596,22 +592,13 @@ export default function NotificationsScreen() {
     [navigation, show]
   );
 
-  const renderNotificationCard = useCallback(({ item, index }: { item: NotificationCard; index: number }) => {
+  const renderNotificationCard = useCallback(({ item }: { item: NotificationCard; index: number }) => {
     const listingId = typeof item.payload.listingId === 'string' ? item.payload.listingId : undefined;
     const actorUserId = item.actorUserId ?? getPayloadString(item.payload, ['sellerId', 'actorUserId', 'fromUserId', 'counterpartyUserId']);
     const actorHandle = item.actorUsername ?? actorUserId ?? null;
     const visualUri = item.itemImage || item.actorAvatar || '';
 
     return (
-      <Reanimated.View
-        entering={
-          reducedMotionEnabled
-            ? undefined
-            : FadeInDown
-                .delay(Math.min(index, Motion.list.maxStaggerItems) * Motion.list.staggerStep)
-                .duration(Motion.list.enterDuration)
-        }
-      >
         <Swipeable
           ref={(ref) => { swipeableRefs.current[item.id] = ref; }}
           renderRightActions={() => renderSwipeRightAction(item)}
@@ -735,10 +722,8 @@ export default function NotificationsScreen() {
           ) : null}
         </View>
         </Swipeable>
-      </Reanimated.View>
     );
   }, [
-    reducedMotionEnabled,
     swipeableRefs,
     renderSwipeRightAction,
     renderSwipeLeftAction,

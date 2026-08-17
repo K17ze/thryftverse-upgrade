@@ -13,12 +13,10 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import {
   CoOwnStateCanvas,
@@ -54,7 +52,6 @@ export default function DistributionHistoryScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const filterAssetId = route.params?.assetId;
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -165,77 +162,70 @@ export default function DistributionHistoryScreen() {
           }
         >
           {/* Summary */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-            <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total received</Text>
-              <Text style={[styles.summaryValue, { color: colors.success }]}>
-                {formatDistributionAmount(totalReceived)}
-              </Text>
-              <Text style={[styles.summaryCount, { color: colors.textSecondary }]}>
-                {distributions.length} distribution{distributions.length !== 1 ? 's' : ''}
-              </Text>
-            </View>
-          </Reanimated.View>
+          <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total received</Text>
+            <Text style={[styles.summaryValue, { color: colors.success }]}>
+              {formatDistributionAmount(totalReceived)}
+            </Text>
+            <Text style={[styles.summaryCount, { color: colors.textSecondary }]}>
+              {distributions.length} distribution{distributions.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
 
           {/* DRIP enrollment card — flagship treatment with count badge and status indicators */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-            <View style={[styles.dripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.dripHeader}>
-                <View style={[styles.dripIcon, { backgroundColor: colors.brand }]}>
-                  <Ionicons name="repeat" size={20} color={colors.textInverse} />
-                </View>
-                <View style={styles.dripHeaderText}>
-                  <Text style={[styles.dripTitle, { color: colors.textPrimary }]}>Dividend reinvestment</Text>
-                  <Text style={[styles.dripBody, { color: colors.textSecondary }]}>
-                    Automatically reinvest distributions into additional units of the same asset.
-                  </Text>
-                </View>
+          <View style={[styles.dripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.dripHeader}>
+              <View style={[styles.dripIcon, { backgroundColor: colors.brand }]}>
+                <Ionicons name="repeat" size={20} color={colors.textInverse} />
               </View>
-              {/* Per-asset DRIP toggles with status indicators */}
-              {Object.keys(dripEnrollments).length > 0 ? (
-                <View style={[styles.dripAssetList, { borderTopColor: colors.borderSubtle }]}>
-                  {Object.entries(dripEnrollments).map(([assetId, enrolled]) => (
-                    <View key={assetId} style={styles.dripAssetRow}>
-                      <View style={styles.dripAssetInfo}>
-                        <View style={[styles.dripAssetDot, { backgroundColor: enrolled ? colors.success : colors.textMuted }]} />
-                        <Text style={[styles.dripAssetName, { color: colors.textPrimary }]} numberOfLines={1}>
-                          {assetId.slice(0, 20)}…
-                        </Text>
-                        {enrolled && (
-                          <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.success + '18' }]}>
-                            <Text style={[styles.dripEnrolledText, { color: colors.success }]}>Active</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Switch
-                        value={enrolled}
-                        onValueChange={(v) => void handleToggleDrip(assetId, v)}
-                        disabled={dripToggling === assetId}
-                        trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-                        thumbColor="#fff"
-                        accessibilityRole="switch"
-                        accessibilityLabel={`DRIP for ${assetId}`}
-                      />
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.dripEmptyWrap}>
-                  <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-                  <Text style={[styles.dripEmpty, { color: colors.textMuted }]}>
-                    Enroll from an asset's distribution card to automatically reinvest future payments.
-                  </Text>
-                </View>
-              )}
+              <View style={styles.dripHeaderText}>
+                <Text style={[styles.dripTitle, { color: colors.textPrimary }]}>Dividend reinvestment</Text>
+                <Text style={[styles.dripBody, { color: colors.textSecondary }]}>
+                  Automatically reinvest distributions into additional units of the same asset.
+                </Text>
+              </View>
             </View>
-          </Reanimated.View>
+            {/* Per-asset DRIP toggles with status indicators */}
+            {Object.keys(dripEnrollments).length > 0 ? (
+              <View style={[styles.dripAssetList, { borderTopColor: colors.borderSubtle }]}>
+                {Object.entries(dripEnrollments).map(([assetId, enrolled]) => (
+                  <View key={assetId} style={styles.dripAssetRow}>
+                    <View style={styles.dripAssetInfo}>
+                      <View style={[styles.dripAssetDot, { backgroundColor: enrolled ? colors.success : colors.textMuted }]} />
+                      <Text style={[styles.dripAssetName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {assetId.slice(0, 20)}…
+                      </Text>
+                      {enrolled && (
+                        <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.success + '18' }]}>
+                          <Text style={[styles.dripEnrolledText, { color: colors.success }]}>Active</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Switch
+                      value={enrolled}
+                      onValueChange={(v) => void handleToggleDrip(assetId, v)}
+                      disabled={dripToggling === assetId}
+                      trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
+                      thumbColor="#fff"
+                      accessibilityRole="switch"
+                      accessibilityLabel={`DRIP for ${assetId}`}
+                    />
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.dripEmptyWrap}>
+                <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+                <Text style={[styles.dripEmpty, { color: colors.textMuted }]}>
+                  Enroll from an asset's distribution card to automatically reinvest future payments.
+                </Text>
+              </View>
+            )}
+          </View>
 
           {/* Distribution list */}
-          {distributions.map((dist, idx) => (
-            <Reanimated.View
-              key={dist.id}
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300).delay(idx * 50)}
-            >
+          {distributions.map((dist) => (
+            <View key={dist.id}>
               <View style={[styles.distCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.distHeader}>
                   <View style={[styles.distIcon, { backgroundColor: colors.surfaceAlt }]}>
@@ -280,7 +270,7 @@ export default function DistributionHistoryScreen() {
                   </View>
                 </View>
               </View>
-            </Reanimated.View>
+            </View>
           ))}
         </ScrollView>
       )}

@@ -20,7 +20,6 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  FadeInDown,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -1230,7 +1229,7 @@ export default function HomeScreen() {
               renderExploreLoadingState()
             ) : feedGridData.length === 0 ? (
               feedMode === 'following' ? (
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+                <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
                     icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
@@ -1244,12 +1243,12 @@ export default function HomeScreen() {
                     secondaryCtaLabel={followingFeed.hasFollowing ? 'Browse all' : undefined}
                     onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
                   />
-                </Reanimated.View>
+                </View>
               ) : (
                 // Premium empty state — backend returned zero items and we are not
                 // loading. Preserves the flagship layout instead of collapsing to
                 // a blank masonry. Distinct from the sync-error banner above.
-                <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ flex: 1 }}>
+                <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
                     icon="cube-outline"
@@ -1260,7 +1259,7 @@ export default function HomeScreen() {
                     secondaryCtaLabel="Refresh"
                     onSecondaryCtaPress={() => void handleRefresh()}
                   />
-                </Reanimated.View>
+                </View>
               )
             ) : null}
           </View>

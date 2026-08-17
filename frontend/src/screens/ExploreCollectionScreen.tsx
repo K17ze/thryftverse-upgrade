@@ -6,7 +6,6 @@ import {
   Dimensions,
   ScrollView,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -18,7 +17,6 @@ import { MasonryGrid } from '../components/ProductCardV2';
 import { Type, Space, Radius, Typography } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -40,7 +38,6 @@ export default function ExploreCollectionScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
-  const reducedMotionEnabled = useReducedMotion();
   const savedProducts = useStore((state) => state.savedProducts);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
 
@@ -119,12 +116,12 @@ export default function ExploreCollectionScreen() {
   };
 
   const renderHeader = () => (
-    <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.headerInfo}>
+    <View style={styles.headerInfo}>
       {subtitle ? (
         <Text style={styles.headerSubtitle}>{subtitle}</Text>
       ) : null}
       <Text style={styles.headerCount}>{filteredListings.length} items</Text>
-    </Reanimated.View>
+    </View>
   );
 
   if ((isSyncing || isFetching) && filteredListings.length === 0) {

@@ -4,7 +4,6 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -20,7 +19,6 @@ import { OrderHistoryRow } from '../components/trade';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
@@ -119,7 +117,6 @@ export default function CoOwnOrderHistoryScreen() {
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
-  const reducedMotionEnabled = useReducedMotion();
 
   const [sideFilter, setSideFilter] = React.useState<SideFilter>('all');
   const [dateFilter, setDateFilter] = React.useState<DateFilter>('all');
@@ -244,34 +241,25 @@ export default function CoOwnOrderHistoryScreen() {
   // FlashList v2 performance: memoized renderItem prevents full re-render of
   // all visible order history rows on every parent state change.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
-  const renderOrderItem = useCallback(({ item, index }: { item: HistoryEntry; index: number }) => (
-    <Reanimated.View
-      entering={
-        reducedMotionEnabled
-          ? undefined
-          : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
-      }
-    >
-      <OrderHistoryRow
-        id={item.id}
-        side={item.side}
-        type={item.type}
-        assetTitle={item.assetTitle}
-        quantity={item.quantity}
-        filledQuantity={item.filledQuantity}
-        pricePerShare={formatCoOwnIze(item.pricePerShare)}
-        totalAmount={formatCoOwnIze(item.totalAmount)}
-        status={item.status}
-        timestamp={item.createdAt}
-        onCancel={item.source === 'backend' && (item.status === 'open' || item.status === 'partially_filled')
-          ? () => requestCancelOrder(item)
-          : undefined}
-        isCancelling={cancellingOrderId === item.id}
-        onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: item.assetId }); }}
-      />
-    </Reanimated.View>
+  const renderOrderItem = useCallback(({ item }: { item: HistoryEntry }) => (
+    <OrderHistoryRow
+      id={item.id}
+      side={item.side}
+      type={item.type}
+      assetTitle={item.assetTitle}
+      quantity={item.quantity}
+      filledQuantity={item.filledQuantity}
+      pricePerShare={formatCoOwnIze(item.pricePerShare)}
+      totalAmount={formatCoOwnIze(item.totalAmount)}
+      status={item.status}
+      timestamp={item.createdAt}
+      onCancel={item.source === 'backend' && (item.status === 'open' || item.status === 'partially_filled')
+        ? () => requestCancelOrder(item)
+        : undefined}
+      isCancelling={cancellingOrderId === item.id}
+      onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: item.assetId }); }}
+    />
   ), [
-    reducedMotionEnabled,
     formatCoOwnIze,
     requestCancelOrder,
     cancellingOrderId,

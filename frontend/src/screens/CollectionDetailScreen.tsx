@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
-  FadeInDown,
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
@@ -35,7 +34,6 @@ import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
@@ -73,7 +71,6 @@ export default function CollectionDetailScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
@@ -393,13 +390,13 @@ export default function CollectionDetailScreen() {
 
         {/* Grid — 3-column media mosaic with 3:4 portrait thumbnails */}
         {count > 0 && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
+          <View style={{ marginTop: Space.md }}>
             <ClosetMediaMosaic
               items={collectionItems}
               onPressItem={(item: any) => navigation.navigate('ItemDetail', { itemId: item.id })}
               showSaveButton
             />
-          </Reanimated.View>
+          </View>
         )}
         {count === 0 && (
           <EmptyState
@@ -445,7 +442,6 @@ function MoreLikeThisRow({
   formatFromFiat: any;
 }) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const similarItems = React.useMemo(() => {
     if (collectionItems.length === 0) return [];

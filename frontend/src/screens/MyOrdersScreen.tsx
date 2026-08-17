@@ -11,12 +11,10 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { useStore } from '../store/useStore';
 import {
@@ -83,7 +81,6 @@ export default function MyOrdersScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
-  const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
 
@@ -503,20 +500,18 @@ export default function MyOrdersScreen() {
       />
 
       {needsActionCount > 0 && !debouncedQuery.trim() && filter.classification === 'all' && (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <Pressable
-            style={[styles.needsActionBanner, { backgroundColor: colors.brand + '12' }]}
-            onPress={() => setFilter({ classification: 'needs_action', year: null })}
-            accessibilityRole="button"
-            accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
-          >
-            <Ionicons name="alert-circle-outline" size={16} color={colors.brand} />
-            <Text style={[styles.needsActionText, { color: colors.brand }]}>
-              {needsActionCount} {needsActionCount === 1 ? 'order' : 'orders'} need{needsActionCount === 1 ? 's' : ''} your attention
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-          </Pressable>
-        </Reanimated.View>
+        <Pressable
+          style={[styles.needsActionBanner, { backgroundColor: colors.brand + '12' }]}
+          onPress={() => setFilter({ classification: 'needs_action', year: null })}
+          accessibilityRole="button"
+          accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
+        >
+          <Ionicons name="alert-circle-outline" size={16} color={colors.brand} />
+          <Text style={[styles.needsActionText, { color: colors.brand }]}>
+            {needsActionCount} {needsActionCount === 1 ? 'order' : 'orders'} need{needsActionCount === 1 ? 's' : ''} your attention
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+        </Pressable>
       )}
 
       <View style={styles.searchRow}>

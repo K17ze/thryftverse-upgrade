@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -15,7 +14,6 @@ import { fetchCoOwnAssetById, fetchCoOwnHoldings, createCoOwnBuyoutOffer } from 
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
 import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -32,7 +30,6 @@ export default function BuyoutScreen() {
   const route = useRoute<RouteT>();
   const { colors } = useAppTheme();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
@@ -197,89 +194,79 @@ export default function BuyoutScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPadding }]} showsVerticalScrollIndicator={false}>
         {/* Item image */}
         {asset.imageUrl ? (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-            <CachedImage uri={asset.imageUrl} style={[styles.image, { height: imageHeight }]} contentFit="cover" transition={300} />
-          </Reanimated.View>
+          <CachedImage uri={asset.imageUrl} style={[styles.image, { height: imageHeight }]} contentFit="cover" transition={300} />
         ) : null}
 
         {/* Title */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{asset.title}</Text>
-        </Reanimated.View>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{asset.title}</Text>
 
         {/* Position summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <View style={[styles.positionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.positionRow}>
-              <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Your units</Text>
-              <Text style={[styles.positionValue, { color: colors.textPrimary }]}>{sharesOwned} / {asset.totalUnits}</Text>
-            </View>
-            <View style={[styles.positionRow, { borderColor: colors.border }]}>
-              <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Ownership</Text>
-              <Text style={[styles.positionValue, { color: colors.textPrimary }]}>{ownershipPct.toFixed(1)}%</Text>
-            </View>
-            <View style={styles.positionRow}>
-              <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Remaining</Text>
-              <Text style={[styles.positionValue, { color: colors.textPrimary }]}>{remainingUnits} units</Text>
-            </View>
+        <View style={[styles.positionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.positionRow}>
+            <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Your units</Text>
+            <Text style={[styles.positionValue, { color: colors.textPrimary }]}>{sharesOwned} / {asset.totalUnits}</Text>
           </View>
-        </Reanimated.View>
+          <View style={[styles.positionRow, { borderColor: colors.border }]}>
+            <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Ownership</Text>
+            <Text style={[styles.positionValue, { color: colors.textPrimary }]}>{ownershipPct.toFixed(1)}%</Text>
+          </View>
+          <View style={styles.positionRow}>
+            <Text style={[styles.positionLabel, { color: colors.textMuted }]}>Remaining</Text>
+            <Text style={[styles.positionValue, { color: colors.textPrimary }]}>{remainingUnits} units</Text>
+          </View>
+        </View>
 
         {/* Status message */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          {ownsAll ? (
-            <View style={[styles.statusCard, { backgroundColor: colors.success + '12', borderColor: colors.success + '40' }]}>
-              <View style={[styles.statusIconWrap, { backgroundColor: colors.success + '22' }]}>
-                <Ionicons name="checkmark-circle" size={28} color={colors.success} />
-              </View>
-              <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>You own 100% of this item</Text>
-              <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
-                You already hold all units in this Co-Own. No buyout is needed.
-              </Text>
+        {ownsAll ? (
+          <View style={[styles.statusCard, { backgroundColor: colors.success + '12', borderColor: colors.success + '40' }]}>
+            <View style={[styles.statusIconWrap, { backgroundColor: colors.success + '22' }]}>
+              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
             </View>
-          ) : (
-            <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={[styles.statusIconWrap, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="cash-outline" size={28} color={colors.brand} />
-              </View>
-              <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>Make a buyout offer</Text>
-              <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
-                Submit an offer to acquire the remaining {remainingUnits} units from current holders. Holders will be notified and can accept or decline.
-              </Text>
+            <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>You own 100% of this item</Text>
+            <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
+              You already hold all units in this Co-Own. No buyout is needed.
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.statusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.statusIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="cash-outline" size={28} color={colors.brand} />
             </View>
-          )}
-        </Reanimated.View>
+            <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>Make a buyout offer</Text>
+            <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
+              Submit an offer to acquire the remaining {remainingUnits} units from current holders. Holders will be notified and can accept or decline.
+            </Text>
+          </View>
+        )}
 
         {/* Buyout offer form */}
         {!ownsAll && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-            <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Offer price (£)</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={offerPrice}
-                onChangeText={setOfferPrice}
-                placeholder="e.g. 500.00"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="decimal-pad"
-                accessibilityLabel="Offer price in pounds"
-              />
+          <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Offer price (£)</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              value={offerPrice}
+              onChangeText={setOfferPrice}
+              placeholder="e.g. 500.00"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              accessibilityLabel="Offer price in pounds"
+            />
 
-              <Text style={[styles.formLabel, { color: colors.textSecondary, marginTop: Space.md }]}>Target units (optional)</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                value={targetUnits}
-                onChangeText={setTargetUnits}
-                placeholder={`All remaining (${remainingUnits})`}
-                placeholderTextColor={colors.textMuted}
-                keyboardType="numeric"
-                accessibilityLabel="Target units to acquire"
-              />
-              <Text style={[styles.formHint, { color: colors.textMuted }]}>
-                Leave blank to offer on all remaining units.
-              </Text>
-            </View>
-          </Reanimated.View>
+            <Text style={[styles.formLabel, { color: colors.textSecondary, marginTop: Space.md }]}>Target units (optional)</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
+              value={targetUnits}
+              onChangeText={setTargetUnits}
+              placeholder={`All remaining (${remainingUnits})`}
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              accessibilityLabel="Target units to acquire"
+            />
+            <Text style={[styles.formHint, { color: colors.textMuted }]}>
+              Leave blank to offer on all remaining units.
+            </Text>
+          </View>
         )}
       </ScrollView>
 

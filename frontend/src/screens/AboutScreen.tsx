@@ -7,12 +7,10 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -29,7 +27,6 @@ const DEVELOPER_MODE_TAP_RESET_MS = 1500;
 export default function AboutScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const { developerMode, setDeveloperMode } = useSettingsPreferences();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -77,7 +74,7 @@ export default function AboutScreen({ navigation }: Props) {
             toggles developer mode, which reveals the "Advanced & developer"
             section in Settings. The tap target is intentionally undiscoverable
             so ordinary consumers never encounter developer tooling. */}
-        <Reanimated.View entering={FadeInDown.duration(300)} style={styles.heroCard}>
+        <View style={styles.heroCard}>
           <View style={styles.heroRow}>
             <View style={styles.brandIcon}>
               <Ionicons name="shirt-outline" size={32} color={colors.brand} />
@@ -97,9 +94,9 @@ export default function AboutScreen({ navigation }: Props) {
               </Pressable>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <View>
           <Text style={styles.sectionLabel}>Legal</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable
@@ -151,9 +148,9 @@ export default function AboutScreen({ navigation }: Props) {
               </View>
             </AnimatedPressable>
           </View>
-        </Reanimated.View>
+        </View>
 
-        <Reanimated.View entering={FadeInDown.duration(300)}>
+        <View>
           <Text style={styles.sectionLabel}>Support</Text>
           <View style={styles.rowGroup}>
             <AnimatedPressable
@@ -173,7 +170,7 @@ export default function AboutScreen({ navigation }: Props) {
               </View>
             </AnimatedPressable>
           </View>
-        </Reanimated.View>
+        </View>
 
         <View style={{ height: Space.xl }} />
     </FlagshipScreen>

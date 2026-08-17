@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown, SlideInDown } from 'react-native-reanimated';
+import Reanimated, { SlideInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -122,9 +122,8 @@ export function LookCommentsSheet({
   const renderItem = ({ item, index }: { item: LookCommentApiItem; index: number }) => {
     const isOwner = currentUserId && item.authorId === currentUserId;
     return (
-      <Reanimated.View
+      <View
         key={item.id}
-        entering={FadeInDown.duration(200).delay(index * 30)}
         style={styles.commentRow}
       >
         <View style={styles.avatarWrap}>
@@ -155,7 +154,7 @@ export function LookCommentsSheet({
             <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
           </Pressable>
         )}
-      </Reanimated.View>
+      </View>
     );
   };
 

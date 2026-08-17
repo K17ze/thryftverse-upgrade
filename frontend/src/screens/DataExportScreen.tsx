@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -15,7 +14,6 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import { requestDataExport, type DataExportResult } from '../services/accountApi';
 import { AppButton } from '../components/ui/AppButton';
@@ -42,7 +40,6 @@ export default function DataExportScreen({ navigation }: Props) {
   const { show } = useToast();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
-  const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [exportState, setExportState] = React.useState<ExportState>('idle');
@@ -86,7 +83,6 @@ export default function DataExportScreen({ navigation }: Props) {
       }
     >
       {/* ── Hero ── */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: colors.surfaceAlt }]}>
@@ -102,10 +98,8 @@ export default function DataExportScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </Reanimated.View>
 
       {/* ── What's included ── */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
         <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>
           What's included
         </Text>
@@ -135,10 +129,8 @@ export default function DataExportScreen({ navigation }: Props) {
             </View>
           ))}
         </View>
-      </Reanimated.View>
 
       {/* ── State-specific content ── */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
         {/* Loading state */}
         {exportState === 'loading' ? (
           <View style={[styles.stateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -214,10 +206,8 @@ export default function DataExportScreen({ navigation }: Props) {
             </View>
           </View>
         ) : null}
-      </Reanimated.View>
 
       {/* ── Actions ── */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.actionSection, { paddingBottom: insets.bottom + Space.lg }]}>
           {exportState === 'loading' ? (
             <AppButton
@@ -283,7 +273,6 @@ export default function DataExportScreen({ navigation }: Props) {
             />
           )}
         </View>
-      </Reanimated.View>
     </FlagshipScreen>
   );
 }

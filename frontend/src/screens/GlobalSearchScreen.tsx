@@ -12,7 +12,6 @@ import Reanimated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  FadeInDown,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,7 +42,6 @@ import type { ListingCondition } from '../services/listingsApi';
 import { searchUsers, type UserSearchResult, followUser, unfollowUser } from '../services/profileApi';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 
 /* ΓöÇΓöÇ New Discover Components ΓöÇΓöÇ */
@@ -329,7 +327,6 @@ export default function GlobalSearchScreen({ navigation }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
   const { isOffline } = useConnectivity();
-  const reducedMotionEnabled = useReducedMotion();
   const focusProgress = useSharedValue(0);
 
   // Evaluate saved search alerts against current listings
@@ -931,8 +928,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
 
       {/* Live search suggestions dropdown */}
       {searchSuggestions.length > 0 && (
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeInDown.duration(150)}
+        <View
           style={[styles.suggestionsWrap, t.suggestionsWrap]}
         >
           <Text style={[styles.suggestionsHeader, t.suggestionsHeader]}>Suggestions</Text>
@@ -965,7 +961,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
             </AnimatedPressable>
           ))}
-        </Reanimated.View>
+        </View>
       )}
 
       <ScrollView
@@ -982,7 +978,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
               <>
                 {/* ΓöÇΓöÇ FOCUS STATE: Clean recent + trending when search is focused ΓöÇΓöÇ */}
                 {isSearchFocused ? (
-                  <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(220)}>
+                  <View>
                     {/* Recent searches — compact rows */}
                     {recentSearches.length > 0 && (
                       <EditorialSection title="Recent searches">
@@ -1066,7 +1062,7 @@ export default function GlobalSearchScreen({ navigation }: Props) {
                         ))}
                       </ScrollView>
                     </EditorialSection>
-                  </Reanimated.View>
+                  </View>
                 ) : (
                 <>
                 {/* Recent searches — compact rows */}

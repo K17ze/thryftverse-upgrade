@@ -89,7 +89,6 @@ import {
   resolveDetailPriceLabel,
   resolveDetailPriceAmount,
   resolveDetailCountdown,
-  resolveViewerContextMessage,
   isBuyNowAvailable,
   buildDetailAccessibilityLabel,
   formatBidActivityRow,
@@ -98,8 +97,6 @@ import {
   resolveReserveStatus,
 } from '../utils/auctionDetailLogic';
 import {
-  AuctionStateBadge,
-  AuctionCountdown,
   ReserveStatusBadge,
 } from '../components/auction';
 
@@ -458,14 +455,6 @@ export default function AuctionDetailScreen() {
     return resolveDetailCountdown(timing, secondClock, minuteClock);
   }, [timing, secondClock, minuteClock]);
 
-  const countdownProgress = React.useMemo(() => {
-    if (!auction || !timing) return undefined;
-    const totalMs = new Date(auction.endsAt).getTime() - new Date(auction.startsAt).getTime();
-    if (totalMs <= 0) return undefined;
-    const elapsedMs = minuteClock - new Date(auction.startsAt).getTime();
-    return Math.max(0, Math.min(1, elapsedMs / totalMs));
-  }, [auction, timing, minuteClock]);
-
   const accessibilityLabel = React.useMemo(() => {
     if (!detailInput || !timing) return '';
     return buildDetailAccessibilityLabel(
@@ -477,11 +466,6 @@ export default function AuctionDetailScreen() {
       detailInput.viewerState,
     );
   }, [detailInput, timing, priceLabel, priceText, countdown.text]);
-
-  const viewerContext = React.useMemo(() => {
-    if (!detailInput || !timing) return null;
-    return resolveViewerContextMessage(timing.effectiveState, detailInput.viewerState, detailInput, formatFromFiat);
-  }, [detailInput, timing, formatFromFiat]);
 
   const isLive = effectiveState === 'live';
   const isUpcoming = effectiveState === 'upcoming';
@@ -529,22 +513,6 @@ export default function AuctionDetailScreen() {
   const buyNowAvailable = detailInput ? isBuyNowAvailable(detailInput, effectiveState ?? 'upcoming') : false;
   const reserveStatus = detailInput ? resolveReserveStatus(detailInput) : 'none';
   const showBidControls = !isTerminal && !isSeller;
-
-  // ── P1-C: One dominant state sentence ──
-  // When the viewer is actively bidding (leading/outbid), the viewer-state
-  // sentence dominates and the countdown demotes to subordinate metadata.
-  // Otherwise the countdown is the dominant sentence in the headline aside.
-  const isActivelyBidding = viewerState === 'leading' || viewerState === 'outbid';
-  // Subordinate metadata shown beneath the dominant viewer-state sentence.
-  // Appends the countdown so the bidder still sees time remaining without
-  // it competing as a second prominent state element.
-  const viewerStateSubtitle = React.useMemo(() => {
-    if (!viewerContext) return null;
-    const parts: string[] = [];
-    if (viewerContext.subtitle) parts.push(viewerContext.subtitle);
-    if (isActivelyBidding && countdown.text) parts.push(countdown.text);
-    return parts.length > 0 ? parts.join('  ·  ') : null;
-  }, [viewerContext, isActivelyBidding, countdown.text]);
 
   // ── PRODUCT-01: unified view model + shared social state + seller trust + recommendations ──
   const viewModel = React.useMemo(() => {
@@ -675,6 +643,89 @@ export default function AuctionDetailScreen() {
             ? 'Payment confirmed · settlement pending.'
             : 'Awaiting buyer payment.');
 
+  // ── One primary state sentence (audit: reduce simultaneous state cues) ──
+  // Above the fold, show ONE dominant sentence that communicates the most
+  // important state. All other cues (auction state badge, live indicator,
+  // urgency color, viewer signals) demote to subordinate metadata so the
+  // page reads like precise instrumentation, not a casino dashboard.
+  const liveMsToEnd = React.useMemo(() => {
+    if (!auction) return 0;
+    return Math.max(0, new Date(auction.endsAt).getTime() - secondClock);
+  }, [auction, secondClock]);
+
+  const liveMsToStart = React.useMemo(() => {
+    if (!auction) return 0;
+    return Math.max(0, new Date(auction.startsAt).getTime() - secondClock);
+  }, [auction, secondClock]);
+
+  // Countdown color changes only at meaningful thresholds.
+  // < 10 seconds = danger, < 1 minute = warning, otherwise neutral.
+  // This is the single accent for urgency — not every element is red.
+  const countdownColor = React.useMemo(() => {
+    if (!isLive) return colors.textPrimary;
+    if (liveMsToEnd <= 10_000) return colors.danger;
+    if (liveMsToEnd <= 60_000) return colors.warning;
+    return colors.textPrimary;
+  }, [isLive, liveMsToEnd, colors]);
+
+  // Primary state sentence — one dominant line above the fold.
+  // Priority: outbid > leading > reserve not met > countdown > ended.
+  // Do NOT infer winner until server result — terminal sentences are
+  // derived from the authoritative effectiveState + fulfilment contract.
+  const primaryState = React.useMemo<{
+    text: string;
+    color: string;
+  } | null>(() => {
+    if (!timing || !detailInput || !auction) return null;
+
+    // Terminal states — server-confirmed end
+    if (isEnded || isSettled) {
+      if (viewerState === 'won' && !isPaymentConfirmed && !isSettled) {
+        return { text: 'Payment required', color: colors.warning };
+      }
+      return { text: 'Ended', color: colors.textMuted };
+    }
+    if (isCancelled) {
+      return { text: 'Cancelled', color: colors.textMuted };
+    }
+
+    // Live — viewer-state sentences dominate over countdown
+    if (isLive) {
+      if (viewerState === 'outbid') {
+        return { text: 'Outbid', color: colors.warning };
+      }
+      if (viewerState === 'leading') {
+        return { text: "You're highest bidder", color: colors.success };
+      }
+      if (reserveStatus === 'not-met') {
+        return { text: 'Reserve not met', color: colors.textPrimary };
+      }
+      // Default — countdown is the primary sentence
+      return { text: `Ends in ${formatCountdownSentence(liveMsToEnd)}`, color: countdownColor };
+    }
+
+    // Upcoming
+    if (isUpcoming) {
+      return { text: `Starts in ${formatCountdownSentence(liveMsToStart)}`, color: colors.brand };
+    }
+
+    return null;
+  }, [timing, detailInput, auction, isEnded, isSettled, isCancelled, isLive, isUpcoming, viewerState, isPaymentConfirmed, reserveStatus, liveMsToEnd, liveMsToStart, countdownColor, colors]);
+
+  // Subordinate metadata — countdown demotes here when viewer state
+  // dominates the primary sentence. Kept small and neutral so it never
+  // competes with the primary state sentence.
+  const subordinateStateText = React.useMemo<string | null>(() => {
+    if (!isLive || !auction) return null;
+    // Only show subordinate countdown when the primary sentence is NOT
+    // the countdown itself (i.e., viewer state or reserve dominates).
+    const primaryIsCountdown =
+      primaryState?.text.startsWith('Ends in') || primaryState?.text.startsWith('Starts in');
+    if (primaryIsCountdown) return null;
+    if (liveMsToEnd <= 0) return null;
+    return `Ends in ${formatCountdownSentence(liveMsToEnd)}`;
+  }, [isLive, auction, primaryState, liveMsToEnd]);
+
   // Compute scroll bottom padding from dock geometry + safe area so the
   // sticky dock never covers the last content row.
   const hasDualDock = showBidControls && buyNowAvailable && stateAction?.secondary.type === 'buyNow' && !isBuyNowLoading;
@@ -796,13 +847,6 @@ export default function AuctionDetailScreen() {
             setFullscreenMediaIndex(index);
             setMediaViewerVisible(true);
           }}
-          overlayTopContent={
-            <View style={styles.stateBadgeOverlay}>
-              <AuctionStateBadge
-                state={isLive ? 'live' : isUpcoming ? 'upcoming' : isCancelled ? 'cancelled' : isSettled ? 'settled' : 'ended'}
-              />
-            </View>
-          }
           overlayBottomContent={
             <View accessible accessibilityLabel={accessibilityLabel}>
               <CommerceDetailIdentity
@@ -855,97 +899,72 @@ export default function AuctionDetailScreen() {
           onRetry={handleRefresh}
         />
 
-        {/* ── Zone B — Identity seam ──
-            One compact identity composition: eyebrow + title + condition.
-            Per spec 02 §B + spec 05 §3: auction identity must NOT show
-            price (the transaction surface owns the current bid) and
-            must NOT show a second family/state chip (the media overlay
-            already carries AuctionStateBadge). */}
         {/* ── Zone C — Auction transaction surface ──
-            P1-C: One dominant state sentence above the fold. When the
-            viewer is actively bidding (leading/outbid), the viewer-state
-            sentence dominates and the countdown demotes to subordinate
-            metadata. Otherwise the countdown is the dominant sentence.
+            One primary state sentence above the fold. The countdown,
+            viewer signals, and reserve status demote to subordinate
+            metadata so only one state element has primary visual weight.
             Reserve status is factual only — no persuasive gap copy.
-            Urgency chrome is reduced: a single calm live accent bar
-            replaces the amber→red transition; the countdown owns
-            threshold colour. */}
+            Urgency chrome is reduced: the countdown owns the single
+            accent colour, applied only at meaningful thresholds. */}
         {!isTerminal && (
-          <View style={isLive && styles.liveAccentWrap}>
-            {isLive && <View style={[styles.liveAccentBar, { backgroundColor: colors.brand }]} />}
-            <CommerceDetailTransactionSurface
-              family="auction"
-              flush
-              surfaceColor={colors.surface}
-              primaryLabel={priceLabel}
-              primaryValue={priceText}
-              headlineAside={
-                !isActivelyBidding ? (
-                  <AuctionCountdown
-                    text={countdown.text}
-                    urgent={countdown.isFinalMinutes}
-                    stage={countdown.stage}
-                    progress={isLive && !reducedMotion ? countdownProgress : undefined}
-                    showProgress={isLive && !reducedMotion}
-                    prominent
-                  />
-                ) : undefined
-              }
-              viewerState={
-                viewerContext ? (
-                  <View>
-                    <Text
-                      style={[
-                        styles.viewerStateLine,
-                        viewerContext.treatment === 'warning' && { color: colors.danger },
-                        viewerContext.treatment === 'calm' && { color: colors.success },
-                        viewerContext.treatment === 'seller' && { color: colors.brand },
-                        viewerContext.treatment === 'restrained' && { color: colors.textSecondary },
-                      ]}
-                      numberOfLines={2}
-                      accessibilityLiveRegion="polite"
-                    >
-                      {viewerContext.title}
-                    </Text>
-                    {viewerStateSubtitle ? (
-                      <Text
-                        style={[styles.viewerStateSubordinate, { color: colors.textSecondary }]}
-                        numberOfLines={1}
-                      >
-                        {viewerStateSubtitle}
-                      </Text>
-                    ) : null}
-                  </View>
-                ) : undefined
-              }
-              statusRow={reserveStatus !== 'none' ? (
-                <View style={styles.transactionStatusRow}>
-                  <ReserveStatusBadge status={reserveStatus} showExplanation />
-                </View>
-              ) : undefined}
-            >
-              <View style={[styles.transactionBidActivityRow, { borderTopColor: colors.border }]}>
-                <Text style={[styles.transactionBidActivityLabel, { color: colors.textSecondary }]}>
-                  {isLive ? 'Live bids' : 'Bid activity'}
+          <CommerceDetailTransactionSurface
+            family="auction"
+            flush
+            surfaceColor={colors.surface}
+            primaryLabel={priceLabel}
+            primaryValue={priceText}
+            headlineAside={
+              primaryState ? (
+                <Text
+                  style={[
+                    styles.primaryStateSentence,
+                    { color: primaryState.color },
+                  ]}
+                  numberOfLines={1}
+                  accessibilityLiveRegion="polite"
+                >
+                  {primaryState.text}
                 </Text>
-                <Text style={[styles.transactionBidActivityValue, { color: colors.textPrimary }]}>
-                  {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+              ) : undefined
+            }
+            statusRow={reserveStatus !== 'none' ? (
+              <View style={styles.transactionStatusRow}>
+                <ReserveStatusBadge status={reserveStatus} />
+              </View>
+            ) : undefined}
+          >
+            {/* Subordinate metadata — countdown demotes here when the
+                viewer-state sentence dominates so only one state element
+                has primary visual weight. */}
+            {subordinateStateText ? (
+              <Text
+                style={[styles.subordinateMetadata, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {subordinateStateText}
+              </Text>
+            ) : null}
+            <View style={[styles.transactionBidActivityRow, { borderTopColor: colors.border }]}>
+              <Text style={[styles.transactionBidActivityLabel, { color: colors.textSecondary }]}>
+                {isLive ? 'Live bids' : 'Bid activity'}
+              </Text>
+              <Text style={[styles.transactionBidActivityValue, { color: colors.textPrimary }]}>
+                {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+              </Text>
+            </View>
+            {/* Minimum to lead (outbid) — actionable emphasis inside the
+                surface. The dock carries the "Bid again" action. */}
+            {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
+              <View style={[styles.transactionMinRow, { borderTopColor: colors.border }]}>
+                <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]}>
+                  Minimum to lead
+                </Text>
+                <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
+                  {formatFromFiat(auction.minimumNextBidGbp, 'GBP')}
                 </Text>
               </View>
-              {/* Minimum to lead (outbid) — actionable emphasis inside the
-                  surface. The dock carries the "Bid again" action. */}
-              {isLive && viewerState === 'outbid' && auction.minimumNextBidGbp > 0 && (
-                <View style={[styles.transactionMinRow, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]}>
-                    Minimum to lead
-                  </Text>
-                  <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
-                    {formatFromFiat(auction.minimumNextBidGbp, 'GBP')}
-                  </Text>
-                </View>
-              )}
-            </CommerceDetailTransactionSurface>
-          </View>
+            )}
+          </CommerceDetailTransactionSurface>
         )}
 
         {/* ── Terminal result — one compact module, no duplicate title/brand ──
@@ -956,7 +975,14 @@ export default function AuctionDetailScreen() {
           <View style={styles.terminalResultModule}>
             {viewerState === 'won' && (
               <>
-                <Text style={[styles.terminalResultTitleWon, { color: colors.success }]}>You won</Text>
+                <Text
+                  style={[
+                    styles.terminalResultTitleWon,
+                    { color: isPaymentConfirmed || isSettled ? colors.success : colors.warning },
+                  ]}
+                >
+                  {isPaymentConfirmed || isSettled ? 'You won' : 'Payment required'}
+                </Text>
                 <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
                   {terminalAmountText}
                 </Text>
@@ -1350,13 +1376,12 @@ export default function AuctionDetailScreen() {
             : priceLabel;
           // Show countdown as subtitle when live so urgency follows the
           // user as they scroll — they don't need to scroll up to see
-          // time remaining.
-          const dockSubtitle = isLive && countdown.text
-            ? countdown.isFinalMinutes
-              ? `Ends in ${countdown.text}`
-              : countdown.text
-            : isUpcoming && countdown.text
-              ? countdown.text
+          // time remaining. Uses the same per-second format as the
+          // primary state sentence for consistency.
+          const dockSubtitle = isLive && liveMsToEnd > 0
+            ? `Ends in ${formatCountdownSentence(liveMsToEnd)}`
+            : isUpcoming && liveMsToStart > 0
+              ? `Starts in ${formatCountdownSentence(liveMsToStart)}`
               : undefined;
           const primaryType = stateAction.primary.type;
           // For upcoming state, use "Notify me" as the primary label to
@@ -1523,7 +1548,11 @@ export default function AuctionDetailScreen() {
             sellerName: auction.seller.displayName ?? auction.seller.username,
             effectiveState: effectiveState ?? 'upcoming',
             isSeller,
-            countdownText: countdown.text,
+            countdownText: isLive && liveMsToEnd > 0
+              ? `Ends in ${formatCountdownSentence(liveMsToEnd)}`
+              : isUpcoming && liveMsToStart > 0
+                ? `Starts in ${formatCountdownSentence(liveMsToStart)}`
+                : countdown.text,
           }}
           currencyCode={currencyCode}
           goldRates={goldRates}
@@ -1768,6 +1797,22 @@ function resolveEffectiveState(
   return 'upcoming';
 }
 
+// ── Countdown sentence formatter ──
+// Produces a compact "12m 08s" / "3h 15m" / "2d 5h" string for the
+// primary state sentence and dock subtitle. Uses tabular-friendly
+// zero-padded seconds to prevent per-second layout shift.
+function formatCountdownSentence(ms: number): string {
+  if (ms <= 0) return 'Ended';
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+}
+
 // Viewer-state treatment and title colour maps were dead code from the
 // pre-reconstruction implementation. The shared CommerceDetailTransactionSurface
 // and inline viewer-state rendering now own this logic.
@@ -1886,19 +1931,26 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
   },
   // ── Transaction surface internal rows ──
-  // Live accent wrap — a thin colored bar above the transaction surface
-  // that makes the live state visually dominant at thumbnail size.
-  // Color interpolates: warning (amber) for normal live, danger (red)
-  // when in final minutes. This is the single most important visual
-  // signal for "this auction is live right now."
-  liveAccentWrap: {
-    marginHorizontal: Space.md,
-    marginTop: Space.md,
+  // Primary state sentence — one dominant line in the headline aside.
+  // Uses tabular numerals so per-second countdown updates don't cause
+  // layout shift. Color is applied inline from the primaryState memo
+  // so only one accent communicates urgency.
+  primaryStateSentence: {
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
-  liveAccentBar: {
-    height: 3,
-    borderRadius: 1.5,
-    marginBottom: 0,
+  // Subordinate metadata — countdown demotes here when the viewer-state
+  // sentence dominates. Kept small and neutral so it never competes
+  // with the primary state sentence.
+  subordinateMetadata: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
+    marginTop: Space.sm,
   },
   transactionBidActivityRow: {
     flexDirection: 'row',
@@ -1940,16 +1992,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.priceList.size,
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
-    fontVariant: ['tabular-nums'],
-  },
-  // Subordinate metadata beneath the dominant viewer-state sentence.
-  // P1-C: the countdown demotes here when the viewer is actively bidding
-  // so only one state element dominates at a time.
-  viewerStateSubordinate: {
-    fontSize: TypographyV2.label.size,
-    lineHeight: TypographyV2.label.lineHeight,
-    fontFamily: FontFamily.regular,
-    marginTop: Space.xs / 2,
     fontVariant: ['tabular-nums'],
   },
   transactionStatusRow: {
@@ -2009,15 +2051,6 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.regular,
   },
-  // ── Shared-shell reconstruction styles ──
-  stateBadgeOverlay: {
-    position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
   // ── Seller identity extension ──
   // Tight rhythm: the seller row follows the transaction surface
   // or terminal result. paddingVertical Space.sm + xs (12px) keeps
@@ -2028,11 +2061,6 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'transparent', // overridden inline with theme color
-  },
-  viewerStateLine: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: FontFamily.semibold,
   },
   descriptionBlock: {
     paddingHorizontal: Space.md,

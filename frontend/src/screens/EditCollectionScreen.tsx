@@ -6,7 +6,6 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -20,7 +19,6 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { EmptyState } from '../components/EmptyState';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useBackendData } from '../context/BackendDataContext';
 
@@ -32,7 +30,6 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const collections = useStore((state) => state.collections);
   const renameCollection = useStore((state) => state.renameCollection);
@@ -163,7 +160,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.card}>
+          <View style={styles.card}>
             <Text style={styles.label}>Name</Text>
             <AppInput
               value={name}
@@ -174,9 +171,9 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               accessibilityLabel="Collection name input"
             />
             <Text style={styles.charCount}>{name.length}/40</Text>
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.card}>
+          <View style={styles.card}>
             <Text style={styles.label}>Description</Text>
             <AppInput
               value={description}
@@ -188,9 +185,9 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               accessibilityLabel="Collection description input"
             />
             <Text style={styles.charCount}>{description.length}/200</Text>
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.card}>
+          <View style={styles.card}>
             <View style={styles.toggleRow}>
               <View style={styles.toggleIconWrap}>
                 <Ionicons
@@ -219,10 +216,9 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
                 </View>
               </AnimatedPressable>
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* Manage items link — navigates to ManageCollectionItemsScreen */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
             <AnimatedPressable
               style={styles.manageItemsRow}
               onPress={() => { haptic.light(); navigation.navigate('ManageCollectionItems', { collectionId }); }}
@@ -240,9 +236,8 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </AnimatedPressable>
-          </Reanimated.View>
 
-          <Reanimated.View entering={FadeInDown.duration(300)} style={styles.dangerCard}>
+          <View style={styles.dangerCard}>
             <Text style={styles.dangerLabel}>Danger Zone</Text>
             <AppButton
               title="Delete Collection"
@@ -258,7 +253,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             <Text style={styles.dangerSub}>
               This action cannot be undone. Your saved items will remain in Saved.
             </Text>
-          </Reanimated.View>
+          </View>
       </KeyboardAwareScrollView>
     </FlagshipScreen>
   );

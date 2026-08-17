@@ -4,12 +4,10 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { Space, FontFamily, Stroke, LetterSpacing, Numeric } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -46,7 +44,6 @@ export default function PortfolioScreen() {
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
   const { isOffline } = useConnectivity();
@@ -259,41 +256,33 @@ export default function PortfolioScreen() {
 
   const renderPosition = ({ item, index }: { item: CoOwnPositionVM; index: number }) => {
     return (
-      <Reanimated.View
-        entering={
-          reducedMotionEnabled
-            ? undefined
-            : FadeInDown.duration(300).delay(Math.min(index, 8) * 40)
+      <CoOwnPositionCard
+        imageUri={item.imageUrl}
+        title={item.title}
+        unitsOwned={item.unitsOwned}
+        totalUnits={item.totalUnits}
+        ownershipPct={item.ownershipPct}
+        currentValueLabel={formatFromFiat(item.currentValueGbp, 'GBP')}
+        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, 'GBP')}
+        unrealizedLabel={item.unrealizedPnlGbp >= 0
+          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
+          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
         }
-      >
-        <CoOwnPositionCard
-          imageUri={item.imageUrl}
-          title={item.title}
-          unitsOwned={item.unitsOwned}
-          totalUnits={item.totalUnits}
-          ownershipPct={item.ownershipPct}
-          currentValueLabel={formatFromFiat(item.currentValueGbp, 'GBP')}
-          avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, 'GBP')}
-          unrealizedLabel={item.unrealizedPnlGbp >= 0
-            ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
-            : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
-          }
-          realizedLabel={item.realizedPnlGbp !== 0
-            ? (item.realizedPnlGbp >= 0
-              ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`
-              : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`)
-            : undefined
-          }
-          status={formatPositionStatus(item)}
-          sellable={item.sellableUnits > 0}
-          onPress={() => handlePositionPress(item)}
-          onBuyMore={() => handleBuyMore(item)}
-          onSell={() => handleSell(item)}
-          index={index}
-          positionState={item.positionState}
-          settlementState={item.settlementState}
-        />
-      </Reanimated.View>
+        realizedLabel={item.realizedPnlGbp !== 0
+          ? (item.realizedPnlGbp >= 0
+            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`
+            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`)
+          : undefined
+        }
+        status={formatPositionStatus(item)}
+        sellable={item.sellableUnits > 0}
+        onPress={() => handlePositionPress(item)}
+        onBuyMore={() => handleBuyMore(item)}
+        onSell={() => handleSell(item)}
+        index={index}
+        positionState={item.positionState}
+        settlementState={item.settlementState}
+      />
     );
   };
 

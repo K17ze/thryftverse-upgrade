@@ -7,14 +7,12 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Colors, ActiveTheme } from '../../constants/colors';
 import { Typography, Space, Radius, Type } from '../../theme/designTokens';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -65,9 +63,8 @@ export function ProfileVisualHeader({
   hideCover = false,
 }: ProfileVisualHeaderProps) {
   const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)} style={styles.root}>
+    <View style={styles.root}>
       {/* Cover with gradient scrim */}
       {!hideCover && (
       <View style={styles.coverWrap}>
@@ -180,7 +177,7 @@ export function ProfileVisualHeader({
           </>
         )}
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 

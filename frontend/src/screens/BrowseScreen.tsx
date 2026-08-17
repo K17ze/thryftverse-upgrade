@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS, FadeInDown } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { useAppTheme } from '../theme/ThemeContext';
@@ -41,7 +41,6 @@ import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 import { isSustainableGrade } from '../utils/sustainabilityScore';
 
@@ -382,7 +381,6 @@ export default function BrowseScreen() {
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useSharedValue(0);

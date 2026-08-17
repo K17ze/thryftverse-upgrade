@@ -7,7 +7,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
-  FadeInDown,
   FadeOutDown,
   SlideInRight,
   useAnimatedStyle,
@@ -158,13 +157,9 @@ export default function OnboardingScreen() {
     }
   };
 
-  // Keyed Reanimated view re-mounts on slide change so the entering/exit
-  // transitions replay for each slide — FadeInDown for the icon + title,
-  // a slide for the body copy. Reduced-motion users get instant swaps.
-  const enterVariant = reducedMotion
-    ? FadeInDown.duration(0)
-    : FadeInDown.springify().damping(18).stiffness(180);
-  const bodyEnter = reducedMotion
+  // Keyed Reanimated view re-mounts on slide change so the slide transition
+  // replays for each slide. Reduced-motion users get instant swaps.
+  const slideEnter = reducedMotion
     ? SlideInRight.duration(0)
     : SlideInRight.springify().damping(20).stiffness(200);
 
@@ -210,7 +205,7 @@ export default function OnboardingScreen() {
             the enter/exit transition on every slide change. */}
         <Reanimated.View
           key={`slide-${currentIndex}`}
-          entering={enterVariant}
+          entering={slideEnter}
           exiting={reducedMotion ? FadeOutDown.duration(0) : FadeOutDown.duration(220)}
           style={styles.slideContent}
         >
@@ -233,13 +228,12 @@ export default function OnboardingScreen() {
             {slide.title}
           </Text>
 
-          <Reanimated.Text
-            entering={bodyEnter}
+          <Text
             style={[styles.body, { color: colors.textSecondary }]}
             maxFontSizeMultiplier={1.4}
           >
             {slide.body}
-          </Reanimated.Text>
+          </Text>
         </Reanimated.View>
       </View>
 

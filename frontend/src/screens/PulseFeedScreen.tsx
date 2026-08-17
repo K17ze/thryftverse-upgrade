@@ -6,7 +6,6 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,7 +17,6 @@ import { CachedImage } from '../components/CachedImage';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Type, Space, Radius, Typography, LetterSpacing } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { EmptyState } from '../components/EmptyState';
 import { formatCountdown } from '../data/tradeHub';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -69,25 +67,23 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   };
 
   return (
-    <Reanimated.View entering={FadeInDown.duration(350).delay(index * 40).springify()}>
-      <AnimatedPressable style={styles.card} onPress={handlePress} activeOpacity={0.92}>
-        <CachedImage uri={event.image} style={styles.cardImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
-        <View style={styles.cardContent}>
-          <View style={styles.cardHeader}>
-            <Ionicons name={iconMap[event.type]} size={14} color={accentMap[event.type]} />
-            <Text style={[styles.cardTypeLabel, { color: accentMap[event.type] }]}>
-              {event.type === 'auction_live' ? 'LIVE AUCTION'
-                : event.type === 'fresh_drop' ? 'FRESH DROP'
-                  : event.type === 'price_drop' ? 'PRICE DROP'
-                    : 'SOLD'}
-            </Text>
-          </View>
-          <Text style={styles.cardTitle} numberOfLines={2}>{event.title}</Text>
-          <Text style={styles.cardSubtitle} numberOfLines={1}>{event.subtitle}</Text>
-          <Text style={[styles.cardMeta, event.metaAccent && styles.cardMetaAccent]}>{event.meta}</Text>
+    <AnimatedPressable style={styles.card} onPress={handlePress} activeOpacity={0.92}>
+      <CachedImage uri={event.image} style={styles.cardImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
+      <View style={styles.cardContent}>
+        <View style={styles.cardHeader}>
+          <Ionicons name={iconMap[event.type]} size={14} color={accentMap[event.type]} />
+          <Text style={[styles.cardTypeLabel, { color: accentMap[event.type] }]}>
+            {event.type === 'auction_live' ? 'LIVE AUCTION'
+              : event.type === 'fresh_drop' ? 'FRESH DROP'
+                : event.type === 'price_drop' ? 'PRICE DROP'
+                  : 'SOLD'}
+          </Text>
         </View>
-      </AnimatedPressable>
-    </Reanimated.View>
+        <Text style={styles.cardTitle} numberOfLines={2}>{event.title}</Text>
+        <Text style={styles.cardSubtitle} numberOfLines={1}>{event.subtitle}</Text>
+        <Text style={[styles.cardMeta, event.metaAccent && styles.cardMetaAccent]}>{event.meta}</Text>
+      </View>
+    </AnimatedPressable>
   );
 }
 
@@ -97,7 +93,6 @@ export default function PulseFeedScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { listings } = useBackendData();
-  const reducedMotionEnabled = useReducedMotion();
   const customAuctions = useStore((state) => state.customAuctions);
   const now = Date.now();
 

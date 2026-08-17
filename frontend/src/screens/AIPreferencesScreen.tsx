@@ -30,11 +30,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
@@ -48,7 +46,6 @@ const AI_PREFERENCES_DEMO_MODE = __DEV__;
 
 export default function AIPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -113,7 +110,6 @@ export default function AIPreferencesScreen({ navigation }: Props) {
       )}
 
       {/* ── Hero summary — posture with active count ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: masterEnabled && activeCount > 0 ? colors.brand : colors.surfaceAlt }]}>
@@ -142,10 +138,8 @@ export default function AIPreferencesScreen({ navigation }: Props) {
             </Text>
           </View>
         </View>
-      </Reanimated.View>
 
       {/* ── Master toggle ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Master control" noCard>
           <SettingsRow
             icon="power-outline"
@@ -157,10 +151,8 @@ export default function AIPreferencesScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
 
       {/* ── Feature toggles ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Features" noCard>
           <SettingsRow
             icon="bulb-outline"
@@ -213,10 +205,8 @@ export default function AIPreferencesScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
 
       {/* ── Transparency ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <SettingsSection title="Transparency" noCard>
           <SettingsRow
             icon="git-network-outline"
@@ -227,10 +217,8 @@ export default function AIPreferencesScreen({ navigation }: Props) {
             isLast
           />
         </SettingsSection>
-      </Reanimated.View>
 
       {/* ── Data usage — inline explanation ── */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.dataUsageBlock}>
           <View style={styles.dataUsageHeader}>
             <Ionicons name="server-outline" size={18} color={colors.textSecondary} />
@@ -240,7 +228,6 @@ export default function AIPreferencesScreen({ navigation }: Props) {
             These features use your listing content, search queries and chat messages to generate suggestions. In demo mode this data stays on your device and is never sent to a server or shared with third parties. Disabling a feature stops that data from being processed for suggestions.
           </Text>
         </View>
-      </Reanimated.View>
     </FlagshipScreen>
   );
 }

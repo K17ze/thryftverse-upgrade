@@ -1,11 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface CoOwnFeaturedHeroProps {
   imageUri?: string | null;
@@ -37,7 +35,6 @@ export function CoOwnFeaturedHero({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width } = useWindowDimensions();
-  const reducedMotion = useReducedMotion();
   const imageHeight = Math.min(width * 0.62, 280);
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
 
@@ -47,7 +44,7 @@ export function CoOwnFeaturedHero({
     status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
   return (
-    <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.delay(Math.min(index, 4) * 60).duration(350)}>
+    <View>
       <Pressable
         onPress={onPress}
         style={styles.root}
@@ -108,7 +105,7 @@ export function CoOwnFeaturedHero({
           )}
         </View>
       </Pressable>
-    </Reanimated.View>
+    </View>
   );
 }
 

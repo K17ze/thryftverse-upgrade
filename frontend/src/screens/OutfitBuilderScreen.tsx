@@ -16,8 +16,6 @@ import {
   Share,
 } from 'react-native';
 import Reanimated, {
-  FadeInDown,
-  FadeInUp,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -28,7 +26,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
@@ -276,7 +273,6 @@ export default function OutfitBuilderScreen() {
   const addToCollection = useStore((s) => s.addToCollection);
   const addOutfitToStore = useStore((s) => s.addOutfit);
   const { colors, isDark } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [activeSlot, setActiveSlot] = useState<OutfitSlot>('top');
@@ -430,7 +426,7 @@ export default function OutfitBuilderScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Outfit Preview */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={[styles.previewWrap, backgroundColor ? { backgroundColor } : undefined]}>
+        <View style={[styles.previewWrap, backgroundColor ? { backgroundColor } : undefined]}>
           <View style={styles.slotRow}>
             {SLOTS.map((slot) => (
               <View key={slot} style={styles.slotWrap}>
@@ -494,11 +490,11 @@ export default function OutfitBuilderScreen() {
               ))}
             </ScrollView>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* AI Suggestion */}
         {aiSuggestion && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInUp.duration(250)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+          <View style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
             <View style={styles.aiCard}>
               <View style={styles.aiRow}>
                 <Ionicons name="bulb-outline" size={18} color={colors.brand} />
@@ -517,7 +513,7 @@ export default function OutfitBuilderScreen() {
                 icon={<Ionicons name="add-circle-outline" size={16} color={colors.brand} />}
               />
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Section Header */}
@@ -536,16 +532,13 @@ export default function OutfitBuilderScreen() {
         ) : (
           <View style={styles.grid}>
             {slotItems.map((item, idx) => (
-              <Reanimated.View
-                key={item.id}
-                entering={reducedMotionEnabled ? undefined : FadeInDown.delay(idx * 40).duration(250)}
-              >
+              <View key={item.id}>
                 <ItemThumb
                   item={item}
                   onPress={() => toggleItem(item)}
                   isSelected={outfitItems[activeSlot]?.id === item.id}
                 />
-              </Reanimated.View>
+              </View>
             ))}
           </View>
         )}

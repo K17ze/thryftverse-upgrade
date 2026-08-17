@@ -17,7 +17,6 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  withDelay,
   interpolate,
   SlideInRight,
 } from 'react-native-reanimated';
@@ -67,7 +66,6 @@ const RECENT_STICKERS_KEY = '@thryftverse_recent_stickers';
 const FAVORITE_STICKERS_KEY = '@thryftverse_favorite_stickers';
 const MAX_RECENT = 12;
 const SEARCH_DEBOUNCE_MS = 300;
-const STAGGER_DELAY_MS = 50;
 const EMOJI_CELL_SIZE = 72;
 const EMOJI_VISIBLE_SIZE = 44;
 
@@ -191,48 +189,39 @@ interface EmojiCellProps {
 
 const EmojiCell = React.memo(function EmojiCell({
   emoji,
-  index,
+  index: _index,
   isFav,
   reducedMotion,
   onPress,
   onLongPress,
   colors,
 }: EmojiCellProps) {
-  const scaleSV = useSharedValue(reducedMotion ? 1 : 0);
   const pressSV = useSharedValue(1);
 
-  React.useEffect(() => {
-    if (!reducedMotion) {
-      scaleSV.value = withDelay(
-        Math.min(index * STAGGER_DELAY_MS, 600),
-        withSpring(1, Motion.spring.entrance)
-      );
-    }
-  }, [index, reducedMotion, scaleSV]);
-
-  const enterStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleSV.value * pressSV.value }],
-    opacity: reducedMotion ? 1 : interpolate(scaleSV.value, [0, 1], [0, 1]),
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressSV.value }],
   }));
 
   return (
-    <Reanimated.View style={[{ width: EMOJI_CELL_SIZE, height: EMOJI_CELL_SIZE, alignItems: 'center', justifyContent: 'center' }, enterStyle]}>
-      <Pressable
-        onPress={() => onPress(emoji)}
-        onLongPress={() => onLongPress(emoji)}
-        onPressIn={() => {
-          if (!reducedMotion) pressSV.value = withSpring(0.9, Motion.spring.tap);
-        }}
-        onPressOut={() => {
-          if (!reducedMotion) pressSV.value = withSpring(1, Motion.spring.tap);
-        }}
-        style={{ width: EMOJI_VISIBLE_SIZE, height: EMOJI_VISIBLE_SIZE, alignItems: 'center', justifyContent: 'center' }}
-        accessibilityLabel={`Emoji ${emoji}`}
-        accessibilityHint="Adds this emoji sticker to the frame. Long-press to favorite."
-        accessibilityRole="button"
-      >
-        <Text style={{ fontSize: EMOJI_SIZE }}>{emoji}</Text>
-      </Pressable>
+    <View style={{ width: EMOJI_CELL_SIZE, height: EMOJI_CELL_SIZE, alignItems: 'center', justifyContent: 'center' }}>
+      <Reanimated.View style={[{ width: EMOJI_VISIBLE_SIZE, height: EMOJI_VISIBLE_SIZE, alignItems: 'center', justifyContent: 'center' }, pressStyle]}>
+        <Pressable
+          onPress={() => onPress(emoji)}
+          onLongPress={() => onLongPress(emoji)}
+          onPressIn={() => {
+            if (!reducedMotion) pressSV.value = withSpring(0.9, Motion.spring.tap);
+          }}
+          onPressOut={() => {
+            if (!reducedMotion) pressSV.value = withSpring(1, Motion.spring.tap);
+          }}
+          style={{ width: EMOJI_VISIBLE_SIZE, height: EMOJI_VISIBLE_SIZE, alignItems: 'center', justifyContent: 'center' }}
+          accessibilityLabel={`Emoji ${emoji}`}
+          accessibilityHint="Adds this emoji sticker to the frame. Long-press to favorite."
+          accessibilityRole="button"
+        >
+          <Text style={{ fontSize: EMOJI_SIZE }}>{emoji}</Text>
+        </Pressable>
+      </Reanimated.View>
       {isFav && (
         <View style={{
           position: 'absolute',
@@ -248,7 +237,7 @@ const EmojiCell = React.memo(function EmojiCell({
           <Ionicons name="heart" size={8} color="#fff" />
         </View>
       )}
-    </Reanimated.View>
+    </View>
   );
 });
 
@@ -266,64 +255,46 @@ interface RailStickerProps {
 
 const RailSticker = React.memo(function RailSticker({
   emoji,
-  index,
+  index: _index,
   isFav,
-  reducedMotion,
+  reducedMotion: _reducedMotion,
   onPress,
   onLongPress,
   colors,
 }: RailStickerProps) {
-  const scaleSV = useSharedValue(reducedMotion ? 1 : 0);
-
-  React.useEffect(() => {
-    if (!reducedMotion) {
-      scaleSV.value = withDelay(
-        Math.min(index * STAGGER_DELAY_MS, 400),
-        withSpring(1, Motion.spring.success)
-      );
-    }
-  }, [index, reducedMotion, scaleSV]);
-
-  const enterStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleSV.value }],
-    opacity: reducedMotion ? 1 : interpolate(scaleSV.value, [0, 1], [0, 1]),
-  }));
-
   return (
-    <Reanimated.View style={[enterStyle]}>
-      <Pressable
-        onPress={() => onPress(emoji)}
-        onLongPress={onLongPress ? () => onLongPress(emoji) : undefined}
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: Radius.xl,
+    <Pressable
+      onPress={() => onPress(emoji)}
+      onLongPress={onLongPress ? () => onLongPress(emoji) : undefined}
+      style={{
+        width: 56,
+        height: 56,
+        borderRadius: Radius.xl,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: Space.sm,
+      }}
+      accessibilityLabel={`Sticker ${emoji}`}
+      accessibilityHint="Adds this sticker to the frame"
+      accessibilityRole="button"
+    >
+      <Text style={{ fontSize: EMOJI_SIZE }}>{emoji}</Text>
+      {isFav && (
+        <View style={{
+          position: 'absolute',
+          top: 2,
+          right: 2,
+          width: 14,
+          height: 14,
+          borderRadius: 7,
+          backgroundColor: colors.danger,
           alignItems: 'center',
           justifyContent: 'center',
-          marginRight: Space.sm,
-        }}
-        accessibilityLabel={`Sticker ${emoji}`}
-        accessibilityHint="Adds this sticker to the frame"
-        accessibilityRole="button"
-      >
-        <Text style={{ fontSize: EMOJI_SIZE }}>{emoji}</Text>
-        {isFav && (
-          <View style={{
-            position: 'absolute',
-            top: 2,
-            right: 2,
-            width: 14,
-            height: 14,
-            borderRadius: 7,
-            backgroundColor: colors.danger,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <Ionicons name="heart" size={8} color="#fff" />
-          </View>
-        )}
-      </Pressable>
-    </Reanimated.View>
+        }}>
+          <Ionicons name="heart" size={8} color="#fff" />
+        </View>
+      )}
+    </Pressable>
   );
 });
 

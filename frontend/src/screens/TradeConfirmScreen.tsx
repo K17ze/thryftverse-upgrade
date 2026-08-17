@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -10,7 +9,6 @@ import { Space, Radius, Type, Typography, Numeric } from '../theme/designTokens'
 import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { cancelCoOwnOrderReservation, placeCoOwnOrder } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -54,7 +52,6 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const isCompactDock = width < 360;
   const haptic = useHaptic();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -213,35 +210,33 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         ]}
       >
         {/* Trade receipt — product identity, order details, totals */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <CoOwnTradeReceipt
-            imageUri={assetImageUrl}
-            title={assetTitle ?? 'Co-Own asset'}
-            side={side}
-            orderType={ticketOrderType}
-            units={quantity}
-            filledUnits={estimatedFilledUnits}
-            remainingUnits={estimatedRemainingUnits}
-            unitPriceLabel={quantity > 0 ? format1ze(totalValue / quantity) : format1ze(0)}
-            limitPriceLabel={format1ze(limitPriceGbp)}
-            avgFillPriceLabel={averageFillPriceGbp > 0 ? format1ze(averageFillPriceGbp) : 'No immediate fill'}
-            worstPriceLabel={worstPriceGbp > 0 ? format1ze(worstPriceGbp) : 'No immediate fill'}
-            grossLabel={format1ze(totalValue)}
-            feeLabel={format1ze(fee)}
-            totalLabel={format1ze(netValue)}
-            totalCaption={isBuy ? 'Including 1% fee' : 'After 1% fee'}
-            settlementLabel={settlementLabel}
-            status="pending"
-            timestamp={`Quote ${secondsRemaining}s · market ${new Date(marketDataTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
-            maxReservedLabel={maxReservedLabel}
-            marketWarning={marketWarning}
-          />
-        </Reanimated.View>
+        <CoOwnTradeReceipt
+          imageUri={assetImageUrl}
+          title={assetTitle ?? 'Co-Own asset'}
+          side={side}
+          orderType={ticketOrderType}
+          units={quantity}
+          filledUnits={estimatedFilledUnits}
+          remainingUnits={estimatedRemainingUnits}
+          unitPriceLabel={quantity > 0 ? format1ze(totalValue / quantity) : format1ze(0)}
+          limitPriceLabel={format1ze(limitPriceGbp)}
+          avgFillPriceLabel={averageFillPriceGbp > 0 ? format1ze(averageFillPriceGbp) : 'No immediate fill'}
+          worstPriceLabel={worstPriceGbp > 0 ? format1ze(worstPriceGbp) : 'No immediate fill'}
+          grossLabel={format1ze(totalValue)}
+          feeLabel={format1ze(fee)}
+          totalLabel={format1ze(netValue)}
+          totalCaption={isBuy ? 'Including 1% fee' : 'After 1% fee'}
+          settlementLabel={settlementLabel}
+          status="pending"
+          timestamp={`Quote ${secondsRemaining}s · market ${new Date(marketDataTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
+          maxReservedLabel={maxReservedLabel}
+          marketWarning={marketWarning}
+        />
 
         {/* Risk disclosure */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.riskWrap}>
+        <View style={styles.riskWrap}>
           <CoOwnRiskDisclosure />
-        </Reanimated.View>
+        </View>
       </ScrollView>
 
       {/* Sticky action dock — confirm / cancel */}

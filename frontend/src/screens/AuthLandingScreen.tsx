@@ -8,11 +8,6 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native';
-import Reanimated, {
-  FadeInDown,
-  FadeIn,
-  FadeInUp,
-} from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +20,6 @@ import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken, loginWithPassword } from '../services/authApi';
 
 const { width, height } = Dimensions.get('window');
@@ -51,7 +45,6 @@ export default function AuthLandingScreen() {
   const login = useStore((state) => state.login);
   const setTwoFactorEnabled = useStore((state) => state.setTwoFactorEnabled);
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
-  const reducedMotionEnabled = useReducedMotion();
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
   const [isDevBypassLoading, setIsDevBypassLoading] = useState(false);
@@ -229,42 +222,34 @@ export default function AuthLandingScreen() {
 
       <SafeAreaView style={styles.safeArea}>
         {/* Top - animated brand wordmark */}
-        <Reanimated.View
-          entering={reducedMotionEnabled ? undefined : FadeIn.delay(200).duration(600)}
+        <View
           style={styles.topSection}
         >
           <Text style={styles.logo} maxFontSizeMultiplier={1.3}>entry 01</Text>
-        </Reanimated.View>
+        </View>
 
         {/* Middle - main copy */}
         <View style={styles.content}>
-          <Reanimated.Text
-            entering={
-              reducedMotionEnabled
-                ? undefined
-                : FadeInDown.delay(400).duration(600).springify()
-            }
+          <Text
             style={styles.title}
             maxFontSizeMultiplier={1.2}
           >
             THRYFT
-          </Reanimated.Text>
+          </Text>
 
-          <Reanimated.Text
-            entering={reducedMotionEnabled ? undefined : FadeInDown.delay(600).duration(500)}
+          <Text
             style={styles.subtitle}
             maxFontSizeMultiplier={1.3}
           >
             buy, sell, trade. no noise.
-          </Reanimated.Text>
+          </Text>
 
           {/* Trust signals — compact value props with refined icon treatment.
               Trust signals at the entry
               point reduce anxiety and communicate competence before the user
               commits to an action. Icons at 18pt sit above the reading flow
               without competing with the primary CTA. */}
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.delay(750).duration(500)}
+          <View
             style={styles.trustRow}
             accessibilityRole="text"
             accessibilityLabel="Buyer protection, make offers, and co-own trading"
@@ -283,7 +268,7 @@ export default function AuthLandingScreen() {
               <Ionicons name="swap-horizontal-outline" size={18} color="rgba(245,239,230,0.65)" />
               <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>Co-Own trading</Text>
             </View>
-          </Reanimated.View>
+          </View>
         </View>
 
         {/* Inline auth error banner — accessible, recoverable.
@@ -291,8 +276,7 @@ export default function AuthLandingScreen() {
             communicates competence. The danger-tinted surface is restrained
             so it informs without alarming. */}
         {authError ? (
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}
+          <View
             style={styles.errorBanner}
             accessibilityRole="alert"
             accessibilityLiveRegion="assertive"
@@ -307,7 +291,7 @@ export default function AuthLandingScreen() {
             >
               <Ionicons name="close" size={18} color="rgba(245,239,230,0.65)" />
             </Pressable>
-          </Reanimated.View>
+          </View>
         ) : null}
 
         {/* Bottom — CTAs. Primary action is visually dominant; secondary is
@@ -315,12 +299,7 @@ export default function AuthLandingScreen() {
             path remains the clear primary. Placing
             social below the primary CTA signals that email signup is the
             recommended path while still offering convenience. */}
-        <Reanimated.View
-          entering={
-            reducedMotionEnabled
-              ? undefined
-              : FadeInUp.delay(700).duration(500).springify()
-          }
+        <View
           style={styles.footer}
         >
           <View>
@@ -450,7 +429,7 @@ export default function AuthLandingScreen() {
               )}
             </AnimatedPressable>
           )}
-        </Reanimated.View>
+        </View>
       </SafeAreaView>
     </View>
   );

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,7 +14,6 @@ import type { ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { changePassword } from '../services/authApi';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { PremiumTextField } from '../components/ui/PremiumTextField';
@@ -29,7 +27,6 @@ export default function ChangePasswordScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const twoFactorEnabled = useStore((s) => s.twoFactorEnabled);
-  const reducedMotionEnabled = useReducedMotion();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -104,7 +101,6 @@ export default function ChangePasswordScreen() {
       }
     >
       {/* Security posture — flat state variant. Surfaces 2FA status before the form. */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <FlagshipFormSection
           variant="state"
           tone={twoFactorEnabled ? 'success' : 'warning'}
@@ -138,7 +134,6 @@ export default function ChangePasswordScreen() {
             />
           )}
         </FlagshipFormSection>
-      </Reanimated.View>
 
       {/* Flat intro — no hero card. Just a plain description. */}
       <Text style={[styles.intro, { color: colors.textSecondary }]}>
@@ -146,7 +141,6 @@ export default function ChangePasswordScreen() {
       </Text>
 
       {/* Flat form — no card wrapper. Fields carry their own boundary. */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <FlagshipFormSection variant="flat">
           <PremiumTextField
             label="Current password"
@@ -207,7 +201,6 @@ export default function ChangePasswordScreen() {
             <Text style={[styles.forgotPasswordText, { color: colors.brand }]}>Forgot password?</Text>
           </AnimatedPressable>
         </FlagshipFormSection>
-      </Reanimated.View>
 
       {/* Other security — flat navigation rows, no bordered sessions card */}
       <FlagshipFormSection variant="flat" title="Other security">
@@ -231,7 +224,6 @@ export default function ChangePasswordScreen() {
       </FlagshipFormSection>
 
       {/* Sessions note — flat info row, no card, no border. */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
         <View style={styles.sessionsNote}>
           <Ionicons
             name="information-circle-outline"
@@ -242,7 +234,6 @@ export default function ChangePasswordScreen() {
             After changing your password, you'll stay signed in on this device. Review your active sessions to sign out of other devices.
           </Text>
         </View>
-      </Reanimated.View>
     </FlagshipScreen>
   );
 }

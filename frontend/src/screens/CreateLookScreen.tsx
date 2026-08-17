@@ -8,7 +8,6 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -19,7 +18,6 @@ import { Type, Space, Radius, Typography, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { uploadMedia } from '../services/mediaUpload';
 import { createLookOnApi } from '../services/looksApi';
 import { useStore } from '../store/useStore';
@@ -43,7 +41,6 @@ export default function CreateLookScreen() {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const reducedMotion = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
 
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -185,7 +182,7 @@ export default function CreateLookScreen() {
         showsVerticalScrollIndicator={false}
       >
           {/* Media Composer */}
-          <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+          <View>
             <LookMediaComposer
               imageUri={imageUri}
               onImageChange={setImageUri}
@@ -193,11 +190,10 @@ export default function CreateLookScreen() {
               onTagsChange={handleTagsChange}
               editable
             />
-          </Reanimated.View>
+          </View>
 
           {/* Caption */}
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
+          <View
             style={styles.section}
           >
             <Text style={styles.sectionLabel}>Caption</Text>
@@ -213,22 +209,20 @@ export default function CreateLookScreen() {
               accessibilityLabel="Look caption"
             />
             <Text style={styles.charCount}>{caption.length}/500</Text>
-          </Reanimated.View>
+          </View>
 
           {/* Outfit Pieces */}
           {tags.length > 0 && (
-            <Reanimated.View
-              entering={reducedMotion ? undefined : FadeInDown.duration(300)}
+            <View
               style={styles.section}
             >
               <Text style={styles.sectionLabel}>Outfit Pieces</Text>
               <OutfitPieceEditor tags={tags} onTagsChange={handleTagsChange} />
-            </Reanimated.View>
+            </View>
           )}
 
           {/* Audience */}
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
+          <View
             style={styles.section}
           >
             <Text style={styles.sectionLabel}>Audience</Text>
@@ -264,11 +258,10 @@ export default function CreateLookScreen() {
                 );
               })}
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* Publish Button */}
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
+          <View
             style={styles.publishSection}
           >
             <AnimatedPressable
@@ -285,7 +278,7 @@ export default function CreateLookScreen() {
                 <Text style={styles.publishBtnText}>Publish Look</Text>
               )}
             </AnimatedPressable>
-          </Reanimated.View>
+          </View>
 
           <View style={{ height: 40 }} />
       </KeyboardAwareScrollView>

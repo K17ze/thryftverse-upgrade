@@ -19,8 +19,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import Reanimated, {
-  FadeInDown,
-  FadeInUp,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -532,9 +530,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
           {/* -- 6. SUGGESTED FIELDS -- */}
           {suggestion && !isAnalyzing && (
-            <Reanimated.View
-              entering={reducedMotion ? undefined : FadeInDown.duration(320).springify().damping(18)}
-            >
+            <View>
               {/* AI confidence banner — truthful labelling (§11) */}
               <View style={[styles.confidenceBanner, { backgroundColor: `${colors.brand}10`, borderColor: `${colors.brand}30` }]}>
                 <Ionicons name="document-text-outline" size={16} color={colors.brand} />
@@ -800,7 +796,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 </Text>
               </View>
               <ListingQualityMeter score={qualityScore} />
-            </Reanimated.View>
+            </View>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -869,9 +865,8 @@ function PhotoCaptureSection({
       {photos.length > 0 && (
         <View style={styles.photoGrid}>
           {photos.map((photo, index) => (
-            <Reanimated.View
+            <View
               key={photo.uri}
-              entering={reducedMotion ? undefined : FadeInDown.duration(220).delay(index * 40)}
               style={[styles.photoThumb, { width: thumbSize, height: thumbSize }]}
             >
               <Image source={{ uri: photo.uri }} style={styles.photoImage} />
@@ -899,7 +894,7 @@ function PhotoCaptureSection({
                 <Ionicons name="color-filter-outline" size={13} color={colors.brand} />
                 <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>Enhance</Text>
               </Pressable>
-            </Reanimated.View>
+            </View>
           ))}
         </View>
       )}
@@ -978,8 +973,7 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
   const dotStyle = useAnimatedStyle(() => ({ opacity: dotOpacity.value }));
 
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInUp.duration(200)}
+    <View
       style={[styles.analyzingCard, { backgroundColor: colors.surface, borderColor: `${colors.brand}30` }]}
     >
       <View style={styles.analyzingHeader}>
@@ -1008,7 +1002,7 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
       <Text style={[styles.analyzingHint, { color: colors.textMuted }]}>
         Detecting brand, category, colour and estimated value
       </Text>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -1027,8 +1021,7 @@ function ListingFormSkeleton({
 }) {
   const thumbSize = (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3;
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInDown.duration(240)}
+    <View
       accessibilityLabel="Loading AI suggestions"
       accessibilityState={{ busy: true }}
     >
@@ -1093,7 +1086,7 @@ function ListingFormSkeleton({
           />
         </View>
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 
@@ -1111,8 +1104,7 @@ function EmptyState({
   reducedMotion: boolean;
 }) {
   return (
-    <Reanimated.View
-      entering={reducedMotion ? undefined : FadeInDown.duration(280)}
+    <View
       style={styles.emptyState}
     >
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
@@ -1125,7 +1117,7 @@ function EmptyState({
         Add photos above and AI will suggest a title, description, price and
         category. Edit everything before publishing.
       </Text>
-    </Reanimated.View>
+    </View>
   );
 }
 

@@ -10,14 +10,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Typography, DockConstants, Type, Radius, Control, Stroke } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useStore } from '../store/useStore';
 import { haptics } from '../utils/haptics';
 import { ImageViewer } from '../components/ImageViewer';
@@ -38,7 +36,6 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const photos = preview?.photos ?? [];
@@ -133,7 +130,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         </View>
 
         {/* Listing quality meter — seller guidance */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <ListingQualityMeter
             result={useMemo(() => calculateListingQuality({
               photos: preview?.photos ?? [],
@@ -152,10 +149,10 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
             }), [preview])}
             compact
           />
-        </Reanimated.View>
+        </View>
 
         {/* ── 2. PRODUCT IDENTITY ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <ListingIdentityBlock
             brand={preview?.brand}
             title={title}
@@ -167,21 +164,21 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
         {!hasRealTitle && (
           <Text style={styles.authoringHint}>Untitled listing — add a title before publishing.</Text>
         )}
-        </Reanimated.View>
+        </View>
 
         {/* ── 3. PURCHASE CONTEXT ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={styles.contextRow}>
             <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
             <Text style={styles.contextText}>
               Payment and delivery options are confirmed at checkout.
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* ── 4. SPECIFICATIONS ── */}
         {specs.length > 0 && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
+          <View style={styles.sectionGroup}>
             <Text style={styles.sectionHeading}>Specifications</Text>
             <View style={styles.specGrid}>
               {specs.map((spec, i) => (
@@ -197,11 +194,11 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
                 </View>
               ))}
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── 5. DESCRIPTION ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
+        <View style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Description</Text>
           {description ? (
             <Text style={styles.descriptionText}>{description}</Text>
@@ -210,10 +207,10 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               No description added yet.
             </Text>
           )}
-        </Reanimated.View>
+        </View>
 
         {/* ── 6. SELLER PREVIEW ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
+        <View style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Seller</Text>
           <View style={styles.sellerRow}>
             {sellerAvatar ? (
@@ -233,10 +230,10 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Text style={styles.sellerSubtext}>Seller preview</Text>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* ── 7. SHIPPING & PAYMENT ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.sectionGroup}>
+        <View style={styles.sectionGroup}>
           <Text style={styles.sectionHeading}>Shipping & Payment</Text>
           <View style={styles.specGrid}>
             <View style={[styles.specRow, styles.specRowBorder]}>
@@ -262,7 +259,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               <Text style={styles.specValue}>Through ThryftVerse checkout</Text>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </ScrollView>

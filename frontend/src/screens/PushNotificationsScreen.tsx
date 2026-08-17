@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, ActivityIndicator, Linking, Platform, Pressable
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { PUSH_NOTIFICATION_DEFINITIONS, PUSH_NOTIFICATION_GROUPS } from '../preferences/settingsPreferences';
@@ -19,7 +18,6 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { haptics } from '../utils/haptics';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'PushNotifications'>;
@@ -54,7 +52,6 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   const [editingQuietTime, setEditingQuietTime] = React.useState<'start' | 'end' | null>(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const reducedMotionEnabled = useReducedMotion();
 
   React.useEffect(() => {
     Notifications.getPermissionsAsync()
@@ -255,7 +252,6 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       )}
 
       {/* Hero summary — notification posture with progress */}
-      <Reanimated.View entering={FadeInDown.duration(300)}>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: enabledCount > 0 ? colors.brand : colors.surfaceAlt }]}>
@@ -285,14 +281,13 @@ export default function PushNotificationsScreen({ navigation }: Props) {
             </Text>
           </View>
         </View>
-      </Reanimated.View>
 
-      {PUSH_NOTIFICATION_GROUPS.map((group, index) => {
+      {PUSH_NOTIFICATION_GROUPS.map((group) => {
         const groupItems = NOTIFICATIONS.filter((n) => n.group === group.key);
         if (groupItems.length === 0) return null;
         const groupIconColor = group.key === 'orders' ? colors.success : group.key === 'social' ? colors.brand : colors.textMuted;
         return (
-          <Reanimated.View key={group.key} entering={FadeInDown.duration(300).delay(60 + index * 40)}>
+          <View key={group.key}>
             <SettingsSection title={group.label} noCard>
               {groupItems.map((item, idx) => (
                 <SettingsRow
@@ -308,7 +303,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
                 />
               ))}
             </SettingsSection>
-          </Reanimated.View>
+          </View>
         );
       })}
 

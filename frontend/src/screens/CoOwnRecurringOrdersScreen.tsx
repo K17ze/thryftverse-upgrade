@@ -23,11 +23,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
@@ -68,7 +66,6 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [orders, setOrders] = React.useState<CoOwnRecurringOrder[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -182,23 +179,21 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
         >
         {/* Hero summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
-          <View style={styles.heroCard}>
-            <View style={styles.heroIconRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="repeat" size={22} color={colors.brand} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={styles.heroTitle}>Auto-invest plans</Text>
-                <Text style={styles.heroSubtitle}>
-                  {activeOrders.length === 0
-                    ? 'No active plans'
-                    : `${activeOrders.length} active plan${activeOrders.length !== 1 ? 's' : ''}`}
-                </Text>
-              </View>
+        <View style={styles.heroCard}>
+          <View style={styles.heroIconRow}>
+            <View style={[styles.heroIcon, { backgroundColor: colors.surfaceAlt }]}>
+              <Ionicons name="repeat" size={22} color={colors.brand} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={styles.heroTitle}>Auto-invest plans</Text>
+              <Text style={styles.heroSubtitle}>
+                {activeOrders.length === 0
+                  ? 'No active plans'
+                  : `${activeOrders.length} active plan${activeOrders.length !== 1 ? 's' : ''}`}
+              </Text>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         <Text style={styles.introText}>
           Set up recurring purchases to automatically buy units on a schedule. Cancel at any time.
@@ -222,18 +217,15 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
           <>
             {/* Active orders */}
             {activeOrders.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Active</Text>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{activeOrders.length}</Text>
                   </View>
                 </View>
-                {activeOrders.map((order, idx) => (
-                  <Reanimated.View
-                    key={order.id}
-                    entering={FadeInDown.duration(300).delay((idx + 2) * 60)}
-                  >
+                {activeOrders.map((order) => (
+                  <View key={order.id}>
                     <View style={styles.orderCard}>
                       <Pressable
                         style={({ pressed }) => [styles.orderInfo, pressed && { opacity: 0.85 }]}
@@ -284,25 +276,22 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                         <Ionicons name="close-circle-outline" size={24} color={colors.danger} />
                       </Pressable>
                     </View>
-                  </Reanimated.View>
+                  </View>
                 ))}
-              </Reanimated.View>
+              </View>
             )}
 
             {/* Inactive orders */}
             {inactiveOrders.length > 0 && (
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Cancelled</Text>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{inactiveOrders.length}</Text>
                   </View>
                 </View>
-                {inactiveOrders.map((order, idx) => (
-                  <Reanimated.View
-                    key={order.id}
-                    entering={FadeInDown.duration(300).delay((idx + 4) * 60)}
-                  >
+                {inactiveOrders.map((order) => (
+                  <View key={order.id}>
                     <View style={[styles.orderCard, { opacity: 0.55 }]}>
                       <View style={styles.orderInfo}>
                         <View style={styles.orderHeader}>
@@ -326,9 +315,9 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                         </View>
                       </View>
                     </View>
-                  </Reanimated.View>
+                  </View>
                 ))}
-              </Reanimated.View>
+              </View>
             )}
           </>
         )}
