@@ -1,21 +1,28 @@
-refactor(creator): anti-slop visual deletion pass — remove decorative chrome, dead code, excessive copy
+fix(creator): restore proper camera chrome layout — Flash top-right, Flip bottom-right
 
-Per the Visual Language Anti-Slop spec:
-- Canvas/content must dominate visual mass
-- No card-on-card composition
-- Short labels, no explanatory paragraphs
-- Brand color for selection/Next/active only, not decoration
-- Animation for causality/continuity/state only
+The HFR spec requires the default camera chrome to show:
+  Close · Flash · Gallery · Shutter · Flip · Mode switch · minimal Zoom
 
-Cleaned files:
-- CreatorCamera: removed redundant modePill + 130 lines of dead styles + 6 dead constants
-- CaptureToolsSheet: shortened all tool descriptions to essential labels
-- LookComposerScreen: simplified empty states to minimal text, neutralized decorative brand color
-- PosterComposerScreen: simplified empty state to minimal text
-- AudioBrowserSheet: removed "coming soon", decorative icons, explanatory hints
-- LUTBrowserSheet: removed unselected-state hint paragraph
-- AIEffectBrowserSheet: removed unselected-state hint
-- StickerBrowserSheet: removed decorative empty-state icon
+The previous implementation placed Flash and Flip on a small vertical
+right rail (22pt icons with tiny labels), which:
+  - buried Flip in a low-prominence rail instead of the bottom bar
+  - put Flash in the wrong location (right rail, not top bar)
+  - used a bottom spacer where Flip should have been
+  - did not match the spec's canonical camera layout
+
+This commit:
+  - Moves Flash to the top bar (right side, next to Tools) with an
+    active-state background so the user can read the toggle at a glance
+  - Moves Flip to the bottom bar (right side, next to shutter) as a
+    prominent 48pt circular button with a subtle dark backdrop
+  - Removes the ControlsRail vertical rail entirely (no longer needed)
+  - Removes the now-unused ControlsRail import
+  - Updates the header comment to reflect the new layout
+
+The camera now matches the spec's canonical layout:
+  Top:    [×]                    [⚡] [⋯]
+  Bottom: [gallery]       ◎       [flip]
+  Below:        Look  Poster  Search
 
 Generated with [Devin](https://devin.ai)
 

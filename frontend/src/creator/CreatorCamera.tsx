@@ -41,7 +41,6 @@ import Reanimated, {
 import { FocusReticle } from './camera/FocusReticle';
 import { RecordingRing } from './camera/RecordingRing';
 import { ShutterButton } from './camera/ShutterButton';
-import { ControlsRail } from './camera/ControlsRail';
 import { GalleryCarousel } from './camera/GalleryCarousel';
 import { PermissionState } from './camera/PermissionState';
 import { GreenScreenSheet, type GreenScreenSettings } from './camera/GreenScreenSheet';
@@ -57,7 +56,8 @@ import type { CreatorInitialMedia } from '../navigation/types';
 //   - corner brackets (mode-specific aspect ratio guide, refined 2pt)
 //   - center crosshair
 //   - large shutter button with tap=photo / press-and-hold=video
-//   - vertical controls rail: flip, zoom, tools disclosure
+//   - top bar: close (left), flash + tools (right)
+//   - bottom bar: gallery (left), shutter (center), flip (right)
 //   - gallery thumbnail (64x64, recent photos carousel)
 //   - quick-review overlay (post-capture preview with retake/edit/save)
 //   - multi-capture with frame-review tray (all captures retained)
@@ -988,7 +988,7 @@ export default function CreatorCamera({
         <View style={styles.crosshairV} />
       </View>
 
-      {/* Top controls — close (left), flash + tools + accessories (right) */}
+      {/* Top controls — close (left), flash + tools (right) */}
       <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 16) + 8 }]} pointerEvents="box-none">
         <Pressable
           style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed]}
@@ -997,11 +997,25 @@ export default function CreatorCamera({
           accessibilityLabel="Close camera"
           accessibilityRole="button"
         >
-          <Ionicons name="close" size={26} color="#fff" />
+          <Ionicons name="close" size={28} color="#fff" />
         </Pressable>
 
         <View style={styles.topRightControls}>
           {renderTopRightAccessory?.()}
+          {/* Flash — top-right, prominent circular button */}
+          <Pressable
+            style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed, flash !== 'off' && styles.topIconBtnActive]}
+            onPress={cycleFlash}
+            hitSlop={12}
+            accessibilityLabel={`Flash ${flash}`}
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
+              size={24}
+              color={flash === 'off' ? '#fff' : colors.antiqueGold}
+            />
+          </Pressable>
           {/* Tools button — opens CaptureToolsSheet for all secondary tools */}
           <Pressable
             style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed]}
@@ -1016,20 +1030,7 @@ export default function CreatorCamera({
         </View>
       </View>
 
-      {/* Vertical controls rail — right side (simplified) */}
-      {/* Only Flash and Flip are shown in the default state. All secondary
-          tools (Timer, Grid, Hands-free, Speed, Green Screen, Effects,
-          Multi-capture) are behind the Tools button in the top bar, which
-          opens CaptureToolsSheet. */}
-      <ControlsRail
-        top={Math.max(insets.top, 16) + 60}
-        onFlip={toggleFacing}
-        flash={flash}
-        onCycleFlash={cycleFlash}
-        accentColor={colors.antiqueGold}
-      />
-
-      {/* Bottom controls — gallery, shutter, flip */}
+      {/* Bottom controls — gallery (left), shutter (center), flip (right) */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]} pointerEvents="box-none">
         {/* Gallery thumbnail + recent photos carousel */}
         <GalleryCarousel
@@ -1054,8 +1055,16 @@ export default function CreatorCamera({
           speedMode={speedMode}
         />
 
-        {/* Spacer — flip is in the right rail, this keeps the shutter centered */}
-        <View style={styles.bottomSpacer} />
+        {/* Flip camera — prominent circular button, bottom-right */}
+        <Pressable
+          style={({ pressed }) => [styles.flipBtn, pressed && styles.btnPressed]}
+          onPress={toggleFacing}
+          hitSlop={12}
+          accessibilityLabel="Flip camera"
+          accessibilityRole="button"
+        >
+          <Ionicons name="camera-reverse-outline" size={26} color="#fff" />
+        </Pressable>
       </View>
 
       {/* ── Capture mode switch (Look / Poster / Search) ────────────────
@@ -1473,8 +1482,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Bottom bar — compact: shutter (78pt) + gallery (44pt) + spacer.
-  // Reduced from 120pt to 100pt minHeight so the viewfinder dominates more.
+  // Flash active state — subtle accent background so the user can read
+  // the toggle state at a glance without a heavy fill.
+  topIconBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  // Bottom bar — gallery (left) | shutter (center) | flip (right).
+  // The viewfinder dominates; controls are compact and purposeful.
   bottomBar: {
     position: 'absolute',
     left: 0,
@@ -1487,9 +1501,16 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     minHeight: 100,
   },
-  bottomSpacer: {
-    width: 56,
-    minHeight: 56,
+  // Flip camera — prominent circular button matching the shutter's
+  // visual weight on the opposite side. 48pt touch target with a
+  // subtle dark backdrop for legibility over bright previews.
+  flipBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Capture mode switch (Look / Poster / Search) — sits below the shutter,
   // above the safe area. Minimal text-based switch; the container only
