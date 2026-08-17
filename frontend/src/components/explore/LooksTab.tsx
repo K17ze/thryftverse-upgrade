@@ -177,7 +177,7 @@ export default function LooksTab() {
 
   if (loadError && looks.length === 0) {
     return (
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)} style={styles.errorWrap}>
+      <View style={styles.errorWrap}>
         <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
         <Text style={styles.errorTitle}>Looks could not be loaded</Text>
         <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
@@ -193,13 +193,13 @@ export default function LooksTab() {
         >
           <Text style={styles.retryBtnText}>Retry</Text>
         </AnimatedPressable>
-      </Reanimated.View>
+      </View>
     );
   }
 
   if (looks.length === 0 && !loadError) {
     return (
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(400)}>
+      <View>
         <EmptyState
           icon="camera-outline"
           title="No looks yet"
@@ -212,7 +212,7 @@ export default function LooksTab() {
             </View>
           }
         />
-      </Reanimated.View>
+      </View>
     );
   }
 

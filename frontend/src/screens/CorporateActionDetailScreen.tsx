@@ -15,12 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography, DockConstants, Stroke, LetterSpacing } from '../theme/designTokens';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../utils/haptics';
 import {
   CoOwnStickyActionDock,
@@ -69,7 +67,6 @@ export default function CorporateActionDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const insets = useSafeAreaInsets();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -251,7 +248,7 @@ export default function CorporateActionDetailScreen() {
         }
       >
         {/* Event summary — the corporate action row as a non-interactive card */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <CoOwnCorporateActionRow
             type={typedActionType}
             status={typedStatus}
@@ -261,29 +258,29 @@ export default function CorporateActionDetailScreen() {
             recordDateLabel={displayRecordDate ?? undefined}
             paymentDateLabel={displayPaymentDate ?? undefined}
           />
-        </Reanimated.View>
+        </View>
 
         {/* Title (from backend if available) */}
         {fetchedAction && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{displayTitle}</Text>
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* Description */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>About this event</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
               {description}
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Key dates */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Key dates</Text>
             <View style={styles.dateRow}>
@@ -309,10 +306,10 @@ export default function CorporateActionDetailScreen() {
               </View>
             )}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Effect */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Effect on your position</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
@@ -329,10 +326,10 @@ export default function CorporateActionDetailScreen() {
               </Text>
             )}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Status */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Status</Text>
             <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
@@ -345,11 +342,11 @@ export default function CorporateActionDetailScreen() {
               {!['pending', 'announced', 'effective', 'completed', 'cancelled', 'open'].includes(displayStatus) && displayStatus}
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Governance voting — flagship treatment with tally bars, quorum, voting power */}
         {isGovernanceAction && actionId && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.voteHeaderRow}>
                 <View style={[styles.voteHeaderIcon, { backgroundColor: colors.brand }]}>
@@ -450,7 +447,7 @@ export default function CorporateActionDetailScreen() {
                 })}
               </View>
             </View>
-          </Reanimated.View>
+          </View>
         )}
       </ScrollView>
 

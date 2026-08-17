@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   Pressable,
   RefreshControl,
   ActivityIndicator,
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
@@ -19,7 +19,6 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { fetchKycStatus, type KycStatus } from '../services/complianceApi';
 import { parseApiError } from '../lib/apiClient';
@@ -41,7 +40,6 @@ export default function VerificationStatusScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();
 
   const currentUser = useStore((state) => state.currentUser);
@@ -213,7 +211,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
       header={<FlagshipHeader title="Verification Status" onBack={() => navigation.goBack()} />}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
-      <Reanimated.ScrollView
+      <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -222,13 +220,13 @@ export default function VerificationStatusScreen({ navigation }: Props) {
         }
       >
         {/* ── Status hero ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <StatusHero status={effectiveStatus} colors={colors} styles={styles} />
-        </Reanimated.View>
+        </View>
 
         {/* ── Status-specific content ── */}
         {effectiveStatus === 'unverified' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <FlagshipFormSection
               variant="flat"
               title="Build buyer trust"
@@ -249,11 +247,11 @@ export default function VerificationStatusScreen({ navigation }: Props) {
                 </AnimatedPressable>
               </View>
             </FlagshipFormSection>
-          </Reanimated.View>
+          </View>
         )}
 
         {effectiveStatus === 'in_review' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <FlagshipFormSection
               variant="flat"
               title="What we are checking"
@@ -272,11 +270,11 @@ export default function VerificationStatusScreen({ navigation }: Props) {
                 </View>
               </View>
             </FlagshipFormSection>
-          </Reanimated.View>
+          </View>
         )}
 
         {effectiveStatus === 'verified' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <FlagshipFormSection
               variant="flat"
               title="Your verification benefits"
@@ -289,11 +287,11 @@ export default function VerificationStatusScreen({ navigation }: Props) {
                 <BenefitItem icon="people-outline" text="Buyer trust — verified sellers sell faster" colors={colors} styles={styles} />
               </View>
             </FlagshipFormSection>
-          </Reanimated.View>
+          </View>
         )}
 
         {effectiveStatus === 'rejected' && (
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <FlagshipFormSection
               variant="flat"
               title="Verification declined"
@@ -314,11 +312,11 @@ export default function VerificationStatusScreen({ navigation }: Props) {
                 </AnimatedPressable>
               </View>
             </FlagshipFormSection>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── Timeline ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <FlagshipFormSection
             variant="flat"
             title="Verification timeline"
@@ -336,7 +334,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
               ))}
             </View>
           </FlagshipFormSection>
-        </Reanimated.View>
+        </View>
 
         {/* ── Trust & privacy note ── */}
         <SettingsInfoBanner
@@ -354,7 +352,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
             Read our verification guide
           </Text>
         </Pressable>
-      </Reanimated.ScrollView>
+      </ScrollView>
     </FlagshipScreen>
   );
 }

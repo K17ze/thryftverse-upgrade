@@ -10,7 +10,6 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Typography, Space, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
@@ -21,7 +20,6 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useStore } from '../store/useStore';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   fetchCoOwnRecourseStatus,
   respondToVerificationDemand,
@@ -61,7 +59,6 @@ export default function VerificationResponseScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const reducedMotionEnabled = useReducedMotion();
 
   const [recourseStatus, setRecourseStatus] = useState<CoOwnRecourseStatus | null>(null);
   const [demand, setDemand] = useState<CoOwnVerificationDemand | null>(null);
@@ -325,7 +322,7 @@ export default function VerificationResponseScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Demand details */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={[styles.demandCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
             <View style={styles.demandTypeRow}>
               <View style={[styles.demandTypeIcon, { backgroundColor: colors.surfaceAlt }]}>
@@ -372,10 +369,10 @@ export default function VerificationResponseScreen() {
               {DEMAND_TYPE_GUIDANCE[demand.demandType] ?? 'Provide evidence to verify this asset.'}
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Evidence photo upload */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
             EVIDENCE PHOTOS
           </Text>
@@ -446,10 +443,10 @@ export default function VerificationResponseScreen() {
           <Text style={[styles.photoCount, { color: colors.textMuted }]}>
             {evidencePhotos.length}/6 photos
           </Text>
-        </Reanimated.View>
+        </View>
 
         {/* Evidence notes */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
             NOTES (OPTIONAL)
           </Text>
@@ -468,17 +465,17 @@ export default function VerificationResponseScreen() {
               {evidenceNotes.length}/2000
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Liability warning */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={[styles.warningBox, { backgroundColor: colors.warning + '0F', borderColor: colors.warning + '33' }]}>
             <Ionicons name="shield-outline" size={18} color={colors.warning} />
             <Text style={[styles.warningText, { color: colors.textSecondary }]}>
               Your personal liability guarantee is active. Failure to provide satisfactory evidence may trigger recourse proceedings.
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Submit button */}
         <View style={styles.footer}>

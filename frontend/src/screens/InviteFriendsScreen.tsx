@@ -14,9 +14,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Type, Typography, LetterSpacing, Stroke, Control } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InviteFriends'>;
@@ -34,7 +32,6 @@ function generateReferralCode(userId: string): string {
 export default function InviteFriendsScreen({ navigation }: Props) {
   const currentUser = useStore((s) => s.currentUser);
   const { show } = useToast();
-  const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -113,21 +110,18 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       contentStyle={styles.content}
     >
       {/* Hero */}
-      <Reanimated.View
+      <View
         style={styles.heroCard}
-        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(0).duration(400)}
       >
         <Ionicons name="gift-outline" size={48} color={ACCENT} />
         <Text style={styles.heroTitle}>Invite & earn</Text>
         <Text style={styles.heroSubtitle}>
           Invite friends to Thryftverse. When they make their first sale, you both get a reward.
         </Text>
-      </Reanimated.View>
+      </View>
 
       {/* Referral Code */}
-      <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(80).duration(400)}
-      >
+      <View>
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>YOUR REFERRAL CODE</Text>
           <View style={styles.codeRow}>
@@ -138,12 +132,10 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             </AnimatedPressable>
           </View>
         </View>
-      </Reanimated.View>
+      </View>
 
       {/* Share Link */}
-      <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(160).duration(400)}
-      >
+      <View>
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
           <View style={styles.linkRow}>
@@ -156,12 +148,10 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             </AnimatedPressable>
           </View>
         </View>
-      </Reanimated.View>
+      </View>
 
       {/* Share Options */}
-      <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(240).duration(400)}
-      >
+      <View>
         <View style={styles.shareRow}>
           {([
             { icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },
@@ -177,12 +167,10 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             </AnimatedPressable>
           ))}
         </View>
-      </Reanimated.View>
+      </View>
 
       {/* Rewards Summary */}
-      <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(320).duration(400)}
-      >
+      <View>
         <View style={styles.rewardsCard}>
           <View style={styles.rewardsHeader}>
             <Ionicons name="ribbon-outline" size={18} color={ACCENT} />
@@ -213,12 +201,10 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             Earn £5 credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
           </Text>
         </View>
-      </Reanimated.View>
+      </View>
 
       {/* Loyalty Tier Card */}
-      <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(360).duration(400)}
-      >
+      <View>
         <View style={styles.loyaltyCard}>
           <View style={styles.loyaltyHeader}>
             <View style={[styles.loyaltyIconWrap, { borderColor: loyaltyTier.color }]}>
@@ -251,12 +237,10 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </Reanimated.View>
+      </View>
 
       {/* How it works */}
-      <Reanimated.View
-        entering={reducedMotionEnabled ? undefined : FadeInDown.delay(400).duration(400)}
-      >
+      <View>
         <View style={styles.howItWorksCard}>
           <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
           {([
@@ -273,7 +257,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             </View>
           ))}
         </View>
-      </Reanimated.View>
+      </View>
     </FlagshipScreen>
   );
 }

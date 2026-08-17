@@ -643,10 +643,10 @@ export default function InboxScreen() {
                   >
                     {chip.label}
                   </Text>
-                  {chip.badge ? (
+                  {(chip.badge ?? 0) > 1 ? (
                     <View style={[styles.unreadPill, t.unreadPill, isActive && { backgroundColor: `${colors.textInverse}30` }]}>
                       <Text style={[styles.unreadPillText, t.unreadPillText, isActive && { color: colors.textInverse }]}>
-                        {chip.badge > 99 ? '99+' : chip.badge}
+                        {chip.badge! > 99 ? '99+' : chip.badge}
                       </Text>
                     </View>
                   ) : null}
@@ -694,7 +694,7 @@ export default function InboxScreen() {
           </View>
         ) : (
           <>
-            {segment === 'all' && messageRequests.length > 0 && (
+            {segment === 'all' && messageRequests.length > 0 && !filterExpanded && (
               <View style={styles.requestsBanner}>
                 <AnimatedPressable
                   onPress={() => navigation.navigate('MessageRequests')}

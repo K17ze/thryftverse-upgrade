@@ -70,7 +70,6 @@ import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/Prof
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { SellerReputationCard } from '../components/seller/SellerReputationCard';
-import { EmptyState } from '../components/EmptyState';
 
 // AnimatedFlashList crashes on web with Reanimated 4.x (issue #9266).
 // Use plain FlashList on web; animated version on native for UI-thread perf.
@@ -101,9 +100,9 @@ function getCollapsedInitials(name: string): string {
 }
 
 export default function UserProfileScreen({ navigation, route }: Props) {
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // ALL HOOKS â€” unconditional, no early returns before this section ends
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ───────────────────────────────────────────────────────────────────────
+  // ALL HOOKS — unconditional, no early returns before this section ends
+  // ───────────────────────────────────────────────────────────────────────
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
@@ -213,7 +212,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   const profileDeepLink = useMemo(() => targetUserId ? `${PROFILE_WEB_BASE}/u/${encodeURIComponent(targetUserId)}` : PROFILE_WEB_BASE, [targetUserId]);
 
-  // Tab counts â€” ratingAverage consumed by ProfileHero via stats
+  // Tab counts — ratingAverage consumed by ProfileHero via stats
   const activeCount = stats?.activeListingCount ?? 0;
   const soldCount = stats?.soldListingCount ?? 0;
   const lookCount = stats?.publishedLookCount ?? 0;
@@ -345,7 +344,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Handlers
   const handleShare = useCallback(async () => {
     try {
-      await Share.share({ message: `${displayUsername} on Thryftverse â€” ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
+      await Share.share({ message: `${displayUsername} on Thryftverse — ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
     } catch { /* ignore */ }
   }, [displayUsername, profileDeepLink]);
 
@@ -382,7 +381,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const handleRefresh = useCallback(() => { activeQuery.refetch(); publicProfileQuery.refetch(); }, [activeQuery, publicProfileQuery]);
   const onTabRailLayout = useCallback((y: number) => { stickyThreshold.value = y - (insets.top + COLLAPSED_BAR_HEIGHT); }, [insets.top]);
 
-  // When destination changes, queue a restore â€” no setTimeout during render
+  // When destination changes, queue a restore — no setTimeout during render
   const prevDestination = useRef<string>(currentDestination);
   useEffect(() => {
     if (prevDestination.current !== currentDestination) {
@@ -414,7 +413,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           setStickyRailVisible(shouldSticky);
         }
       } else {
-        // No previous offset â€” if currently collapsed, start at sticky threshold
+        // No previous offset — if currently collapsed, start at sticky threshold
         if (collapsedShared.value) {
           const stickyAt = stickyThreshold.value;
           if (stickyAt < 9999 && listRef.current) {
@@ -445,21 +444,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     );
   }, [activeTab, shopSegment, navigation, formatFromFiat, cardWidth, cardHeight, lookTileWidth, lookTileHeight]);
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // DERIVED RENDER STATE â€” after all hooks
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ───────────────────────────────────────────────────────────────────────
+  // DERIVED RENDER STATE — after all hooks
+  // ───────────────────────────────────────────────────────────────────────
   const isBlockedByTarget = viewer?.isBlockedByTarget && !viewer.isSelf;
   const isBlocked = viewer?.isBlocked ?? false;
   const canMessage = viewer?.canMessage ?? false;
 
-  // State labels â€” rendered by ProfileStates subcomponents:
+  // State labels — rendered by ProfileStates subcomponents:
   // "Profile unavailable" (ProfileUnavailableState)
   // "You've been blocked" (ProfileBlockedState)
   // canMessage gates the Message button (ProfileHero)
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // CONDITIONAL RENDERS â€” loading, error, unavailable, blocked
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ───────────────────────────────────────────────────────────────────────
+  // CONDITIONAL RENDERS — loading, error, unavailable, blocked
+  // ───────────────────────────────────────────────────────────────────────
   if (isLoadingProfile && !targetProfile) {
     return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab as 'Shop' | 'Looks' | 'Reviews'} />;
   }
@@ -475,9 +474,9 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     return <ProfileBlockedState onBack={() => navigation.goBack()} onShare={handleShare} coverHeight={COVER_HEIGHT} />;
   }
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ───────────────────────────────────────────────────────────────────────
   // MAIN RENDER
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ───────────────────────────────────────────────────────────────────────
   const numColumns = (activeTab === 'Reviews' || activeTab === 'Collections' || activeTab === 'Drops') ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
 
   const listHeader = (
@@ -530,14 +529,12 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       <SellerReputationCard seller={sellerTrust ?? null} />
 
 
-      {/* Tab rail â€” measures Y for sticky threshold */}
+      {/* Tab rail — measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
         <TabRail
           tabs={[
             { key: 'Shop', label: 'Shop', count: activeCount + soldCount },
             { key: 'Looks', label: 'Looks', count: lookCount },
-            { key: 'Collections' as any, label: 'Collections' },
-            { key: 'Drops' as any, label: 'Drops' },
             { key: 'Reviews', label: 'Reviews', count: reviewCount },
           ]}
           activeKey={activeTab as any}
@@ -600,26 +597,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           </View>
         );
       }
-      if (activeTab === 'Collections') {
-        return (
-          <EmptyState
-            icon="folder-open-outline"
-            title="No collections yet"
-            subtitle="Curated collections from this seller will appear here."
-            density="compact"
-          />
-        );
-      }
-      if (activeTab === 'Drops') {
-        return (
-          <EmptyState
-            icon="calendar-outline"
-            title="No upcoming drops"
-            subtitle="Scheduled releases will appear here."
-            density="compact"
-          />
-        );
-      }
       return (
         <View style={styles.listState}>
           <Ionicons name="chatbubble-ellipses-outline" size={32} color={MUTED} />
@@ -639,7 +616,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     <View style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={BG} />
 
-      {/* Top utility controls â€” overlay cover, fade out on scroll */}
+      {/* Top utility controls — overlay cover, fade out on scroll */}
       <View pointerEvents="box-none" style={styles.coverActionLayer}>
         <Reanimated.View
           style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}
@@ -681,7 +658,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </Reanimated.View>
       </View>
 
-      {/* Collapsed header â€” total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
+      {/* Collapsed header — total height = insets.top + COLLAPSED_BAR_HEIGHT, paddingTop = insets.top, inner row = COLLAPSED_BAR_HEIGHT */}
       <Reanimated.View
         style={[styles.collapsedHeader, t.collapsedHeader, { height: insets.top + COLLAPSED_BAR_HEIGHT, paddingTop: insets.top }, collapsedHeaderStyle, collapsedHeaderShadowStyle]}
         pointerEvents={collapsedVisible ? 'auto' : 'none'}
@@ -741,7 +718,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         </View>
       </Reanimated.View>
 
-      {/* Sticky tab rail â€” external overlay, appears when original scrolls past */}
+      {/* Sticky tab rail — external overlay, appears when original scrolls past */}
       <Reanimated.View
         style={[styles.stickyRailWrap, t.stickyRailWrap, { top: insets.top + COLLAPSED_BAR_HEIGHT }, stickyRailStyle]}
         pointerEvents={stickyRailVisible ? 'auto' : 'none'}
@@ -750,8 +727,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           tabs={[
             { key: 'Shop', label: 'Shop', count: activeCount + soldCount },
             { key: 'Looks', label: 'Looks', count: lookCount },
-            { key: 'Collections' as any, label: 'Collections' },
-            { key: 'Drops' as any, label: 'Drops' },
             { key: 'Reviews', label: 'Reviews', count: reviewCount },
           ]}
           activeKey={activeTab as any}

@@ -10,7 +10,6 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useToast } from '../context/ToastContext';
 import { Typography, Space, Radius, Type, Elevation, LetterSpacing } from '../theme/designTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -21,7 +20,6 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Meta, BodyEmphasis, Caption } from '../components/ui/Text';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { RootStackParamList } from '../navigation/types';
@@ -42,7 +40,6 @@ export default function WriteReviewScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const { isOffline } = useConnectivity();
-  const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
 
   const [rating, setRating] = useState(0);
@@ -160,7 +157,7 @@ export default function WriteReviewScreen() {
       >
           {/* Order context */}
           {order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+            <View>
               <ElevatedSurface variant="surface" style={styles.orderCard}>
                 <View style={styles.orderRow}>
                   {order.listingImageUrl && (
@@ -176,11 +173,11 @@ export default function WriteReviewScreen() {
                   </View>
                 </View>
               </ElevatedSurface>
-            </Reanimated.View>
+            </View>
           )}
 
           {existingReview ? (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.existingCard}>
+            <View style={styles.existingCard}>
               <Ionicons name="checkmark-circle" size={32} color={colors.success} />
               <BodyEmphasis style={styles.existingTitle}>Review already submitted</BodyEmphasis>
               <Caption color={colors.textSecondary} style={styles.existingSub}>
@@ -192,10 +189,10 @@ export default function WriteReviewScreen() {
                   <Text style={styles.existingCommentText}>{existingReview.comment}</Text>
                 </View>
               )}
-            </Reanimated.View>
+            </View>
           ) : (
             <>
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <Text style={styles.promptText}>How was your experience?</Text>
 
                 <View style={styles.starsContainer}>
@@ -223,9 +220,9 @@ export default function WriteReviewScreen() {
                     {['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][rating - 1]}
                   </Text>
                 )}
-              </Reanimated.View>
+              </View>
 
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILED REVIEW (OPTIONAL)</Meta>
                 <View style={styles.inputCard}>
                   <TextInput
@@ -242,10 +239,10 @@ export default function WriteReviewScreen() {
                   />
                   <Text style={styles.charCount}>{review.length}/2000</Text>
                 </View>
-              </Reanimated.View>
+              </View>
 
               {/* Photo upload section */}
-              <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+              <View>
                 <Meta color={colors.textMuted} style={styles.sectionLabel}>PHOTOS (OPTIONAL)</Meta>
                 <View style={styles.photoSection}>
                   {photoUris.length > 0 && (
@@ -296,7 +293,7 @@ export default function WriteReviewScreen() {
                     </AnimatedPressable>
                   )}
                 </View>
-              </Reanimated.View>
+              </View>
             </>
           )}
 

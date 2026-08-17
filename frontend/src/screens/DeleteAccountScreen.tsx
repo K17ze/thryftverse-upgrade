@@ -8,7 +8,6 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useForm, Controller } from 'react-hook-form';
@@ -20,7 +19,6 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { parseApiError } from '../lib/apiClient';
 import { requestAccountDeletion } from '../services/accountApi';
 import { logoutFromSession } from '../services/authApi';
@@ -66,7 +64,6 @@ export default function DeleteAccountScreen({ navigation }: Props) {
   const { show } = useToast();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
-  const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   // ── Biometric gate (OWASP M5) ──
@@ -201,7 +198,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Warning hero ── */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={[styles.warningHero, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
             <View style={styles.warningHeader}>
               <View style={[styles.warningIcon, { backgroundColor: colors.danger }]}>
@@ -220,10 +217,10 @@ export default function DeleteAccountScreen({ navigation }: Props) {
               be affected.
             </Text>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* ── What happens ── */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+        <View>
           <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>What happens when you delete</Text>
           <View style={[styles.consequenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {consequences.map((item, i) => (
@@ -246,10 +243,10 @@ export default function DeleteAccountScreen({ navigation }: Props) {
               </View>
             ))}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* ── Confirmation form ── */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+        <View>
           <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>
             Confirm your identity
           </Text>
@@ -378,10 +375,10 @@ export default function DeleteAccountScreen({ navigation }: Props) {
               <Text style={[styles.errorText, { color: colors.danger }]}>{deleteError}</Text>
             </View>
           ) : null}
-        </Reanimated.View>
+        </View>
 
         {/* ── Actions — destructive separated ── */}
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={styles.actionSection}>
             {/* Secondary — keep account */}
             <AppButton
@@ -412,7 +409,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
               style={styles.deleteBtn}
             />
           </View>
-        </Reanimated.View>
+        </View>
       </KeyboardAwareScrollView>
     </FlagshipScreen>
   );

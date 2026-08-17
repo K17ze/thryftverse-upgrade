@@ -54,7 +54,7 @@ interface DestinationMeta {
 const ROUTE_METADATA: DestinationMeta[] = [
   // ── Account ──
   { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor', section: 'Account', showSection: true },
-  { key: 'Verification', label: 'Verification & KYC', searchTerms: 'identity dac7 tax badge seller trust', section: 'Account' },
+  { key: 'Verification', label: 'Verify your identity', searchTerms: 'identity dac7 tax badge seller trust kyc', section: 'Account' },
   { key: 'ChangePassword', label: 'Change password', searchTerms: '2fa two factor security', section: 'Account' },
   { key: 'ConnectedAccounts', label: 'Connected accounts', searchTerms: 'google apple oauth social login', section: 'Account' },
   { key: 'ActiveSessions', label: 'Devices & sessions', searchTerms: 'login device security', section: 'Account' },
@@ -80,7 +80,7 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push offers price drop marketing quiet hours', section: 'Notifications' },
   // ── Personalisation & appearance ──
   { key: 'Personalisation', label: 'Personalisation & appearance', searchTerms: 'theme currency language feed', section: 'Personalisation & appearance', showSection: true },
-  { key: 'AIPreferences', label: 'Listing suggestions', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell', section: 'Personalisation & appearance' },
+  { key: 'AIPreferences', label: 'Recommendations', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell recommendations', section: 'Personalisation & appearance' },
   { key: 'YourAlgorithm', label: 'Your feed', searchTerms: 'feed recommendations topics signals transparency algorithm', section: 'Personalisation & appearance' },
   { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'carbon neutral packaging badges eco secondhand', section: 'Personalisation & appearance' },
   // ── Accessibility ──
@@ -93,10 +93,10 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'HelpSupport', label: 'Help', searchTerms: 'support faq contact', section: 'Help & about', showSection: true },
   { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Help & about' },
   { key: 'About', label: 'About Thryftverse', searchTerms: 'version', section: 'Help & about' },
-  // ── Agents & connections (normal product destination) ──
-  { key: 'BotDirectory', label: 'Agents', searchTerms: 'agent assistant browse catalogue deploy permissions', section: 'Agents & connections', showSection: true },
-  { key: 'AIAgentIntegration', label: 'Connections', searchTerms: 'openai anthropic claude gemini endpoint byok provider credentials api connections', section: 'Agents & connections' },
-  { key: 'CustomBots', label: 'Your agents', searchTerms: 'custom agents created deployed manage draft published', section: 'Agents & connections' },
+  // ── Connected services (normal product destination) ──
+  { key: 'BotDirectory', label: 'Agents', searchTerms: 'agent assistant browse catalogue deploy permissions', section: 'Connected services', showSection: true },
+  { key: 'AIAgentIntegration', label: 'Connections', searchTerms: 'openai anthropic claude gemini endpoint byok provider credentials api connections', section: 'Connected services' },
+  { key: 'CustomBots', label: 'Your agents', searchTerms: 'custom agents created deployed manage draft published', section: 'Connected services' },
   // ── Advanced & developer (developer-only tools, not consumer features) ──
   { key: 'RuntimeSmokeTest', label: 'Runtime smoke test', searchTerms: 'diagnostic developer debug', section: 'Advanced & developer', showSection: true },
 ];
@@ -280,7 +280,7 @@ export default function SettingsScreen({ navigation }: Props) {
   // It is revealed only when the user has enabled developer mode
   // (Settings → About → tap version 7 times). Per spec 18, developer mode
   // keeps only raw debugging tools — not consumer agent features, which now
-  // live in the normal "Agents & connections" section above.
+  // live in the normal "Connected services" section above.
   const showAdvancedDeveloper = developerMode;
 
   const searchResults = React.useMemo(() => {
@@ -380,7 +380,7 @@ export default function SettingsScreen({ navigation }: Props) {
               onPress={() => navigation.navigate('Verification')}
               separatorInset={false}
               accessibilityLabel="Verify identity"
-              accessibilityHint="Opens verification and KYC screen"
+              accessibilityHint="Opens identity verification"
             />
           ) : null}
 
@@ -576,7 +576,7 @@ export default function SettingsScreen({ navigation }: Props) {
             />
             <SettingsRow
               icon="bulb-outline"
-              title="Listing suggestions"
+              title="Recommendations"
               subtitle="Photo enhancement, title and price suggestions"
               onPress={() => navigation.navigate('AIPreferences')}
             />
@@ -638,11 +638,11 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── AGENTS & CONNECTIONS ── */}
+          {/* ── CONNECTED SERVICES ── */}
           {/* Per spec 18: Agents are a normal product destination, not hidden
               behind developer mode. Create Agent is intentionally excluded from
               Settings — it lives in the Agents home and profile menu. */}
-          <SettingsSection title="Agents & connections" icon="hardware-chip-outline" noCard>
+          <SettingsSection title="Connected services" icon="hardware-chip-outline" noCard>
             <SettingsRow
               icon="people-outline"
               title="Agents"
@@ -700,7 +700,7 @@ export default function SettingsScreen({ navigation }: Props) {
     
           {/* ── ADVANCED & DEVELOPER ── */}
           {/* Per spec 18: Developer mode keeps only raw debugging tools — not
-              consumer agent features, which now live in "Agents & connections"
+              consumer agent features, which now live in "Connected services"
               above. Gated behind developer mode (Settings → About → tap version
               7 times) so ordinary consumers never see implementation technology. */}
           {showAdvancedDeveloper ? (

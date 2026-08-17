@@ -4,7 +4,7 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Reanimated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
@@ -105,29 +105,10 @@ function getTimerUrgency(msToEnd: number): TimerUrgency {
 }
 
 function FeaturedLiveDot({ reducedMotion, color }: { reducedMotion: boolean; color: string }) {
-  const opacity = useSharedValue(1);
-  React.useEffect(() => {
-    if (reducedMotion) {
-      opacity.value = 1;
-      return;
-    }
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      true,
-    );
-  }, [opacity, reducedMotion]);
-  const dotStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
   return (
-    <Reanimated.View
+    <View
       style={[
         { width: Space.xs + 2, height: Space.xs + 2, borderRadius: Radius.md, backgroundColor: color },
-        dotStyle,
       ]}
     />
   );
@@ -598,7 +579,7 @@ export default function AuctionsScreen() {
 
   const renderHeader = () => (
     <View>
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <View>
         <MetricGrid
           metrics={[
             { label: 'Live', value: String(liveAuctions.length) },
@@ -608,9 +589,9 @@ export default function AuctionsScreen() {
           columns={3}
           style={{ marginTop: Space.sm }}
         />
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={FadeInDown.duration(300)}>
+      <View>
       <View style={styles.searchWrap}>
         <AppInput
           value={searchQuery}
@@ -622,7 +603,7 @@ export default function AuctionsScreen() {
           onSubmitEditing={() => void syncAuctions()}
         />
       </View>
-      </Reanimated.View>
+      </View>
 
       {renderStatusFilter()}
       {renderSortBar()}

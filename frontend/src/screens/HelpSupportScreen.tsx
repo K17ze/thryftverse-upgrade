@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
@@ -21,7 +19,6 @@ export default function HelpSupportScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
-  const reducedMotionEnabled = useReducedMotion();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [faqSearch, setFaqSearch] = useState('');
 
@@ -70,7 +67,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Help & Support" subtitle="Get answers and contact us" onBack={() => navigation.goBack()} />} keyboardAvoiding>
         {/* Hero summary */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.heroRow}>
               <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
@@ -84,10 +81,10 @@ export default function HelpSupportScreen({ navigation }: Props) {
               </View>
             </View>
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* Contact options */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <SettingsSection title="Contact us">
             <SettingsRow
               icon="mail-outline"
@@ -115,19 +112,19 @@ export default function HelpSupportScreen({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
+        </View>
 
         {/* FAQ Banner */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+        <View style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <SettingsInfoBanner
             text="Search our FAQs below for quick answers to common questions."
             icon="help-circle-outline"
             variant="info"
           />
-        </Reanimated.View>
+        </View>
 
         {/* FAQ Search */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
+        <View style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
           <View style={styles.searchWrap}>
             <Ionicons name="search-outline" size={18} color={colors.textMuted} />
             <TextInput
@@ -143,10 +140,10 @@ export default function HelpSupportScreen({ navigation }: Props) {
               </AnimatedPressable>
             ) : null}
           </View>
-        </Reanimated.View>
+        </View>
 
         {/* FAQ Accordion */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <SettingsSection title="Frequently asked">
             {filteredFaqs.length === 0 ? (
               <View style={styles.emptyFaqs}>
@@ -178,10 +175,10 @@ export default function HelpSupportScreen({ navigation }: Props) {
               ))
             )}
           </SettingsSection>
-        </Reanimated.View>
+        </View>
 
         {/* External links */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <SettingsSection title="Legal">
             <SettingsRow
               icon="document-text-outline"
@@ -201,7 +198,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
               isLast
             />
           </SettingsSection>
-        </Reanimated.View>
+        </View>
 
         {/* Version */}
         <Text style={styles.version}>Thryftverse v1.0.0 · Response time ~2 hours</Text>

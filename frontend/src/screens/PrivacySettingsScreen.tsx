@@ -1,12 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -21,7 +19,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'PrivacySettings'>;
 export default function PrivacySettingsScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
-  const reducedMotionEnabled = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const accountPreferences = useStore((s) => s.accountPreferences);
   const updateAccountPreferences = useStore((s) => s.updateAccountPreferences);
@@ -77,7 +74,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   return (
     <FlagshipScreen header={<FlagshipHeader title="Privacy & safety" onBack={() => navigation.goBack()} />}>
       {/* Privacy posture hero */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
         <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.heroRow}>
             <View style={[styles.heroIcon, { backgroundColor: postureColor }]}>
@@ -94,9 +91,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
       <SettingsSection title="Visibility" noCard>
         <SettingsRow
           icon="eye-outline"
@@ -122,9 +119,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
       <SettingsSection title="Shop activity" noCard>
         <SettingsRow
           icon="bag-outline"
@@ -136,9 +133,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
       <SettingsSection title="Messaging" noCard>
         <SettingsRow
           icon="chatbubble-ellipses-outline"
@@ -149,9 +146,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
       <SettingsSection title="Blocked users" noCard>
         <SettingsRow
           icon="ban-outline"
@@ -162,7 +159,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
       {/* Safety tips — empowering, not frightening.
           A marketplace that visibly
@@ -170,7 +167,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           This section makes safety actionable rather than buried. Research
           (TechVinta 2026): "surface a Report link on every surface" and
           "buyer/seller protection" are core trust pillars. */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
         <View style={[styles.safetyTipsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.safetyTipsHeader}>
             <View style={[styles.safetyTipsIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
@@ -199,9 +196,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
       <SettingsSection title="Data & analytics" noCard>
         <SettingsRow
           icon="analytics-outline"
@@ -213,9 +210,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+      <View>
       <SettingsSection title="Legal" noCard>
         <SettingsRow
           icon="document-text-outline"
@@ -230,7 +227,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isLast
         />
       </SettingsSection>
-      </Reanimated.View>
+      </View>
     </FlagshipScreen>
   );
 }

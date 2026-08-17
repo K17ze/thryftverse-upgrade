@@ -122,7 +122,7 @@ export default function EditTab() {
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
       {/* Trending Rail */}
       {trendingListings.length > 0 && (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <DiscoverySectionHeader
             kicker="What's hot"
             title="Trending Now"
@@ -158,12 +158,12 @@ export default function EditTab() {
               />
             ))}
           </HorizontalRail>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* New Arrivals */}
       {newestListings.length > 0 && (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
+        <View style={{ marginTop: Space.lg }}>
           <DiscoverySectionHeader
             kicker="Fresh listings"
             title="New Arrivals"
@@ -182,12 +182,12 @@ export default function EditTab() {
               />
             ))}
           </HorizontalRail>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* Price Drops */}
       {priceDropListings.length > 0 && (
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
+        <View style={{ marginTop: Space.lg }}>
           <DiscoverySectionHeader
             kicker="Reduced"
             title="Price Drops"
@@ -206,11 +206,11 @@ export default function EditTab() {
               />
             ))}
           </HorizontalRail>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* Style Quiz */}
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
+      <View style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
           kicker="Personalise"
           title="Find Your Aesthetic"
@@ -231,7 +231,7 @@ export default function EditTab() {
             <Ionicons name="color-palette-outline" size={28} color={colors.brand} />
           </View>
         </AnimatedPressable>
-      </Reanimated.View>
+      </View>
 
       <View style={{ height: 100 }} />
     </ScrollView>

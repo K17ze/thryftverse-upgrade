@@ -6,13 +6,6 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  FadeIn,
-} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../../theme/designTokens';
@@ -105,28 +98,12 @@ function buildVariantConfig(colors: ThemeColors): Record<ActivityBadgeVariant, {
 function PulsingDot({ color }: { color: string }) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const pulse = useSharedValue(0.6);
-
-  React.useEffect(() => {
-    // Restrained pulse — single subtle opacity cycle, not perpetual breathing.
-    // Per audit: "Delete perpetual empty-state breathing."
-    pulse.value = withRepeat(
-      withTiming(1, { duration: 800 }),
-      -1,
-      true
-    );
-  }, [pulse]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: pulse.value,
-  }));
 
   return (
-    <Reanimated.View
+    <View
       style={[
         styles.pulseDot,
         { backgroundColor: color },
-        animatedStyle,
       ]}
     />
   );
@@ -147,7 +124,7 @@ export function ActivityBadge({
   const showCount = count !== undefined && count > 0;
 
   return (
-    <Reanimated.View entering={FadeIn.duration(300)} style={style}>
+    <View style={style}>
       <View
         style={[
           styles.badge,
@@ -178,7 +155,7 @@ export function ActivityBadge({
           <Text style={styles.subtitle}>{subtitle}</Text>
         )}
       </View>
-    </Reanimated.View>
+    </View>
   );
 }
 

@@ -17,7 +17,6 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  FadeInDown,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,7 +44,6 @@ import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHe
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
 import { useSellerTrust, VERIFICATION_TIERS } from '../platform/product';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
@@ -143,7 +141,6 @@ export default function MyProfileScreen() {
 
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
-  const reducedMotionEnabled = useReducedMotion();
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
   // 'saved' is retained in the union so a stale value (e.g. from a previous
@@ -515,7 +512,7 @@ export default function MyProfileScreen() {
   const GRID_GAP = 4;
   const GRID_COLS = 3;
   const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
-  const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait — Poshmark 2026 standard
+  const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait grid
 
   return (
     <View style={[styles.container, t.container]}>
@@ -644,7 +641,7 @@ export default function MyProfileScreen() {
         scrollEventThrottle={16}
       >
         {/* ── 3-9: IDENTITY HERO + ACTIONS ── */}
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+        <View>
           <MyProfileIdentityHero
             avatarUri={displayAvatar}
             displayName={user.displayName || user.username}
@@ -700,7 +697,7 @@ export default function MyProfileScreen() {
             activeKey={activeTab === 'saved' ? 'listings' : activeTab}
             onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
           />
-        </Reanimated.View>
+        </View>
 
         {/* ── 10. ACTIVE TAB CONTENT ── */}
         <View

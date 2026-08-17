@@ -12,12 +12,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, {
   FadeIn,
   FadeInDown,
-  withRepeat,
-  withSequence,
-  withTiming,
-  useSharedValue,
-  useAnimatedStyle,
-  Easing,
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -49,40 +43,11 @@ const FEATURED_CARD_WIDTH = 240;
 const FEATURED_CARD_HEIGHT = 320;
 const UPCOMING_THUMB_SIZE = 72;
 
-// ── Pulsing live dot ──
+// ── Live dot ──
 function LivePulse({ size = 8, color }: { size?: number; color: string }) {
-  const reducedMotion = useReducedMotion();
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    scale.value = withRepeat(
-      withSequence(
-        withTiming(1.4, { duration: 700, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: 700, easing: Easing.in(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.3, { duration: 700 }),
-        withTiming(1, { duration: 700 }),
-      ),
-      -1,
-      false,
-    );
-  }, [reducedMotion, scale, opacity]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
   return (
-    <Reanimated.View
-      style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }, animStyle]}
+    <View
+      style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}
     />
   );
 }
@@ -459,12 +424,12 @@ export default function LiveShoppingHomeScreen() {
 
         {/* ── Demo mode banner (truthful UI — §11) ── */}
         {LIVE_SHOPPING_DEMO_MODE && (
-          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(300)} style={styles.demoBanner}>
+          <View style={styles.demoBanner}>
             <Ionicons name="flask-outline" size={16} color={colors.warning} />
             <Text style={styles.demoBannerText}>
               Demo mode — live streams are simulated. Real video coming soon.
             </Text>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ── Category filter ── */}
@@ -524,7 +489,7 @@ export default function LiveShoppingHomeScreen() {
 
         {/* ── Populated content ── */}
         {showContent && (
-          <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(280)} style={{ gap: Space.lg, paddingTop: Space.md }}>
+          <View style={{ gap: Space.lg, paddingTop: Space.md }}>
             {/* Featured live strip */}
             {liveSessions.length > 0 ? (
               <View>
@@ -589,7 +554,7 @@ export default function LiveShoppingHomeScreen() {
                 </Text>
               </View>
             )}
-          </Reanimated.View>
+          </View>
         )}
       </ScrollView>
     </View>

@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -9,7 +8,6 @@ import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill, type AppStatusTone } from '../ui/AppStatusPill';
 import { Meta, BodyEmphasis, Body, Headline } from '../ui/Text';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 type TimerUrgency = 'critical' | 'urgent' | 'normal';
 
@@ -41,27 +39,8 @@ interface AuctionCardProps {
 }
 
 function LiveDot({ color }: { color: string }) {
-  const reducedMotion = useReducedMotion();
-  const opacity = useSharedValue(1);
-  React.useEffect(() => {
-    if (reducedMotion) {
-      opacity.value = 1;
-      return;
-    }
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      true,
-    );
-  }, [opacity, reducedMotion]);
-  const dotStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
   return (
-    <Reanimated.View style={[{ width: 6, height: 6, borderRadius: Radius.sm, backgroundColor: color }, dotStyle]} />
+    <View style={{ width: 6, height: 6, borderRadius: Radius.sm, backgroundColor: color }} />
   );
 }
 

@@ -258,7 +258,7 @@ export default function PulseTab() {
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
       {/* Trending Now Rail (merged from EditTab) */}
       {trendingListings.length > 0 && (
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+        <View>
           <DiscoverySectionHeader
             kicker="What's hot"
             title="Trending Now"
@@ -295,12 +295,12 @@ export default function PulseTab() {
               />
             ))}
           </HorizontalRail>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* Live Now Rail */}
       {liveAuctions.length > 0 && (
-        <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+        <View>
           <DiscoverySectionHeader
             kicker="Bidding now"
             title="Live Now"
@@ -320,11 +320,11 @@ export default function PulseTab() {
               />
             ))}
           </HorizontalRail>
-        </Reanimated.View>
+        </View>
       )}
 
       {/* Live Pulse Banner */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)}>
+      <View>
         <AnimatedPressable style={styles.pulseBanner} onPress={handleViewAll} activeOpacity={0.92}>
           <View style={styles.pulseDot}>
             <View style={styles.pulseRing} />
@@ -336,10 +336,10 @@ export default function PulseTab() {
           </View>
           <Ionicons name="arrow-forward" size={18} color={colors.brand} />
         </AnimatedPressable>
-      </Reanimated.View>
+      </View>
 
       {/* Activity feed */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
+      <View style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
           kicker="Updates"
           title="Live Feed"
@@ -349,10 +349,10 @@ export default function PulseTab() {
         {activities.map((item, i) => (
           <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} index={i} colors={colors} styles={styles} reducedMotion={reducedMotion} formatPrice={formatPrice} />
         ))}
-      </Reanimated.View>
+      </View>
 
       {/* Style Quiz (merged from EditTab) */}
-      <Reanimated.View entering={reducedMotion ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.lg }}>
+      <View style={{ marginTop: Space.lg }}>
         <DiscoverySectionHeader
           kicker="Personalise"
           title="Find Your Aesthetic"
@@ -373,7 +373,7 @@ export default function PulseTab() {
             <Ionicons name="color-palette-outline" size={28} color={colors.brand} />
           </View>
         </AnimatedPressable>
-      </Reanimated.View>
+      </View>
 
       <View style={{ height: 100 }} />
     </ScrollView>
