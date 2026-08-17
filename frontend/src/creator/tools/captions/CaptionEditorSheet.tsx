@@ -43,6 +43,7 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
+  Animated,
   type LayoutChangeEvent,
   type GestureResponderEvent,
   type PanResponderGestureState,
@@ -137,6 +138,38 @@ export function CaptionEditorSheet({
   const [editText, setEditText] = useState('');
   const [editStart, setEditStart] = useState('');
   const [editEnd, setEditEnd] = useState('');
+
+  // ── Font rail underline animation ──────────────────────────────────
+  const fontLayouts = useRef<Array<{ x: number; width: number }>>([]);
+  const fontUnderlineLeft = useRef(new Animated.Value(0)).current;
+  const fontUnderlineWidth = useRef(new Animated.Value(0)).current;
+
+  const animateFontUnderline = useCallback(
+    (index: number) => {
+      const layout = fontLayouts.current[index];
+      if (!layout) return;
+      Animated.parallel([
+        Animated.spring(fontUnderlineLeft, {
+          toValue: layout.x,
+          useNativeDriver: false,
+          stiffness: 300,
+          damping: 30,
+        }),
+        Animated.spring(fontUnderlineWidth, {
+          toValue: layout.width,
+          useNativeDriver: false,
+          stiffness: 300,
+          damping: 30,
+        }),
+      ]).start();
+    },
+    [fontUnderlineLeft, fontUnderlineWidth],
+  );
+
+  useEffect(() => {
+    const idx = TEXT_STYLE_PRESETS.findIndex((p) => p.id === style.textStyle);
+    if (idx >= 0) animateFontUnderline(idx);
+  }, [style.textStyle, animateFontUnderline]);
 
   const sttAvailable = captionService.isAvailable();
 
@@ -312,7 +345,6 @@ export function CaptionEditorSheet({
               styles.autoBtn,
               {
                 backgroundColor: sttAvailable ? colors.brand : colors.surfaceAlt,
-                borderColor: sttAvailable ? 'transparent' : colors.border,
               },
             ]}
             accessibilityLabel="Auto-generate captions"
@@ -348,6 +380,9 @@ export function CaptionEditorSheet({
                   ? 'Auto-Generate Captions'
                   : 'Auto-Generate Unavailable'}
             </Text>
+            {sttAvailable && autoStatus !== 'transcribing' && (
+              <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
+            )}
           </Pressable>
 
           {/* Truthful status messaging */}
@@ -454,6 +489,9 @@ export function CaptionEditorSheet({
             >
               Add Caption
             </Text>
+            {entryText.trim() && (
+              <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
+            )}
           </Pressable>
         </View>
 
@@ -474,12 +512,8 @@ export function CaptionEditorSheet({
 
           {segmentCount === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="chatbubble-ellipses-outline" size={28} color={colors.textMuted} />
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 No captions yet
-              </Text>
-              <Text style={[styles.emptyHint, { color: colors.textMuted }]}>
-                Add a caption above or auto-generate from audio.
               </Text>
             </View>
           ) : (
@@ -504,7 +538,7 @@ export function CaptionEditorSheet({
                 />
               )}
               scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={{ height: Space.xs }} />}
+              ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
             />
           )}
         </View>
@@ -524,37 +558,47 @@ export function CaptionEditorSheet({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.fontRail}
           >
-            {TEXT_STYLE_PRESETS.map((preset) => {
+            {TEXT_STYLE_PRESETS.map((preset, i) => {
               const isSelected = style.textStyle === preset.id;
               return (
-                <Pressable
+                <View
                   key={preset.id}
-                  onPress={() => handleStyleChange({ textStyle: preset.id })}
-                  style={[
-                    styles.fontChip,
-                    {
-                      borderColor: isSelected ? colors.brand : colors.border,
-                      backgroundColor: isSelected ? colors.brandSubtle : 'transparent',
-                    },
-                  ]}
-                  accessibilityLabel={`Font: ${preset.name}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
+                  onLayout={(e) => {
+                    fontLayouts.current[i] = {
+                      x: e.nativeEvent.layout.x,
+                      width: e.nativeEvent.layout.width,
+                    };
+                    if (isSelected) animateFontUnderline(i);
+                  }}
                 >
-                  <Text
-                    style={[
-                      styles.fontChipText,
-                      {
-                        color: isSelected ? colors.brand : colors.textSecondary,
-                        fontFamily: preset.fontFamily,
-                      },
-                    ]}
+                  <Pressable
+                    onPress={() => handleStyleChange({ textStyle: preset.id })}
+                    style={styles.fontTab}
+                    accessibilityLabel={`Font: ${preset.name}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
                   >
-                    {preset.name}
-                  </Text>
-                </Pressable>
+                    <Text
+                      style={[
+                        styles.fontTabText,
+                        {
+                          color: isSelected ? colors.brand : colors.textSecondary,
+                          fontFamily: preset.fontFamily,
+                        },
+                      ]}
+                    >
+                      {preset.name}
+                    </Text>
+                  </Pressable>
+                </View>
               );
             })}
+            <Animated.View
+              style={[
+                styles.tabUnderline,
+                { left: fontUnderlineLeft, width: fontUnderlineWidth },
+              ]}
+            />
           </ScrollView>
 
           {/* Font size slider */}
@@ -645,6 +689,7 @@ export function CaptionEditorSheet({
             accessibilityHint="Applies the captions and closes the sheet"
           >
             <Text style={[styles.doneBtnText, { color: colors.textInverse }]}>Done</Text>
+            <Ionicons name="checkmark" size={18} color={colors.textInverse} />
           </Pressable>
         </View>
       </ScrollView>
@@ -748,7 +793,7 @@ const CaptionRow = React.memo(function CaptionRow({
   }
 
   return (
-    <View style={[styles.captionRow, { borderColor: colors.border }]}>
+    <View style={styles.captionRow}>
       <Pressable
         onPress={() => onStartEdit(segment)}
         style={styles.captionContent}
@@ -981,14 +1026,12 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
-      paddingVertical: Space.md,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
-      minHeight: Control.hit + 4,
+      height: 50,
+      borderRadius: Radius.lg,
     },
     autoBtnText: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
+      fontFamily: FontFamily.semibold,
+      fontSize: Type.bodyEmphasis.size,
     },
     noticeBox: {
       flexDirection: 'row',
@@ -1039,13 +1082,12 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs,
-      paddingVertical: Space.md,
-      borderRadius: Radius.md,
-      minHeight: Control.hit + 4,
+      height: 50,
+      borderRadius: Radius.lg,
     },
     addBtnText: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
+      fontFamily: FontFamily.semibold,
+      fontSize: Type.bodyEmphasis.size,
     },
     // ── List ──
     listHeader: {
@@ -1061,15 +1103,12 @@ function createStyles(colors: ThemeColors) {
     emptyState: {
       paddingVertical: Space.lg,
       alignItems: 'center',
-      gap: Space.xs,
+      justifyContent: 'center',
     },
     emptyText: {
-      fontFamily: Typography.family.medium,
+      fontFamily: FontFamily.regular,
       fontSize: Type.body.size,
-    },
-    emptyHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      lineHeight: Type.body.lineHeight,
       textAlign: 'center',
     },
     captionRow: {
@@ -1077,9 +1116,6 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.sm,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
       minHeight: Control.hit,
     },
     captionContent: {
@@ -1102,12 +1138,12 @@ function createStyles(colors: ThemeColors) {
     },
     wordBadge: {
       paddingHorizontal: Space.xs,
-      paddingVertical: 1,
+      paddingVertical: Space.xxs,
       borderRadius: Radius.full,
     },
     wordBadgeText: {
-      fontFamily: Typography.family.medium,
-      fontSize: 10,
+      fontFamily: FontFamily.medium,
+      fontSize: Type.meta.size,
     },
     deleteBtn: {
       width: Control.hit,
@@ -1152,17 +1188,29 @@ function createStyles(colors: ThemeColors) {
     },
     // ── Font rail ──
     fontRail: {
-      gap: Space.xs,
+      gap: Space.sm,
       paddingVertical: Space.xxs,
+      position: 'relative',
     },
-    fontChip: {
-      paddingVertical: Space.sm - 2,
-      paddingHorizontal: Space.md,
-      borderRadius: Radius.full,
-      borderWidth: Stroke.standard,
+    fontTab: {
+      height: Control.hit,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: Space.smMd,
     },
-    fontChipText: {
+    fontTabText: {
       fontSize: Type.caption.size,
+    },
+    tabUnderline: {
+      position: 'absolute',
+      bottom: 0,
+      height: Stroke.emphasis,
+      backgroundColor: colors.brand,
+      borderRadius: Stroke.emphasis,
+    },
+    rowSeparator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
     },
     // ── Toggle ──
     toggleRow: {
@@ -1175,7 +1223,7 @@ function createStyles(colors: ThemeColors) {
     toggleTextWrap: {
       flex: 1,
       paddingRight: Space.md,
-      gap: 2,
+      gap: Space.xxs,
     },
     toggleTitle: {
       fontFamily: Typography.family.semibold,
@@ -1261,14 +1309,15 @@ function createStyles(colors: ThemeColors) {
       paddingTop: Space.lg,
     },
     doneBtn: {
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.md,
-      borderRadius: Radius.md,
-      minHeight: Control.hit + 8,
+      gap: Space.xs,
+      height: 50,
+      borderRadius: Radius.lg,
     },
     doneBtnText: {
-      fontFamily: Typography.family.semibold,
+      fontFamily: FontFamily.semibold,
       fontSize: Type.bodyEmphasis.size,
     },
   });

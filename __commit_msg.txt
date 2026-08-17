@@ -1,55 +1,65 @@
-feat(creator): flagship visual quality pass — upload department (media browser, tool dock, publish sheet, entry)
+feat(creator): flagship visual quality pass — all creator tool sheets and editor surfaces
 
-Upgrades the creator upload/publish department from generic component-library
-quality to flagship 2026 product quality. Four surfaces rebuilt in parallel:
+Upgrades 21 creator components from generic component-library quality to
+flagship 2026 product quality. Six parallel batches covering the entire
+creator department:
 
-MediaBrowserSheet (gallery picker):
-- Tab bar: removed pill indicator + icons → text-only tabs with 2pt spring-
-  animated underline (Instagram/Apple Photos pattern)
-- Album list: replaced grey folder squares with real album cover thumbnails
-  (48×48 rounded), asset-count subtitles, brand-color selection state
-- Camera tile: 32pt brand-tinted icon on brandSubtle bg, no text label
-- Selection state: removed heavy dark overlay → clean 2pt brand ring + 20pt
-  corner order badge with shadow
-- Confirm button: 50pt height, Radius.lg, text + chevron-forward, semibold
-- Limited access banner: removed border, surfaceAlt bg, refined typography
-- Video badge: 10pt play icon, lighter bg, semibold duration
-- Header: title upgraded to Type.title.size
+Common patterns fixed across all files:
+- Pill tab indicators → text-only tabs with 2pt spring-animated underline
+- Generic pill buttons → 50pt premium buttons (Radius.lg, semibold, brand color)
+- Tiny labels (<10pt) → 10.5pt minimum
+- Card-on-card compositions → flattened with hairline separators
+- Inline magic numbers → design tokens (Space, Radius, Type, Stroke, Control)
+- Decorative empty states → minimal text-only
+- Debug-looking handles → refined L-shaped brackets with shadows
+- Close buttons < 44pt → 44pt minimum
 
-CreatorToolDock + ToolButton (bottom tool dock):
-- Label size: 9pt → 10.5pt (flagship navigation band)
-- Label typography: removed letterSpacing, semibold for primary, medium for
-  secondary — hierarchy via weight not size
-- Icon↔label gap: 4 → 6 (better breathing room)
-- Inactive opacity: 0.6 → 0.75 (no longer looks disabled)
-- Gradient ring: strokeWidth 3 → 2.5 (gentle highlight)
-- Primary tool: 44pt → 46pt, secondary: 36pt → 40pt
-- Secondary icon: 20pt → 22pt (optical balance)
-- Label color: textMuted → textSecondary (better contrast)
-- Dock padding: Space.sm → Space.md (premium feel)
-- Group divider: hairline width, 20pt height (subtle separator)
-- Expand toggle: 36pt → 44pt hit target
+Batch 1 — Text/Stickers/Captions:
+- TextEditorSheet: alignment/animation toggles → underline tabs, 44pt close,
+  premium confirm button with checkmark
+- StickerBrowserSheet: category tabs → underline, minimal empty state
+- CaptionEditorSheet: font chips → underline tabs, flattened rows, premium
+  buttons with chevrons, minimal empty state
 
-CreatorPublishSheet (publish/upload flow):
-- Preview area: rounded corners, 1pt border, subtle elevation shadow
-- Caption input: clean 1pt border field, proper padding, explicit typography
-- Publish button: full-width 50pt, brand color, semibold bodyEmphasis —
-  dominates the bottom; Save draft is now a quiet secondary action below
-- Upload progress: removed ActivityIndicator, 4px thin full-width track
-  with Radius.full pill ends — calm, not alarming
-- Toggle rows: flattened — removed inconsistent card backgrounds
-- Spacing: all inline magic numbers → design tokens
-- Success buttons: 50pt primary, 44pt secondary, full-width group
+Batch 2 — Audio:
+- AudioBrowserSheet: pill tabs → underline, premium Done button
+- VoiceoverRecorderSheet: premium Done button, minimal empty states
+- AudioMixPanel: removed decorative track icon circles, minimal empty state
 
-CreatorEntryScreen (camera entry polish):
-- "Aa" button: rgba(0,0,0,0.4) + 1pt white/10 border, 17pt semibold
-- Drafts button: consistent chrome + brand-color dot badge when drafts exist
-- Draft cards: 120×150 → 140×175, subtle border on thumbnails, softer
-  placeholder (32pt centered icon, no dark grey box)
-- Draft title: medium weight, 0.85 opacity
-- "Last edited" timestamp: relative time helper, meta size, recedes
-- Empty state: "No drafts yet" — no decorative elements
-- All overlay controls: consistent rgba(0,0,0,0.4) + border treatment
+Batch 3 — Drawing + Color:
+- DrawingWorkspace: emoji category tabs → underline, premium Done button
+- DrawingPaletteBar: flattened palette rows, magic numbers → tokens
+- GradientEditor: refined active control, hardcoded colors → theme tokens
+
+Batch 4 — Editor surfaces:
+- CreatorLayersSheet: flattened layer rows, magic numbers → tokens
+- CreatorSettingsSheet: 44pt close, premium save button, tokens
+- CreatorTemplateBrowser: category chips → underline tabs, flattened cards
+- CreatorDraftListScreen: folder/sort chips → underline tabs, flattened rows
+
+Batch 5 — Crop/Cutout/Background:
+- InCanvasCropOverlay: L-shaped corner brackets, underline aspect ratio tabs
+- CutoutPreviewSheet: premium footer buttons, underline mode selector
+- CreatorCutoutSheet: underline tool selector, premium footer
+- CreatorCropSheet: underline ratio presets, refined handles, premium footer
+- BackgroundSheet: underline type chips, premium footer, minimal empties
+
+Batch 6 — Camera + Timeline + Misc:
+- GalleryCarousel: 10.5pt label, design tokens
+- ShutterButton: 10.5pt speed badge, design tokens
+- PermissionState: minimal empty state, premium button
+- GreenScreenSheet: underline chips, premium buttons, flattened info banner
+- CaptureToolsSheet: underline timer chips
+- KeyframeEditor: underline property selector, flattened panels
+- SpeedCurveEditor: underline preset/easing selectors, flattened panels
+- ProductBrowserSheet: underline tabs, premium retry button
+- LookSourceTray: minimal empty state, 10.5pt labels
+- AIEffectBrowserSheet: premium apply/remove buttons
+- LUTBrowserSheet: premium apply button
+- CreatorFolderOrganizeSheet: underline chips, flattened rows, 44pt buttons
+- AccessibilityMoveSheet: underline toggle, flattened, premium buttons
+- AccessibilityZOrderSheet: minimal empty, flattened, text-only selection
+- HelpShortcutsSheet: removed decorative key caps, flattened entries
 
 Generated with [Devin](https://devin.ai)
 

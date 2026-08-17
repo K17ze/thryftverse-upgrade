@@ -24,7 +24,7 @@ import Reanimated, {
   useReducedMotion,
   type SharedValue,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke, IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CreatorDraftService, type DraftMeta, type Folder } from './drafts';
 import { createStableId, makeStableId } from '../utils/createStableId';
@@ -49,6 +49,78 @@ const SORT_OPTIONS: { key: SortBy; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'type', label: 'Type' },
 ];
+
+// ── Underline filter tab ────────────────────────────────────────────
+// Replaces pill-background chips/pills with text-only tabs + 2pt spring-
+// animated underline indicator (brand color, Stroke.emphasis).
+interface FilterTabProps {
+  label: string;
+  isActive: boolean;
+  onPress: () => void;
+  colors: ThemeColors;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  accessibilityLabel: string;
+}
+
+function FilterTab({ label, isActive, onPress, colors, icon, accessibilityLabel }: FilterTabProps) {
+  const underlineOpacity = useSharedValue(isActive ? 1 : 0);
+
+  useEffect(() => {
+    underlineOpacity.value = withSpring(isActive ? 1 : 0, { damping: 20, stiffness: 300 });
+  }, [isActive, underlineOpacity]);
+
+  const underlineStyle = useAnimatedStyle(() => ({
+    opacity: underlineOpacity.value,
+  }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          paddingHorizontal: Space.md,
+          paddingVertical: Space.sm,
+          alignItems: 'center',
+          marginRight: Space.xs,
+        },
+        pressed && { opacity: 0.7 },
+      ]}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xxs }}>
+        {icon && (
+          <Ionicons
+            name={icon}
+            size={IconGrammar.metadata}
+            color={isActive ? colors.textPrimary : colors.textSecondary}
+          />
+        )}
+        <Text
+          style={{
+            fontFamily: Typography.family.semibold,
+            fontSize: Type.body.size,
+            color: isActive ? colors.textPrimary : colors.textSecondary,
+          }}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </View>
+      <Reanimated.View
+        style={[
+          {
+            height: Stroke.emphasis,
+            backgroundColor: colors.brand,
+            width: '100%',
+            marginTop: Space.xxs,
+          },
+          underlineStyle,
+        ]}
+      />
+    </Pressable>
+  );
+}
 
 export function CreatorDraftListScreen() {
   const { colors } = useAppTheme();
@@ -333,50 +405,26 @@ export function CreatorDraftListScreen() {
         </Pressable>
       </View>
 
-      {/* Folder filter chips — with project counts from ProjectFolderStore */}
+      {/* Folder filter tabs — with project counts from ProjectFolderStore */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.folderChipBar}
+        contentContainerStyle={styles.folderTabBar}
       >
-        <Pressable
+        <FilterTab
+          label={`All Projects (${drafts.length})`}
+          isActive={folderFilter === 'all'}
           onPress={() => handleFolderFilterPress('all')}
-          style={({ pressed }) => [
-            styles.folderChip,
-            folderFilter === 'all' ? styles.folderChipActive : styles.folderChipInactive,
-            pressed && { opacity: 0.7 },
-          ]}
+          colors={colors}
           accessibilityLabel="Show all projects"
-          accessibilityRole="button"
-        >
-          <Text
-            style={[
-              styles.folderChipText,
-              folderFilter === 'all' ? styles.folderChipTextActive : styles.folderChipTextInactive,
-            ]}
-          >
-            All Projects ({drafts.length})
-          </Text>
-        </Pressable>
-        <Pressable
+        />
+        <FilterTab
+          label={`Unfiled (${getFolderProjectCount(storeFolders, null, drafts.length)})`}
+          isActive={folderFilter === 'unfiled'}
           onPress={() => handleFolderFilterPress('unfiled')}
-          style={({ pressed }) => [
-            styles.folderChip,
-            folderFilter === 'unfiled' ? styles.folderChipActive : styles.folderChipInactive,
-            pressed && { opacity: 0.7 },
-          ]}
+          colors={colors}
           accessibilityLabel="Show unfiled drafts"
-          accessibilityRole="button"
-        >
-          <Text
-            style={[
-              styles.folderChipText,
-              folderFilter === 'unfiled' ? styles.folderChipTextActive : styles.folderChipTextInactive,
-            ]}
-          >
-            Unfiled ({getFolderProjectCount(storeFolders, null, drafts.length)})
-          </Text>
-        </Pressable>
+        />
         {folders.map((folder) => {
           const isActive =
             typeof folderFilter !== 'string' && folderFilter.folderId === folder.id;
@@ -387,59 +435,31 @@ export function CreatorDraftListScreen() {
             ? getFolderProjectCount(storeFolders, storeFolder.id, drafts.length)
             : drafts.filter((d) => d.folderId === folder.id).length;
           return (
-            <Pressable
+            <FilterTab
               key={folder.id}
+              label={`${folder.name} (${count})`}
+              isActive={isActive}
               onPress={() => handleFolderFilterPress({ folderId: folder.id })}
-              style={({ pressed }) => [
-                styles.folderChip,
-                isActive ? styles.folderChipActive : styles.folderChipInactive,
-                pressed && { opacity: 0.7 },
-              ]}
+              colors={colors}
+              icon={isActive ? 'folder' : 'folder-outline'}
               accessibilityLabel={`Filter by folder ${folder.name}, ${count} projects`}
-              accessibilityRole="button"
-            >
-              <Ionicons
-                name={isActive ? 'folder' : 'folder-outline'}
-                size={14}
-                color={isActive ? colors.textInverse : colors.textSecondary}
-                style={{ marginRight: Space.xxs }}
-              />
-              <Text
-                style={[
-                  styles.folderChipText,
-                  isActive ? styles.folderChipTextActive : styles.folderChipTextInactive,
-                ]}
-                numberOfLines={1}
-              >
-                {folder.name} ({count})
-              </Text>
-            </Pressable>
+            />
           );
         })}
       </ScrollView>
 
-      {/* Sort toggle pills */}
+      {/* Sort tabs */}
       <View style={styles.sortBar}>
-        {SORT_OPTIONS.map((opt) => {
-          const isActive = sortBy === opt.key;
-          return (
-            <Pressable
-              key={opt.key}
-              onPress={() => setSortBy(opt.key)}
-              style={({ pressed }) => [
-                styles.sortPill,
-                isActive ? styles.sortPillActive : styles.sortPillInactive,
-                pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] },
-              ]}
-              accessibilityLabel={`Sort by ${opt.label}`}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.sortPillText, isActive ? styles.sortPillTextActive : styles.sortPillTextInactive]}>
-                {opt.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {SORT_OPTIONS.map((opt) => (
+          <FilterTab
+            key={opt.key}
+            label={opt.label}
+            isActive={sortBy === opt.key}
+            onPress={() => setSortBy(opt.key)}
+            colors={colors}
+            accessibilityLabel={`Sort by ${opt.label}`}
+          />
+        ))}
       </View>
 
       <FlashList
@@ -569,7 +589,9 @@ function UndoToast({
           {
             paddingHorizontal: Space.md,
             paddingVertical: Space.sm,
-            borderRadius: Radius.md,
+            minHeight: 50,
+            justifyContent: 'center',
+            borderRadius: Radius.lg,
             backgroundColor: pressed ? colors.brandPressed : colors.brand,
           },
         ]}
@@ -579,7 +601,7 @@ function UndoToast({
         <Text
           style={{
             fontFamily: Typography.family.semibold,
-            fontSize: Type.body.size,
+            fontSize: Type.bodyEmphasis.size,
             color: colors.textInverse,
           }}
         >
@@ -773,9 +795,9 @@ function EmptyDraftsState({ colors, styles, reduceMotion, onCreate }: EmptyDraft
   return (
     <View style={styles.emptyState}>
       <Reanimated.View style={entranceStyle}>
-        <Ionicons name="document-outline" size={56} color={colors.textMuted} />
+        <Text style={styles.emptyTitle}>No drafts yet</Text>
       </Reanimated.View>
-      <Text style={styles.emptyTitle}>No drafts yet</Text>
+      <Text style={styles.emptySubtext}>Create your first poster to see it here</Text>
       <Text style={styles.emptySubtext}>Create your first poster to see it here</Text>
       <PressScale
         onPress={onCreate}
@@ -872,6 +894,8 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
             backgroundColor: pressed ? colors.danger : colors.danger,
             opacity: pressed ? 0.85 : 1,
             paddingVertical: Space.md,
+            minHeight: 50,
+            justifyContent: 'center',
             borderRadius: Radius.lg,
             alignItems: 'center',
             marginBottom: Space.sm,
@@ -888,6 +912,8 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
           style={({ pressed }) => ({
             backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
             paddingVertical: Space.md,
+            minHeight: 50,
+            justifyContent: 'center',
             borderRadius: Radius.lg,
             alignItems: 'center',
           })}
@@ -925,14 +951,14 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
   organizeBtn: {
-    width: 40,
-    height: 40,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -941,63 +967,17 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.title.size,
     color: colors.textPrimary,
   },
-  // ── Folder chip bar ──
-  folderChipBar: {
+  // ── Folder tab bar ──
+  folderTabBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
-    gap: Space.xs,
-  },
-  folderChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full,
-  },
-  folderChipActive: {
-    backgroundColor: colors.brand,
-  },
-  folderChipInactive: {
-    backgroundColor: colors.surfaceAlt,
-  },
-  folderChipText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-  folderChipTextActive: {
-    color: colors.textInverse,
-  },
-  folderChipTextInactive: {
-    color: colors.textSecondary,
   },
   // ── Sort bar ──
   sortBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
-  sortPill: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.lg,
-  },
-  sortPillActive: {
-    backgroundColor: colors.brand,
-  },
-  sortPillInactive: {
-    backgroundColor: colors.surfaceAlt,
-  },
-  sortPillText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-  sortPillTextActive: {
-    color: colors.textInverse,
-  },
-  sortPillTextInactive: {
-    color: colors.textSecondary,
+    paddingVertical: Space.xs,
   },
   listContent: {
     padding: Space.md,
@@ -1008,14 +988,8 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.md,
     padding: Space.md,
-    marginBottom: Space.sm,
-    borderRadius: Radius.xl,
-    backgroundColor: colors.surface,
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.borderSubtle,
   },
   draftRowPressed: {
     opacity: 0.85,
@@ -1024,11 +998,6 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   thumbOverlay: {
     position: 'absolute',
@@ -1037,7 +1006,7 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: Space.xs,
-    paddingVertical: 3,
+    paddingVertical: Space.xxs,
   },
   thumbOverlayText: {
     fontFamily: Typography.family.medium,
@@ -1048,15 +1017,10 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   draftInfo: {
     flex: 1,
-    gap: 3,
+    gap: Space.xxs,
   },
   draftTitle: {
     fontFamily: Typography.family.semibold,
@@ -1074,7 +1038,7 @@ function createStyles(colors: ThemeColors) {
   },
   typeBadge: {
     paddingHorizontal: Space.sm,
-    paddingVertical: 2,
+    paddingVertical: Space.xxs,
     borderRadius: Radius.full,
   },
   typeBadgeLook: {
@@ -1094,8 +1058,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
   },
   actionBtn: {
-    width: 36,
-    height: 36,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
@@ -1113,7 +1077,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     fontSize: Type.subtitle.size,
     color: colors.textPrimary,
-    marginTop: Space.xs,
   },
   emptySubtext: {
     fontFamily: Typography.family.regular,
@@ -1125,6 +1088,9 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.lg,
+    minHeight: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: Space.md,
     marginTop: Space.sm,
   },

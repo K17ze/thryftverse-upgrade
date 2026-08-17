@@ -29,6 +29,7 @@ import {
   TextInput,
   ScrollView,
   PanResponder,
+  Animated,
   type TextStyle,
   type LayoutChangeEvent,
   type GestureResponderEvent,
@@ -42,6 +43,7 @@ import {
   Typography,
   Stroke,
   Control,
+  FontFamily,
 } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -172,6 +174,60 @@ export function TextEditorSheet({
 
   // Track which color section is expanded (only one at a time)
   const [expandedColor, setExpandedColor] = useState<ColorSection | null>(null);
+
+  // ── Tab underline animations ──────────────────────────────────────
+  // Alignment tabs (3 fixed-width)
+  const alignmentLayouts = useRef<Array<{ x: number; width: number }>>([]);
+  const alignmentUnderlineLeft = useRef(new Animated.Value(0)).current;
+  const alignmentUnderlineWidth = useRef(new Animated.Value(0)).current;
+
+  // Animation tabs (horizontal scroll, variable width)
+  const animLayouts = useRef<Array<{ x: number; width: number }>>([]);
+  const animUnderlineLeft = useRef(new Animated.Value(0)).current;
+  const animUnderlineWidth = useRef(new Animated.Value(0)).current;
+
+  const animateUnderline = useCallback(
+    (
+      layouts: Array<{ x: number; width: number }>,
+      leftVal: Animated.Value,
+      widthVal: Animated.Value,
+      index: number,
+    ) => {
+      const layout = layouts[index];
+      if (!layout) return;
+      Animated.parallel([
+        Animated.spring(leftVal, {
+          toValue: layout.x,
+          useNativeDriver: false,
+          stiffness: 300,
+          damping: 30,
+        }),
+        Animated.spring(widthVal, {
+          toValue: layout.width,
+          useNativeDriver: false,
+          stiffness: 300,
+          damping: 30,
+        }),
+      ]).start();
+    },
+    [],
+  );
+
+  // Animate alignment underline when alignment changes
+  useEffect(() => {
+    const idx = ALIGNMENTS.findIndex((a) => a.key === alignment);
+    if (idx >= 0) {
+      animateUnderline(alignmentLayouts.current, alignmentUnderlineLeft, alignmentUnderlineWidth, idx);
+    }
+  }, [alignment, animateUnderline]);
+
+  // Animate animation underline when animation changes
+  useEffect(() => {
+    const idx = ANIMATIONS.findIndex((a) => a.key === animation);
+    if (idx >= 0) {
+      animateUnderline(animLayouts.current, animUnderlineLeft, animUnderlineWidth, idx);
+    }
+  }, [animation, animateUnderline]);
 
   // ── Migrate legacy fields on open ──
   useEffect(() => {
@@ -470,23 +526,37 @@ export function TextEditorSheet({
 
           {/* ── Alignment ── */}
           <Text style={styles.sectionLabel}>Alignment</Text>
-          <View style={styles.toggleRow}>
-            {ALIGNMENTS.map((a) => {
+          <View style={styles.tabBar}>
+            {ALIGNMENTS.map((a, i) => {
               const isActive = alignment === a.key;
               return (
                 <Pressable
                   key={a.key}
                   onPress={() => { haptic.selection(); setAlignment(a.key); }}
-                  style={[styles.toggleOption, isActive && styles.toggleOptionActive]}
+                  style={styles.tabItem}
                   accessibilityLabel={`Align ${a.key}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  onLayout={(e) => {
+                    alignmentLayouts.current[i] = {
+                      x: e.nativeEvent.layout.x,
+                      width: e.nativeEvent.layout.width,
+                    };
+                    if (isActive) {
+                      animateUnderline(alignmentLayouts.current, alignmentUnderlineLeft, alignmentUnderlineWidth, i);
+                    }
+                  }}
                 >
                   <Ionicons name={a.icon} size={18} color={isActive ? colors.brand : colors.textSecondary} />
                 </Pressable>
               );
             })}
+            <Animated.View
+              style={[
+                styles.tabUnderline,
+                { left: alignmentUnderlineLeft, width: alignmentUnderlineWidth },
+              ]}
+            />
           </View>
 
           {/* ── Stroke section ── */}
@@ -718,30 +788,47 @@ export function TextEditorSheet({
           {/* ── Animation selector ── */}
           <Text style={styles.sectionLabel}>Animation</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.animContent}>
-            {ANIMATIONS.map((a) => {
+            {ANIMATIONS.map((a, i) => {
               const isActive = animation === a.key;
               return (
-                <Pressable
+                <View
                   key={a.key}
-                  onPress={() => { haptic.selection(); setAnimation(a.key); }}
-                  style={[styles.animChip, isActive && styles.animChipActive]}
-                  accessibilityLabel={`Animation ${a.label}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  onLayout={(e) => {
+                    animLayouts.current[i] = {
+                      x: e.nativeEvent.layout.x,
+                      width: e.nativeEvent.layout.width,
+                    };
+                    if (isActive) {
+                      animateUnderline(animLayouts.current, animUnderlineLeft, animUnderlineWidth, i);
+                    }
+                  }}
                 >
-                  <Ionicons name={a.icon} size={20} color={isActive ? colors.brand : colors.textSecondary} />
-                  <Text
-                    style={[
-                      styles.animChipLabel,
-                      { color: isActive ? colors.brand : colors.textSecondary },
-                    ]}
+                  <Pressable
+                    onPress={() => { haptic.selection(); setAnimation(a.key); }}
+                    style={styles.animTab}
+                    accessibilityLabel={`Animation ${a.label}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isActive }}
                   >
-                    {a.label}
-                  </Text>
-                </Pressable>
+                    <Ionicons name={a.icon} size={18} color={isActive ? colors.brand : colors.textSecondary} />
+                    <Text
+                      style={[
+                        styles.animTabLabel,
+                        { color: isActive ? colors.brand : colors.textSecondary },
+                      ]}
+                    >
+                      {a.label}
+                    </Text>
+                  </Pressable>
+                </View>
               );
             })}
+            <Animated.View
+              style={[
+                styles.tabUnderline,
+                { left: animUnderlineLeft, width: animUnderlineWidth },
+              ]}
+            />
           </ScrollView>
 
           {/* ── Done button ── */}
@@ -752,9 +839,13 @@ export function TextEditorSheet({
             accessibilityLabel="Done"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canConfirm }}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Text style={styles.confirmBtnText}>Done</Text>
+            <Text style={[styles.confirmBtnText, !canConfirm && { color: colors.textMuted }]}>Done</Text>
+            <Ionicons
+              name="checkmark"
+              size={18}
+              color={canConfirm ? colors.textInverse : colors.textMuted}
+            />
           </Pressable>
         </View>
       </KeyboardAwareScrollView>
@@ -887,8 +978,8 @@ function useEditorStyles(colors: ThemeColors) {
           letterSpacing: Type.subtitle.letterSpacing,
         },
         closeBtn: {
-          width: 36,
-          height: 36,
+          width: Control.hit,
+          height: Control.hit,
           alignItems: 'center',
           justifyContent: 'center',
         },
@@ -936,22 +1027,22 @@ function useEditorStyles(colors: ThemeColors) {
         colorPicker: {
           // No extra padding — CreatorColorPicker manages its own layout
         },
-        toggleRow: {
+        tabBar: {
           flexDirection: 'row',
-          gap: Space.sm,
+          position: 'relative',
         },
-        toggleOption: {
+        tabItem: {
           flex: 1,
-          height: 44,
-          borderRadius: Radius.md,
-          borderWidth: Stroke.standard,
-          borderColor: colors.borderSubtle,
+          height: Control.hit,
           alignItems: 'center',
           justifyContent: 'center',
         },
-        toggleOptionActive: {
-          borderWidth: Stroke.emphasis,
-          borderColor: colors.brand,
+        tabUnderline: {
+          position: 'absolute',
+          bottom: 0,
+          height: Stroke.emphasis,
+          backgroundColor: colors.brand,
+          borderRadius: Stroke.emphasis,
         },
         // ── Effect section header (label + enable toggle) ──
         effectSectionHeader: {
@@ -1039,39 +1130,35 @@ function useEditorStyles(colors: ThemeColors) {
         animContent: {
           gap: Space.sm,
           paddingRight: Space.md,
+          position: 'relative',
         },
-        animChip: {
+        animTab: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
           paddingHorizontal: Space.smMd,
-          height: 44,
-          borderRadius: Radius.md,
-          borderWidth: Stroke.standard,
-          borderColor: colors.borderSubtle,
+          height: Control.hit,
         },
-        animChipActive: {
-          borderWidth: Stroke.emphasis,
-          borderColor: colors.brand,
-        },
-        animChipLabel: {
+        animTabLabel: {
           fontFamily: Typography.family.medium,
           fontSize: Type.caption.size,
         },
         // ── Confirm ──
         confirmBtn: {
           backgroundColor: colors.brand,
-          borderRadius: Radius.sm,
-          height: 52,
+          borderRadius: Radius.lg,
+          height: 50,
+          flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
+          gap: Space.xs,
           marginTop: Space.sm,
         },
         confirmBtnDisabled: {
-          opacity: 0.4,
+          backgroundColor: colors.surfaceAlt,
         },
         confirmBtnText: {
-          fontFamily: Typography.family.semibold,
+          fontFamily: FontFamily.semibold,
           fontSize: Type.bodyEmphasis.size,
           color: colors.textInverse,
         },

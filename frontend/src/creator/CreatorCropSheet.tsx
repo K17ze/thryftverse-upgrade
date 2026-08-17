@@ -12,7 +12,7 @@ import { Image } from 'expo-image';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -87,6 +87,12 @@ export function CreatorCropSheet({
   const backdropOpacitySV = useSharedValue(0);
   const mountedRef = useRef(false);
 
+  // ── Ratio tab underline indicator (spring-animated, brand color) ──
+  const ratioTabLayouts = useRef<Map<string, { x: number; width: number }>>(new Map());
+  const ratioUnderlineXSV = useSharedValue(0);
+  const ratioUnderlineWSV = useSharedValue(0);
+  const RATIO_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
+
   // ── Load image dimensions on open ────────────────────────────────
   useEffect(() => {
     if (visible && imageUri) {
@@ -132,7 +138,7 @@ export function CreatorCropSheet({
   }, [visible, reduceMotion, sheetYSV, backdropOpacitySV, gridOpacitySV, spring]);
 
   // ── Calculate display dimensions ─────────────────────────────────
-  const displayW = SCREEN_W - 32;
+  const displayW = SCREEN_W - Space.md * 2;
   const displayH = imageSize.width > 0
     ? displayW * (imageSize.height / imageSize.width)
     : displayW;
@@ -156,6 +162,20 @@ export function CreatorCropSheet({
   const applyRatio = useCallback((ratio: number | null) => {
     haptic.selection();
     setSelectedRatio(ratio);
+
+    // Animate underline to the selected tab.
+    const tabId = ratio == null ? 'Original' : ASPECT_PRESETS.find((p) => p.ratio === ratio)?.label ?? '';
+    const layout = ratioTabLayouts.current.get(tabId);
+    if (layout) {
+      if (reduceMotion) {
+        ratioUnderlineXSV.value = layout.x;
+        ratioUnderlineWSV.value = layout.width;
+      } else {
+        ratioUnderlineXSV.value = withSpring(layout.x, RATIO_UNDERLINE_SPRING);
+        ratioUnderlineWSV.value = withSpring(layout.width, RATIO_UNDERLINE_SPRING);
+      }
+    }
+
     if (!imageSize.width || !ratio) {
       // Reset to full image
       setCropRect({ x: 0, y: 0, width: imageSize.width, height: imageSize.height });
@@ -179,7 +199,7 @@ export function CreatorCropSheet({
     const y = (imageSize.height - cropH) / 2;
     setCropRect({ x, y, width: cropW, height: cropH });
     syncCropSV(x, y, cropW, cropH);
-  }, [imageSize, haptic, syncCropSV]);
+  }, [imageSize, haptic, syncCropSV, reduceMotion, ratioUnderlineXSV, ratioUnderlineWSV]);
 
   // ── Drag to reposition crop frame (spring-bounded) ───────────────
   const dragStartX = useSharedValue(0);
@@ -336,19 +356,25 @@ export function CreatorCropSheet({
     ),
   }));
 
+  // Ratio tab underline indicator (spring-animated on tab change).
+  const ratioUnderlineStyle = useAnimatedStyle(() => ({
+    left: ratioUnderlineXSV.value,
+    width: ratioUnderlineWSV.value,
+  }));
+
   if (!visible && !mountedRef.current) return null;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
       {/* Backdrop */}
-      <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 300 }]}>
+      <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay, zIndex: 300 }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close crop" accessibilityRole="button" />
       </Reanimated.View>
 
       <Reanimated.View
         style={[
           styles.sheet,
-          { paddingBottom: insets.bottom + 16, backgroundColor: '#0A0A0A' },
+          { paddingBottom: insets.bottom + Space.md, backgroundColor: '#0A0A0A' },
           sheetStyle,
         ]}
       >
@@ -359,19 +385,14 @@ export function CreatorCropSheet({
 
         {/* Title row */}
         <View style={styles.titleRow}>
-          <PressScale onPress={onClose} accessibilityLabel="Cancel crop" hitSlop={12}>
-            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-          </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Crop</Text>
           <PressScale
-            onPress={handleCrop}
-            disabled={isProcessing}
-            accessibilityLabel="Apply crop"
-            hitSlop={12}
+            onPress={onClose}
+            style={styles.closeBtn}
+            accessibilityLabel="Close crop"
+            accessibilityRole="button"
           >
-            <Text style={[styles.applyText, { color: colors.brand, opacity: isProcessing ? 0.5 : 1 }]}>
-              {isProcessing ? 'Processing…' : 'Done'}
-            </Text>
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -432,12 +453,13 @@ export function CreatorCropSheet({
           </View>
         </GestureHandlerRootView>
 
-        {/* Rotate + Aspect ratio presets */}
+        {/* Rotate + Aspect ratio presets — text-only tabs with underline */}
         <View style={styles.controlsRow}>
           <PressScale
             onPress={handleRotate}
-            style={[styles.rotateBtn, { borderColor: colors.border }]}
+            style={styles.rotateBtn}
             accessibilityLabel={`Rotate ${rotation} degrees`}
+            accessibilityRole="button"
             hitSlop={8}
           >
             <Ionicons name="refresh-outline" size={20} color={colors.textPrimary} />
@@ -457,25 +479,68 @@ export function CreatorCropSheet({
                 <PressScale
                   key={preset.label}
                   onPress={() => applyRatio(preset.ratio)}
-                  style={[
-                    styles.ratioPill,
-                    {
-                      backgroundColor: active ? colors.brand : colors.surface,
-                      borderColor: active ? colors.brand : colors.border,
-                    },
-                  ]}
+                  onLayout={(e) => {
+                    ratioTabLayouts.current.set(preset.label, {
+                      x: e.nativeEvent.layout.x,
+                      width: e.nativeEvent.layout.width,
+                    });
+                    if (selectedRatio === preset.ratio) {
+                      ratioUnderlineXSV.value = e.nativeEvent.layout.x;
+                      ratioUnderlineWSV.value = e.nativeEvent.layout.width;
+                    }
+                  }}
+                  style={styles.ratioTab}
                   accessibilityLabel={`Aspect ratio ${preset.label}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                 >
                   <Text style={[
                     styles.ratioText,
-                    { color: active ? colors.textInverse : colors.textSecondary },
+                    { color: active ? colors.brand : colors.textSecondary },
                   ]}>
                     {preset.label}
                   </Text>
                 </PressScale>
               );
             })}
+            {/* Spring-animated underline indicator (brand color, 2pt) */}
+            <Reanimated.View
+              style={[styles.ratioUnderline, ratioUnderlineStyle, { backgroundColor: colors.brand }]}
+              pointerEvents="none"
+            />
           </ScrollView>
+        </View>
+
+        {/* ── Footer — premium Cancel / Done buttons ── */}
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+          <PressScale
+            onPress={onClose}
+            style={[styles.footerBtn, styles.footerCancel]}
+            accessibilityLabel="Cancel crop"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.footerCancelText, { color: colors.textSecondary }]}>
+              Cancel
+            </Text>
+          </PressScale>
+          <PressScale
+            onPress={handleCrop}
+            disabled={isProcessing}
+            style={[
+              styles.footerBtn,
+              styles.footerConfirm,
+              {
+                backgroundColor: colors.brand,
+                opacity: isProcessing ? 0.5 : 1,
+              },
+            ]}
+            accessibilityLabel="Apply crop"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.footerConfirmText, { color: colors.textInverse }]}>
+              {isProcessing ? 'Processing…' : 'Done'}
+            </Text>
+          </PressScale>
         </View>
       </Reanimated.View>
     </View>
@@ -493,8 +558,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
     paddingTop: Space.sm,
     zIndex: 301,
     elevation: 24,
@@ -516,17 +581,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
-  cancelText: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.regular,
-  },
   title: {
     fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
-  applyText: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
+  closeBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
   },
   previewArea: {
     alignItems: 'center',
@@ -542,7 +606,7 @@ const styles = StyleSheet.create({
   },
   cropBorder: {
     position: 'absolute',
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: '#fff',
   },
   gridLineV: {
@@ -559,41 +623,52 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
+  // Refined L-shaped corner brackets — Stroke.emphasis (2pt) per stroke
+  // grammar (selection/focus). Shadow for visibility over dark preview.
   corner: {
     position: 'absolute',
     width: 20,
     height: 20,
     borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 2,
+    elevation: 2,
   },
   cornerTL: {
-    top: -2,
-    left: -2,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
+    top: -1,
+    left: -1,
+    borderTopWidth: Stroke.emphasis,
+    borderLeftWidth: Stroke.emphasis,
+    borderTopLeftRadius: 3,
   },
   cornerTR: {
-    top: -2,
-    right: -2,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
+    top: -1,
+    right: -1,
+    borderTopWidth: Stroke.emphasis,
+    borderRightWidth: Stroke.emphasis,
+    borderTopRightRadius: 3,
   },
   cornerBL: {
-    bottom: -2,
-    left: -2,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
+    bottom: -1,
+    left: -1,
+    borderBottomWidth: Stroke.emphasis,
+    borderLeftWidth: Stroke.emphasis,
+    borderBottomLeftRadius: 3,
   },
   cornerBR: {
-    bottom: -2,
-    right: -2,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
+    bottom: -1,
+    right: -1,
+    borderBottomWidth: Stroke.emphasis,
+    borderRightWidth: Stroke.emphasis,
+    borderBottomRightRadius: 3,
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingVertical: 12,
+    paddingVertical: Space.smMd,
     gap: Space.sm,
   },
   rotateBtn: {
@@ -601,8 +676,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 52,
     height: 44,
-    borderRadius: Radius.md,
-    borderWidth: 1,
     gap: 2,
   },
   rotateLabel: {
@@ -611,17 +684,52 @@ const styles = StyleSheet.create({
   },
   ratioRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: Space.xs,
+    position: 'relative',
   },
-  ratioPill: {
-    paddingHorizontal: Space.md,
-    paddingVertical: 10,
-    borderRadius: Radius.full,
-    borderWidth: 1,
+  ratioTab: {
+    paddingHorizontal: Space.xs,
+    paddingVertical: Space.xs,
+    alignItems: 'center',
+  },
+  ratioUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    height: Stroke.emphasis,
+    borderRadius: 1,
   },
   ratioText: {
     fontSize: Type.captionElevated.size,
     fontFamily: Typography.family.medium,
+  },
+  // ── Footer — premium Cancel / Done buttons ──
+  footer: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  footerBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerCancel: {
+    backgroundColor: 'transparent',
+  },
+  footerCancelText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
+  },
+  footerConfirm: {
+    // backgroundColor set inline
+  },
+  footerConfirmText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
   },
 });

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, Control } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
@@ -564,8 +564,8 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     closeBtn: {
-      width: 32,
-      height: 32,
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -616,13 +616,12 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.md,
-      paddingHorizontal: Space.md,
-      borderRadius: Radius.lg,
-      marginBottom: Space.xs,
-      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: Space.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
     },
     folderRowSelected: {
-      backgroundColor: colors.brandSubtle,
+      backgroundColor: 'transparent',
     },
     folderInfo: {
       flex: 1,
@@ -646,16 +645,16 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
     },
     folderActionBtn: {
-      width: 32,
-      height: 32,
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
     },
     assignSection: {
       marginTop: Space.lg,
-      padding: Space.md,
-      borderRadius: Radius.lg,
-      backgroundColor: colors.surfaceAlt,
+      paddingTop: Space.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
     },
     assignHeader: {
       flexDirection: 'row',
@@ -692,12 +691,12 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.sm,
-      borderRadius: Radius.md,
-      marginBottom: Space.xxs,
+      paddingHorizontal: Space.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
     },
     draftPickRowSelected: {
-      backgroundColor: colors.brandSubtle,
+      backgroundColor: 'transparent',
     },
     draftPickInfo: {
       flex: 1,
@@ -714,8 +713,8 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
     draftPickRemove: {
-      width: 32,
-      height: 32,
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -742,34 +741,36 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
     quickChip: {
-      paddingHorizontal: Space.md,
+      paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
-      borderRadius: Radius.full,
       marginRight: Space.xs,
+      minHeight: Control.hit,
+      justifyContent: 'center',
     },
     quickChipActive: {
-      backgroundColor: colors.brand,
+      backgroundColor: 'transparent',
     },
     quickChipInactive: {
-      backgroundColor: colors.surfaceAlt,
+      backgroundColor: 'transparent',
     },
     quickChipUnfile: {
-      backgroundColor: colors.surfaceAlt,
+      backgroundColor: 'transparent',
     },
     quickChipText: {
-      fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
+      fontFamily: FontFamily.medium,
+      fontSize: Type.body.size,
     },
     quickChipTextActive: {
-      color: colors.textInverse,
+      color: colors.brand,
+      textDecorationLine: 'underline',
     },
     quickChipTextInactive: {
       color: colors.textSecondary,
     },
     quickChipTextUnfile: {
       color: colors.danger,
-      fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
+      fontFamily: FontFamily.medium,
+      fontSize: Type.body.size,
     },
     footerHint: {
       fontFamily: Typography.family.regular,

@@ -467,15 +467,15 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
                 accessibilityLabel={EASING_LABELS[ease]}
-                style={[
-                  styles.easingButton,
-                  { backgroundColor: active ? colors.brand : colors.surfaceAlt },
-                ]}
+                style={styles.easingButton}
               >
                 <Text
                   style={[
                     styles.easingLabel,
-                    { color: active ? colors.textInverse : colors.textSecondary },
+                    {
+                      color: active ? colors.brand : colors.textSecondary,
+                      textDecorationLine: active ? 'underline' : 'none',
+                    },
                   ]}
                 >
                   {EASING_LABELS[ease]}
@@ -486,17 +486,17 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
         </View>
       </View>
 
-      {/* ── Selected point inspector ── */}
+      {/* ── Selected point inspector — flat with hairline separator ── */}
       {selectedPoint && (
         <View
-          style={[styles.inspector, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={[styles.inspector, { borderTopColor: colors.borderSubtle }]}
         >
           <View style={styles.inspectorRow}>
             <Text style={[styles.inspectorLabel, { color: colors.textSecondary }]}>Speed</Text>
             <View style={styles.valueControls}>
               <Pressable
                 onPress={() => handleSpeedStep(-0.05)}
-                style={[styles.stepButton, { backgroundColor: colors.surfaceAlt }]}
+                style={styles.stepButton}
                 accessibilityRole="button"
                 accessibilityLabel="Decrease speed"
                 hitSlop={Control.hit / 2}
@@ -508,7 +508,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
               </Text>
               <Pressable
                 onPress={() => handleSpeedStep(0.05)}
-                style={[styles.stepButton, { backgroundColor: colors.surfaceAlt }]}
+                style={styles.stepButton}
                 accessibilityRole="button"
                 accessibilityLabel="Increase speed"
                 hitSlop={Control.hit / 2}
@@ -554,23 +554,21 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   presetChip: {
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-    borderWidth: Stroke.standard,
     minHeight: Control.hit,
     justifyContent: 'center',
   },
   presetLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSize.caption,
+    fontSize: Type.body.size,
     letterSpacing: LetterSpacing.normal,
   },
   canvasWrap: {
     marginHorizontal: Space.sm,
     height: CURVE_HEIGHT,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.hairline,
+    borderTopWidth: Stroke.hairline,
+    borderBottomWidth: Stroke.hairline,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -590,7 +588,7 @@ const styles = StyleSheet.create({
   },
   axisLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: 9,
+    fontSize: 10.5,
     letterSpacing: LetterSpacing.normal,
   },
   pointHit: {
@@ -616,30 +614,28 @@ const styles = StyleSheet.create({
   },
   easingRowLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSize.caption,
+    fontSize: Type.body.size,
     letterSpacing: LetterSpacing.normal,
   },
   easingButtons: {
     flexDirection: 'row',
-    gap: Space.xs,
+    gap: Space.md,
   },
   easingButton: {
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
     minHeight: Control.hit,
     justifyContent: 'center',
   },
   easingLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSize.caption,
+    fontSize: Type.body.size,
     letterSpacing: LetterSpacing.normal,
   },
   inspector: {
     marginHorizontal: Space.sm,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.hairline,
-    padding: Space.sm,
+    borderTopWidth: Stroke.hairline,
+    paddingTop: Space.sm,
     gap: Space.sm,
   },
   inspectorRow: {
@@ -650,7 +646,7 @@ const styles = StyleSheet.create({
   },
   inspectorLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: FontSize.caption,
+    fontSize: Type.body.size,
     letterSpacing: LetterSpacing.normal,
   },
   valueControls: {
@@ -661,13 +657,12 @@ const styles = StyleSheet.create({
   stepButton: {
     width: Control.chrome,
     height: Control.chrome,
-    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   valueText: {
     fontFamily: FontFamily.semibold,
-    fontSize: FontSize.body,
+    fontSize: Type.bodyEmphasis.size,
     letterSpacing: LetterSpacing.normal,
     minWidth: 56,
     textAlign: 'center',
@@ -678,12 +673,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     paddingVertical: Space.sm,
-    borderRadius: Radius.sm,
-    minHeight: Control.hit,
+    borderRadius: Radius.lg,
+    minHeight: 50,
   },
   deleteLabel: {
     fontFamily: FontFamily.semibold,
-    fontSize: FontSize.body,
+    fontSize: Type.bodyEmphasis.size,
     color: '#FFFFFF',
     letterSpacing: LetterSpacing.normal,
   },

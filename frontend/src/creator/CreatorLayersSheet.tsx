@@ -13,7 +13,7 @@ import Reanimated, {
   Easing,
   type SharedValue,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { getAllLayersSorted } from './composition';
@@ -53,7 +53,6 @@ const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ioni
   weather: 'partly-sunny-outline',
 };
 
-const TOUCH = 44;
 const THUMB = 40;
 const ROW_HEIGHT = 56;
 const ROW_GAP = Space.sm;
@@ -267,7 +266,6 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
       <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
         {layers.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="layers-outline" size={36} color={colors.textMuted} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No layers yet</Text>
             <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>Add content from the dock below</Text>
           </View>
@@ -393,8 +391,7 @@ function LayerRow({
       style={[
         styles.layerRow,
         {
-          backgroundColor: colors.surface,
-          borderColor: isSelected && !reorderMode ? colors.brand : colors.borderSubtle,
+          borderBottomColor: colors.borderSubtle,
           opacity: layer.locked ? 0.5 : (layer.hidden ? 0.3 : 1),
         },
         isDragging && styles.layerRowDragging,
@@ -448,7 +445,7 @@ function LayerRow({
           <View style={styles.layerNameRow}>
             <Ionicons name={LAYER_ICONS[layer.type]} size={16} color={getLayerAccentColor(layer.type)} />
             <Text
-              style={[styles.layerName, { color: colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
+              style={[styles.layerName, { color: isSelected && !reorderMode ? colors.brand : colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
               numberOfLines={1}
             >
               {getLayerDisplayName(layer)}
@@ -861,14 +858,14 @@ const styles = StyleSheet.create({
     fontSize: Type.subtitle.size,
   },
   closeBtn: {
-    width: TOUCH,
-    height: TOUCH,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
   },
   doneBtn: {
-    height: TOUCH,
+    height: Control.hit,
     paddingHorizontal: Space.sm,
     justifyContent: 'center',
     alignItems: 'center',
@@ -883,13 +880,13 @@ const styles = StyleSheet.create({
     fontSize: Type.caption.size,
     textAlign: 'center',
     paddingVertical: Space.xs,
+    marginBottom: Space.sm,
   },
   scrollBody: {
     paddingHorizontal: Space.md,
   },
   scrollContent: {
     paddingBottom: Space.lg,
-    gap: Space.sm,
   },
   emptyState: {
     alignItems: 'center',
@@ -909,13 +906,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
     paddingVertical: Space.sm,
-    paddingHorizontal: 12,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    minHeight: 56,
+    paddingHorizontal: Space.smMd,
+    borderBottomWidth: Stroke.hairline,
+    minHeight: ROW_HEIGHT,
   },
   layerRowDragging: {
     opacity: 0.7,
+    borderRadius: Radius.lg,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -923,8 +920,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   dragHandle: {
-    width: TOUCH,
-    height: TOUCH,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,
@@ -934,7 +931,7 @@ const styles = StyleSheet.create({
     left: 0,
     top: Space.xs,
     bottom: Space.xs,
-    width: 3,
+    width: Stroke.emphasis,
     borderRadius: Radius.sm,
   },
   rowMain: {
@@ -942,7 +939,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    minHeight: TOUCH,
+    minHeight: Control.hit,
   },
   thumbnail: {
     width: THUMB,
@@ -961,33 +958,33 @@ const styles = StyleSheet.create({
   },
   videoBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
+    bottom: Space.xxs,
+    right: Space.xxs,
     width: 14,
     height: 14,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   lockBadge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
+    top: Space.xxs,
+    right: Space.xxs,
     width: 14,
     height: 14,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   layerInfo: {
     flex: 1,
     justifyContent: 'center',
-    gap: 2,
+    gap: Space.xxs,
   },
   layerNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Space.xs,
   },
   layerName: {
     fontFamily: Typography.family.semibold,
@@ -1002,11 +999,11 @@ const styles = StyleSheet.create({
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xxs,
   },
   actionBtn: {
-    width: TOUCH,
-    height: TOUCH,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.sm,

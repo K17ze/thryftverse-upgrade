@@ -13,7 +13,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
-import { Space, Radius, FontFamily, Type } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Type, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -86,9 +86,6 @@ export function HelpShortcutsSheet({ visible, onClose }: HelpShortcutsSheetProps
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="keypad-outline" size={22} color={colors.textPrimary} />
-          </View>
           <View style={styles.headerText}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>
               Help & Shortcuts
@@ -113,7 +110,7 @@ export function HelpShortcutsSheet({ visible, onClose }: HelpShortcutsSheetProps
                   {cat.title}
                 </Text>
               </View>
-              <View style={[styles.entryList, { backgroundColor: colors.surfaceAlt, borderRadius: Radius.md }]}>
+              <View style={styles.entryList}>
                 {cat.entries.map((entry, i) => (
                   <View
                     key={`${cat.title}-${entry.keys}-${i}`}
@@ -125,11 +122,9 @@ export function HelpShortcutsSheet({ visible, onClose }: HelpShortcutsSheetProps
                     <Text style={[styles.entryLabel, { color: colors.textPrimary }]}>
                       {entry.label}
                     </Text>
-                    <View style={[styles.keyCap, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                      <Text style={[styles.keyCapText, { color: colors.textPrimary }]}>
-                        {entry.keys}
-                      </Text>
-                    </View>
+                    <Text style={[styles.keyText, { color: colors.textSecondary }]}>
+                      {entry.keys}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -161,17 +156,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
     paddingVertical: Space.sm,
-  },
-  headerIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerText: {
     flex: 1,
@@ -219,7 +204,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: Space.xs,
     minHeight: 44,
   },
   entryLabel: {
@@ -228,18 +213,10 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
   },
-  keyCap: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    minWidth: 44,
-    alignItems: 'center',
-  },
-  keyCapText: {
+  keyText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     letterSpacing: 0.2,
   },
   footer: {
@@ -247,8 +224,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   gotItBtn: {
-    height: 48,
-    borderRadius: Radius.md,
+    height: 50,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -66,9 +66,9 @@ export interface AudioBrowserSheetProps {
 
 type TabKey = 'library' | 'original';
 
-const TABS: Array<{ key: TabKey; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
-  { key: 'library', label: 'Library', icon: 'musical-notes-outline' },
-  { key: 'original', label: 'Original Audio', icon: 'mic-outline' },
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'library', label: 'Library' },
+  { key: 'original', label: 'Original Audio' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────

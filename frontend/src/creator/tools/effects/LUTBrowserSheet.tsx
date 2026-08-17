@@ -300,8 +300,8 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.md,
-      borderRadius: Radius.md,
-      minHeight: Control.hit + 8,
+      borderRadius: Radius.lg,
+      minHeight: 50,
     },
     applyBtnText: {
       fontFamily: FontFamily.semibold,

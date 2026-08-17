@@ -579,19 +579,9 @@ export function LookSourceTray({
             </View>
           )}
 
-          {/* Empty state */}
+          {/* Empty state — text-only, no decorative icon */}
           {!isSearching && isEmpty && (
             <View style={styles.stateContainer}>
-              <Ionicons
-                name={
-                  activeTab === 'foryou' ? 'sparkles-outline' :
-                  activeTab === 'closet' ? 'heart-outline' :
-                  activeTab === 'listings' ? 'pricetag-outline' :
-                  'search-outline'
-                }
-                size={28}
-                color={colors.textMuted}
-              />
               <Text style={[styles.stateText, { color: colors.textSecondary }]}>
                 {activeTab === 'foryou' && 'No recommendations available'}
                 {activeTab === 'closet' && 'No saved items yet'}
@@ -794,13 +784,13 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     fontFamily: Typography.family.medium,
-    fontSize: 10,
+    fontSize: 10.5,
     marginTop: 2,
     textAlign: 'center',
   },
   itemPrice: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10,
+    fontSize: 10.5,
   },
   // ── Floating drag preview ──
   dragPreview: {
@@ -819,12 +809,12 @@ const styles = StyleSheet.create({
   },
   previewTitle: {
     fontFamily: Typography.family.medium,
-    fontSize: 10,
+    fontSize: 10.5,
     marginTop: 2,
     textAlign: 'center',
   },
   previewPrice: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10,
+    fontSize: 10.5,
   },
 });

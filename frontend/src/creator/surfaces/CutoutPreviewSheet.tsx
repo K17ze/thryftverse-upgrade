@@ -46,8 +46,13 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+} from 'react-native-reanimated';
+import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
@@ -182,6 +187,13 @@ export function CutoutPreviewSheet({
   const [featherPx, setFeatherPx] = useState(0);
   const [invert, setInvert] = useState(false);
 
+  // ── Mode tab underline indicator (spring-animated, brand color) ──
+  const modeTabLayouts = useRef<Map<BrushMode, { x: number; width: number }>>(new Map());
+  const modeUnderlineXSV = useSharedValue(0);
+  const modeUnderlineWSV = useSharedValue(0);
+  const modeUnderlineOpacitySV = useSharedValue(0);
+  const UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
+
   // ── Reset state when the sheet opens ──────────────────────────────
   useEffect(() => {
     if (!visible) return;
@@ -289,8 +301,22 @@ export function CutoutPreviewSheet({
       return;
     }
     haptic.selection();
-    setBrushMode((prev) => (prev === mode ? null : mode));
-  }, [strokes.length, haptic]);
+    setBrushMode((prev) => {
+      const next = prev === mode ? null : mode;
+      // Animate underline to the selected tab (or hide if deselected).
+      if (next) {
+        const layout = modeTabLayouts.current.get(next);
+        if (layout) {
+          modeUnderlineXSV.value = withSpring(layout.x, UNDERLINE_SPRING);
+          modeUnderlineWSV.value = withSpring(layout.width, UNDERLINE_SPRING);
+          modeUnderlineOpacitySV.value = withSpring(1, UNDERLINE_SPRING);
+        }
+      } else {
+        modeUnderlineOpacitySV.value = withSpring(0, UNDERLINE_SPRING);
+      }
+      return next;
+    });
+  }, [strokes.length, haptic, modeUnderlineXSV, modeUnderlineWSV, modeUnderlineOpacitySV]);
 
   // ── Refine toggle ─────────────────────────────────────────────────
   const handleRefineToggle = useCallback(() => {
@@ -301,10 +327,11 @@ export function CutoutPreviewSheet({
         // Leaving refine mode — clear in-progress drawing state.
         setBrushMode(null);
         setCurrentPoints([]);
+        modeUnderlineOpacitySV.value = withSpring(0, UNDERLINE_SPRING);
       }
       return next;
     });
-  }, [haptic]);
+  }, [haptic, modeUnderlineOpacitySV]);
 
   // ── Invert toggle ─────────────────────────────────────────────────
   const handleInvertToggle = useCallback(() => {
@@ -345,51 +372,34 @@ export function CutoutPreviewSheet({
 
   const canRefine = supported === true && !processing && !!result;
 
+  // Mode tab underline animated style.
+  const modeUnderlineStyle = useAnimatedStyle(() => ({
+    left: modeUnderlineXSV.value,
+    width: modeUnderlineWSV.value,
+    opacity: modeUnderlineOpacitySV.value,
+  }));
+
   return (
     <SheetContainer visible={visible} onClose={onClose} maxHeight={0.8}>
       <View style={{ paddingBottom: Math.max(insets.bottom, Space.md) }}>
         {/* ── Header ── */}
         <View style={styles.header}>
-          <PressScale
-            onPress={onClose}
-            accessibilityLabel="Cancel cutout"
-            accessibilityRole="button"
-            hitSlop={12}
-          >
-            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>
-              Cancel
-            </Text>
-          </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             Cutout
           </Text>
           <PressScale
-            onPress={handleConfirm}
-            disabled={!result || processing}
-            accessibilityLabel="Apply cutout"
+            onPress={onClose}
+            style={styles.closeBtn}
+            accessibilityLabel="Close cutout"
             accessibilityRole="button"
-            hitSlop={12}
           >
-            <Text
-              style={[
-                styles.applyText,
-                {
-                  color: colors.brand,
-                  opacity: !result || processing ? 0.4 : 1,
-                },
-              ]}
-            >
-              Apply
-            </Text>
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
 
         {/* ── Body ── */}
         {supported === false && (
           <View style={styles.messageContainer}>
-            <View style={[styles.messageIcon, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="alert-circle-outline" size={32} color={colors.textMuted} />
-            </View>
             <Text style={[styles.messageTitle, { color: colors.textPrimary }]}>
               Cutout is not available on this device
             </Text>
@@ -414,9 +424,6 @@ export function CutoutPreviewSheet({
 
         {supported === true && !processing && error && (
           <View style={styles.messageContainer}>
-            <View style={[styles.messageIcon, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="warning-outline" size={32} color={colors.textMuted} />
-            </View>
             <Text style={[styles.messageTitle, { color: colors.textPrimary }]}>
               Could not complete the cutout
             </Text>
@@ -428,19 +435,15 @@ export function CutoutPreviewSheet({
 
         {supported === true && !processing && result && (
           <View style={styles.previewContainer}>
-            {/* Before / After labels (hidden in refine mode) */}
+            {/* Before / After labels — text-only (hidden in refine mode) */}
             {!refineMode && !comparing && (
               <View style={styles.labelRow}>
-                <View style={[styles.labelPill, { backgroundColor: colors.surfaceAlt }]}>
-                  <Text style={[styles.labelText, { color: colors.textSecondary }]}>
-                    Before
-                  </Text>
-                </View>
-                <View style={[styles.labelPill, { backgroundColor: colors.brandSubtle }]}>
-                  <Text style={[styles.labelText, { color: colors.brand }]}>
-                    After
-                  </Text>
-                </View>
+                <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+                  Before
+                </Text>
+                <Text style={[styles.labelText, { color: colors.textSecondary }]}>
+                  After
+                </Text>
               </View>
             )}
 
@@ -632,39 +635,39 @@ export function CutoutPreviewSheet({
               </PressScale>
             </View>
 
-            {/* ── Mode selector (active in refine mode) ── */}
+            {/* ── Mode selector — text-only tabs with spring underline ── */}
             <View style={styles.modeRow}>
               {modeButtons.map((btn) => {
                 const isRestore = btn.id === 'restore';
                 const selected = !isRestore && brushMode === btn.id;
-                const isErase = btn.id === 'erase';
-                const accent = isErase ? ERASE_BRUSH : KEEP_BRUSH;
                 return (
                   <PressScale
                     key={btn.id}
                     onPress={() => handleModeSelect(btn.id)}
                     disabled={!refineMode || !canRefine}
-                    style={[
-                      styles.modeBtn,
-                      {
-                        backgroundColor: selected ? colors.brand : colors.surfaceAlt,
-                        borderColor: selected ? colors.brand : colors.border,
-                        opacity: !refineMode || !canRefine ? 0.4 : 1,
-                      },
-                    ]}
+                    onLayout={!isRestore ? (e) => {
+                      modeTabLayouts.current.set(btn.id as BrushMode, {
+                        x: e.nativeEvent.layout.x,
+                        width: e.nativeEvent.layout.width,
+                      });
+                      if (brushMode === btn.id) {
+                        modeUnderlineXSV.value = e.nativeEvent.layout.x;
+                        modeUnderlineWSV.value = e.nativeEvent.layout.width;
+                        modeUnderlineOpacitySV.value = 1;
+                      }
+                    } : undefined}
+                    style={styles.modeTab}
                     accessibilityLabel={btn.label}
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
                   >
-                    <Ionicons
-                      name={btn.icon}
-                      size={16}
-                      color={selected ? colors.textInverse : accent}
-                    />
                     <Text
                       style={[
-                        styles.modeBtnLabel,
-                        { color: selected ? colors.textInverse : colors.textSecondary },
+                        styles.modeTabText,
+                        {
+                          color: selected ? colors.brand : colors.textSecondary,
+                          opacity: !refineMode || !canRefine ? 0.4 : 1,
+                        },
                       ]}
                       numberOfLines={1}
                     >
@@ -673,6 +676,11 @@ export function CutoutPreviewSheet({
                   </PressScale>
                 );
               })}
+              {/* Spring-animated underline indicator (brand color, 2pt) */}
+              <Reanimated.View
+                style={[styles.modeUnderline, modeUnderlineStyle, { backgroundColor: colors.brand }]}
+                pointerEvents="none"
+              />
             </View>
 
             {/* ── Edge Softness slider ── */}
@@ -716,6 +724,38 @@ export function CutoutPreviewSheet({
             </Text>
           </View>
         )}
+
+        {/* ── Footer — premium Cancel / Apply buttons ── */}
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+          <PressScale
+            onPress={onClose}
+            style={[styles.footerBtn, styles.footerCancel]}
+            accessibilityLabel="Cancel cutout"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.footerCancelText, { color: colors.textSecondary }]}>
+              Cancel
+            </Text>
+          </PressScale>
+          <PressScale
+            onPress={handleConfirm}
+            disabled={!result || processing}
+            style={[
+              styles.footerBtn,
+              styles.footerConfirm,
+              {
+                backgroundColor: colors.brand,
+                opacity: !result || processing ? 0.4 : 1,
+              },
+            ]}
+            accessibilityLabel="Apply cutout"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.footerConfirmText, { color: colors.textInverse }]}>
+              Apply
+            </Text>
+          </PressScale>
+        </View>
       </View>
     </SheetContainer>
   );
@@ -803,20 +843,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
-  cancelText: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    minWidth: 44,
-  },
   title: {
     fontFamily: Typography.family.semibold,
     fontSize: Type.bodyEmphasis.size,
   },
-  applyText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    minWidth: 44,
-    textAlign: 'right',
+  closeBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
   },
   // ── Message / state container ──
   messageContainer: {
@@ -824,14 +860,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingVertical: Space.xl,
     gap: Space.xs,
-  },
-  messageIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.xs,
   },
   messageTitle: {
     fontFamily: Typography.family.semibold,
@@ -855,14 +883,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     paddingHorizontal: Space.xs,
   },
-  labelPill: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xxs,
-    borderRadius: Radius.sm,
-  },
   labelText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: Type.caption.size,
   },
   previewRow: {
     flexDirection: 'row',
@@ -914,28 +937,29 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
   },
-  // ── Mode selector row ──
+  // ── Mode selector row — text-only tabs with underline ──
   modeRow: {
     flexDirection: 'row',
-    gap: Space.xs,
     marginTop: Space.sm,
     paddingHorizontal: Space.xs,
+    position: 'relative',
   },
-  modeBtn: {
+  modeTab: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xxs,
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.xxs,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
   },
-  modeBtnLabel: {
+  modeTabText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: Type.caption.size,
+  },
+  modeUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    height: Stroke.emphasis,
+    borderRadius: 1,
   },
   // ── Edge Softness slider ──
   sliderRow: {
@@ -981,5 +1005,34 @@ const styles = StyleSheet.create({
     marginLeft: -10,
     borderRadius: 10,
     top: 4,
+  },
+  // ── Footer — premium Cancel / Apply buttons ──
+  footer: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  footerBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerCancel: {
+    backgroundColor: 'transparent',
+  },
+  footerCancelText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
+  },
+  footerConfirm: {
+    // backgroundColor set inline
+  },
+  footerConfirmText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
   },
 });

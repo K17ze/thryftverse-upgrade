@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
@@ -153,7 +153,6 @@ export function AccessibilityZOrderSheet({
 
         {!canEdit ? (
           <View style={styles.emptyState}>
-            <Ionicons name="layers-outline" size={36} color={colors.textMuted} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               Select an object to arrange it
             </Text>
@@ -163,15 +162,15 @@ export function AccessibilityZOrderSheet({
           </View>
         ) : (
           <View style={styles.body}>
-            {/* ── Current position readout ── */}
-            <View style={[styles.readout, { backgroundColor: colors.surfaceAlt }]}>
+            {/* ── Current position readout — flat with hairline ── */}
+            <View style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}>
               <Ionicons name="layers-outline" size={20} color={colors.textMuted} />
               <Text style={[styles.readoutText, { color: colors.textPrimary }]}>
                 Position {selectedIndex + 1} of {sortedLayers.length}
               </Text>
             </View>
 
-            {/* ── Reorder action buttons ── */}
+            {/* ── Reorder action buttons — flat with hairline borders ── */}
             <View style={styles.actionGrid}>
               {reorderActions.map((action) => (
                 <PressScale
@@ -180,7 +179,7 @@ export function AccessibilityZOrderSheet({
                   disabled={action.disabled}
                   style={[
                     styles.actionBtn,
-                    { backgroundColor: colors.surfaceAlt, opacity: action.disabled ? 0.4 : 1 },
+                    { borderColor: colors.borderSubtle, opacity: action.disabled ? 0.4 : 1 },
                   ]}
                   accessibilityLabel={action.label}
                   accessibilityHint={action.hint}
@@ -199,11 +198,11 @@ export function AccessibilityZOrderSheet({
               ))}
             </View>
 
-            {/* ── Mini layer stack ── */}
+            {/* ── Mini layer stack — flat with hairline separators ── */}
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
               Layer stack
             </Text>
-            <View style={[styles.stackContainer, { backgroundColor: colors.surfaceAlt }]}>
+            <View style={[styles.stackContainer, { borderTopColor: colors.borderSubtle }]}>
               <ScrollView
                 style={styles.stackScroll}
                 contentContainerStyle={styles.stackContent}
@@ -216,7 +215,6 @@ export function AccessibilityZOrderSheet({
                       key={layer.id}
                       style={[
                         styles.stackRow,
-                        isSelected && { backgroundColor: colors.brandSubtle },
                         i > 0 && { borderTopColor: colors.borderSubtle, borderTopWidth: StyleSheet.hairlineWidth },
                       ]}
                     >
@@ -241,11 +239,9 @@ export function AccessibilityZOrderSheet({
                         {layer.label}
                       </Text>
                       {isSelected && (
-                        <View style={[styles.stackBadge, { backgroundColor: colors.brand }]}>
-                          <Text style={[styles.stackBadgeText, { color: colors.textInverse }]}>
-                            Selected
-                          </Text>
-                        </View>
+                        <Text style={[styles.stackSelectedText, { color: colors.brand }]}>
+                          Selected
+                        </Text>
                       )}
                     </View>
                   );
@@ -306,12 +302,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.md,
+    paddingHorizontal: Space.xs,
     paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   readoutText: {
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     fontSize: Type.bodyEmphasis.size,
     fontVariant: ['tabular-nums'],
   },
@@ -328,7 +324,8 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     height: TOUCH,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
   },
   actionBtnText: {
     fontFamily: Typography.family.medium,
@@ -342,12 +339,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   stackContainer: {
-    borderRadius: Radius.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
     maxHeight: 220,
   },
-  stackScroll: {
-    borderRadius: Radius.lg,
-  },
+  stackScroll: {},
   stackContent: {
     paddingVertical: Space.xs,
   },
@@ -355,12 +350,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.md,
+    paddingHorizontal: Space.xs,
     paddingVertical: Space.sm,
     minHeight: TOUCH,
   },
   stackIndex: {
-    fontFamily: Typography.family.semibold,
+    fontFamily: FontFamily.semibold,
     fontSize: Type.bodyEmphasis.size,
     width: 24,
     textAlign: 'center',
@@ -368,16 +363,11 @@ const styles = StyleSheet.create({
   },
   stackLabel: {
     flex: 1,
-    fontFamily: Typography.family.regular,
+    fontFamily: FontFamily.regular,
     fontSize: Type.body.size,
   },
-  stackBadge: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  stackBadgeText: {
-    fontFamily: Typography.family.semibold,
+  stackSelectedText: {
+    fontFamily: FontFamily.semibold,
     fontSize: Type.meta.size,
     letterSpacing: Type.meta.letterSpacing,
   },

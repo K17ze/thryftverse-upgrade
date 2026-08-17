@@ -52,6 +52,11 @@ import {
 } from '../color/';
 import type { CreatorColor, GradientDefinition, GradientStop } from '../color/';
 import { makeStableId } from '../../utils/createStableId';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import type { CreatorBackground, CreatorLayer } from '../composition';
 
 // ── Presets ───────────────────────────────────────────────────────────
@@ -152,6 +157,12 @@ export function BackgroundSheet({
     stops: [],
   }));
 
+  // ── Type tab underline indicator (spring-animated, brand color) ──
+  const typeTabLayouts = useRef<Map<BgType, { x: number; width: number }>>(new Map());
+  const typeUnderlineXSV = useSharedValue(0);
+  const typeUnderlineWSV = useSharedValue(0);
+  const TYPE_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
+
   useEffect(() => {
     if (visible) {
       setDraft(currentBackground);
@@ -159,8 +170,14 @@ export function BackgroundSheet({
       // Build gradient definition from draft: prefer gradientStops, else
       // derive from value/secondaryValue (preset), else default.
       setGradientDef(backgroundToGradient(currentBackground));
+      // Reset underline to the active type tab (instant, not animated).
+      const layout = typeTabLayouts.current.get(currentBackground.type);
+      if (layout) {
+        typeUnderlineXSV.value = layout.x;
+        typeUnderlineWSV.value = layout.width;
+      }
     }
-  }, [visible, currentBackground]);
+  }, [visible, currentBackground, typeUnderlineXSV, typeUnderlineWSV]);
 
   // First media layer for the Blurred preview.
   const firstMediaLayer = useMemo(
@@ -172,6 +189,12 @@ export function BackgroundSheet({
   // ── Type chip selection ────────────────────────────────────────────
   const handleTypeSelect = useCallback((type: BgType) => {
     haptic.selection();
+    // Animate underline to the selected tab.
+    const layout = typeTabLayouts.current.get(type);
+    if (layout) {
+      typeUnderlineXSV.value = withSpring(layout.x, TYPE_UNDERLINE_SPRING);
+      typeUnderlineWSV.value = withSpring(layout.width, TYPE_UNDERLINE_SPRING);
+    }
     setDraft((prev) => {
       const next: CreatorBackground = { ...prev, type };
       // When switching to blur, seed blurAssetId/blurRadius if available.
@@ -191,7 +214,7 @@ export function BackgroundSheet({
       }
       return next;
     });
-  }, [haptic, firstMediaLayer]);
+  }, [haptic, firstMediaLayer, typeUnderlineXSV, typeUnderlineWSV]);
 
   // ── Solid color selection (preset swatches) ────────────────────────
   const handleSolidSelect = useCallback((value: string) => {
@@ -329,6 +352,12 @@ export function BackgroundSheet({
     onClose();
   }, [onClose, haptic]);
 
+  // Type tab underline animated style.
+  const typeUnderlineStyle = useAnimatedStyle(() => ({
+    left: typeUnderlineXSV.value,
+    width: typeUnderlineWSV.value,
+  }));
+
   // ── Derived: is a solid swatch active? ─────────────────────────────
   const activeSolidValue = draft.type === 'color' ? draft.value : null;
   const blurRadius = draft.type === 'blur' ? (draft.blurRadius ?? 20) : 20;
@@ -350,38 +379,32 @@ export function BackgroundSheet({
         </PressScale>
       </View>
 
-      {/* Type chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipScroll}
-        contentContainerStyle={styles.chipScrollContent}
-      >
+      {/* Type tabs — text-only with spring-animated underline */}
+      <View style={styles.typeTabRow}>
         {TYPE_CHIPS.map((chip) => {
           const isActive = draft.type === chip.id;
           return (
             <PressScale
               key={chip.id}
               onPress={() => handleTypeSelect(chip.id)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: isActive ? colors.brandSubtle : 'transparent',
-                  borderColor: isActive ? colors.brand : colors.border,
-                },
-              ]}
+              onLayout={(e) => {
+                typeTabLayouts.current.set(chip.id, {
+                  x: e.nativeEvent.layout.x,
+                  width: e.nativeEvent.layout.width,
+                });
+                if (draft.type === chip.id) {
+                  typeUnderlineXSV.value = e.nativeEvent.layout.x;
+                  typeUnderlineWSV.value = e.nativeEvent.layout.width;
+                }
+              }}
+              style={styles.typeTab}
               accessibilityLabel={`${chip.label} background type${isActive ? ', selected' : ''}`}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
             >
-              <Ionicons
-                name={chip.icon}
-                size={16}
-                color={isActive ? colors.brand : colors.textSecondary}
-              />
               <Text
                 style={[
-                  styles.chipLabel,
+                  styles.typeTabLabel,
                   { color: isActive ? colors.brand : colors.textSecondary },
                 ]}
               >
@@ -390,7 +413,12 @@ export function BackgroundSheet({
             </PressScale>
           );
         })}
-      </ScrollView>
+        {/* Spring-animated underline indicator (brand color, 2pt) */}
+        <Reanimated.View
+          style={[styles.typeUnderline, typeUnderlineStyle, { backgroundColor: colors.brand }]}
+          pointerEvents="none"
+        />
+      </View>
 
       {/* Section body */}
       <ScrollView
@@ -545,7 +573,6 @@ export function BackgroundSheet({
               </View>
             ) : (
               <View style={[styles.blurEmpty, { borderColor: colors.border }]}>
-                <Ionicons name="images-outline" size={28} color={colors.textMuted} />
                 <Text style={[styles.blurEmptyText, { color: colors.textMuted }]}>
                   Add a photo to the canvas first
                 </Text>
@@ -605,7 +632,6 @@ export function BackgroundSheet({
                 accessibilityLabel="Pick a background photo"
                 accessibilityHint="Opens the photo library to select a background image"
               >
-                <Ionicons name="image-outline" size={32} color={colors.textMuted} />
                 <Text style={[styles.imagePickerEmptyTitle, { color: colors.textPrimary }]}>
                   {isPickingImage ? 'Opening photo library…' : 'Choose from library'}
                 </Text>
@@ -637,7 +663,7 @@ export function BackgroundSheet({
       <View style={[styles.footer, { borderTopColor: colors.border }]}>
         <PressScale
           onPress={handleCancel}
-          style={[styles.footerBtn, styles.footerCancel, { borderColor: colors.border }]}
+          style={[styles.footerBtn, styles.footerCancel]}
           accessibilityLabel="Cancel"
           accessibilityHint="Discards background changes and closes the sheet"
         >
@@ -773,27 +799,27 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       borderRadius: Radius.sm,
     },
-    // ── Type chips ──
-    chipScroll: {
-      marginHorizontal: -Space.md,
-    },
-    chipScrollContent: {
-      paddingHorizontal: Space.md,
-      gap: Space.sm,
-      paddingVertical: Space.xs,
-    },
-    chip: {
+    // ── Type tabs — text-only with spring underline ──
+    typeTabRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.full,
-      borderWidth: 1,
+      paddingVertical: Space.xs,
+      position: 'relative',
     },
-    chipLabel: {
-      fontFamily: Typography.family.medium,
+    typeTab: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: Space.sm,
+    },
+    typeTabLabel: {
+      fontFamily: Typography.family.semibold,
       fontSize: Type.caption.size,
+    },
+    typeUnderline: {
+      position: 'absolute',
+      bottom: 0,
+      height: Stroke.emphasis,
+      borderRadius: 1,
     },
     // ── Body ──
     body: {
@@ -869,7 +895,6 @@ function createStyles(colors: ThemeColors) {
     blurEmpty: {
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.sm,
       paddingVertical: Space.xl,
       borderWidth: StyleSheet.hairlineWidth,
       borderRadius: Radius.lg,
@@ -950,24 +975,24 @@ function createStyles(colors: ThemeColors) {
     },
     footerBtn: {
       flex: 1,
-      paddingVertical: Space.md,
-      borderRadius: Radius.md,
+      height: 50,
+      borderRadius: Radius.lg,
       alignItems: 'center',
       justifyContent: 'center',
     },
     footerCancel: {
-      borderWidth: 1,
+      backgroundColor: 'transparent',
     },
     footerCancelText: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
+      fontFamily: FontFamily.semibold,
+      fontSize: Type.bodyEmphasis.size,
     },
     footerConfirm: {
       // backgroundColor set inline
     },
     footerConfirmText: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
+      fontFamily: FontFamily.semibold,
+      fontSize: Type.bodyEmphasis.size,
     },
   });
 }

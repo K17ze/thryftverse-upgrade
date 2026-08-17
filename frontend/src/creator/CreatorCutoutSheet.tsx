@@ -20,7 +20,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
@@ -101,6 +101,12 @@ export function CreatorCutoutSheet({
   const cutoutYSV = useSharedValue(0);
   const subjectHighlightSV = useSharedValue(0);
 
+  // ── Tool tab underline indicator (spring-animated, brand color) ──
+  const toolTabLayouts = useRef<Map<Tool, { x: number; width: number }>>(new Map());
+  const toolUnderlineXSV = useSharedValue(0);
+  const toolUnderlineWSV = useSharedValue(0);
+  const TOOL_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
+
   // ── Load image dimensions ────────────────────────────────────────
   useEffect(() => {
     if (visible && imageUri) {
@@ -149,7 +155,18 @@ export function CreatorCutoutSheet({
     } else {
       toolHighlightSV.value = withSpring(nextTool === 'eraser' ? 1 : 0, spring.tap);
     }
-  }, [tool, haptic, toolHighlightSV, reduceMotion, spring]);
+    // Animate underline to the selected tab.
+    const layout = toolTabLayouts.current.get(nextTool);
+    if (layout) {
+      if (reduceMotion) {
+        toolUnderlineXSV.value = layout.x;
+        toolUnderlineWSV.value = layout.width;
+      } else {
+        toolUnderlineXSV.value = withSpring(layout.x, TOOL_UNDERLINE_SPRING);
+        toolUnderlineWSV.value = withSpring(layout.width, TOOL_UNDERLINE_SPRING);
+      }
+    }
+  }, [tool, haptic, toolHighlightSV, reduceMotion, spring, toolUnderlineXSV, toolUnderlineWSV]);
 
   // ── Drawing gesture (trace path) ─────────────────────────────────
   const panGesture = Gesture.Pan()
@@ -338,9 +355,10 @@ export function CreatorCutoutSheet({
     transform: [{ scale: interpolate(subjectHighlightSV.value, [0, 1], [1, 1.05], Extrapolation.CLAMP) }],
   }));
 
-  // Tool highlight indicator (slides between scissors/eraser)
-  const toolHighlightStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: interpolate(toolHighlightSV.value, [0, 1], [0, 88], Extrapolation.CLAMP) }],
+  // Tool tab underline indicator (spring-animated, brand color).
+  const toolUnderlineStyle = useAnimatedStyle(() => ({
+    left: toolUnderlineXSV.value,
+    width: toolUnderlineWSV.value,
   }));
 
   // ── Bounding box of all traced paths (for preview crop overlay) ───
@@ -378,25 +396,14 @@ export function CreatorCutoutSheet({
 
         {/* Title row */}
         <View style={styles.titleRow}>
-          <PressScale onPress={onClose} accessibilityLabel="Cancel manual crop" hitSlop={12}>
-            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-          </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Manual Crop</Text>
           <PressScale
-            onPress={handleApply}
-            disabled={isProcessing || paths.length === 0}
-            accessibilityLabel="Apply crop"
-            hitSlop={12}
+            onPress={onClose}
+            style={styles.closeBtn}
+            accessibilityLabel="Close manual crop"
+            accessibilityRole="button"
           >
-            <Text style={[
-              styles.applyText,
-              {
-                color: colors.brand,
-                opacity: isProcessing || paths.length === 0 ? 0.4 : 1,
-              },
-            ]}>
-              {isProcessing ? 'Processing…' : 'Crop'}
-            </Text>
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -463,11 +470,20 @@ export function CreatorCutoutSheet({
           </GestureDetector>
         </GestureHandlerRootView>
 
-        {/* Tool selector with spring highlight indicator */}
-        <View style={[styles.toolSelectorRow, { borderColor: colors.borderSubtle }]}>
-          <Reanimated.View style={[styles.toolHighlight, toolHighlightStyle, { backgroundColor: colors.brand }]} />
+        {/* Tool selector — text-only tabs with spring underline */}
+        <View style={styles.toolSelectorRow}>
           <PressScale
             onPress={() => handleToolSwitch('scissors')}
+            onLayout={(e) => {
+              toolTabLayouts.current.set('scissors', {
+                x: e.nativeEvent.layout.x,
+                width: e.nativeEvent.layout.width,
+              });
+              if (tool === 'scissors') {
+                toolUnderlineXSV.value = e.nativeEvent.layout.x;
+                toolUnderlineWSV.value = e.nativeEvent.layout.width;
+              }
+            }}
             style={styles.toolSelectorBtn}
             accessibilityLabel="Scissors tool"
             accessibilityRole="button"
@@ -476,14 +492,24 @@ export function CreatorCutoutSheet({
             <Ionicons
               name="cut-outline"
               size={20}
-              color={tool === 'scissors' ? colors.textInverse : colors.textSecondary}
+              color={tool === 'scissors' ? colors.brand : colors.textSecondary}
             />
-            <Text style={[styles.toolSelectorLabel, { color: tool === 'scissors' ? colors.textInverse : colors.textSecondary }]}>
+            <Text style={[styles.toolSelectorLabel, { color: tool === 'scissors' ? colors.brand : colors.textSecondary }]}>
               Trace
             </Text>
           </PressScale>
           <PressScale
             onPress={() => handleToolSwitch('eraser')}
+            onLayout={(e) => {
+              toolTabLayouts.current.set('eraser', {
+                x: e.nativeEvent.layout.x,
+                width: e.nativeEvent.layout.width,
+              });
+              if (tool === 'eraser') {
+                toolUnderlineXSV.value = e.nativeEvent.layout.x;
+                toolUnderlineWSV.value = e.nativeEvent.layout.width;
+              }
+            }}
             style={styles.toolSelectorBtn}
             accessibilityLabel="Eraser tool"
             accessibilityRole="button"
@@ -492,21 +518,27 @@ export function CreatorCutoutSheet({
             <Ionicons
               name="brush-outline"
               size={20}
-              color={tool === 'eraser' ? colors.textInverse : colors.textSecondary}
+              color={tool === 'eraser' ? colors.brand : colors.textSecondary}
             />
-            <Text style={[styles.toolSelectorLabel, { color: tool === 'eraser' ? colors.textInverse : colors.textSecondary }]}>
+            <Text style={[styles.toolSelectorLabel, { color: tool === 'eraser' ? colors.brand : colors.textSecondary }]}>
               Erase
             </Text>
           </PressScale>
+          {/* Spring-animated underline indicator (brand color, 2pt) */}
+          <Reanimated.View
+            style={[styles.toolUnderline, toolUnderlineStyle, { backgroundColor: colors.brand }]}
+            pointerEvents="none"
+          />
         </View>
 
-        {/* Tool controls */}
+        {/* Tool controls — flattened, no card containers */}
         <View style={styles.toolRow}>
           <PressScale
             onPress={handlePreviewCrop}
-            style={[styles.toolBtn, { borderColor: previewCrop ? colors.brand : colors.border, backgroundColor: previewCrop ? `${colors.brand}15` : 'transparent' }]}
+            style={styles.toolBtn}
             disabled={paths.length === 0}
             accessibilityLabel="Preview crop"
+            accessibilityRole="button"
           >
             <Ionicons
               name="eye-outline"
@@ -520,9 +552,10 @@ export function CreatorCutoutSheet({
 
           <PressScale
             onPress={handleUndo}
-            style={[styles.toolBtn, { borderColor: colors.border }]}
+            style={styles.toolBtn}
             disabled={paths.length === 0}
             accessibilityLabel="Undo last trace"
+            accessibilityRole="button"
           >
             <Ionicons
               name="arrow-undo-outline"
@@ -533,12 +566,12 @@ export function CreatorCutoutSheet({
               Undo
             </Text>
           </PressScale>
-
           <PressScale
             onPress={handleClear}
-            style={[styles.toolBtn, { borderColor: colors.border }]}
+            style={styles.toolBtn}
             disabled={paths.length === 0}
             accessibilityLabel="Clear all traces"
+            accessibilityRole="button"
           >
             <Ionicons
               name="trash-outline"
@@ -547,6 +580,38 @@ export function CreatorCutoutSheet({
             />
             <Text style={[styles.toolLabel, { color: paths.length === 0 ? colors.textMuted : colors.textSecondary }]}>
               Clear
+            </Text>
+          </PressScale>
+        </View>
+
+        {/* ── Footer — premium Cancel / Crop buttons ── */}
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+          <PressScale
+            onPress={onClose}
+            style={[styles.footerBtn, styles.footerCancel]}
+            accessibilityLabel="Cancel manual crop"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.footerCancelText, { color: colors.textSecondary }]}>
+              Cancel
+            </Text>
+          </PressScale>
+          <PressScale
+            onPress={handleApply}
+            disabled={isProcessing || paths.length === 0}
+            style={[
+              styles.footerBtn,
+              styles.footerConfirm,
+              {
+                backgroundColor: colors.brand,
+                opacity: isProcessing || paths.length === 0 ? 0.4 : 1,
+              },
+            ]}
+            accessibilityLabel="Apply crop"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.footerConfirmText, { color: colors.textInverse }]}>
+              {isProcessing ? 'Processing…' : 'Crop'}
             </Text>
           </PressScale>
         </View>
@@ -613,17 +678,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
   },
-  cancelText: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.regular,
-  },
   title: {
     fontSize: Type.bodyLarge.size,
     fontFamily: Typography.family.semibold,
   },
-  applyText: {
-    fontSize: Type.bodyLarge.size,
-    fontFamily: Typography.family.semibold,
+  closeBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm,
   },
   instructions: {
     fontSize: Type.captionElevated.size,
@@ -651,18 +715,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 4,
     position: 'relative',
   },
-  toolHighlight: {
+  toolUnderline: {
     position: 'absolute',
-    top: 4,
-    left: 4,
-    width: 84,
-    height: 40,
-    borderRadius: Radius.md,
+    bottom: 0,
+    height: Stroke.emphasis,
+    borderRadius: 1,
   },
   toolSelectorBtn: {
     flex: 1,
@@ -670,7 +729,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 40,
+    height: 44,
     zIndex: 1,
   },
   toolSelectorLabel: {
@@ -688,11 +747,38 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: Radius.md,
-    borderWidth: 1,
   },
   toolLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
+  },
+  // ── Footer — premium Cancel / Crop buttons ──
+  footer: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  footerBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerCancel: {
+    backgroundColor: 'transparent',
+  },
+  footerCancelText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
+  },
+  footerConfirm: {
+    // backgroundColor set inline
+  },
+  footerConfirmText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
   },
 });

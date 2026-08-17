@@ -345,31 +345,47 @@ export function StickerBrowserSheet({
             contentContainerStyle={styles.tabsContent}
             style={styles.tabs}
           >
-            {categories.map((cat) => {
+            {categories.map((cat, i) => {
               const active = cat.id === activeCategoryId;
               return (
-                <PressScale
+                <View
                   key={cat.id}
-                  accessibilityLabel={`${cat.name} category`}
-                  accessibilityRole="button"
-                  onPress={() => handleCategoryTap(cat.id)}
-                  style={active ? [styles.tab, styles.tabActive] : styles.tab}
+                  onLayout={(e) => {
+                    tabLayouts.current[i] = {
+                      x: e.nativeEvent.layout.x,
+                      width: e.nativeEvent.layout.width,
+                    };
+                    if (active) animateUnderlineTo(i);
+                  }}
                 >
-                  <Ionicons
-                    name={cat.icon}
-                    size={Control.iconCompact}
-                    color={active ? colors.textInverse : colors.textSecondary}
-                    style={styles.tabIcon}
-                  />
-                  <Text
-                    style={active ? [styles.tabLabel, styles.tabLabelActive] : styles.tabLabel}
-                    numberOfLines={1}
+                  <PressScale
+                    accessibilityLabel={`${cat.name} category`}
+                    accessibilityRole="button"
+                    onPress={() => handleCategoryTap(cat.id)}
+                    style={styles.tab}
                   >
-                    {cat.name}
-                  </Text>
-                </PressScale>
+                    <Ionicons
+                      name={cat.icon}
+                      size={Control.iconCompact}
+                      color={active ? colors.brand : colors.textSecondary}
+                      style={styles.tabIcon}
+                    />
+                    <Text
+                      style={[styles.tabLabel, active && styles.tabLabelActive]}
+                      numberOfLines={1}
+                    >
+                      {cat.name}
+                    </Text>
+                  </PressScale>
+                </View>
               );
             })}
+            <Animated.View
+              style={[
+                styles.tabUnderline,
+                { left: underlineLeft, width: underlineWidth },
+              ]}
+            />
           </ScrollView>
         )}
 
@@ -566,16 +582,8 @@ function createStyles(colors: ThemeColors) {
     tab: {
       flexDirection: 'row',
       alignItems: 'center',
-      height: 36,
+      height: Control.hit,
       paddingHorizontal: Space.smMd,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: Stroke.hairline,
-      borderColor: colors.borderSubtle,
-    } as ViewStyle,
-    tabActive: {
-      backgroundColor: colors.brand,
-      borderColor: colors.brand,
     } as ViewStyle,
     tabIcon: {
       marginRight: Space.xs,
@@ -588,8 +596,15 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     } as TextStyle,
     tabLabelActive: {
-      color: colors.textInverse,
+      color: colors.brand,
     } as TextStyle,
+    tabUnderline: {
+      position: 'absolute',
+      bottom: 0,
+      height: Stroke.emphasis,
+      backgroundColor: colors.brand,
+      borderRadius: Stroke.emphasis,
+    } as ViewStyle,
     gridWrap: {
       flex: 1,
     } as ViewStyle,
@@ -635,11 +650,10 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xl,
     } as ViewStyle,
     emptyText: {
-      marginTop: Space.sm,
       fontFamily: FontFamily.regular,
       fontSize: Type.body.size,
       lineHeight: Type.body.lineHeight,
-      color: colors.textMuted,
+      color: colors.textSecondary,
       textAlign: 'center',
     } as TextStyle,
   });

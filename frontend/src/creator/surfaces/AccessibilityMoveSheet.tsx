@@ -27,7 +27,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
@@ -139,7 +139,6 @@ export function AccessibilityMoveSheet({
 
         {!canEdit ? (
           <View style={styles.emptyState}>
-            <Ionicons name="move-outline" size={36} color={colors.textMuted} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               Select an object to move it
             </Text>
@@ -149,8 +148,8 @@ export function AccessibilityMoveSheet({
           </View>
         ) : (
           <View style={styles.body}>
-            {/* ── Current position readout ── */}
-            <View style={[styles.readout, { backgroundColor: colors.surfaceAlt }]}>
+            {/* ── Current position readout — flat with hairline ── */}
+            <View style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}>
               <View style={styles.readoutCell}>
                 <Text style={[styles.readoutLabel, { color: colors.textMuted }]}>
                   X
@@ -170,18 +169,15 @@ export function AccessibilityMoveSheet({
               </View>
             </View>
 
-            {/* ── Fine / Coarse toggle ── */}
+            {/* ── Fine / Coarse toggle — underline selection ── */}
             <View style={styles.toggleRow}>
               <Text style={[styles.toggleLabel, { color: colors.textSecondary }]}>
                 Step size
               </Text>
-              <View style={[styles.toggleGroup, { backgroundColor: colors.surfaceAlt }]}>
+              <View style={styles.toggleGroup}>
                 <PressScale
                   onPress={() => coarse && handleCoarseToggle()}
-                  style={[
-                    styles.toggleBtn,
-                    { backgroundColor: !coarse ? colors.brand : 'transparent' },
-                  ]}
+                  style={styles.toggleBtn}
                   accessibilityLabel="Fine step, 1 percent per tap"
                   accessibilityHint="Sets the nudge step to 1 percent"
                   accessibilityRole="button"
@@ -190,7 +186,10 @@ export function AccessibilityMoveSheet({
                   <Text
                     style={[
                       styles.toggleText,
-                      { color: !coarse ? colors.textInverse : colors.textSecondary },
+                      {
+                        color: !coarse ? colors.brand : colors.textSecondary,
+                        textDecorationLine: !coarse ? 'underline' : 'none',
+                      },
                     ]}
                   >
                     Fine
@@ -198,10 +197,7 @@ export function AccessibilityMoveSheet({
                 </PressScale>
                 <PressScale
                   onPress={() => !coarse && handleCoarseToggle()}
-                  style={[
-                    styles.toggleBtn,
-                    { backgroundColor: coarse ? colors.brand : 'transparent' },
-                  ]}
+                  style={styles.toggleBtn}
                   accessibilityLabel="Coarse step, 10 percent per tap"
                   accessibilityHint="Sets the nudge step to 10 percent"
                   accessibilityRole="button"
@@ -210,7 +206,10 @@ export function AccessibilityMoveSheet({
                   <Text
                     style={[
                       styles.toggleText,
-                      { color: coarse ? colors.textInverse : colors.textSecondary },
+                      {
+                        color: coarse ? colors.brand : colors.textSecondary,
+                        textDecorationLine: coarse ? 'underline' : 'none',
+                      },
                     ]}
                   >
                     Coarse
@@ -225,7 +224,7 @@ export function AccessibilityMoveSheet({
                 <View style={styles.nudgeSpacer} />
                 <PressScale
                   onPress={() => nudge('y', -step)}
-                  style={[styles.nudgeBtn, { backgroundColor: colors.surfaceAlt }]}
+                  style={styles.nudgeBtn}
                   accessibilityLabel="Nudge up"
                   accessibilityHint={`Moves the object up by ${coarse ? 10 : 1} percent`}
                   accessibilityRole="button"
@@ -238,7 +237,7 @@ export function AccessibilityMoveSheet({
               <View style={styles.nudgeRow}>
                 <PressScale
                   onPress={() => nudge('x', -step)}
-                  style={[styles.nudgeBtn, { backgroundColor: colors.surfaceAlt }]}
+                  style={styles.nudgeBtn}
                   accessibilityLabel="Nudge left"
                   accessibilityHint={`Moves the object left by ${coarse ? 10 : 1} percent`}
                   accessibilityRole="button"
@@ -246,12 +245,12 @@ export function AccessibilityMoveSheet({
                 >
                   <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
                 </PressScale>
-                <View style={[styles.nudgeCenter, { backgroundColor: colors.surfaceElevated }]}>
+                <View style={styles.nudgeCenter}>
                   <Ionicons name="move" size={22} color={colors.textMuted} />
                 </View>
                 <PressScale
                   onPress={() => nudge('x', step)}
-                  style={[styles.nudgeBtn, { backgroundColor: colors.surfaceAlt }]}
+                  style={styles.nudgeBtn}
                   accessibilityLabel="Nudge right"
                   accessibilityHint={`Moves the object right by ${coarse ? 10 : 1} percent`}
                   accessibilityRole="button"
@@ -264,7 +263,7 @@ export function AccessibilityMoveSheet({
                 <View style={styles.nudgeSpacer} />
                 <PressScale
                   onPress={() => nudge('y', step)}
-                  style={[styles.nudgeBtn, { backgroundColor: colors.surfaceAlt }]}
+                  style={styles.nudgeBtn}
                   accessibilityLabel="Nudge down"
                   accessibilityHint={`Moves the object down by ${coarse ? 10 : 1} percent`}
                   accessibilityRole="button"
@@ -283,7 +282,7 @@ export function AccessibilityMoveSheet({
                   X (%)
                 </Text>
                 <TextInput
-                  style={[styles.input, { backgroundColor: colors.surfaceAlt, color: colors.textPrimary, borderColor: colors.border }]}
+                  style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
                   value={xText}
                   onChangeText={setXText}
                   keyboardType="number-pad"
@@ -299,7 +298,7 @@ export function AccessibilityMoveSheet({
                   Y (%)
                 </Text>
                 <TextInput
-                  style={[styles.input, { backgroundColor: colors.surfaceAlt, color: colors.textPrimary, borderColor: colors.border }]}
+                  style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
                   value={yText}
                   onChangeText={setYText}
                   keyboardType="number-pad"
@@ -314,7 +313,7 @@ export function AccessibilityMoveSheet({
 
             <PressScale
               onPress={handleApplyNumeric}
-              style={[styles.applyBtn, { backgroundColor: colors.surfaceAlt }]}
+              style={[styles.applyBtn, { borderColor: colors.border }]}
               accessibilityLabel="Apply position"
               accessibilityHint="Moves the object to the entered X and Y values"
               accessibilityRole="button"
@@ -392,8 +391,8 @@ const styles = StyleSheet.create({
   readout: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: Radius.lg,
     paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   readoutCell: {
     flex: 1,
@@ -426,15 +425,13 @@ const styles = StyleSheet.create({
   },
   toggleGroup: {
     flexDirection: 'row',
-    borderRadius: Radius.md,
-    padding: 2,
+    gap: Space.md,
   },
   toggleBtn: {
-    paddingHorizontal: Space.md,
+    paddingHorizontal: Space.xs,
     height: TOUCH - 8,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
   },
   toggleText: {
     fontFamily: Typography.family.semibold,
@@ -454,14 +451,12 @@ const styles = StyleSheet.create({
     height: TOUCH,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.md,
   },
   nudgeCenter: {
     width: TOUCH,
     height: TOUCH,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.md,
   },
   nudgeSpacer: {
     width: TOUCH,
@@ -482,34 +477,35 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   input: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     fontSize: Type.bodyEmphasis.size,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     height: TOUCH,
     fontVariant: ['tabular-nums'],
   },
   applyBtn: {
-    height: TOUCH,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
   },
   applyBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
   },
   centerBtn: {
     flexDirection: 'row',
-    height: TOUCH,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
     gap: Space.sm,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
   },
   centerBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
   },
 });

@@ -22,7 +22,7 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Space, Radius, Type, Typography } from '../../../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import {
@@ -373,8 +373,8 @@ export function ProductBrowserSheet({
           </PressScale>
         </View>
 
-        {/* ── Source tabs ─────────────────────────────────────────── */}
-        <View style={styles.tabBar}>
+        {/* ── Source tabs — underline indicators ─────────────────── */}
+        <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBarContent}>
             {visibleTabs.map((tab) => {
               const isActive = activeTab === tab.key;
@@ -382,13 +382,12 @@ export function ProductBrowserSheet({
                 <Pressable
                   key={tab.key}
                   onPress={() => { haptic.light(); setActiveTab(tab.key); }}
-                  style={[styles.tab, isActive && styles.tabActive]}
+                  style={styles.tab}
                   accessibilityLabel={tab.label}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: isActive }}
                 >
-                  <Ionicons name={tab.icon} size={16} color={isActive ? colors.brand : colors.textSecondary} />
-                  <Text style={[styles.tabLabel, { color: isActive ? colors.brand : colors.textSecondary }]}>
+                  <Text style={[styles.tabLabel, { color: isActive ? colors.brand : colors.textSecondary, textDecorationLine: isActive ? 'underline' : 'none' }]}>
                     {tab.label}
                   </Text>
                 </Pressable>
@@ -525,26 +524,16 @@ function createStyles(colors: ThemeColors) {
       borderBottomColor: colors.border,
     },
     tabBarContent: {
-      gap: Space.xs,
+      gap: Space.md,
       paddingVertical: Space.xs,
     },
     tab: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingVertical: Space.sm - 2,
-      paddingHorizontal: Space.md,
-      borderRadius: Radius.full,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'transparent',
-    },
-    tabActive: {
-      borderColor: colors.brand,
-      backgroundColor: colors.brand + '14',
+      paddingVertical: Space.sm,
+      paddingHorizontal: Space.xs,
     },
     tabLabel: {
-      fontFamily: Typography.family.medium,
-      fontSize: Type.captionElevated.size,
+      fontFamily: FontFamily.medium,
+      fontSize: Type.body.size,
     },
     // ── Search ──
     searchRow: {
@@ -626,14 +615,17 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.body.size,
     },
     retryBtn: {
-      paddingHorizontal: Space.lg,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
+      height: 50,
+      paddingHorizontal: Space.xl,
+      borderRadius: Radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.brand,
     },
     retryBtnText: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
+      fontFamily: FontFamily.semibold,
+      fontSize: Type.bodyEmphasis.size,
+      color: colors.textInverse,
     },
   });
 }
