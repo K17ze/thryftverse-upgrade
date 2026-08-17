@@ -1,17 +1,17 @@
 import React from 'react';
 import { View } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Control, Type } from '../../theme/designTokens';
 
 function SettingsRow() {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: 14, gap: 14 }}>
-      <SkeletonLoader width={40} height={40} borderRadius={Radius.full} />
-      <View style={{ flex: 1, gap: 8 }}>
-        <SkeletonLoader width="55%" height={14} borderRadius={Radius.sm} />
-        <SkeletonLoader width="75%" height={11} borderRadius={Radius.sm} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm + Space.xs, gap: Space.sm + Space.xs }}>
+      <SkeletonLoader width={Control.hit} height={Control.hit} borderRadius={Radius.full} />
+      <View style={{ flex: 1, gap: Space.xs / 4 }}>
+        <SkeletonLoader width="55%" height={Type.bodyEmphasis.size} borderRadius={Radius.sm} />
+        <SkeletonLoader width="75%" height={Type.captionElevated.size} borderRadius={Radius.sm} />
       </View>
-      <SkeletonLoader width={20} height={20} borderRadius={Radius.full} />
+      <SkeletonLoader width={18} height={18} borderRadius={Radius.full} />
     </View>
   );
 }
