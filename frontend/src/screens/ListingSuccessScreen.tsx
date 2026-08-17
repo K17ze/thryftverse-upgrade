@@ -26,7 +26,6 @@ import { fetchListingByIdFromApi } from '../services/listingsApi';
 import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ListingSuccess'>;
 

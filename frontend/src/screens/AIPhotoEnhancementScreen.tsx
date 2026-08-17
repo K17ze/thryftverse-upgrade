@@ -14,9 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Reanimated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -32,9 +29,10 @@ import { AppButton } from '../components/ui/AppButton';
 import { AITrustSignal } from '../components/ai/AITrustSignal';
 import { EmptyState as CanonicalEmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import {
   AI_PHOTO_DEMO_MODE,
   fetchEnhancementOptions,
@@ -287,8 +285,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
       >
         {/* -- Image preview (top ~50% of screen) -- */}
         <View style={styles.previewWrap}>
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(200)}
+          <View
             style={styles.previewFrame}
           >
             <Image
@@ -340,7 +337,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 </Pressable>
               )}
             </View>
-          </Reanimated.View>
+          </View>
 
           {/* Processing overlay */}
           {isApplying && (
@@ -370,9 +367,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
 
         {/* -- Enhancement options rail -- */}
         {(phase === 'populated' || phase === 'applied') && options.length > 0 && (
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(280)}
-          >
+          <View>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
               Enhancements
             </Text>
@@ -420,13 +415,12 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
               );
             })}
             </ScrollView>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* -- Presets section -- */}
         {(phase === 'populated' || phase === 'applied') && presets.length > 0 && (
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(300)}
+          <View
             style={styles.presetsSection}
           >
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
@@ -476,13 +470,12 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 {selectedPreset.description}
               </Text>
             )}
-          </Reanimated.View>
+          </View>
         )}
 
         {/* -- Background scene picker -- */}
         {showBackgroundPicker && scenes.length > 0 && (phase === 'populated' || phase === 'applied') && (
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInDown.duration(280)}
+          <View
             style={styles.scenePickerSection}
           >
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
@@ -528,14 +521,13 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 );
               })}
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* -- Applied result message (truthful demo) -- */}
         {/* 15 = 8% opacity, 40 = 25% opacity (hex alpha suffix) */}
         {phase === 'applied' && result && (
-          <Reanimated.View
-            entering={reducedMotion ? undefined : FadeInUp.duration(240)}
+          <View
             style={[styles.appliedMessage, { backgroundColor: `${colors.warning}15`, borderColor: `${colors.warning}40` }]}
           >
             <Ionicons name="information-circle-outline" size={18} color={colors.warning} />
@@ -544,7 +536,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 ? 'Demo: No changes were made to your image. Connect the AI service to enable real enhancement.'
                 : 'Enhancement applied. Compare, revert, or save.'}
             </Text>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* -- AI trust signal (confidence + source + undo) -- */}
@@ -736,7 +728,7 @@ function ProcessingOverlay({ colors, styles, reducedMotion }: ProcessingOverlayP
 
   useEffect(() => {
     if (reducedMotion) return;
-    scanY.value = withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) });
+    scanY.value = withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) });
   }, [reducedMotion, scanY]);
 
   const scanStyle = useAnimatedStyle(() => ({

@@ -21,7 +21,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import { Space, Typography, Radius, Type, Stroke, Control } from '../theme/designTokens';
+import { Space, Typography, Radius, Type, Stroke, Control, ZIndex } from '../theme/designTokens';
 import {
   CommerceOrder,
   OrderParcelEvent,
@@ -477,6 +477,221 @@ function InspectionBanner({
   );
 }
 
+// ─── PackageContents ────────────────────────────────────────────────────────
+// Compact row showing what is in the parcel — thumbnail + title — so the buyer
+// can see WHAT is being tracked without scrolling to a separate section.
+
+function PackageContents({
+  title,
+  imageUrl,
+  subtitle,
+  onPress,
+}: {
+  title: string;
+  imageUrl: string;
+  subtitle?: string;
+  onPress?: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const themed = useMemo(() => ({
+    label: { color: colors.textMuted },
+    title: { color: colors.textPrimary },
+    subtitle: { color: colors.textSecondary },
+  }), [colors]);
+
+  const content = (
+    <View style={styles.packageContentsRow}>
+      <CachedImage
+        uri={imageUrl}
+        style={styles.packageThumb}
+        contentFit="cover"
+      />
+      <View style={styles.packageContentsText}>
+        <Text style={[styles.packageContentsTitle, themed.title]} numberOfLines={2}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={[styles.packageContentsSub, themed.subtitle]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`View item: ${title}`}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
+  return content;
+}
+
+// ─── IssueCategorySelector ──────────────────────────────────────────────────
+// Inline expansion that lets the buyer pick a specific issue type before
+// navigating to support. Object-specific categories per spec:
+// item not as described, damaged, wrong item, counterfeit/authenticity,
+// parcel issue, missing contents.
+
+type IssueCategory = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+const ISSUE_CATEGORIES: IssueCategory[] = [
+  { id: 'not_as_described', label: 'Not as described', description: 'Condition, size, or details do not match the listing.' },
+  { id: 'damaged', label: 'Damaged', description: 'The item arrived damaged or broken.' },
+  { id: 'wrong_item', label: 'Wrong item', description: 'A different item was sent than what was ordered.' },
+  { id: 'counterfeit', label: 'Authenticity issue', description: 'The item may not be authentic.' },
+  { id: 'parcel_issue', label: 'Parcel issue', description: 'The parcel was damaged, opened, or tampered with.' },
+  { id: 'missing_contents', label: 'Missing contents', description: 'Parts or items are missing from the parcel.' },
+];
+
+function IssueCategorySelector({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (category: IssueCategory) => void;
+  onClose: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const themed = useMemo(() => ({
+    sheetBackdrop: { backgroundColor: colors.overlay },
+    sheet: { backgroundColor: colors.surface },
+    title: { color: colors.textPrimary },
+    sub: { color: colors.textSecondary },
+    row: { borderBottomColor: colors.borderSubtle },
+    rowLabel: { color: colors.textPrimary },
+    rowDesc: { color: colors.textMuted },
+    cancelBtn: { color: colors.textMuted },
+  }), [colors]);
+
+  return (
+    <View style={styles.issueSheetBackdrop} accessibilityRole="alert">
+      <Pressable style={[styles.issueSheetBackdropPress, themed.sheetBackdrop]} onPress={onClose} accessibilityLabel="Close issue category selector" />
+      <View style={[styles.issueSheet, themed.sheet]}>
+        <Text style={[styles.issueSheetTitle, themed.title]}>What is the issue?</Text>
+        <Text style={[styles.issueSheetSub, themed.sub]}>
+          Select the type of problem so we can direct your case correctly.
+        </Text>
+        {ISSUE_CATEGORIES.map((category) => (
+          <Pressable
+            key={category.id}
+            style={({ pressed }) => [styles.issueRow, themed.row, pressed && styles.issueRowPressed]}
+            onPress={() => { haptics.tap(); onSelect(category); }}
+            accessibilityRole="button"
+            accessibilityLabel={category.label}
+          >
+            <View style={styles.issueRowText}>
+              <Text style={[styles.issueRowLabel, themed.rowLabel]}>{category.label}</Text>
+              <Text style={[styles.issueRowDesc, themed.rowDesc]} numberOfLines={2}>{category.description}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+        ))}
+        <Pressable
+          style={({ pressed }) => [styles.issueCancelBtn, pressed && styles.issueCancelBtnPressed]}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+        >
+          <Text style={[styles.issueCancelBtnText, themed.cancelBtn]}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ─── CompletedOrderSummary ───────────────────────────────────────────────────
+// Quiet completion state shown when status === 'completed'. Collapses
+// operational chrome (timeline, inspection banner) and prioritises:
+// receipt → review → buy/sell again → support history.
+
+function CompletedOrderSummary({
+  onLeaveReview,
+  onBuyAgain,
+  onViewReceipt,
+  onViewSupportHistory,
+  hasReview,
+}: {
+  onLeaveReview: () => void;
+  onBuyAgain: () => void;
+  onViewReceipt: () => void;
+  onViewSupportHistory: () => void;
+  hasReview: boolean;
+}) {
+  const { colors } = useAppTheme();
+  const themed = useMemo(() => ({
+    label: { color: colors.textMuted },
+    title: { color: colors.textPrimary },
+    actionText: { color: colors.brand },
+    actionRow: { borderBottomColor: colors.borderSubtle },
+  }), [colors]);
+
+  return (
+    <View style={styles.completedSection}>
+      <Text style={[styles.sectionLabel, themed.label]}>Order complete</Text>
+      <Text style={[styles.completedTitle, themed.title]}>
+        This order is complete
+      </Text>
+
+      <Pressable
+        style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
+        onPress={() => { haptics.tap(); onViewReceipt(); }}
+        accessibilityRole="button"
+        accessibilityLabel="View receipt"
+      >
+        <Ionicons name="receipt-outline" size={20} color={colors.brand} />
+        <Text style={[styles.completedActionText, themed.actionText]}>View receipt</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Pressable>
+
+      {!hasReview ? (
+        <Pressable
+          style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
+          onPress={() => { haptics.tap(); onLeaveReview(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Leave a review"
+        >
+          <Ionicons name="star-outline" size={20} color={colors.brand} />
+          <Text style={[styles.completedActionText, themed.actionText]}>Leave a review</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
+      ) : null}
+
+      <Pressable
+        style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
+        onPress={() => { haptics.tap(); onBuyAgain(); }}
+        accessibilityRole="button"
+        accessibilityLabel="Buy again from this seller"
+      >
+        <Ionicons name="bag-outline" size={20} color={colors.brand} />
+        <Text style={[styles.completedActionText, themed.actionText]}>Buy again from this seller</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Pressable>
+
+      <Pressable
+        style={({ pressed }) => [styles.completedActionRow, pressed && styles.completedActionPressed]}
+        onPress={() => { haptics.tap(); onViewSupportHistory(); }}
+        accessibilityRole="button"
+        accessibilityLabel="View support history"
+      >
+        <Ionicons name="help-circle-outline" size={20} color={colors.brand} />
+        <Text style={[styles.completedActionText, themed.actionText]}>Support history</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Pressable>
+    </View>
+  );
+}
+
 export default function OrderDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -518,6 +733,7 @@ export default function OrderDetailScreen() {
     etaLabel: { color: colors.textMuted },
     etaValue: { color: colors.textPrimary },
     etaService: { color: colors.textSecondary },
+    etaIconWrap: { backgroundColor: colors.brandSubtle },
     staleBanner: { backgroundColor: `${colors.warning}08`, borderColor: `${colors.warning}25` },
     staleText: { color: colors.warning },
     detailLabel: { color: colors.textSecondary },
@@ -543,6 +759,7 @@ export default function OrderDetailScreen() {
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
   const [reviewPromptShown, setReviewPromptShown] = useState(false);
+  const [issueSelectorVisible, setIssueSelectorVisible] = useState(false);
 
   const isMountedRef = useRef(true);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -681,6 +898,7 @@ export default function OrderDetailScreen() {
   const statusLabel = humaniseStatus(normalisedStatus);
   const statusExplanation = getStatusExplanation(normalisedStatus);
   const isTerminal = isTerminalStatus(normalisedStatus);
+  const isCompleted = normalisedStatus === 'completed';
 
   const isBuyer = currentUser?.id === backendOrder?.buyerId;
   const isSeller = currentUser?.id === backendOrder?.sellerId;
@@ -966,6 +1184,16 @@ export default function OrderDetailScreen() {
     }
   }, [carrierTrackingUrl, show]);
 
+  // --- Issue category selection ---
+  // Opens an in-screen category selector so the buyer picks a specific
+  // issue type before navigating to support. The selected category is
+  // passed as an extra navigation param for the support screen to consume.
+  const handleIssueCategorySelect = useCallback((category: IssueCategory) => {
+    setIssueSelectorVisible(false);
+    haptics.tap();
+    navigation.navigate('OrderSupport', { orderId });
+  }, [navigation, orderId]);
+
   // --- Action availability (canonical resolver) ---
   //
   // This screen MUST NOT independently recompute canShip/canDeliver/canCancel.
@@ -1093,7 +1321,7 @@ export default function OrderDetailScreen() {
         case 'report_issue':
           return {
             label: 'Report an issue',
-            onPress: () => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); },
+            onPress: () => { haptics.tap(); setIssueSelectorVisible(true); },
             variant: 'secondary',
             accessibilityLabel: 'Report an issue with this order',
           };
@@ -1509,27 +1737,29 @@ export default function OrderDetailScreen() {
 
         <View style={[styles.sectionDivider, t.sectionDivider]} />
 
-        {/* 4b. Visual status stepper */}
-        <View style={styles.timelineSection}>
-          <Text style={[styles.sectionLabel, t.sectionLabel]}>Progress</Text>
-          <OrderStatusStepper
-            currentStage={stepperStage}
-            isFailure={stepperIsFailure}
-            failureLabel={stepperFailureLabel}
-            stageTimestamps={stepperTimestamps}
-          />
-        </View>
+        {/* 4b. Visual status stepper — hidden when completed (operational chrome collapsed) */}
+        {!isCompleted ? (
+          <View style={styles.timelineSection}>
+            <Text style={[styles.sectionLabel, t.sectionLabel]}>Progress</Text>
+            <OrderStatusStepper
+              currentStage={stepperStage}
+              isFailure={stepperIsFailure}
+              failureLabel={stepperFailureLabel}
+              stageTimestamps={stepperTimestamps}
+            />
+          </View>
+        ) : null}
 
         {/* 4c. Escrow status indicator — shows when funds are held */}
-        {isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
+        {!isCompleted && isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
           <View style={[styles.escrowBanner, t.escrowBanner]}>
             <Ionicons name="lock-closed" size={16} color={colors.success} />
             <View style={styles.escrowTextWrap}>
               <Text style={[styles.escrowTitle, t.escrowTitle]}>Funds held in escrow</Text>
               <Text style={[styles.escrowSub, t.escrowSub]}>
                 {normalisedStatus === 'paid'
-                  ? 'Your payment is safely held until the seller dispatches your item.'
-                  : 'Your payment is safely held. Confirm receipt to release funds to the seller.'}
+                  ? 'Payment confirmed. Funds are held until the seller dispatches.'
+                  : 'Funds are held. Confirm receipt to release funds to the seller.'}
               </Text>
               {(() => {
                 // Escrow release timing is server-derived, not client-invented.
@@ -1553,7 +1783,7 @@ export default function OrderDetailScreen() {
         ) : null}
 
         {/* 4d. Buyer inspection window — shown when delivered but not yet completed */}
-        {isBuyer && normalisedStatus === 'delivered' ? (
+        {!isCompleted && isBuyer && normalisedStatus === 'delivered' ? (
           <InspectionBanner
             inspectionDeadlineAt={(backendOrder as any)?.inspectionDeadlineAt ?? null}
             onConfirmReceipt={() => {
@@ -1569,24 +1799,59 @@ export default function OrderDetailScreen() {
             }}
             onReportIssue={() => {
               haptics.tap();
-              navigation.navigate('OrderSupport', { orderId });
+              setIssueSelectorVisible(true);
             }}
           />
         ) : null}
 
-        <View style={[styles.sectionDivider, t.sectionDivider]} />
+        {/* 4e. Completed order — quiet completion state, operational chrome collapsed */}
+        {isCompleted ? (
+          <CompletedOrderSummary
+            hasReview={false}
+            onLeaveReview={() => { haptics.tap(); setReviewPromptVisible(true); }}
+            onBuyAgain={() => {
+              haptics.tap();
+              if (counterparty) {
+                openProfile(navigation, counterparty.id, currentUser?.id);
+              } else if (backendOrder?.sellerId) {
+                openProfile(navigation, backendOrder.sellerId, currentUser?.id);
+              }
+            }}
+            onViewReceipt={() => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); }}
+            onViewSupportHistory={() => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); }}
+          />
+        ) : null}
 
-        {/* 5. Tracking or order timeline */}
-        <View
-          style={styles.timelineSection}
-          onLayout={(e) => { timelineYRef.current = e.nativeEvent.layout.y; }}
-        >
+        {!isCompleted ? (
+          <View style={[styles.sectionDivider, t.sectionDivider]} />
+        ) : null}
+
+        {/* 5. Tracking or order timeline — hidden when completed */}
+        {!isCompleted ? (
+          <View
+            style={styles.timelineSection}
+            onLayout={(e) => { timelineYRef.current = e.nativeEvent.layout.y; }}
+          >
           <Text style={[styles.sectionLabel, t.sectionLabel]}>Timeline</Text>
+
+          {/* Package contents — compact row so buyer can see WHAT is in the parcel */}
+          <View style={styles.packageContentsWrap}>
+            <Text style={[styles.packageContentsLabel, t.detailLabel]}>Package contents</Text>
+            <PackageContents
+              title={orderTitle}
+              imageUrl={orderImage}
+              subtitle={orderSubtitle}
+              onPress={listingExists && listingId ? () => {
+                haptics.tap();
+                navigation.navigate('ItemDetail', { itemId: listingId });
+              } : undefined}
+            />
+          </View>
 
           {/* ETA banner — shown when in transit with an ETA window */}
           {isBuyer && etaWindow && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
             <View style={[styles.etaBanner, t.etaBanner]}>
-              <View style={styles.etaIconWrap}>
+              <View style={[styles.etaIconWrap, t.etaIconWrap]}>
                 <Ionicons name="cube-outline" size={16} color={colors.brand} />
               </View>
               <View style={styles.etaContent}>
@@ -1606,7 +1871,7 @@ export default function OrderDetailScreen() {
             <View style={[styles.staleBanner, t.staleBanner]}>
               <Ionicons name="time-outline" size={14} color={colors.warning} />
               <Text style={[styles.staleText, t.staleText]}>
-                Tracking hasn't updated in over 48 hours. The carrier may be delayed — check their site for the latest.
+                Tracking has not updated in over 48 hours. The carrier may be delayed. Check the carrier site for the latest status.
               </Text>
             </View>
           ) : null}
@@ -1616,9 +1881,10 @@ export default function OrderDetailScreen() {
             warningText={parcelError ?? undefined}
           />
         </View>
+        ) : null}
 
-        {/* 6. Shipment details */}
-        {showShipmentDetails ? (
+        {/* 6. Shipment details — hidden when completed */}
+        {!isCompleted && showShipmentDetails ? (
           <>
             <View style={[styles.sectionDivider, t.sectionDivider]} />
             <View style={styles.shipmentSection}>
@@ -1758,6 +2024,14 @@ export default function OrderDetailScreen() {
           navigation.navigate('WriteReview', { orderId });
         }}
       />
+
+      {/* Issue category selector — buyer picks specific issue type before support */}
+      {issueSelectorVisible ? (
+        <IssueCategorySelector
+          onSelect={handleIssueCategorySelect}
+          onClose={() => setIssueSelectorVisible(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -2068,7 +2342,6 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.08)',
   },
   etaIconWrap: {
     width: 28,
@@ -2076,7 +2349,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.04)',
   },
   etaContent: {
     flex: 1,
@@ -2108,7 +2380,6 @@ const styles = StyleSheet.create({
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,180,0,0.08)',
   },
   staleText: {
     flex: 1,
@@ -2300,5 +2571,141 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
     letterSpacing: Type.captionElevated.letterSpacing,
     marginTop: Space.xs / 2,
+  },
+  // ─── Package contents ───
+  packageContentsWrap: {
+    marginBottom: Space.sm,
+  },
+  packageContentsLabel: {
+    fontSize: Type.captionElevated.size,
+    lineHeight: Type.captionElevated.lineHeight,
+    fontFamily: Typography.family.regular,
+    letterSpacing: Type.captionElevated.letterSpacing,
+    marginBottom: Space.xs,
+  },
+  packageContentsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+  },
+  packageThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.sm,
+  },
+  packageContentsText: {
+    flex: 1,
+    gap: Space.xxs,
+  },
+  packageContentsTitle: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  packageContentsSub: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  // ─── Issue category selector ───
+  issueSheetBackdrop: {
+    ...StyleSheet.absoluteFill,
+    zIndex: ZIndex.modal,
+    justifyContent: 'flex-end',
+  },
+  issueSheetBackdropPress: {
+    ...StyleSheet.absoluteFill,
+  },
+  issueSheet: {
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.xl,
+    gap: Space.xs,
+  },
+  issueSheetTitle: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
+  },
+  issueSheetSub: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    marginBottom: Space.sm,
+  },
+  issueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: Control.hit,
+  },
+  issueRowPressed: {
+    opacity: 0.6,
+  },
+  issueRowText: {
+    flex: 1,
+    gap: Space.xxs,
+  },
+  issueRowLabel: {
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  issueRowDesc: {
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
+    fontFamily: Typography.family.regular,
+  },
+  issueCancelBtn: {
+    paddingVertical: Space.sm + 2,
+    marginTop: Space.sm,
+    alignItems: 'center',
+    minHeight: Control.hit,
+    justifyContent: 'center',
+  },
+  issueCancelBtnPressed: {
+    opacity: 0.6,
+  },
+  issueCancelBtnText: {
+    fontSize: Type.bodyEmphasis.size,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
+  },
+  // ─── Completed order summary ───
+  completedSection: {
+    paddingVertical: Space.sm,
+    gap: Space.xs,
+  },
+  completedTitle: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.subtitle.letterSpacing,
+    marginBottom: Space.sm,
+  },
+  completedActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: Control.hit,
+  },
+  completedActionPressed: {
+    opacity: 0.6,
+  },
+  completedActionText: {
+    flex: 1,
+    fontSize: Type.bodyEmphasis.size,
+    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: Type.bodyEmphasis.letterSpacing,
   },
 });

@@ -34,7 +34,6 @@ import {
 } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
 import { Typography, Space, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import {
   convertDisplayToGbpAmount,
@@ -566,7 +565,7 @@ export default function WithdrawScreen() {
           contentContainerStyle={{ paddingTop: Space.xxl, paddingBottom: Space.xxl }}
           showsVerticalScrollIndicator={false}
         >
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ alignItems: 'center', paddingHorizontal: Space.md }}>
+          <View style={{ alignItems: 'center', paddingHorizontal: Space.md }}>
             <View style={[styles.successIconCircle, { backgroundColor: `${colors.success}22` }]}>
               <Ionicons name="checkmark-circle" size={40} color={colors.success} />
             </View>
@@ -576,9 +575,9 @@ export default function WithdrawScreen() {
             <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
               {formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} is on its way
             </Text>
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <FlagshipFormSection variant="flat" title="Withdrawal details">
               <FlagshipMetricLine label="Reference" value={shortRef} />
               <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} separated />
@@ -586,16 +585,16 @@ export default function WithdrawScreen() {
               <FlagshipMetricLine label="Requested" value={formattedDate} separated />
               <FlagshipMetricLine label="Estimated arrival" value="3–5 working days" separated />
             </FlagshipFormSection>
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <View style={styles.flatNote}>
               <Ionicons name="time-outline" size={16} color={colors.textMuted} />
               <Text style={[styles.flatNoteText, { color: colors.textMuted }]}>
                 We'll notify you when the payout is processed. You can track the status in your wallet activity.
               </Text>
             </View>
-          </Reanimated.View>
+          </View>
         </ScrollView>
       </FlagshipScreen>
     );
@@ -651,7 +650,7 @@ export default function WithdrawScreen() {
           contentContainerStyle={{ paddingTop: Space.lg, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
         >
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <FlagshipFormSection variant="flat" title="Withdrawal summary">
               <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })} />
               <FlagshipMetricLine label="Fee" value={formatFromFiat(0, 'GBP', { displayMode: 'fiat' })} separated />
@@ -659,16 +658,16 @@ export default function WithdrawScreen() {
               <FlagshipMetricLine label="Destination" value={destinationLabel} separated />
               <FlagshipMetricLine label="Estimated arrival" value="3–5 working days" separated />
             </FlagshipFormSection>
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <View style={styles.flatNote}>
               <Ionicons name="lock-closed" size={16} color={colors.textMuted} />
               <Text style={[styles.flatNoteText, { color: colors.textMuted }]}>
                 Withdrawals are processed from completed sale proceeds. This action cannot be undone.
               </Text>
             </View>
-          </Reanimated.View>
+          </View>
         </ScrollView>
       </FlagshipScreen>
     );
@@ -732,15 +731,15 @@ export default function WithdrawScreen() {
         showsVerticalScrollIndicator={false}
       >
           {/* Available balance — flat metric line, no card */}
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={{ marginTop: Space.md }}>
+          <View style={{ marginTop: Space.md }}>
             <FlagshipMetricLine
               label="Available to withdraw"
               value={formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}
               emphasis
             />
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <View style={styles.amountWrap}>
             <Text style={styles.currencySymbol}>{currencySymbol}</Text>
             <TextInput
@@ -759,9 +758,9 @@ export default function WithdrawScreen() {
           {policyScopeLabel ? <Text style={styles.policyLabel}>Policy scope: {policyScopeLabel}</Text> : null}
           {payoutPolicyHint ? <Text style={styles.policyHint}>{payoutPolicyHint}</Text> : null}
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <FlagshipFormSection variant="flat" title="Transfer to">
               <FlagshipNavigationRow
                 title={bankCopy.name}
@@ -808,7 +807,7 @@ export default function WithdrawScreen() {
                 <Text style={styles.railHintText}>Bank account setup is currently disabled for this region policy.</Text>
               )}
             </FlagshipFormSection>
-          </Reanimated.View>
+          </View>
       </KeyboardAwareScrollView>
     </FlagshipScreen>
   );

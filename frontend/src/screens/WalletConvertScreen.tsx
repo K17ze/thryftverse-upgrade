@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -478,9 +477,7 @@ export default function WalletConvertScreen() {
         {step === 'amount' && (
           <>
             {/* Hero summary — available 1ZE balance */}
-            <Reanimated.View
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
-            >
+            <View>
               <View
                 style={[
                   styles.heroCard,
@@ -501,12 +498,10 @@ export default function WalletConvertScreen() {
                   </View>
                 </View>
               </View>
-            </Reanimated.View>
+            </View>
 
             {/* Amount input */}
-            <Reanimated.View
-              entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
-            >
+            <View>
               <View style={styles.amountWrap}>
                 <Text style={styles.amountSuffix}>1ZE</Text>
                 <TextInput
@@ -534,13 +529,11 @@ export default function WalletConvertScreen() {
                   Entered amount exceeds available 1ZE balance.
                 </Text>
               ) : null}
-            </Reanimated.View>
+            </View>
 
             {/* Live calculation summary */}
             {izeValue > 0 && !exceedsBalance && (
-              <Reanimated.View
-                entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
-              >
+              <View>
                 <View
                   style={[
                     styles.calcCard,
@@ -569,7 +562,7 @@ export default function WalletConvertScreen() {
                     </Text>
                   </View>
                 ) : null}
-              </Reanimated.View>
+              </View>
             )}
           </>
         )}
@@ -578,9 +571,7 @@ export default function WalletConvertScreen() {
         {/* STEP 2: REVIEW                                                    */}
         {/* ════════════════════════════════════════════════════════════════ */}
         {step === 'review' && (
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
-          >
+          <View>
             <View
               style={[
                 styles.reviewCard,
@@ -622,15 +613,14 @@ export default function WalletConvertScreen() {
                 </View>
               ) : null}
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* STEP 3: AUTHENTICATING                                            */}
         {/* ════════════════════════════════════════════════════════════════ */}
         {step === 'authenticating' && (
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
+          <View
             style={styles.centeredStep}
           >
             <View style={[styles.authIconCircle, { backgroundColor: colors.surfaceAlt }]}>
@@ -672,15 +662,14 @@ export default function WalletConvertScreen() {
                 style={{ marginTop: Space.lg }}
               />
             )}
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* STEP 4: EXECUTING                                                 */}
         {/* ════════════════════════════════════════════════════════════════ */}
         {step === 'executing' && (
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
+          <View
             style={styles.centeredStep}
           >
             <View style={[styles.authIconCircle, { backgroundColor: colors.surfaceAlt }]}>
@@ -697,16 +686,14 @@ export default function WalletConvertScreen() {
               size="large"
               style={{ marginTop: Space.lg }}
             />
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* STEP 5: RECEIPT                                                   */}
         {/* ════════════════════════════════════════════════════════════════ */}
         {step === 'receipt' && result && (
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
-          >
+          <View>
             <View style={styles.receiptWrap}>
               <View style={[styles.successIconCircle, { backgroundColor: `${colors.success}22` }]}>
                 <Ionicons name="checkmark-circle" size={40} color={colors.success} />
@@ -748,15 +735,14 @@ export default function WalletConvertScreen() {
                 )}
               </View>
             </View>
-          </Reanimated.View>
+          </View>
         )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* ERROR STATE                                                       */}
         {/* ════════════════════════════════════════════════════════════════ */}
         {step === 'error' && (
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
+          <View
             style={styles.centeredStep}
           >
             <View style={[styles.errorIconCircle, { backgroundColor: `${colors.danger}18` }]}>
@@ -789,7 +775,7 @@ export default function WalletConvertScreen() {
                 accessibilityHint="Returns to the amount step"
               />
             </View>
-          </Reanimated.View>
+          </View>
         )}
       </KeyboardAwareScrollView>
 

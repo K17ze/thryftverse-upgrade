@@ -22,7 +22,6 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { Typography, Radius, Type, Space, Elevation, Stroke } from '../theme/designTokens';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 type RouteT = RouteProp<RootStackParamList, 'Success'>;
 
 export default function SuccessScreen() {
