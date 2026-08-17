@@ -9,7 +9,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Confetti } from '../components/Confetti';
 import { useToast } from '../context/ToastContext';
@@ -23,6 +22,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { Typography, Radius, Type, Space, Elevation, Stroke } from '../theme/designTokens';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 type RouteT = RouteProp<RootStackParamList, 'Success'>;
 
 export default function SuccessScreen() {
@@ -83,11 +83,11 @@ export default function SuccessScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.centerContent}>
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(400)} style={styles.iconCircle}>
+          <View style={styles.iconCircle}>
             <Ionicons name="checkmark" size={48} color={colors.background} />
-          </Reanimated.View>
+          </View>
 
-          <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}>
+          <View>
             <Text style={styles.title}>Payment Successful</Text>
             <Text style={styles.subtitle}>
               Your order has been placed.{ '\n' }
@@ -97,11 +97,11 @@ export default function SuccessScreen() {
                   ? 'Order confirmation received. View details from My Orders.'
                   : `Order #${orderId.slice(-8).toUpperCase()} confirmed. The seller will prepare your item for dispatch.`}
             </Text>
-          </Reanimated.View>
+          </View>
 
           {/* Order Context Card */}
           {!isLoading && !hasError && order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.orderCardWrap}>
+            <View style={styles.orderCardWrap}>
               <ElevatedSurface variant="surface" style={styles.orderCard}>
                 {order.listingImageUrl && (
                   <CachedImage
@@ -116,12 +116,12 @@ export default function SuccessScreen() {
                   <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, 'GBP')}</Text>
                 </View>
               </ElevatedSurface>
-            </Reanimated.View>
+            </View>
           )}
 
           {/* What happens next — timeline */}
           {!isLoading && !hasError && order && (
-            <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.timelineWrap}>
+            <View style={styles.timelineWrap}>
               <Text style={styles.timelineTitle}>What happens next?</Text>
               <View style={styles.timeline}>
                 <TimelineStep
@@ -151,14 +151,11 @@ export default function SuccessScreen() {
                   isLast
                 />
               </View>
-            </Reanimated.View>
+            </View>
           )}
 
           {/* Support Action */}
-          <Reanimated.View
-            entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)}
-            style={styles.supportRowWrap}
-          >
+          <View style={styles.supportRowWrap}>
             <AnimatedPressable
               onPress={handleOpenSupport}
               activeOpacity={0.85}
@@ -175,11 +172,11 @@ export default function SuccessScreen() {
                 <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </View>
             </AnimatedPressable>
-          </Reanimated.View>
+          </View>
         </View>
       </ScrollView>
 
-      <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeInDown.duration(300)} style={styles.footer}>
+      <View style={styles.footer}>
         <FlagshipActionCluster
           actions={[
             { label: 'View Order', onPress: handleViewOrder, variant: 'primary' },
@@ -187,7 +184,7 @@ export default function SuccessScreen() {
           ]}
           layout="stack"
         />
-      </Reanimated.View>
+      </View>
     </SafeAreaView>
   );
 }

@@ -1,57 +1,8 @@
-feat(creator): flagship interaction quality pass — motion, skeletons, transitions, green screen
+fix(screens): add missing Reanimated + FadeInDown imports
 
-Four parallel batches addressing the highest-impact interaction, motion,
-and state-coverage gaps identified by audit against August 2026
-competitor benchmarks (Instagram Edits, Snapchat, CapCut).
-
-Batch A — Motion & haptic fixes:
-- PressScale default scale 0.96 → 0.97 (AGENTS.md §17 spec compliance)
-- Removed prohibited continuous pulse animations (withRepeat) from
-  VoiceoverRecorderSheet (recording indicator now static),
-  CreatorCanvas empty state (now one-time entrance fade+scale),
-  CreatorAssetPicker (removed unused import)
-- Added haptic.light() to RailToolButton press in ContextToolRail
-- Added swipe-to-dismiss gesture to SheetContainer using
-  Gesture.Pan with 100pt/25% threshold, spring-back, reduced-motion
-  support
-
-Batch B — Skeleton loading states (AGENTS.md §14):
-- CreatorDraftListScreen: spinner → 5 draft row skeletons matching
-  final layout (thumbnail + title + meta lines)
-- CutoutPreviewSheet: 2 spinners → cutout preview rectangle skeleton
-  with shimmer
-- ProductBrowserSheet: search spinner → 3 tile skeleton rows;
-  full-screen spinner → 2×3 product grid skeleton
-- MediaBrowserSheet: 2 full-screen spinners → 3×4 media grid
-  thumbnail skeleton matching actual grid geometry
-- All skeletons use one-time shimmer sweep (not continuous pulse),
-  colors.surfaceAlt, respect reduced motion
-
-Batch C — Green screen background picker (only genuine AI slop stub):
-- GreenScreenSheet: replaced non-functional placeholder with real
-  expo-image-picker integration (launchImageLibraryAsync,
-  mediaTypes: 'images', quality: 0.9)
-- Shows thumbnail preview of selected background, remove button
-- Permission handling with truthful Alert guidance
-- Premium button styling (50pt, Radius.lg), flattened layout
-
-Batch D — Camera→editor transition (perceptual continuity):
-- New CreatorEntryEditorCrossfade component: 200ms opacity crossfade
-  between camera and editor, media appears to stay in place,
-  reduced-motion instant swap, pointer events routed to destination
-- Integrated into LookComposerScreen and PosterComposerScreen
-- CreatorCamera: mode-switch framing guide now crossfades (opacity
-  dip 1→0→1, 200ms) when switching Look/Poster/Search, masking the
-  bracket reposition as a smooth transition
-
-Audit findings (3 parallel subagents):
-- AI slop: CLEAN — no fake functionality, all features real or
-  honestly disabled. Only stub was GreenScreenSheet (now fixed).
-- Visual quality: AutoAdjust already integrated, text animations
-  already exist, canvas gestures (pinch/long-press/double-tap)
-  already implemented
-- Interaction: 4 confirmed gaps fixed (PressScale, pulses, haptics,
-  swipe-to-dismiss), skeleton states added, transition smoothed
+SuccessScreen and ListingSuccessScreen used Reanimated.View with
+FadeInDown entering animations but were missing the imports, causing
+TS2304 errors. Added the missing import line to both files.
 
 Generated with [Devin](https://devin.ai)
 
