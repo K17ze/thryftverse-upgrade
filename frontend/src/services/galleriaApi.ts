@@ -78,6 +78,8 @@ export interface GalleriaFeaturedAsset {
   aspectRatio: number;
   /** Honest flag — true while this asset comes from mock data. */
   isDemo: boolean;
+  /** Canonical reference kind for navigation. Always 'co_own' for Galleria assets. */
+  referenceKind: 'co_own';
 }
 
 /** Full collection detail — collection metadata + resolved item summaries. */
@@ -259,6 +261,7 @@ const MOCK_FEATURED_ASSETS: GalleriaFeaturedAsset[] = [
     story: 'Reference 2526, one of the first automatic watches produced in series. Original enamel dial, documented service history since 1971.',
     aspectRatio: 1.25,
     isDemo: true,
+    referenceKind: 'co_own',
   },
   {
     id: 'g-asset-2',
@@ -269,6 +272,7 @@ const MOCK_FEATURED_ASSETS: GalleriaFeaturedAsset[] = [
     story: 'Togo leather, palladium hardware. Single owner since 2015, full set with original box and dust bag. Exceptional patina.',
     aspectRatio: 1.08,
     isDemo: true,
+    referenceKind: 'co_own',
   },
   {
     id: 'g-asset-3',
@@ -279,6 +283,7 @@ const MOCK_FEATURED_ASSETS: GalleriaFeaturedAsset[] = [
     story: 'Gilt dial, 1967 production. Unpolished case with sharp bevels. One of the finest examples of the matte-dial era.',
     aspectRatio: 1.32,
     isDemo: true,
+    referenceKind: 'co_own',
   },
   {
     id: 'g-asset-4',
@@ -289,6 +294,7 @@ const MOCK_FEATURED_ASSETS: GalleriaFeaturedAsset[] = [
     story: 'Sterling silver, designed by Johan Rohde in 1915. This set produced in 1952. Original case, no monograms. Museum-quality provenance.',
     aspectRatio: 0.85,
     isDemo: true,
+    referenceKind: 'co_own',
   },
   {
     id: 'g-asset-5',
@@ -299,6 +305,7 @@ const MOCK_FEATURED_ASSETS: GalleriaFeaturedAsset[] = [
     story: 'Original 1956 production with Brazilian rosewood shell. Documented by the Eames Foundation. Pre-1990 production, before the rosewood embargo.',
     aspectRatio: 1.18,
     isDemo: true,
+    referenceKind: 'co_own',
   },
   {
     id: 'g-asset-6',
@@ -309,6 +316,7 @@ const MOCK_FEATURED_ASSETS: GalleriaFeaturedAsset[] = [
     story: 'Wheel-thrown stoneware with manganese glaze, c. 1978. Studio stamp present. From the collection of a London gallerist.',
     aspectRatio: 1.0,
     isDemo: true,
+    referenceKind: 'co_own',
   },
   {
     id: 'g-asset-7',
@@ -319,6 +327,7 @@ const MOCK_FEATURED_ASSETS: GalleriaFeaturedAsset[] = [
     story: '1928 production, gold case. One of fewer than 100 known surviving examples. Ex-private European collection, sold with original Cartier archive extract.',
     aspectRatio: 1.4,
     isDemo: true,
+    referenceKind: 'co_own',
   },
   {
     id: 'g-asset-8',
@@ -329,6 +338,7 @@ const MOCK_FEATURED_ASSETS: GalleriaFeaturedAsset[] = [
     story: 'Calfskin, hand-woven Intrecciato. No visible logo. 2019 production, excellent condition. The definition of understated craft.',
     aspectRatio: 0.92,
     isDemo: true,
+    referenceKind: 'co_own',
   },
 ];
 
@@ -349,6 +359,11 @@ function delay(ms: number): Promise<void> {
  * Returns collections sorted by most recently published.
  */
 export async function fetchGalleriaCollections(): Promise<GalleriaCollection[]> {
+  if (!GALLERIA_DEMO_MODE) {
+    // Real backend not yet wired — throw so the UI shows an honest error
+    // instead of silently presenting demo data as real content.
+    throw new Error('Galleria API not configured for production');
+  }
   await delay(420); // simulate network latency for honest loading states
   return [...MOCK_COLLECTIONS].sort(
     (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
@@ -360,6 +375,11 @@ export async function fetchGalleriaCollections(): Promise<GalleriaCollection[]> 
  * Returns editorials sorted by most recently published.
  */
 export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
+  if (!GALLERIA_DEMO_MODE) {
+    // Real backend not yet wired — throw so the UI shows an honest error
+    // instead of silently presenting demo data as real content.
+    throw new Error('Galleria API not configured for production');
+  }
   await delay(380);
   return [...MOCK_EDITORIALS].sort(
     (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
@@ -370,6 +390,11 @@ export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
  * Fetch featured Co-Own assets for the Galleria discovery grid.
  */
 export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
+  if (!GALLERIA_DEMO_MODE) {
+    // Real backend not yet wired — throw so the UI shows an honest error
+    // instead of silently presenting demo data as real content.
+    throw new Error('Galleria API not configured for production');
+  }
   await delay(360);
   return [...MOCK_FEATURED_ASSETS];
 }
@@ -379,6 +404,11 @@ export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
  * Returns null if the collection ID is not found.
  */
 export async function fetchCollectionDetail(id: string): Promise<GalleriaCollectionDetail | null> {
+  if (!GALLERIA_DEMO_MODE) {
+    // Real backend not yet wired — throw so the UI shows an honest error
+    // instead of silently presenting demo data as real content.
+    throw new Error('Galleria API not configured for production');
+  }
   await delay(320);
   const collection = MOCK_COLLECTIONS.find((c) => c.id === id) ?? null;
   if (!collection) return null;

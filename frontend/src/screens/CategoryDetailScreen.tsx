@@ -5,6 +5,8 @@ import {
   Text,
   View,
 } from 'react-native';
+// Note: ScrollView is retained for the horizontal subcategory rail only.
+// The vertical scroll surface is owned by the FlashList inside PinterestMasonryGrid.
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { CATEGORIES } from '../constants/categories';
@@ -59,7 +61,7 @@ export default function CategoryDetailScreen() {
     () =>
       StyleSheet.create({
         content: {
-          paddingBottom: Space.xl,
+          flex: 1,
         },
         summary: {
           paddingHorizontal: Space.md,
@@ -96,9 +98,11 @@ export default function CategoryDetailScreen() {
           fontSize: Type.body.size,
         },
         grid: {
+          flex: 1,
           paddingTop: Space.xs,
         },
         loadingGrid: {
+          flex: 1,
           flexDirection: 'row',
           flexWrap: 'wrap',
           gap: Space.sm,
@@ -115,6 +119,7 @@ export default function CategoryDetailScreen() {
           marginTop: Space.xs + 2,
         },
         emptyWrap: {
+          flex: 1,
           minHeight: Space.xxl * 7 + Space.lg,
           justifyContent: 'center',
         },
@@ -148,10 +153,7 @@ export default function CategoryDetailScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
       header={<FlagshipHeader title={category.name} onBack={() => navigation.goBack()} />}
     >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
+      <View style={styles.content}>
         <View style={styles.summary}>
           <Text style={styles.count}>
             {gridData.length} {gridData.length === 1 ? 'listing' : 'listings'}
@@ -232,7 +234,7 @@ export default function CategoryDetailScreen() {
             />
           </View>
         )}
-      </ScrollView>
+      </View>
     </FlagshipScreen>
   );
 }

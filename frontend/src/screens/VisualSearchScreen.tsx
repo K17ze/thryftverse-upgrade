@@ -699,7 +699,15 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             onPressItem={handlePressItem}
             numColumns={2}
             showSaveButton
-            horizontalPadding={0}
+            horizontalPadding={Space.md}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+              />
+            }
           />
         </View>
       );
@@ -730,25 +738,15 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.brand}
-            colors={[colors.brand]}
-          />
-        }
-        keyboardShouldPersistTaps="handled"
-      >
-        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)}>
+      <View style={styles.screenRoot}>
+        <Reanimated.View entering={reducedMotionEnabled ? undefined : FadeIn.duration(300)} style={styles.headerSection}>
           {renderVisualQueryHeader()}
           {renderRefinementBar()}
-          {renderResults()}
         </Reanimated.View>
-      </ScrollView>
+        <View style={styles.resultsSection}>
+          {renderResults()}
+        </View>
+      </View>
     </FlagshipScreen>
   );
 }
@@ -756,6 +754,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   scroll: { paddingHorizontal: Space.md, paddingBottom: Space.xxl },
+  screenRoot: { flex: 1 },
+  headerSection: { paddingHorizontal: Space.md },
 
   // ── Visual-query header ───────────────────────────────────────────────
   queryHeader: {
@@ -996,7 +996,7 @@ function createStyles(colors: ThemeColors) {
   },
 
   // ── Results ───────────────────────────────────────────────────────────
-  resultsSection: { marginTop: Space.lg },
+  resultsSection: { flex: 1, marginTop: Space.lg },
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

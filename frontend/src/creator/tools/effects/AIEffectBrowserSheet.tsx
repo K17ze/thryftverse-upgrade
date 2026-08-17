@@ -1,16 +1,19 @@
 /**
- * AIEffectBrowserSheet — bottom sheet for browsing and applying AI effects.
+ * AIEffectBrowserSheet — bottom sheet for browsing and applying effects.
  *
  * Wraps `AIEffectGrid` in a `SheetContainer` (the canonical animated bottom
  * sheet) and adds an intensity slider (`CreatorSlider`) plus an "Apply"
  * button. The user picks an effect from the grid, dials the intensity, and
  * taps Apply — which calls `onApply(effectId, intensity)`.
  *
- * Per AGENTS.md §11 (truthful UI): the Apply button is disabled until an
- * effect is selected — no fake "applied" state. The intensity slider is
- * likewise disabled until a selection exists. When `onRemove` is provided,
- * a "Remove" button appears for an already-selected effect so the caller's
- * removal capability is preserved (AGENTS.md §8).
+ * Per AGENTS.md §11 (truthful UI): effects are labelled honestly by their
+ * `capabilityClass` via `getEffectCapabilityLabel` — deterministic filters
+ * are never labelled "AI". When ML is unavailable, no ML-specific badges
+ * are shown. The Apply button is disabled until an effect is selected —
+ * no fake "applied" state. The intensity slider is likewise disabled
+ * until a selection exists. When `onRemove` is provided, a "Remove"
+ * button appears for an already-selected effect so the caller's removal
+ * capability is preserved (AGENTS.md §8).
  *
  * Per AGENTS.md §4: authored composition, clear hierarchy, restraint.
  * Per AGENTS.md §13: 44pt touch targets, haptics on apply.
@@ -34,9 +37,11 @@ import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { AIEffectGrid } from './AIEffectGrid';
 import {
-  type AIEffectDefinition,
-  getAllAIEffects,
-  getAIEffect,
+  type EffectDefinition,
+  getAllEffects,
+  getEffect,
+  getEffectCapabilityLabel,
+  isMLAvailable,
 } from './AIEffectRegistry';
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -73,7 +78,7 @@ const DEFAULT_INTENSITY = 1;
 // ── Component ──────────────────────────────────────────────────────────
 
 /**
- * Bottom sheet for browsing AI effects with an intensity slider and Apply.
+ * Bottom sheet for browsing effects with an intensity slider and Apply.
  */
 export function AIEffectBrowserSheet({
   visible,
@@ -89,7 +94,8 @@ export function AIEffectBrowserSheet({
   const reducedMotion = useReducedMotion();
   const styles = useSheetStyles(colors);
 
-  const effects = useMemo<AIEffectDefinition[]>(() => getAllAIEffects(), []);
+  const effects = useMemo<EffectDefinition[]>(() => getAllEffects(), []);
+  const mlAvailable = useMemo(() => isMLAvailable(), []);
 
   const [selectedId, setSelectedId] = useState<string | null>(initialEffectId);
   const [intensity, setIntensity] = useState<number>(initialIntensity);
@@ -104,7 +110,7 @@ export function AIEffectBrowserSheet({
   }, [visible, initialEffectId, initialIntensity]);
 
   const hasSelection = selectedId !== null;
-  const selectedEffect = hasSelection ? getAIEffect(selectedId) : undefined;
+  const selectedEffect = hasSelection ? getEffect(selectedId) : undefined;
 
   const handleSelect = useCallback((effectId: string) => {
     setSelectedId(effectId);
@@ -138,12 +144,12 @@ export function AIEffectBrowserSheet({
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
-            AI Effects
+            Effects
           </Text>
           <PressScale
             onPress={handleClose}
             style={styles.closeBtn}
-            accessibilityLabel="Close AI effects browser"
+            accessibilityLabel="Close effects browser"
             accessibilityHint="Closes the effect browser sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
@@ -154,15 +160,44 @@ export function AIEffectBrowserSheet({
         {/* ── Selected effect name ────────────────────────────────── */}
         {selectedEffect ? (
           <View style={styles.selectionMeta}>
-            <Text style={[styles.selectionName, { color: colors.textPrimary }]}>
-              {selectedEffect.name}
-            </Text>
+            <View style={styles.selectionHeading}>
+              <Text style={[styles.selectionName, { color: colors.textPrimary }]}>
+                {selectedEffect.name}
+              </Text>
+              {/* Honest capability badge. ML/generative classes are only
+                  shown when ML is actually available; otherwise they read
+                  "Unavailable" — never a fake "AI" label (AGENTS.md §11). */}
+              <View
+                style={[
+                  styles.capabilityBadge,
+                  { borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.capabilityBadgeText,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  {getEffectCapabilityLabel(selectedEffect)}
+                </Text>
+              </View>
+            </View>
             <Text
               style={[styles.selectionDesc, { color: colors.textMuted }]}
               numberOfLines={2}
             >
               {selectedEffect.description}
             </Text>
+            {/* Only surface the ML note when ML is genuinely available. */}
+            {mlAvailable && selectedEffect.requiresML ? (
+              <Text
+                style={[styles.selectionNote, { color: colors.textMuted }]}
+                numberOfLines={1}
+              >
+                AI-assisted
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -197,7 +232,7 @@ export function AIEffectBrowserSheet({
                 onPress={handleRemove}
                 accessibilityLabel="Remove effect"
                 accessibilityRole="button"
-                accessibilityHint="Removes the selected AI effect"
+                accessibilityHint="Removes the selected effect"
                 style={[styles.removeBtn, { borderColor: colors.border }]}
               >
                 <Text style={[styles.removeBtnText, { color: colors.textSecondary }]}>
@@ -273,11 +308,33 @@ function useSheetStyles(colors: ThemeColors) {
           paddingBottom: Space.sm,
           gap: 2,
         } as ViewStyle,
+        selectionHeading: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: Space.sm,
+        } as ViewStyle,
         selectionName: {
+          flex: 1,
           fontFamily: FontFamily.medium,
           fontSize: FontSize.bodyLarge,
         } as ViewStyle,
+        capabilityBadge: {
+          paddingHorizontal: Space.sm,
+          paddingVertical: 2,
+          borderRadius: Radius.sm,
+          borderWidth: Stroke.hairline,
+        } as ViewStyle,
+        capabilityBadgeText: {
+          fontFamily: FontFamily.medium,
+          fontSize: FontSize.caption,
+        } as ViewStyle,
         selectionDesc: {
+          fontFamily: FontFamily.regular,
+          fontSize: FontSize.caption,
+          lineHeight: FontSize.caption + 4,
+        } as ViewStyle,
+        selectionNote: {
           fontFamily: FontFamily.regular,
           fontSize: FontSize.caption,
           lineHeight: FontSize.caption + 4,

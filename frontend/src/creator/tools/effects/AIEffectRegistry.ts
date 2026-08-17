@@ -1,25 +1,37 @@
 /**
- * AIEffectRegistry — the foundation of the AI Story effects ecosystem.
+ * EffectRegistry — the foundation of the Story effects ecosystem.
  *
- * This registry defines AI-powered effects as compositions of real render
- * primitives (color matrices, blur, grain, vignette, adjust nodes) — not
- * single CSS labels or fake "AI" presets. Each effect is a stack of
- * `EffectNode`s that Skia executes on the GPU, guaranteeing WYSIWYG across
- * thumbnail, canvas, viewer, and export (spec 07 §1, AGENTS.md §11).
+ * This registry defines effects as compositions of real render primitives
+ * (color matrices, blur, grain, vignette, adjust nodes) — not single CSS
+ * labels or fake "AI" presets. Each effect is a stack of `EffectNode`s
+ * that Skia executes on the GPU, guaranteeing WYSIWYG across thumbnail,
+ * canvas, viewer, and export (spec 07 §1, AGENTS.md §11).
  *
- * The registry is the foundation for the "30+ AI Story effects" roadmap
- * row. It ships with 12 composed effects across four categories
- * (portrait, creative, color, atmospheric). The architecture is
- * extensible — new effects are added by registering an `AIEffectDefinition`
- * with a `render` function that returns an `EffectNode[]` stack.
+ * The registry is the foundation for the "30+ Story effects" roadmap row.
+ * It ships with 12 composed effects across four categories (portrait,
+ * creative, color, atmospheric). The architecture is extensible — new
+ * effects are added by registering an `EffectDefinition` with a `render`
+ * function that returns an `EffectNode[]` stack.
+ *
+ * ## Honest capability labelling
+ *
+ * Each effect declares a `capabilityClass` describing what it actually
+ * does: 'filter' (deterministic pixel math), 'manual' (a user-guided
+ * transform such as a colour-key), 'ml' (requires on-device ML), or
+ * 'generative' (requires a generative model). Effects are labelled
+ * truthfully in the UI via `getEffectCapabilityLabel` — never labelled
+ * "AI" when the underlying implementation is a deterministic filter
+ * (AGENTS.md §11).
  *
  * ## ML availability & graceful fallback
  *
- * Some effects (e.g. background removal, skin smoothing) ideally use
- * on-device ML (segmentation / rembg). When ML is unavailable, each
- * effect declares a graceful fallback stack (chroma-key approximation,
- * blur-based approximation) so the effect still produces a real, visible
- * result — never a fake preview or a disabled stub (AGENTS.md §11).
+ * Some effects ideally use on-device ML (segmentation / rembg). When ML
+ * is unavailable, each such effect declares a graceful fallback stack
+ * (chroma-key approximation, blur-based approximation) so the effect
+ * still produces a real, visible result — never a fake preview or a
+ * disabled stub (AGENTS.md §11). The `capabilityClass` reflects the
+ * *current* implementation path, so when ML is not available an effect's
+ * class is reported honestly as 'filter' or 'manual'.
  *
  * Per AGENTS.md §11: no CSS filter strings — real Skia render data only.
  * Per AGENTS.md §4: real effect composition, not single presets.
@@ -34,22 +46,39 @@ import type {
 
 // ── Types ───────────────────────────────────────────────────────────────
 
-/** The four AI effect categories used by the browser filter tabs. */
-export type AIEffectCategory =
+/** The four effect categories used by the browser filter tabs. */
+export type EffectCategory =
   | 'portrait'
   | 'creative'
   | 'color'
   | 'atmospheric';
 
 /**
- * A registered AI effect definition.
+ * @deprecated Use `EffectCategory`. Kept as an alias for backward
+ * compatibility with existing imports.
+ */
+export type AIEffectCategory = EffectCategory;
+
+/**
+ * The capability class describes what an effect's implementation
+ * actually does, so the UI can label it honestly.
+ *
+ * - 'filter'     — deterministic pixel math (color matrices, blur, grain).
+ * - 'manual'     — a user-guided transform (e.g. a colour-key).
+ * - 'ml'         — requires on-device ML (segmentation / rembg).
+ * - 'generative' — requires a generative model.
+ */
+export type CapabilityClass = 'filter' | 'manual' | 'ml' | 'generative';
+
+/**
+ * A registered effect definition.
  *
  * `render(intensity)` returns the ordered effect stack applied to the
  * media layer. The renderer (CreatorCanvas) walks the stack and applies
  * each node in order. `intensity` (0..1) scales the strength of each
  * node's parameters so the same effect can be dialled back by the user.
  */
-export interface AIEffectDefinition {
+export interface EffectDefinition {
   /** Stable identifier used in persistence and the UI. */
   id: string;
   /** Display name shown in the browser grid. */
@@ -57,7 +86,7 @@ export interface AIEffectDefinition {
   /** Short description of the look. */
   description: string;
   /** Category used by the browser filter tabs. */
-  category: AIEffectCategory;
+  category: EffectCategory;
   /**
    * Whether the ideal implementation requires on-device ML (segmentation,
    * rembg, etc.). When ML is unavailable, `render` still returns a real
@@ -65,12 +94,25 @@ export interface AIEffectDefinition {
    */
   requiresML: boolean;
   /**
+   * What this effect's implementation actually does, so the UI can label
+   * it honestly. An effect that ships a deterministic fallback stack
+   * while ML is unavailable should declare 'filter' or 'manual' here,
+   * not 'ml'.
+   */
+  capabilityClass: CapabilityClass;
+  /**
    * Returns the ordered effect stack for the given intensity (0..1).
    * At intensity 0 the stack should be a no-op (identity); at 1 the
    * full effect is applied. Intermediate values scale each node.
    */
   render: (intensity: number) => EffectNode[];
 }
+
+/**
+ * @deprecated Use `EffectDefinition`. Kept as an alias for backward
+ * compatibility with existing imports.
+ */
+export type AIEffectDefinition = EffectDefinition;
 
 // ── Matrix primitives (mirrors EffectPresets helpers) ───────────────────
 // These are local to the registry so it has no circular dependency on
@@ -223,6 +265,10 @@ function lerp(a: number, b: number, t: number): number {
  * declared fallback stacks. The UI uses `isMLAvailable()` to label
  * effects truthfully (AGENTS.md §11) — never showing a fake "AI" badge
  * when the underlying model is not present.
+ *
+ * Note: effects whose current implementation is a deterministic filter
+ * or colour-key declare `capabilityClass: 'filter' | 'manual'` directly,
+ * regardless of this flag, because that is what they actually do today.
  */
 let mlAvailable = false;
 
@@ -255,13 +301,14 @@ export function setMLAvailable(value: boolean): void {
 //    AutoAdjust.computeAutoAdjust; this registry entry provides the
 //    canonical "auto enhance" effect slot and a sensible default stack
 //    that mirrors the AutoAdjust fallback shape.
-const autoEnhance: AIEffectDefinition = {
+const autoEnhance: EffectDefinition = {
   id: 'autoEnhance',
   name: 'Auto Enhance',
   description:
-    'Content-aware one-tap enhancement. Analyzes exposure, contrast, saturation, and white balance, then corrects each conservatively.',
+    'One-tap enhancement. Adjusts exposure, contrast, saturation, and white balance conservatively for a balanced, corrected look.',
   category: 'color',
   requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     // Mirror the AutoAdjust fallback shape, scaled by intensity.
@@ -280,17 +327,18 @@ const autoEnhance: AIEffectDefinition = {
   },
 };
 
-// 2. skinSmooth — portrait skin smoothing.
-//    Ideal: ML segmentation mask + frequency-separated blur on skin.
-//    Fallback: a gentle blur blended with a slight contrast/saturation
-//    lift so skin tones soften without the whole image going soft.
-const skinSmooth: AIEffectDefinition = {
+// 2. skinSmooth — portrait skin softening.
+//    A gentle whole-image blur blended with a slight contrast/saturation
+//    lift so skin tones soften without the whole image going hard. This
+//    is a deterministic softening filter, not ML-based skin detection.
+const skinSmooth: EffectDefinition = {
   id: 'skinSmooth',
-  name: 'Skin Smooth',
+  name: 'Skin Soften',
   description:
-    'Softens skin tones for portraits. Ideal: on-device segmentation isolates skin and applies frequency-separated smoothing. Fallback: a gentle whole-image softening with warm tone preservation.',
+    'Softens skin tones for portraits with a gentle whole-image softening and warm tone preservation. A deterministic smoothing filter.',
   category: 'portrait',
-  requiresML: true,
+  requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     // Fallback stack: light blur + warm tone preservation + slight contrast.
@@ -307,17 +355,18 @@ const skinSmooth: AIEffectDefinition = {
   },
 };
 
-// 3. bgBlur — simulated bokeh (background blur).
-//    Ideal: ML subject segmentation + blur outside the mask.
-//    Fallback: a moderate blur across the whole frame with a vignette
-//    to simulate depth falloff toward the edges.
-const bgBlur: AIEffectDefinition = {
+// 3. bgBlur — depth-falloff blur.
+//    A moderate blur across the whole frame with a vignette to simulate
+//    depth falloff toward the edges. This is a vignette blur, not
+//    subject-background separation.
+const bgBlur: EffectDefinition = {
   id: 'bgBlur',
-  name: 'Background Blur',
+  name: 'Depth Blur',
   description:
-    'Simulated bokeh. Ideal: ML subject segmentation blurs the background while keeping the subject sharp. Fallback: a depth-falloff blur with a vignette to approximate shallow depth of field.',
+    'A depth-falloff blur with a vignette that approximates shallow depth of field. A whole-frame softening filter, not subject-background separation.',
   category: 'portrait',
-  requiresML: true,
+  requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     return [
@@ -330,19 +379,19 @@ const bgBlur: AIEffectDefinition = {
   },
 };
 
-// 4. bgRemove — background removal.
-//    Ideal: expo-image ML segmentation or rembg producing an alpha mask.
-//    Fallback: chroma-key approximation — a green-dominance suppression
-//    via a channel-scale matrix that drops green-heavy pixels toward
-//    transparency-equivalent desaturation. This is a real, visible
-//    approximation, not a fake cutout.
-const bgRemove: AIEffectDefinition = {
+// 4. bgRemove — colour-key background suppression.
+//    A chroma-key approximation: a green-dominance suppression via a
+//    channel-scale matrix that drops green-heavy pixels toward
+//    transparency-equivalent desaturation. This is a colour-key
+//    transform, not subject segmentation or a true alpha cutout.
+const bgRemove: EffectDefinition = {
   id: 'bgRemove',
-  name: 'Background Remove',
+  name: 'Colour-Key Remove',
   description:
-    'Removes the background. Ideal: on-device ML segmentation (expo-image ML or rembg) produces a true alpha cutout. Fallback: a chroma-key approximation that suppresses green-dominant regions.',
+    'A chroma-key approximation that suppresses green-dominant regions via a colour-key transform. Not a true subject cutout — a manual colour-range suppression.',
   category: 'portrait',
-  requiresML: true,
+  requiresML: false,
+  capabilityClass: 'manual',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     // Fallback chroma-key approximation: reduce green dominance and
@@ -366,18 +415,19 @@ const bgRemove: AIEffectDefinition = {
   },
 };
 
-// 5. skyReplace — sky replacement.
-//    Ideal: ML sky segmentation + replacement texture composite.
-//    Fallback: color-range selection that boosts blues and shifts the
+// 5. skyReplace — sky enhance.
+//    A color-range selection that boosts blues and shifts the
 //    upper-luminance band toward a richer sky tone via a teal-shifted
-//    channel scale + contrast lift.
-const skyReplace: AIEffectDefinition = {
+//    channel scale + contrast lift. It enriches existing blues rather
+//    than replacing the sky with a new texture.
+const skyReplace: EffectDefinition = {
   id: 'skyReplace',
-  name: 'Sky Replace',
+  name: 'Sky Enhance',
   description:
-    'Replaces the sky. Ideal: ML sky segmentation composites a new sky texture. Fallback: a color-range selection that enriches existing blue regions toward a vivid teal sky.',
+    'Enriches existing blue regions toward a vivid teal sky via a color-range selection with a contrast lift. Enhances rather than replaces the sky.',
   category: 'creative',
-  requiresML: true,
+  requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     return [
@@ -397,18 +447,18 @@ const skyReplace: AIEffectDefinition = {
   },
 };
 
-// 6. colorPop — desaturate background, keep subject saturated.
-//    Ideal: ML subject mask + desaturate outside.
-//    Fallback: a partial desaturation with a saturation boost that
-//    approximates "pop" by increasing the contrast between saturated
-//    and unsaturated regions.
-const colorPop: AIEffectDefinition = {
+// 6. colorPop — partial desaturation with saturation boost.
+//    A partial desaturation with a saturation boost that approximates
+//    "pop" by increasing the contrast between saturated and unsaturated
+//    regions. A deterministic filter, not subject masking.
+const colorPop: EffectDefinition = {
   id: 'colorPop',
   name: 'Color Pop',
   description:
-    'Keeps the subject saturated while desaturating the background. Ideal: ML subject mask. Fallback: a contrast-boosted partial desaturation that emphasises already-saturated regions.',
+    'A contrast-boosted partial desaturation that emphasises already-saturated regions for a vivid pop. A deterministic colour filter.',
   category: 'color',
-  requiresML: true,
+  requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     return [
@@ -426,13 +476,14 @@ const colorPop: AIEffectDefinition = {
 };
 
 // 7. vintageFilm — film grain + warm color grade + vignette.
-const vintageFilm: AIEffectDefinition = {
+const vintageFilm: EffectDefinition = {
   id: 'vintageFilm',
   name: 'Vintage Film',
   description:
     'Film grain, warm color grade, and a soft vignette for a retro analog look.',
   category: 'atmospheric',
   requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     return [
@@ -458,13 +509,14 @@ const vintageFilm: AIEffectDefinition = {
 //    RGB shift is approximated by a channel-scale that offsets R and B
 //    gains; scan lines are approximated by a contrast boost that
 //    increases the perceived line structure. Grain adds digital noise.
-const glitch: AIEffectDefinition = {
+const glitch: EffectDefinition = {
   id: 'glitch',
   name: 'Glitch',
   description:
     'Digital glitch effect with RGB channel shift and scan-line noise for a retro-tech aesthetic.',
   category: 'creative',
   requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     return [
@@ -490,13 +542,14 @@ const glitch: AIEffectDefinition = {
 // 9. prism — prism / light leak overlay.
 //    Approximated by a split-tone grade (cool shadows, warm highlights)
 //    via channel scale + temperature + a soft bloom (slight blur blend).
-const prism: AIEffectDefinition = {
+const prism: EffectDefinition = {
   id: 'prism',
   name: 'Prism',
   description:
     'Prism and light-leak overlay with split-tone coloring and a soft bloom for a dreamy refractive look.',
   category: 'creative',
   requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     return [
@@ -523,13 +576,14 @@ const prism: AIEffectDefinition = {
 // 10. dreamy — soft glow + bloom.
 //     A light blur blended with a lifted exposure and reduced contrast
 //     for a soft, glowing, ethereal look.
-const dreamy: AIEffectDefinition = {
+const dreamy: EffectDefinition = {
   id: 'dreamy',
   name: 'Dreamy',
   description:
     'Soft glow and bloom with lifted exposure and reduced contrast for an ethereal, romantic feel.',
   category: 'atmospheric',
   requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     return [
@@ -551,13 +605,14 @@ const dreamy: AIEffectDefinition = {
 };
 
 // 11. noir — high contrast B&W + grain.
-const noir: AIEffectDefinition = {
+const noir: EffectDefinition = {
   id: 'noir',
   name: 'Noir',
   description:
     'High-contrast black and white with film grain for a dramatic monochrome look.',
   category: 'color',
   requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     return [
@@ -580,13 +635,14 @@ const noir: AIEffectDefinition = {
 //     Teal shadows + orange highlights via channel scale + temperature,
 //     plus a contrast lift and a vignette to approximate the letterbox
 //     falloff.
-const cinematic: AIEffectDefinition = {
+const cinematic: EffectDefinition = {
   id: 'cinematic',
   name: 'Cinematic',
   description:
     'Cinematic teal-and-orange color grade with a contrast lift and vignette for a filmic look.',
   category: 'color',
   requiresML: false,
+  capabilityClass: 'filter',
   render: (intensity: number): EffectNode[] => {
     const t = Math.max(0, Math.min(1, intensity));
     return [
@@ -616,10 +672,10 @@ const cinematic: AIEffectDefinition = {
 // ── Registry ────────────────────────────────────────────────────────────
 
 /**
- * The canonical registered AI effects. This is the foundation for the
- * "30+ AI Story effects" roadmap row — new effects are appended here.
+ * The canonical registered effects. This is the foundation for the
+ * "30+ Story effects" roadmap row — new effects are appended here.
  */
-const REGISTRY: AIEffectDefinition[] = [
+const REGISTRY: EffectDefinition[] = [
   autoEnhance,
   skinSmooth,
   bgBlur,
@@ -635,28 +691,60 @@ const REGISTRY: AIEffectDefinition[] = [
 ];
 
 // O(1) lookup map keyed by effect id.
-const REGISTRY_MAP: ReadonlyMap<string, AIEffectDefinition> = new Map(
+const REGISTRY_MAP: ReadonlyMap<string, EffectDefinition> = new Map(
   REGISTRY.map((e) => [e.id, e]),
 );
 
 /**
+ * The canonical effect registry. New effects are appended to `REGISTRY`
+ * above; this object exposes the lookup helpers.
+ */
+export const EffectRegistry = {
+  get: getEffect,
+  getAll: getAllEffects,
+  byCategory: getEffectsByCategory,
+};
+
+/**
+ * @deprecated Use `EffectRegistry`. Kept as an alias for backward
+ * compatibility with existing imports.
+ */
+export const AIEffectRegistry = EffectRegistry;
+
+/**
  * Returns the effect definition for the given id, or `undefined`.
  */
-export function getAIEffect(id: string): AIEffectDefinition | undefined {
+export function getEffect(id: string): EffectDefinition | undefined {
   return REGISTRY_MAP.get(id);
 }
 
 /**
- * Returns all registered AI effects.
+ * @deprecated Use `getEffect`. Kept as an alias for backward
+ * compatibility with existing imports.
  */
-export function getAllAIEffects(): AIEffectDefinition[] {
+export function getAIEffect(id: string): EffectDefinition | undefined {
+  return getEffect(id);
+}
+
+/**
+ * Returns all registered effects.
+ */
+export function getAllEffects(): EffectDefinition[] {
   return REGISTRY;
 }
 
 /**
- * Returns all registered AI effects in the given category.
+ * @deprecated Use `getAllEffects`. Kept as an alias for backward
+ * compatibility with existing imports.
  */
-export function getEffectsByCategory(category: AIEffectCategory): AIEffectDefinition[] {
+export function getAllAIEffects(): EffectDefinition[] {
+  return getAllEffects();
+}
+
+/**
+ * Returns all registered effects in the given category.
+ */
+export function getEffectsByCategory(category: EffectCategory): EffectDefinition[] {
   return REGISTRY.filter((e) => e.category === category);
 }
 
@@ -664,10 +752,38 @@ export function getEffectsByCategory(category: AIEffectCategory): AIEffectDefini
  * The ordered list of category filter tabs shown in the browser.
  * "All" is always first; the rest follow the canonical category order.
  */
-export const AI_EFFECT_CATEGORIES: ReadonlyArray<'all' | AIEffectCategory> = [
+export const EFFECT_CATEGORIES: ReadonlyArray<'all' | EffectCategory> = [
   'all',
   'portrait',
   'creative',
   'color',
   'atmospheric',
 ];
+
+/**
+ * @deprecated Use `EFFECT_CATEGORIES`. Kept as an alias for backward
+ * compatibility with existing imports.
+ */
+export const AI_EFFECT_CATEGORIES: ReadonlyArray<'all' | EffectCategory> =
+  EFFECT_CATEGORIES;
+
+// ── Capability labelling ────────────────────────────────────────────────
+
+/**
+ * Returns an honest, human-readable label for an effect's capability
+ * class. ML/generative effects are reported as "Unavailable" when the
+ * underlying model is not present, so the UI never shows a fake "AI"
+ * badge (AGENTS.md §11).
+ */
+export function getEffectCapabilityLabel(effect: EffectDefinition): string {
+  switch (effect.capabilityClass) {
+    case 'filter':
+      return 'Filter';
+    case 'manual':
+      return 'Manual';
+    case 'ml':
+      return isMLAvailable() ? 'AI-assisted' : 'Unavailable';
+    case 'generative':
+      return isMLAvailable() ? 'Generative' : 'Unavailable';
+  }
+}

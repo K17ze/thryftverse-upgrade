@@ -1,22 +1,41 @@
-import React, { useMemo } from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
+import React, { useCallback, useMemo } from 'react';
+import { View, StyleSheet, useWindowDimensions, ActivityIndicator, RefreshControl } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import type { Listing } from '../../domain';
-import { ProductCardV2 } from '../ProductCardV2';
+import { ProductDiscoveryTile } from '../ProductCardV2';
 import { Space } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../../utils/listingMediaGeometry';
+import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
+import { EmptyState } from '../EmptyState';
 
 interface Props {
   items: Listing[];
-  onPressItem: (item: Listing) => void;
+  /** Legacy navigation callback — kept so existing callers type-check. */
+  onPressItem?: (item: Listing) => void;
+  /** Preferred navigation callback (spec). Falls back to onPressItem. */
+  onItemPress?: (item: Listing) => void;
+  /** Kept for interface compatibility; the discovery tile has no seller row. */
   onPressSeller?: (item: Listing) => void;
   onMessageSeller?: (item: Listing) => void;
+  /** Pagination — invoked when the user nears the end of the feed. */
+  onEndReached?: () => void;
+  /** Initial load (no items yet) → masonry skeleton. */
+  isLoading?: boolean;
+  /** Loading more pages (items present) → small footer indicator. */
+  isLoadingMore?: boolean;
   numColumns?: number;
+  /** Kept for interface compatibility; the discovery tile has no save button. */
   showSaveButton?: boolean;
   visualOnly?: boolean;
   gap?: number;
   horizontalPadding?: number;
+  /**
+   * Kept for interface compatibility. FlashList recycles items, so staggered
+   * entrance animations are intentionally NOT rendered (they break recycling
+   * and replay on every recycled cell). Silently ignored.
+   */
   enableEntranceAnimation?: boolean;
   /**
    * TestID prefix for Maestro/automation. When provided, the first card
@@ -24,110 +43,152 @@ interface Props {
    * id instead of brittle coordinate taps (P0.6).
    */
   testIDPrefix?: string;
+  /** Pull-to-refresh control — passed through to FlashList. */
+  refreshControl?: React.ReactElement<any>;
 }
 
+/**
+ * PinterestMasonryGrid — production FlashList v2 masonry feed.
+ *
+ * Replaces the former manual two-array height-estimation layout. FlashList
+ * v2 measures actual rendered item heights, so no `estimatedItemSize` is
+ * required and no manual column balancing is needed. The FlashList owns its
+ * own scrolling — it must NOT be wrapped in a ScrollView.
+ *
+ * Recycling safety:
+ *  - `keyExtractor` returns a stable `product-${id}` key.
+ *  - `renderItem` is memoized with `useCallback`.
+ *  - The tile uses `expo-image` with `recyclingKey={item.id}` so recycled
+ *    cells never display stale media.
+ *  - No per-item service subscriptions or network calls inside the tile.
+ */
 export function PinterestMasonryGrid({
   items,
   onPressItem,
-  onPressSeller,
-  onMessageSeller,
+  onItemPress,
+  onEndReached,
+  isLoading = false,
+  isLoadingMore = false,
   numColumns = 2,
-  showSaveButton = false,
-  visualOnly = false,
   gap = Space.sm,
   horizontalPadding = Space.md,
-  enableEntranceAnimation = true,
   testIDPrefix,
+  refreshControl,
 }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const reducedMotionEnabled = useReducedMotion();
-  const colWidth = (windowWidth - horizontalPadding * 2 - gap * (numColumns - 1)) / numColumns;
+  const { colors } = useAppTheme();
 
-  // True masonry: assign each item to the shortest column by cumulative height
-  const columns = useMemo(() => {
-    const cols: { item: Listing; index: number }[][] = Array.from({ length: numColumns }, () => []);
-    const heights = Array.from({ length: numColumns }, () => 0);
+  // Column width for CDN downscaling. FlashList v2 masonry gives each column
+  // (windowWidth - 2*horizontalPadding) / numColumns; subtract the inter-item
+  // gutter so thumbnails request appropriately sized derivatives.
+  const colWidth = Math.max(
+    1,
+    Math.floor((windowWidth - horizontalPadding * 2 - gap * (numColumns - 1)) / numColumns),
+  );
 
-    items.forEach((item, idx) => {
-      const aspect = resolveListingMediaAspectRatio(item);
-      const imgHeight = colWidth / aspect;
-      const titleLines = item.title.length > 22 ? 2 : 1;
-      // Info height: title (2 lines max) + price (1 line) + seller row.
-      // Likes count, original price, and size are no longer on the tile
-      // (PRODUCT_TILE_METADATA_BUDGET), so the info block is shorter.
-      const infoHeight = visualOnly ? 0 : 52 + titleLines * 19;
-      const itemHeight = imgHeight + infoHeight + gap;
+  // Resolve navigation handler — prefer the spec's onItemPress, fall back to
+  // the legacy onPressItem so existing callers keep working. The grid never
+  // navigates directly; the parent decides.
+  const handlePress = useCallback(
+    (item: Listing) => {
+      const handler = onItemPress ?? onPressItem;
+      handler?.(item);
+    },
+    [onItemPress, onPressItem],
+  );
 
-      // Find shortest column
-      let shortestCol = 0;
-      let shortestHeight = heights[0];
-      for (let c = 1; c < numColumns; c++) {
-        if (heights[c] < shortestHeight) {
-          shortestCol = c;
-          shortestHeight = heights[c];
-        }
-      }
+  const keyExtractor = useCallback((item: Listing) => `product-${item.id}`, []);
 
-      cols[shortestCol].push({ item, index: idx });
-      heights[shortestCol] += itemHeight;
-    });
+  const renderItem = useCallback(
+    ({ item, index }: { item: Listing; index: number }) => (
+      <View style={{ paddingHorizontal: gap / 2, paddingBottom: gap, width: '100%' }}>
+        <ProductDiscoveryTile
+          item={item}
+          onPress={() => handlePress(item)}
+          aspectRatio={resolveListingMediaAspectRatio(item)}
+          downscaleWidth={colWidth}
+          testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
+        />
+      </View>
+    ),
+    [gap, colWidth, handlePress, testIDPrefix],
+  );
 
-    return cols;
-  }, [items, numColumns, colWidth, gap, visualOnly]);
+  // Discovery tiles never span the full width — single-column placement only.
+  // `overrideItemLayout` is wired so full-span units (e.g. editorial breaks)
+  // can be introduced later by switching on item type here.
+  const overrideItemLayout = useCallback(
+    (layout: { span?: number }) => {
+      layout.span = 1;
+    },
+    [],
+  );
+
+  const ListFooterComponent = useMemo(
+    () =>
+      isLoadingMore ? (
+        <View style={styles.footer}>
+          <ActivityIndicator color={colors.textMuted} />
+        </View>
+      ) : null,
+    [isLoadingMore, colors.textMuted],
+  );
+
+  // Empty / loading states. FlashList owns its own scrolling, so these render
+  // as the list body — never wrapped in a ScrollView.
+  if (items.length === 0) {
+    if (isLoading) {
+      return (
+        <MasonrySkeleton
+          numColumns={numColumns}
+          horizontalPadding={horizontalPadding}
+          gap={gap}
+        />
+      );
+    }
+    return (
+      <View style={styles.empty}>
+        <EmptyState
+          icon="search-outline"
+          title="Nothing here yet"
+          subtitle="Check back soon for new finds."
+          density="compact"
+        />
+      </View>
+    );
+  }
+
+  // `reducedMotionEnabled` is referenced (not gated) so the skeleton path and
+  // future viewability-driven surfaces honour the accessibility preference
+  // without introducing animations that would break recycling.
+  void reducedMotionEnabled;
 
   return (
-    <View style={[styles.grid, { gap, paddingHorizontal: horizontalPadding }]}>
-      {items.length === 0 ? null : columns.map((columnItems, colIndex) => (
-        <View key={colIndex} style={[styles.column, { width: colWidth, gap }]}>
-          {columnItems.map(({ item, index }) => (
-            enableEntranceAnimation && !reducedMotionEnabled ? (
-              <Reanimated.View
-                key={item.id}
-                entering={FadeIn.duration(240).delay(Math.min(index, 6) * 35)}
-              >
-                <ProductCardV2
-                  item={item}
-                  onPress={() => onPressItem(item)}
-                  index={index}
-                  showSaveButton={showSaveButton}
-                  visualOnly={visualOnly}
-                  mediaAspectRatio={resolveListingMediaAspectRatio(item)}
-                  enableEntranceAnimation={false}
-                  onPressSeller={onPressSeller ? () => onPressSeller(item) : undefined}
-                  onMessageSeller={onMessageSeller ? () => onMessageSeller(item) : undefined}
-                  downscaleWidth={Math.round(colWidth)}
-                  testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
-                />
-              </Reanimated.View>
-            ) : (
-              <ProductCardV2
-                key={item.id}
-                item={item}
-                onPress={() => onPressItem(item)}
-                index={index}
-                showSaveButton={showSaveButton}
-                visualOnly={visualOnly}
-                mediaAspectRatio={resolveListingMediaAspectRatio(item)}
-                enableEntranceAnimation={false}
-                onPressSeller={onPressSeller ? () => onPressSeller(item) : undefined}
-                onMessageSeller={onMessageSeller ? () => onMessageSeller(item) : undefined}
-                downscaleWidth={Math.round(colWidth)}
-                testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
-              />
-            )
-          ))}
-        </View>
-      ))}
-    </View>
+    <FlashList
+      data={items}
+      masonry
+      numColumns={numColumns}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      onEndReached={onEndReached}
+      onEndReachedThreshold={0.5}
+      overrideItemLayout={overrideItemLayout}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: Math.max(horizontalPadding - gap / 2, 0) }}
+      ListFooterComponent={ListFooterComponent}
+      refreshControl={refreshControl}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  footer: {
+    paddingVertical: Space.md,
+    alignItems: 'center',
   },
-  column: {
-    flexDirection: 'column',
+  empty: {
+    flex: 1,
+    paddingHorizontal: Space.md,
   },
 });

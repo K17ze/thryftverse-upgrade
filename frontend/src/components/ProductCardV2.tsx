@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
@@ -662,6 +663,147 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   column: {
     flex: 1,
     gap: 12,
+  },
+});
+
+// ============================================================================
+// PRODUCT DISCOVERY TILE — lightweight masonry tile for FlashList v2
+// ============================================================================
+// A recycling-safe discovery tile: media + price + optional condition badge.
+// No seller row, no full badge cascade, no description, no shipping info.
+// Images use expo-image directly with `recyclingKey` so recycled cells never
+// show stale media (FlashList v2 recycles aggressively). The tile holds NO
+// local state — nothing leaks across recycled instances. Honours the product
+// tile metadata budget (audit §02): media + title + price + one state marker.
+
+interface ProductDiscoveryTileProps {
+  item: Listing;
+  onPress: () => void;
+  /** Width divided by height for the media frame. Defaults to the listing's
+   *  real media geometry, falling back to the 3:4 portrait standard. */
+  aspectRatio?: number;
+  /** Target display width in dp for CDN downscaling (optional). */
+  downscaleWidth?: number;
+  testID?: string;
+}
+
+function ProductDiscoveryTileBase({
+  item,
+  onPress,
+  aspectRatio,
+  downscaleWidth,
+  testID,
+}: ProductDiscoveryTileProps) {
+  const { colors } = useAppTheme();
+  const { formatFromFiat } = useFormattedPrice();
+  const tileStyles = React.useMemo(() => createTileStyles(colors), [colors]);
+  const ratio = aspectRatio ?? resolveListingMediaAspectRatio(item);
+  const primaryImage = (item.images ?? [])[0] ?? '';
+
+  // Condition badge — single state marker only (sold > condition). Sits over
+  // the media on the semantic `overlay` scrim; "New with tags" uses the
+  // `success` semantic. Label text is fixed white because the overlay is
+  // always dark and no semantic on-scrim text token exists (same convention
+  // as the condition badge above, lines ~643–654).
+  const conditionBadge = item.isSold
+    ? { label: 'Sold', bg: colors.overlay }
+    : item.condition
+      ? {
+          label: item.condition === 'New with tags' ? 'New' : item.condition,
+          bg: item.condition === 'New with tags' ? colors.success : colors.overlay,
+        }
+      : null;
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      hapticFeedback="light"
+      style={tileStyles.container}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
+      accessibilityHint="Opens item details"
+      testID={testID}
+    >
+      <View style={[tileStyles.media, { aspectRatio: ratio, backgroundColor: colors.surfaceAlt }]}>
+        {primaryImage ? (
+          <ExpoImage
+            source={{ uri: primaryImage }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            recyclingKey={item.id}
+            placeholder={colors.surfaceAlt}
+            transition={200}
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <ImageEmptyGraphic icon="shirt-outline" style={StyleSheet.absoluteFill} />
+        )}
+        {conditionBadge ? (
+          <View style={[tileStyles.conditionBadge, { backgroundColor: conditionBadge.bg }]}>
+            <Text style={tileStyles.conditionText}>{conditionBadge.label}</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={tileStyles.info}>
+        <Text style={tileStyles.title} numberOfLines={2}>{item.title}</Text>
+        <Text style={tileStyles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+      </View>
+    </AnimatedPressable>
+  );
+}
+
+export const ProductDiscoveryTile = React.memo(ProductDiscoveryTileBase);
+
+const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  media: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: Radius.lg,
+  },
+  conditionBadge: {
+    position: 'absolute',
+    bottom: Space.xs,
+    left: Space.xs,
+    height: 20,
+    paddingHorizontal: 6,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Fixed white ink — the badge always sits on the dark `overlay` scrim or
+  // the saturated `success` green, so a theme text token (black in dark
+  // mode) would render invisible. Mirrors the ProductCardV2 convention.
+  conditionText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: Typography.family.bold,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    fontVariant: ['tabular-nums'],
+  },
+  info: {
+    paddingTop: Space.sm,
+    paddingHorizontal: Space.xs,
+    gap: Space.xxs,
+  },
+  title: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.semibold,
+    color: colors.textPrimary,
+    letterSpacing: Type.body.letterSpacing,
+  },
+  price: {
+    fontSize: Type.bodyLarge.size,
+    lineHeight: Type.bodyLarge.lineHeight,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+    letterSpacing: Type.bodyLarge.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
 });
 

@@ -975,6 +975,14 @@ export default function BrowseScreen() {
             gap={gridDensity === 'compact' ? Space.xs + 2 : 3}
             horizontalPadding={Space.md}
             testIDPrefix="golden-browse-product-card"
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => void handleRefresh()}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+              />
+            }
           />
         ) : hasAnyFiltering ? (
           // Filtered-empty — filters returned no results. Friendly, not an

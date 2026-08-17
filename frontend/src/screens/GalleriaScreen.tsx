@@ -29,10 +29,12 @@ import {
   fetchGalleriaCollections,
   fetchGalleriaEditorials,
   fetchFeaturedAssets,
+  GALLERIA_DEMO_MODE,
   type GalleriaCollection,
   type GalleriaEditorial,
   type GalleriaFeaturedAsset,
 } from '../services/galleriaApi';
+import { openProductDetail } from '../platform/product/openProductDetail';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -527,7 +529,12 @@ export default function GalleriaScreen() {
   const handleAssetPress = useCallback(
     (asset: GalleriaFeaturedAsset) => {
       haptic.selection();
-      navigation.navigate('ItemDetail', { itemId: asset.id });
+      openProductDetail(navigation, {
+        referenceKind: 'co_own',
+        canonicalId: asset.id,
+        sourceSurface: 'Galleria',
+        sourceItemId: asset.id,
+      });
     },
     [haptic, navigation],
   );
@@ -607,6 +614,14 @@ export default function GalleriaScreen() {
           />
         }
       >
+        {/* ── Honest demo indicator (AGENTS.md §11) ── */}
+        {GALLERIA_DEMO_MODE && (
+          <View style={styles.demoBadgeRow}>
+            <View style={styles.demoBadgeDot} />
+            <Text style={styles.demoBadgeText}>Demo content</Text>
+          </View>
+        )}
+
         {/* ── Section 1: Hero editorial ── */}
         {loading ? (
           <HeroSkeleton />
@@ -776,6 +791,26 @@ function useStyles() {
           fontSize: Type.caption.size,
           fontFamily: Typography.family.medium,
           color: colors.textSecondary,
+        },
+        // ── Honest demo indicator (AGENTS.md §11) ──
+        demoBadgeRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.xs,
+          paddingHorizontal: Space.md,
+          paddingBottom: Space.sm,
+        },
+        demoBadgeDot: {
+          width: Space.xs,
+          height: Space.xs,
+          borderRadius: Radius.full,
+          backgroundColor: colors.textMuted,
+        },
+        demoBadgeText: {
+          fontSize: Type.caption.size,
+          fontFamily: Typography.family.medium,
+          color: colors.textMuted,
+          letterSpacing: Type.metaElevated.letterSpacing,
         },
         // ── Hero — full-bleed, no card chrome ──
         heroContainer: {
