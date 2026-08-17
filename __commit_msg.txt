@@ -1,9 +1,0 @@
-fix(screens): add missing Reanimated + FadeInDown imports
-
-SuccessScreen and ListingSuccessScreen used Reanimated.View with
-FadeInDown entering animations but were missing the imports, causing
-TS2304 errors. Added the missing import line to both files.
-
-Generated with [Devin](https://devin.ai)
-
-Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
