@@ -1,17 +1,33 @@
-feat(creator): wave 4 completion — Look auto-layout, AI effect browser, camera effects, multi-clip capture
+feat(creator): human flow reconstruction — camera-first entry, mode switch, simplified chrome, rail dedup
 
-New UI files:
-- LookAutoLayout.ts: 5 layout styles (grid, masonry, feature, strip, collage)
-- LookAutoLayoutBar.tsx: layout selector with CreatorToolButton
-- AIEffectGrid.tsx: 3-column AI effect browser with category filters
-- AIEffectBrowserSheet.tsx: bottom sheet with intensity slider
-- CameraEffectPreview.tsx: truthful post-capture effect application
+Reconstructs the creator interaction architecture per the Human Flow Reconstruction spec:
 
-Integration:
-- LookComposerScreen: wired LookAutoLayoutBar + AIEffectBrowserSheet + camera effect post-capture
-- CreatorCamera: wired CameraEffectBar with effect state
-- CreatorContext: added createCompositionFromClips for multi-clip capture
-- navigation/types: added cameraEffect to CreatorInitialMedia
+Camera-first entry (HFR 01-04):
+- CreatorEntryScreen: deleted 2x2 tile dashboard, camera is now root state
+- CreatorModeSwitch: minimal Look/Poster/Search switch with AsyncStorage persistence
+- Direct gallery→editor and capture→editor (no intermediate action pages)
+- Drafts moved to small affordance in camera top bar
+- Items and Templates removed from entry, accessible only inside editor
+
+Simplified camera chrome (HFR 05):
+- CaptureToolsSheet: secondary tools (timer, grid, hands-free, speed, green screen, effects, multi) behind one Tools button
+- ControlsRail: simplified to only Flash + Flip (was 286 lines, now 103)
+- Default camera shows: Close, Flash, Gallery, Shutter, Flip, mode switch
+
+Look flow reconstruction (HFR 06-08):
+- Bottom-surface state machine: only one of tools/items/layout/effects renders at a time
+- Removed permanent AutoLayoutBar, LayoutPreviewRail, LookSourceTray
+- Layout and Items are now contextual surfaces accessed from tool rail
+- AI effects folded under Effects (no standalone AI destination)
+- Slide-up surface transitions with Reanimated
+- Auto-layout still applies on multi-image import (no UI needed)
+
+Poster flow reconstruction (HFR 09-12):
+- Single-photo Poster has no forced timeline (canvas is dominant)
+- Timeline auto-expands for video/multi-clip or explicit Edit Clip
+- InCanvasCropOverlay is sole canonical crop UX (CreatorCropSheet removed)
+- Templates demoted to More/project surfaces
+- Bottom-surface state machine for Poster (tools/timeline/effects)
 
 Generated with [Devin](https://devin.ai)
 

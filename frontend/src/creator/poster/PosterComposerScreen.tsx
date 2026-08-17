@@ -31,7 +31,6 @@ import { CreatorLayersSheet } from '../CreatorLayersSheet';
 import { CreatorPublishSheet } from '../CreatorPublishSheet';
 import { CreatorSettingsSheet } from '../CreatorSettingsSheet';
 import { CreatorAssetPicker, type AssetPickerMode } from '../CreatorAssetPicker';
-import { CreatorCropSheet } from '../CreatorCropSheet';
 import { InCanvasCropOverlay } from '../surfaces/InCanvasCropOverlay';
 import { CutoutPreviewSheet } from '../surfaces/CutoutPreviewSheet';
 import { AccessibilityMoveSheet } from '../surfaces/AccessibilityMoveSheet';
@@ -191,7 +190,17 @@ function PosterComposerInner() {
   const [pageMenuIndex, setPageMenuIndex] = useState<number | null>(null);
   const [showFrameTray, setShowFrameTray] = useState(false);
   const [videoInfoFrameIndex, setVideoInfoFrameIndex] = useState<number | null>(null);
-  const [showEffects, setShowEffects] = useState(false);
+  // ── Mutually exclusive bottom surfaces (spec: one at a time) ──────
+  // 'tools' = default tool rail (canvas dominant for single-photo)
+  // 'timeline' = timeline expanded (video, multiple clips, or explicit)
+  // 'effects' = effects/adjust bottom sheet
+  // null = no bottom surface (full canvas)
+  type BottomSurface = 'tools' | 'timeline' | 'effects' | null;
+  const [bottomSurface, setBottomSurface] = useState<BottomSurface>('tools');
+  // User explicitly requested the timeline (Edit Clip / Timeline button).
+  // For single-photo posters the timeline is hidden by default; this flag
+  // records the user's intent so the timeline stays open until dismissed.
+  const [userRequestedTimeline, setUserRequestedTimeline] = useState(false);
   const [showA11yMove, setShowA11yMove] = useState(false);
   const [showA11yZOrder, setShowA11yZOrder] = useState(false);
   const [showTransitions, setShowTransitions] = useState(false);
@@ -200,7 +209,6 @@ function PosterComposerInner() {
   const [showReverse, setShowReverse] = useState(false);
   const [showFreezeFrame, setShowFreezeFrame] = useState(false);
   const [showAudioFade, setShowAudioFade] = useState(false);
-  const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
   // ── True cutout (segmentation) state ───────────────────────────────
   // `cutoutPreviewTarget` holds the media layer being previewed in the
   // CutoutPreviewSheet (true segmentation). `cutoutSupported` is probed
@@ -296,7 +304,8 @@ function PosterComposerInner() {
         if (showHelp) setShowHelp(false);
         else if (showA11yMove) setShowA11yMove(false);
         else if (showA11yZOrder) setShowA11yZOrder(false);
-        else if (showEffects) setShowEffects(false);
+        else if (bottomSurface === 'effects') setBottomSurface('tools');
+        else if (userRequestedTimeline) { setUserRequestedTimeline(false); setBottomSurface('tools'); }
         else if (showTransitions) setShowTransitions(false);
         else if (showKeyframes) setShowKeyframes(false);
         else if (showSpeedCurve) setShowSpeedCurve(false);
@@ -304,7 +313,6 @@ function PosterComposerInner() {
         else if (showFreezeFrame) setShowFreezeFrame(false);
         else if (showAudioFade) setShowAudioFade(false);
         else if (cropMode) setCropMode(false);
-        else if (cropTarget) setCropTarget(null);
         else if (cutoutPreviewTarget) setCutoutPreviewTarget(null);
         else if (pageMenuIndex !== null) setPageMenuIndex(null);
         else if (showPreview) setShowPreview(false);
@@ -323,7 +331,7 @@ function PosterComposerInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, showHelp, showA11yMove, showA11yZOrder, showEffects, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cropTarget, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, showHelp, showA11yMove, showA11yZOrder, bottomSurface, userRequestedTimeline, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // ── Hardware back button — intercept to close sheets first ─────────
   useFocusEffect(
@@ -332,7 +340,8 @@ function PosterComposerInner() {
         if (showHelp) { setShowHelp(false); return true; }
         if (showA11yMove) { setShowA11yMove(false); return true; }
         if (showA11yZOrder) { setShowA11yZOrder(false); return true; }
-        if (showEffects) { setShowEffects(false); return true; }
+        if (bottomSurface === 'effects') { setBottomSurface('tools'); return true; }
+        if (userRequestedTimeline) { setUserRequestedTimeline(false); setBottomSurface('tools'); return true; }
         if (showTransitions) { setShowTransitions(false); return true; }
         if (showKeyframes) { setShowKeyframes(false); return true; }
         if (showSpeedCurve) { setShowSpeedCurve(false); return true; }
@@ -340,7 +349,6 @@ function PosterComposerInner() {
         if (showFreezeFrame) { setShowFreezeFrame(false); return true; }
         if (showAudioFade) { setShowAudioFade(false); return true; }
         if (cropMode) { setCropMode(false); return true; }
-        if (cropTarget) { setCropTarget(null); return true; }
         if (cutoutPreviewTarget) { setCutoutPreviewTarget(null); return true; }
         if (pageMenuIndex !== null) { setPageMenuIndex(null); return true; }
         if (showPreview) { setShowPreview(false); return true; }
@@ -354,7 +362,7 @@ function PosterComposerInner() {
         return false;
       };
       return onBackPress;
-    }, [showHelp, showA11yMove, showA11yZOrder, showEffects, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cropTarget, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+    }, [showHelp, showA11yMove, showA11yZOrder, bottomSurface, userRequestedTimeline, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
@@ -593,6 +601,27 @@ function PosterComposerInner() {
     () => computeTotalDuration(timelineClips),
     [timelineClips],
   );
+
+  // ── Timeline visibility (spec: no permanent timeline for single photo) ──
+  // The timeline expands only when:
+  //   a) There's a video clip (hasVideoContent)
+  //   b) There are multiple clips (timelineClips.length > 1)
+  //   c) The user explicitly tapped "Timeline" / "Edit Clip"
+  // It is suppressed when another bottom surface (effects) is active so
+  // only one bottom surface occupies the canvas edge at a time.
+  const shouldShowTimeline =
+    (hasVideoContent || timelineClips.length > 1 || userRequestedTimeline) &&
+    bottomSurface !== 'effects' &&
+    bottomSurface !== null;
+
+  // ── Auto-expand timeline when video or second clip is added ──────
+  // When the composition transitions from single-photo to video or
+  // multi-clip, the timeline auto-expands without requiring a user tap.
+  useEffect(() => {
+    if (hasVideoContent || timelineClips.length > 1) {
+      setUserRequestedTimeline(true);
+    }
+  }, [hasVideoContent, timelineClips.length]);
 
   const timelineState: TimelineState = useMemo(
     () => ({
@@ -891,6 +920,20 @@ function PosterComposerInner() {
     addPage();
   }, [haptic, selectLayer, addPage]);
 
+  // ── Timeline toggle (spec: timeline expands on explicit request) ──
+  // For single-photo posters the timeline is hidden by default. Tapping
+  // "Timeline" in the tool rail expands it; tapping again collapses it.
+  // For video posters the timeline auto-expands — this toggle still
+  // allows the user to collapse it if desired.
+  const handleTimelineToggle = useCallback(() => {
+    haptic.light();
+    setUserRequestedTimeline((prev) => {
+      const next = !prev;
+      setBottomSurface(next ? 'timeline' : 'tools');
+      return next;
+    });
+  }, [haptic]);
+
   // ── Music handler (video mode) ─────────────────────────────────────
   const handleAddMusic = useCallback(() => {
     haptic.light();
@@ -910,7 +953,7 @@ function PosterComposerInner() {
       return;
     }
     haptic.medium();
-    setShowEffects(true);
+    setBottomSurface('effects');
   }, [selectedLayer, haptic, show]);
 
   // ── Effects sheet — derived state & handlers ───────────────────────
@@ -1039,7 +1082,7 @@ function PosterComposerInner() {
       return;
     }
     haptic.medium();
-    setShowEffects(true);
+    setBottomSurface('effects');
   }, [selectedLayer, haptic]);
 
   // ── Transition handler ─────────────────────────────────────────────
@@ -1153,7 +1196,9 @@ function PosterComposerInner() {
       mk('product', 'Product', 'pricetag-outline', handleAddProduct, 'Add product', 'Opens the product picker'),
     ];
 
-    // ── poster-photo-default: Text, Stickers, Music, Effects, Draw, More ──
+    // ── poster-photo-default: Text, Stickers, Music, Effects, Draw, Timeline ──
+    // Timeline is included so the user can explicitly expand it for timed
+    // overlays. For a single photo it is hidden by default (canvas dominant).
     const photoDefault: ToolGroup = {
       context: 'poster-photo-default',
       primary: [
@@ -1162,6 +1207,7 @@ function PosterComposerInner() {
         mk('music', 'Music', 'musical-notes-outline', handleAddMusic, 'Add music', 'Opens the music picker'),
         mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
         mk('draw', 'Draw', 'brush-outline', handleDraw, 'Draw', 'Opens the drawing tool'),
+        mk('timeline', 'Timeline', 'film-outline', handleTimelineToggle, 'Timeline', 'Expands the timeline for editing clip timing and overlays'),
       ],
       overflow: [...productOverflow, ...addFrameOverflow, ...sharedOverflow],
     };
@@ -1170,7 +1216,7 @@ function PosterComposerInner() {
     const videoDefault: ToolGroup = {
       context: 'poster-video-default',
       primary: [
-        mk('timeline', 'Timeline', 'film-outline', () => { haptic.light(); setShowFrameTray(true); }, 'Timeline', 'Shows the video timeline'),
+        mk('timeline', 'Timeline', 'film-outline', handleTimelineToggle, 'Timeline', 'Toggles the video timeline'),
         mk('text', 'Text', 'text', handleAddText, 'Add text', 'Opens the text picker'),
         mk('music', 'Music', 'musical-notes-outline', handleAddMusic, 'Add music', 'Opens the music picker'),
         mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
@@ -1184,7 +1230,7 @@ function PosterComposerInner() {
       context: 'poster-media-selected',
       primary: [
         mk('replace', 'Replace', 'swap-horizontal-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Replace media', 'Replaces the selected media'),
-        mk('crop', 'Crop', 'crop-outline', handleCropAction, 'Crop', 'Opens the crop sheet to adjust the aspect ratio'),
+        mk('crop', 'Crop', 'crop-outline', handleCropAction, 'Crop', 'Opens in-canvas crop with direct pan, zoom, and precise handles'),
         mk('auto', 'Auto', 'bulb-outline', handleAutoAdjust, 'Auto', 'Applies one-tap intelligent color correction'),
         mk('adjust', 'Adjust', 'color-wand-outline', handleAdjustAction, 'Adjust', 'Opens the adjust panel for exposure and color'),
         mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
@@ -1273,7 +1319,7 @@ function PosterComposerInner() {
     ];
   }, [
     handleAddText, handleAddStickers, handleAddProduct, handleAddMusic, handleAddEffects, handleDraw,
-    handleAddFrame, handleEditLayer, handleReorderLayer, handleDuplicateLayer,
+    handleAddFrame, handleTimelineToggle, handleEditLayer, handleReorderLayer, handleDuplicateLayer,
     handleDeleteLayer, handleCropAction, handleCutoutAction, handleAdjustAction, handleAutoAdjust,
     selectedLayer, updateLayer, haptic, show, navigation,
     pageCount, cutoutSupported,
@@ -1589,12 +1635,12 @@ function PosterComposerInner() {
         />
       </View>
 
-      {/* ── Poster timeline (video content only) ─────────────────────── */}
-      {/* When the current page or any page contains video media, show the
-          timeline components below the canvas. The timeline appears
-          automatically — NOT hidden behind More. It includes a playback
-          bar (play/pause, timecode, undo/redo) above the clip track. */}
-      {hasVideoContent && timelineClips.length > 0 && (
+      {/* ── Poster timeline (conditional — spec: no permanent timeline for single photo) ── */}
+      {/* The timeline expands for video, multiple clips, or explicit user
+          request. For a single-photo poster the timeline is hidden by
+          default so the canvas remains dominant. When another bottom
+          surface (effects) is active, the timeline is suppressed. */}
+      {shouldShowTimeline && timelineClips.length > 0 && (
         <View
           style={[
             styles.timelineContainer,
@@ -1777,17 +1823,18 @@ function PosterComposerInner() {
                   label="Replace"
                   onPress={() => handleEditLayer(selectedLayer)}
                 />
-                {/* Video trim/mute — opens the timeline which provides
-                    drag-to-trim and volume controls. The timeline is
-                    the canonical video editing surface. */}
+                {/* Video trim/mute — expands the timeline (Edit Clip)
+                    which provides drag-to-trim and volume controls.
+                    The timeline is the canonical video editing surface. */}
                 {selectedLayer.payload.mediaType === 'video' && (
                   <FrameTool
                     icon="film-outline"
-                    label="Trim"
+                    label="Edit Clip"
                     onPress={() => {
                       haptic.light();
                       setSelectedClipId(selectedLayer.id);
-                      setShowFrameTray(true);
+                      setUserRequestedTimeline(true);
+                      setBottomSurface('timeline');
                     }}
                   />
                 )}
@@ -2230,24 +2277,6 @@ function PosterComposerInner() {
           onCancel={() => setCropMode(false)}
         />
       )}
-      {/* Crop sheet — legacy fallback for aspect-ratio crop (kept as
-          fallback per spec — not removed). */}
-      {cropTarget && cropTarget.type === 'media' && (
-        <CreatorCropSheet
-          visible={!!cropTarget}
-          imageUri={cropTarget.payload.mediaUri}
-          onClose={() => setCropTarget(null)}
-          onCropComplete={(newUri) => {
-            if (cropTarget && cropTarget.type === 'media') {
-              updateLayer(cropTarget.id, {
-                type: 'media',
-                payload: { ...cropTarget.payload, mediaUri: newUri },
-              }, 'Crop media');
-            }
-            setCropTarget(null);
-          }}
-        />
-      )}
       {/* True cutout preview sheet — native subject segmentation.
           Opens when the user taps "Cutout" in the media-selected
           overflow and the native backend is available. Shows a
@@ -2318,14 +2347,14 @@ function PosterComposerInner() {
           the AdjustPanel (fine-tuning sliders). Filter selection and
           adjustment changes commit to the layer's non-destructive
           `effects` array (EffectNode[]) via updateLayer. */}
-      {showEffects && selectedMediaLayer && (
+      {bottomSurface === 'effects' && selectedMediaLayer && (
         <View style={styles.effectsSheetBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowEffects(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setBottomSurface('tools')} />
           <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
             <View style={styles.effectsSheetHeader}>
               <Text style={styles.effectsSheetTitle}>Effects</Text>
               <PressScale
-                onPress={() => { haptic.light(); setShowEffects(false); }}
+                onPress={() => { haptic.light(); setBottomSurface('tools'); }}
                 style={styles.effectsSheetDone}
                 accessibilityLabel="Done"
                 accessibilityHint="Closes the effects panel"

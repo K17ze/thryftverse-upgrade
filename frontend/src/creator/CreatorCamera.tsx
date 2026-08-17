@@ -45,8 +45,9 @@ import { ControlsRail } from './camera/ControlsRail';
 import { GalleryCarousel } from './camera/GalleryCarousel';
 import { PermissionState } from './camera/PermissionState';
 import { GreenScreenSheet, type GreenScreenSettings } from './camera/GreenScreenSheet';
-import { CameraEffectBar, type CameraEffectId } from './camera/CameraEffectBar';
-import { CreatorSegmentControl } from './controls/CreatorSegmentControl';
+import { type CameraEffectId } from './camera/CameraEffectBar';
+import { CaptureToolsSheet, type TimerOption as SheetTimerOption } from './camera/CaptureToolsSheet';
+import { CreatorModeSwitch, type CreatorCaptureMode } from './capture/CreatorModeSwitch';
 import { CreatorAnalytics } from './creatorAnalytics';
 import type { CreatorInitialMedia } from '../navigation/types';
 
@@ -82,7 +83,6 @@ const ZOOM_STEPS = [
   { label: '2×', normalized: 0.5 },
   { label: '3×', normalized: 1 },
 ] as const;
-const TIMER_OPTIONS = [0, 3, 5, 10] as const;
 const FOCUS_RETICLE_SIZE = 70;
 const RECORDING_MAX_DURATION = 15000; // 15s max for video
 const RECORDING_RING_SIZE = SHUTTER_SIZE + 12;
@@ -107,12 +107,6 @@ const HANDS_FREE_MAX_DURATION = 30000; // 30s max
 // metadata (CreatorInitialMedia.speed) so the timeline/export engine
 // applies it at playback. This is the truthful approach — we do not
 // claim the native camera is recording in slow-motion.
-const SPEED_MODES = [
-  { label: '0.3×', value: '0.3' },
-  { label: '1×', value: '1' },
-  { label: '2×', value: '2' },
-  { label: '3×', value: '3' },
-] as const;
 const DEFAULT_SPEED = '1';
 
 type FlashMode = 'off' | 'on' | 'auto';
@@ -233,13 +227,25 @@ export default function CreatorCamera({
   // Countdown Reanimated values (flagship spring)
   const countdownScale = useSharedValue(1.5);
   const countdownOpacity = useSharedValue(0);
-  // ── Tools disclosure (timer/grid/multi-capture behind one button) ──
-  const [showTools, setShowTools] = useState(false);
+  // ── Tools sheet (secondary tools behind a Tools button in the top bar) ──
+  const [showToolsSheet, setShowToolsSheet] = useState(false);
   // ── Press-and-hold video: track long-press state to suppress photo on release ──
   const isLongPressRef = useRef(false);
 
-  const isPoster = mode === 'poster';
-  const isVisualSearch = mode === 'visual-search';
+  // ── Internal capture mode (controlled by CreatorModeSwitch) ──
+  // The `mode` prop seeds the initial mode (from the entry screen's
+  // documentType), but the user can switch between Look / Poster / Search
+  // without leaving the camera. 'search' maps to the internal
+  // 'visual-search' mode (square framing, visual-search capture path).
+  const [captureMode, setCaptureMode] = useState<CreatorCaptureMode>(
+    mode === 'poster' ? 'poster' : mode === 'visual-search' ? 'search' : 'look',
+  );
+  const handleCaptureModeChange = useCallback((next: CreatorCaptureMode) => {
+    setCaptureMode(next);
+  }, []);
+
+  const isPoster = captureMode === 'poster';
+  const isVisualSearch = captureMode === 'search';
   const modeLabel = isVisualSearch ? 'Search' : isPoster ? 'Story' : 'Look';
   const zoomLabel = ZOOM_STEPS[zoomIndex].label;
   const zoomNormalized = ZOOM_STEPS[zoomIndex].normalized;
@@ -350,25 +356,21 @@ export default function CreatorCamera({
       });
   }, [toggleFacing]);
 
-  const cycleZoom = useCallback(() => {
+  // ── Tools sheet open/close ──
+  const openToolsSheet = useCallback(() => {
     haptic.light();
-    setZoomIndex((p) => ((p + 1) % 3) as ZoomStepIndex);
-    // Show zoom indicator with spring appearance, auto-hide after 1.2s
-    if (!reducedMotion) {
-      zoomIndicatorOpacity.value = withSpring(1, spring.tap);
-      zoomIndicatorScale.value = withSpring(1, spring.lift);
-      zoomIndicatorOpacity.value = withDelay(1200, withTiming(0, { duration: 200 }));
-      zoomIndicatorScale.value = withDelay(1200, withSpring(0.8, spring.entrance));
-    }
-  }, [haptic, reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
-
-  const cycleTimer = useCallback(() => {
-    haptic.selection();
-    setTimerOption((p) => {
-      const idx = TIMER_OPTIONS.indexOf(p);
-      return TIMER_OPTIONS[(idx + 1) % TIMER_OPTIONS.length] as TimerOption;
-    });
+    setShowToolsSheet(true);
   }, [haptic]);
+
+  const closeToolsSheet = useCallback(() => {
+    haptic.light();
+    setShowToolsSheet(false);
+  }, [haptic]);
+
+  // ── Timer change from the CaptureToolsSheet ──
+  const handleTimerChange = useCallback((option: SheetTimerOption) => {
+    setTimerOption(option);
+  }, []);
 
   // ── Hands-free mode toggle ──
   const toggleHandsFree = useCallback(() => {
@@ -994,7 +996,7 @@ export default function CreatorCamera({
         <View style={styles.crosshairV} />
       </View>
 
-      {/* Top controls — close (left), accessories + flash (right) */}
+      {/* Top controls — close (left), flash + tools + accessories (right) */}
       <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 16) + 8 }]} pointerEvents="box-none">
         <Pressable
           style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed]}
@@ -1008,44 +1010,31 @@ export default function CreatorCamera({
 
         <View style={styles.topRightControls}>
           {renderTopRightAccessory?.()}
-          {/* Flash control moved to the expanded ControlsRail to reduce
-              idle chrome. The top bar keeps only the close button and the
-              screen-level accessory (overflow menu). */}
+          {/* Tools button — opens CaptureToolsSheet for all secondary tools */}
+          <Pressable
+            style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed]}
+            onPress={openToolsSheet}
+            hitSlop={12}
+            accessibilityLabel="Camera tools"
+            accessibilityHint="Opens timer, grid, hands-free, speed, green screen, effects, and multi-capture"
+            accessibilityRole="button"
+          >
+            <Ionicons name="ellipsis-horizontal-circle-outline" size={26} color="#fff" />
+          </Pressable>
         </View>
       </View>
 
-      {/* Vertical controls rail — right side */}
-      {/* IDLE: only Flip + More are visible. EXPANDED: Flash, Zoom, Timer,
-          Grid, Multi-capture are revealed. This keeps the viewfinder
-          dominant — the camera preview is the hero, not a wall of controls. */}
+      {/* Vertical controls rail — right side (simplified) */}
+      {/* Only Flash and Flip are shown in the default state. All secondary
+          tools (Timer, Grid, Hands-free, Speed, Green Screen, Effects,
+          Multi-capture) are behind the Tools button in the top bar, which
+          opens CaptureToolsSheet. */}
       <ControlsRail
         top={Math.max(insets.top, 16) + 60}
-        isVisualSearch={isVisualSearch}
         onFlip={toggleFacing}
         flash={flash}
         onCycleFlash={cycleFlash}
-        onCycleZoom={cycleZoom}
-        zoomLabel={zoomLabel}
-        onCycleTimer={cycleTimer}
-        timerOption={timerOption}
-        onToggleGrid={toggleGrid}
-        showGrid={showGrid}
-        onToggleMultiCapture={toggleMultiCapture}
-        multiCaptureMode={multiCaptureMode}
-        multiCaptureCount={multiCaptures.length}
-        hasCapturedUri={!!capturedUri}
-        showTools={showTools}
-        onToggleTools={() => { haptic.light(); setShowTools((p) => !p); }}
         accentColor={colors.antiqueGold}
-        // ── Hands-free capture ──
-        handsFreeMode={handsFreeMode}
-        onToggleHandsFree={toggleHandsFree}
-        // ── Speed modes ──
-        speedMode={speedMode}
-        onSpeedChange={handleSpeedChange}
-        // ── Green screen (post-capture) ──
-        greenScreenActive={!!greenScreenSettings}
-        onToggleGreenScreen={toggleGreenScreen}
       />
 
       {/* Bottom controls — gallery, shutter, flip */}
@@ -1077,6 +1066,21 @@ export default function CreatorCamera({
         <View style={styles.bottomSpacer} />
       </View>
 
+      {/* ── Capture mode switch (Look / Poster / Search) ────────────────
+          Sits below the shutter, above the safe area. A minimal text-based
+          switch with a spring-animated active indicator dot. Lets the user
+          reframe their intent without leaving the camera — no route
+          transition, just a mode change. Hidden while a review overlay or
+          countdown is active so it never competes with capture feedback. */}
+      {!capturedUri && countdown === null && handsFreeCountdown === null && (
+        <View
+          style={[styles.captureModeSwitch, { bottom: Math.max(insets.bottom, 16) - 8 }]}
+          pointerEvents="box-none"
+        >
+          <CreatorModeSwitch mode={captureMode} onModeChange={handleCaptureModeChange} />
+        </View>
+      )}
+
       {/* Recording timer badge — shown while recording.
           Includes speed indicator when a non-1× speed mode is active. */}
       {isRecording && (
@@ -1089,37 +1093,9 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* ── Camera effect bar ─────────────────────────────────────────── */}
-      {/* Horizontal scrollable bar of camera effect buttons. The selected
-          effect is stored and applied post-capture (expo-camera does not
-          support real-time color matrix filters). Shown above the bottom
-          area when not recording, not in visual search, and no active
-          countdown. Disabled during recording. */}
-      {!isVisualSearch && handsFreeCountdown === null && countdown === null && (
-        <View style={[styles.cameraEffectBarWrap, { bottom: Math.max(insets.bottom, 16) + 56 }]}>
-          <CameraEffectBar
-            activeEffect={cameraEffect}
-            onSelectEffect={setCameraEffect}
-            disabled={isRecording}
-          />
-        </View>
-      )}
-
-      {/* Speed mode segment control — shown above the bottom bar when
-          tools are expanded. Uses CreatorSegmentControl for spring
-          physics + selection haptic. The speed is stored in clip
-          metadata; expo-camera records at 1× and the timeline applies
-          the speed at playback (truthful labelling). */}
-      {showTools && !isVisualSearch && !isRecording && handsFreeCountdown === null && countdown === null && (
-        <View style={[styles.speedControlWrap, { bottom: Math.max(insets.bottom, 16) + 120 }]}>
-          <CreatorSegmentControl
-            segments={SPEED_MODES.map((s) => ({ label: s.label, value: s.value }))}
-            value={speedMode}
-            onChange={handleSpeedChange}
-            testID="camera-speed-control"
-          />
-        </View>
-      )}
+      {/* Camera effect bar and speed segment control have been moved into
+          the CaptureToolsSheet (behind the Tools button). They are no longer
+          rendered inline in the default camera chrome. */}
 
       {/* Hands-free mode indicator — subtle badge when hands-free is armed */}
       {handsFreeMode && !isRecording && handsFreeCountdown === null && (
@@ -1139,6 +1115,42 @@ export default function CreatorCamera({
         onCancel={handleGreenScreenCancel}
       />
 
+      {/* ── Capture tools sheet ──────────────────────────────────────── */}
+      {/* Bottom sheet containing all secondary camera tools: Timer, Grid,
+          Hands-free, Speed, Green Screen, Effects, Multi-capture. Opens
+          from the Tools button in the top bar. Each tool applies
+          immediately; the sheet can stay open or be dismissed. */}
+      <CaptureToolsSheet
+        visible={showToolsSheet}
+        onClose={closeToolsSheet}
+        timerOption={timerOption}
+        onTimerChange={handleTimerChange}
+        showGrid={showGrid}
+        onToggleGrid={toggleGrid}
+        handsFreeMode={handsFreeMode}
+        onToggleHandsFree={toggleHandsFree}
+        speedMode={speedMode}
+        onSpeedChange={handleSpeedChange}
+        greenScreenActive={!!greenScreenSettings}
+        onOpenGreenScreen={() => {
+          setShowToolsSheet(false);
+          if (!greenScreenSettings) {
+            setShowGreenScreenSheet(true);
+          } else {
+            // Toggle off — clear settings
+            toggleGreenScreen();
+          }
+        }}
+        cameraEffect={cameraEffect}
+        onSelectEffect={setCameraEffect}
+        multiCaptureMode={multiCaptureMode}
+        onToggleMultiCapture={toggleMultiCapture}
+        multiCaptureCount={multiCaptures.length}
+        hasCapturedUri={!!capturedUri}
+        isVisualSearch={isVisualSearch}
+        isRecording={isRecording}
+      />
+
       {/* Green screen active indicator — shows the selected background
           thumbnail when green screen is armed */}
       {greenScreenSettings && !showGreenScreenSheet && (
@@ -1151,8 +1163,10 @@ export default function CreatorCamera({
         </View>
       )}
 
-      {/* Mode indicator (only when no bottom overlay and no mode switcher) */}
-      {!renderBottomOverlay && (
+      {/* Mode indicator — only when an external bottom overlay is supplied.
+          The internal CreatorModeSwitch already labels the active mode, so
+          the pill is redundant when the switch is rendered. */}
+      {renderBottomOverlay && (
         <View style={styles.modePill} pointerEvents="none">
           <Text style={styles.modeText}>{modeLabel}</Text>
         </View>
@@ -1644,6 +1658,15 @@ const styles = StyleSheet.create({
     width: 56,
     minHeight: 56,
   },
+  // Capture mode switch (Look / Poster / Search) — sits below the shutter,
+  // above the safe area. Minimal text-based switch; the container only
+  // positions it, the component draws its own content.
+  captureModeSwitch: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
   bottomLabel: {
     fontFamily: Typography.family.medium,
     fontSize: Type.meta.size,
@@ -1792,26 +1815,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     fontSize: Type.caption.size,
     // color applied inline via colors.background (theme token)
-  },
-  // ── Speed mode segment control wrapper ──
-  // Positioned above the bottom bar, centered. The segment control
-  // itself is 36pt tall with equal-width segments.
-  speedControlWrap: {
-    position: 'absolute',
-    left: Space.lg,
-    right: Space.lg,
-    alignSelf: 'center',
-    maxWidth: 320,
-  },
-  // ── Camera effect bar wrapper ──
-  // Positioned above the bottom area (mode switcher + shutter). The
-  // CameraEffectBar is a transparent horizontal scroll — no card, no
-  // background — so it reads as an overlay on the camera preview.
-  cameraEffectBarWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
   },
   // ── Hands-free mode badge ──
   // Subtle indicator that hands-free is armed. Positioned at top-left

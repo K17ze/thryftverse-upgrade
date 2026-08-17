@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useSharedValue, runOnJS } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Space, Radius, Type, Typography, FontFamily, FontSize, Control } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
@@ -59,6 +59,7 @@ import type { AssetTransform, LayoutPreview, LayoutId } from './layout/layoutTyp
 import { LookAutoLayoutBar } from './LookAutoLayoutBar';
 import { autoLayout, type LayoutStyle } from './LookAutoLayout';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { fetchLookByIdFromApi } from '../../services/looksApi';
 import { lookToDocument } from '../viewerAdapters';
 import type { CreatorTemplate } from '../templates';
@@ -80,6 +81,15 @@ import type { CreatorTemplate } from '../templates';
 //
 // Selected object produces a context toolbar (not a permanent dock).
 // Global Layers remains More/Advanced.
+
+// ── Bottom surface state machine ──────────────────────────────────────
+// Per spec: "One lower interaction surface at a time." The Look screen
+// shows exactly ONE bottom surface at any moment. The default is 'tools'
+// (the ContextToolRail). Tapping "Items" / "Layout" / "Effects" swaps
+// the bottom surface to that panel; closing the panel returns to 'tools'.
+// This replaces the old pattern of multiple permanent rails (AutoLayoutBar,
+// LayoutPreviewRail, LookSourceTray) competing with the canvas.
+type BottomSurface = 'tools' | 'items' | 'layout' | 'effects' | null;
 
 function layerTypeLabel(type: CreatorLayer['type']): string {
   switch (type) {
@@ -104,6 +114,27 @@ function layerTypeLabel(type: CreatorLayer['type']): string {
     case 'weather': return 'Weather';
     default: return 'Object';
   }
+}
+
+// ── SlideUpSurface — wraps a bottom surface with a slide-up entrance ──
+// Per spec: "Reanimated for surface transitions (slide in/out)." Each
+// bottom surface (items, layout, effects) slides up from below when it
+// mounts. Under reduced motion, the transition is instant.
+function SlideUpSurface({ children }: { children: React.ReactNode }) {
+  const motionConfig = useMotionConfig();
+  const translateY = useSharedValue(1);
+  useEffect(() => {
+    if (motionConfig.isReducedMotion) {
+      translateY.value = 0;
+    } else {
+      translateY.value = withSpring(0, motionConfig.spring.entrance);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value * 300 }],
+  }));
+  return <Reanimated.View style={animStyle}>{children}</Reanimated.View>;
 }
 
 function LookComposerInner() {
@@ -180,9 +211,11 @@ function LookComposerInner() {
   }, []);
   const [editingLookId, setEditingLookId] = useState<string | null>(null);
   const [isLoadingSourceLook, setIsLoadingSourceLook] = useState(false);
-  // ── Commerce source tray (spec 10: pull in items from closet/listings/search) ──
-  const [showSourceTray, setShowSourceTray] = useState(false);
-  const [showEffects, setShowEffects] = useState(false);
+  // ── Bottom surface state machine ───────────────────────────────────
+  // Controls which bottom surface is visible. Only ONE renders at a time.
+  // 'tools' = ContextToolRail (default). 'items' = Items drawer.
+  // 'layout' = Layout panel. 'effects' = Effects panel (incl. AI effects).
+  const [bottomSurface, setBottomSurface] = useState<BottomSurface>('tools');
   const [showAIEffects, setShowAIEffects] = useState(false);
   const [autoLayoutId, setAutoLayoutId] = useState<LayoutStyle | null>(null);
   const [showA11yMove, setShowA11yMove] = useState(false);
@@ -332,8 +365,8 @@ function LookComposerInner() {
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
         if (showHelp) setShowHelp(false);
-        else if (showEffects) setShowEffects(false);
         else if (showAIEffects) setShowAIEffects(false);
+        else if (bottomSurface !== 'tools') setBottomSurface('tools');
         else if (showA11yMove) setShowA11yMove(false);
         else if (showA11yZOrder) setShowA11yZOrder(false);
         else if (cropMode) setCropMode(false);
@@ -363,15 +396,15 @@ function LookComposerInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, showHelp, showEffects, showAIEffects, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, selectedLayerIds, exitMultiSelect, handleMultiDelete, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, showHelp, showAIEffects, bottomSurface, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, selectedLayerIds, exitMultiSelect, handleMultiDelete, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // Hardware back button — intercept to close sheets first
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
         if (showHelp) { setShowHelp(false); return true; }
-        if (showEffects) { setShowEffects(false); return true; }
         if (showAIEffects) { setShowAIEffects(false); return true; }
+        if (bottomSurface !== 'tools') { setBottomSurface('tools'); return true; }
         if (showA11yMove) { setShowA11yMove(false); return true; }
         if (showA11yZOrder) { setShowA11yZOrder(false); return true; }
         if (cropMode) { setCropMode(false); return true; }
@@ -393,7 +426,7 @@ function LookComposerInner() {
         return false;
       };
       return onBackPress;
-    }, [showHelp, showEffects, showAIEffects, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, exitMultiSelect, selectedLayerId, selectLayer])
+    }, [showHelp, showAIEffects, bottomSurface, showA11yMove, showA11yZOrder, cropMode, cropTarget, cutoutTarget, cutoutPreviewTarget, showPreview, showBackground, showSafeZone, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, showAlignPicker, multiSelectMode, exitMultiSelect, selectedLayerId, selectLayer])
   );
 
   const handleCanvasPress = useCallback(() => {
@@ -412,6 +445,19 @@ function LookComposerInner() {
       setMultiSelectMode(false);
     }
   }, [multiSelectMode, selectedLayerIds.length]);
+
+  // ── Reset bottom surface to 'tools' when the selection changes ──
+  // When the user selects or deselects a layer, any open bottom surface
+  // (items / layout / effects) closes so the ContextToolRail can adapt to
+  // the new selection context. This ensures only one surface is visible
+  // and the rail always reflects the current selection state.
+  const prevSelectionRef = useRef<string | null>(selectedLayerId);
+  useEffect(() => {
+    if (prevSelectionRef.current !== selectedLayerId) {
+      prevSelectionRef.current = selectedLayerId;
+      setBottomSurface('tools');
+    }
+  }, [selectedLayerId]);
 
   const handleLayerPress = useCallback((layerId: string) => {
     if (multiSelectMode) {
@@ -523,15 +569,8 @@ function LookComposerInner() {
     setPickerMode('product');
   }, []);
 
-  // ── Bottom action handlers (default toolbar) ───────────────────────
-  // Per spec 10: Add item, Add photo, Crop, Text, Layout
-  const handleAddItem = useCallback(() => {
-    haptic.light();
-    setPickerMode('product');
-  }, [haptic]);
-
   // ── Source tray: add item from closet/listings/search ──
-  // Tapping an item in the source tray adds it as a product tag layer
+  // Tapping an item in the items drawer adds it as a product tag layer
   // via addLookProduct. The tray stays open so the user can add multiple
   // items in quick succession.
   const handleSourceTrayAddItem = useCallback((item: {
@@ -577,9 +616,23 @@ function LookComposerInner() {
     haptic.medium();
   }, [addLookProduct, haptic]);
 
-  const handleToggleSourceTray = useCallback(() => {
-    setShowSourceTray((p) => !p);
-  }, []);
+  // ── Bottom surface switching ──────────────────────────────────────
+  // Each handler swaps the bottom surface to the requested panel and fires
+  // a haptic. Closing a panel returns to 'tools' (the ContextToolRail).
+  const handleOpenItems = useCallback(() => {
+    haptic.light();
+    setBottomSurface('items');
+  }, [haptic]);
+
+  const handleOpenLayout = useCallback(() => {
+    haptic.light();
+    setBottomSurface('layout');
+  }, [haptic]);
+
+  const handleCloseSurface = useCallback(() => {
+    haptic.light();
+    setBottomSurface('tools');
+  }, [haptic]);
 
   const handleAddPhoto = useCallback(() => {
     haptic.light();
@@ -589,11 +642,6 @@ function LookComposerInner() {
   const handleAddText = useCallback(() => {
     haptic.light();
     setPickerMode('text');
-  }, [haptic]);
-
-  const handleOpenLayout = useCallback(() => {
-    haptic.light();
-    setShowTemplates(true);
   }, [haptic]);
 
   // Cutout from the default toolbar — opens true subject segmentation
@@ -642,18 +690,18 @@ function LookComposerInner() {
   }, [selectedLayer, haptic]);
 
   // ── Effects action for selected media ───────────────────────────────
-  // Opens the effects bottom sheet for the selected media layer. The
-  // sheet shows the EffectPreviewRail (filter thumbnails using the
-  // layer's own media as the preview source) and the AdjustPanel
-  // (fine-tuning sliders). Effect changes commit to the layer's
-  // non-destructive `effects` array (EffectNode[]) via updateLayer.
+  // Opens the effects bottom surface for the selected media layer. The
+  // surface shows the EffectPreviewRail (filter thumbnails using the
+  // layer's own media as the preview source), AI effects, and the
+  // AdjustPanel (fine-tuning sliders). Effect changes commit to the
+  // layer's non-destructive `effects` array (EffectNode[]) via updateLayer.
   const handleEffectsAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'media') {
       haptic.light();
       return;
     }
     haptic.medium();
-    setShowEffects(true);
+    setBottomSurface('effects');
   }, [selectedLayer, haptic]);
 
   // ── Effects sheet — derived state & handlers ───────────────────────
@@ -753,21 +801,10 @@ function LookComposerInner() {
     }, 'Apply auto-adjust');
   }, [selectedMediaLayer, currentEffects, updateLayer, effectsSourceUri]);
 
-  // ── AI Effects browser ──────────────────────────────────────────────
-  // Opens the AIEffectBrowserSheet for the selected media layer. When
-  // an AI effect is applied, its render stack (EffectNode[]) is converted
-  // to a composition-schema filter node and added to the layer's effect
-  // stack. The filter node stores the AI effect ID so the renderer can
-  // resolve the full render graph at draw time.
-  const handleAIEffectAction = useCallback(() => {
-    if (!selectedLayer || selectedLayer.type !== 'media') {
-      haptic.light();
-      return;
-    }
-    haptic.medium();
-    setShowAIEffects(true);
-  }, [selectedLayer, haptic]);
-
+  // ── AI Effects ──────────────────────────────────────────────────────
+  // AI effects are now folded under the Effects bottom surface (no
+  // standalone AI destination). The AIEffectBrowserSheet is launched
+  // from within the effects panel via the "AI Effects" button.
   const handleAIEffectApply = useCallback((effectId: string, intensity: number) => {
     if (!selectedMediaLayer) return;
     // Store the AI effect as a composition-schema filter node with a
@@ -1054,9 +1091,9 @@ function LookComposerInner() {
           id: 'look-items',
           label: 'Items',
           icon: 'bag-outline',
-          onPress: handleToggleSourceTray,
+          onPress: handleOpenItems,
           accessibilityLabel: 'Items',
-          accessibilityHint: 'Toggles the commerce source tray to add items from your closet or listings',
+          accessibilityHint: 'Opens the items drawer to add products from your closet, listings, or search',
           hapticFeedback: 'light',
         },
         {
@@ -1074,7 +1111,7 @@ function LookComposerInner() {
           icon: 'grid-outline',
           onPress: handleOpenLayout,
           accessibilityLabel: 'Layout',
-          accessibilityHint: 'Opens the template browser for layout presets',
+          accessibilityHint: 'Opens the layout panel to arrange your photos with grid, masonry, or collage presets',
           hapticFeedback: 'light',
         },
       ],
@@ -1181,15 +1218,6 @@ function LookComposerInner() {
         },
       ],
       overflow: [
-        {
-          id: 'look-media-ai-effects',
-          label: 'AI Effects',
-          icon: 'sparkles-outline',
-          onPress: handleAIEffectAction,
-          accessibilityLabel: 'AI Effects',
-          accessibilityHint: 'Opens the AI effects browser for the selected media',
-          hapticFeedback: 'medium',
-        },
         {
           id: 'look-media-front',
           label: 'Front',
@@ -1430,7 +1458,7 @@ function LookComposerInner() {
   }, [
     selectedLayer,
     handleAddPhoto,
-    handleToggleSourceTray,
+    handleOpenItems,
     handleAddText,
     handleOpenLayout,
     handleCutoutAction,
@@ -1808,73 +1836,167 @@ function LookComposerInner() {
         </View>
       </View>
 
-      {/* ── Auto layout bar (LookAutoLayoutBar) ─────────────────────────── */}
-      {/* Compact quick-access layout switching. Always visible when there
-          are media layers on the canvas and no layer is selected. Sits
-          just above the bottom ContextToolRail. Complements the
-          LayoutPreviewRail (detailed previews) with instant one-tap
-          layout switching via autoLayout. */}
-      {mediaLayers.length > 0 && !selectedLayer && !multiSelectMode && (
-        <View style={[styles.autoLayoutBarContainer, { bottom: insets.bottom + 56 }]}>
-          <LookAutoLayoutBar
-            activeStyle={autoLayoutId}
-            onSelect={handleAutoLayoutSelect}
-          />
-        </View>
-      )}
+      {/* ── Bottom surface state machine ────────────────────────────────── */}
+      {/* Per spec: "One lower interaction surface at a time." Only ONE of
+          the following surfaces renders at any moment. The default is
+          'tools' (the ContextToolRail). Tapping Items / Layout / Effects
+          swaps the surface; closing returns to 'tools'. No permanent
+          rails compete with the canvas. */}
 
-      {/* ── Layout preview rail (autoCompose) ──────────────────────────── */}
-      {/* Replaces the blind "Try arrangement" cycling button. When the user
-          has 2+ media assets on the canvas, the LayoutPreviewRail shows
-          real preview thumbnails computed by autoCompose. Sits above the
-          LookAutoLayoutBar. Only shown when no layer is selected so
-          the selection context toolbar is not obscured. */}
-      {hasMultipleMedia && !selectedLayer && !multiSelectMode && (
-        <View style={[styles.layoutRailContainer, { bottom: insets.bottom + 108 }]}>
-          <LayoutPreviewRail
-            assetUris={mediaAssetUris}
-            layouts={allLayouts}
-            selectedId={selectedLayoutId}
-            onSelect={handleLayoutSelect}
-            onPreview={handleLayoutPreview}
-            onPreviewEnd={handleLayoutPreviewEnd}
-          />
-        </View>
-      )}
-
-      {/* ── Commerce source tray (spec 10: pull in items from closet/listings/search) ── */}
-      {/* A bottom tray where users can pull in items from their closet, their
-          own listings, or search for products. Sits above the bottom action
-          bar. Collapsible so the canvas remains dominant. Only shown when
-          no layer is selected (the context toolbar takes over on selection). */}
-      {!selectedLayer && (
-        <View style={[styles.sourceTrayContainer, { bottom: insets.bottom + (hasMultipleMedia ? 184 : 108) }]}>
-          <LookSourceTray
-            expanded={showSourceTray}
-            onToggle={handleToggleSourceTray}
-            onAddItem={handleSourceTrayAddItem}
-            onDropProduct={handleDropProduct}
-          />
-        </View>
-      )}
-
-      {/* ── ContextToolRail (replaces static bottom bar + context toolbar) ── */}
+      {/* ── 'tools' surface: ContextToolRail ── */}
       {/* The rail adapts its visible tool set based on the current selection
           state. No selection → look-default (Add, Items, Text, Layout, More).
-          Media selected → look-media-selected (Replace, Crop, Adjust, Effects).
+          Media selected → look-media-selected (Replace, Crop, Auto, Adjust, Effects).
           Text selected → look-text-selected (Edit, Font, Color, Align).
           Product selected → look-product-selected (Item, Tag Style, Price, Duplicate).
           Each tool's onPress calls an EXISTING handler — no new capabilities. */}
-      <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
-        <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <ContextToolRail
-            context={activeToolContext}
-            groups={toolGroups}
-            onOverflowPress={() => { haptic.selection(); setShowOverflow(true); }}
-            style={styles.toolRail}
-          />
+      {bottomSurface === 'tools' && (
+        <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
+          <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <ContextToolRail
+              context={activeToolContext}
+              groups={toolGroups}
+              onOverflowPress={() => { haptic.selection(); setShowOverflow(true); }}
+              style={styles.toolRail}
+            />
+          </View>
         </View>
-      </View>
+      )}
+
+      {/* ── 'items' surface: Items drawer (LookSourceTray expanded) ── */}
+      {/* Replaces the tools rail temporarily. Shows Closet / Listings /
+          Search tabs. Tapping an item adds it to the canvas. Closing
+          the drawer returns to 'tools'. The LookSourceTray's peek bar
+          acts as the drawer header with a close chevron. */}
+      {bottomSurface === 'items' && (
+        <SlideUpSurface>
+          <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
+            <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+              <LookSourceTray
+                expanded={true}
+                onToggle={handleCloseSurface}
+                onAddItem={handleSourceTrayAddItem}
+                onDropProduct={handleDropProduct}
+              />
+            </View>
+          </View>
+        </SlideUpSurface>
+      )}
+
+      {/* ── 'layout' surface: Layout panel ── */}
+      {/* Replaces the tools rail temporarily. Shows the LookAutoLayoutBar
+          (one-tap layout styles) and, when there are 2+ media assets,
+          the LayoutPreviewRail (real preview thumbnails). Closing the
+          panel returns to 'tools'. */}
+      {bottomSurface === 'layout' && (
+        <SlideUpSurface>
+          <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
+            <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+              <LayoutPanel
+                title="Layout"
+                onClose={handleCloseSurface}
+                colors={colors}
+              >
+                {mediaLayers.length > 0 && (
+                  <LookAutoLayoutBar
+                    activeStyle={autoLayoutId}
+                    onSelect={handleAutoLayoutSelect}
+                  />
+                )}
+                {hasMultipleMedia && (
+                  <LayoutPreviewRail
+                    assetUris={mediaAssetUris}
+                    layouts={allLayouts}
+                    selectedId={selectedLayoutId}
+                    onSelect={handleLayoutSelect}
+                    onPreview={handleLayoutPreview}
+                    onPreviewEnd={handleLayoutPreviewEnd}
+                  />
+                )}
+                {mediaLayers.length === 0 && (
+                  <Text style={[styles.layoutEmptyText, { color: colors.textMuted }]}>
+                    Add photos to arrange them with layout presets
+                  </Text>
+                )}
+              </LayoutPanel>
+            </View>
+          </View>
+        </SlideUpSurface>
+      )}
+
+      {/* ── 'effects' surface: Effects panel (includes AI effects) ── */}
+      {/* Replaces the tools rail temporarily. Shows the EffectPreviewRail
+          (filter thumbnails), an AI Effects entry button, the AutoAdjust
+          button, and the AdjustPanel (fine-tuning sliders). AI effects
+          are folded in here — no separate AI destination. */}
+      {bottomSurface === 'effects' && selectedMediaLayer && (
+        <SlideUpSurface>
+          <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
+            <View style={[styles.effectsSurface, { backgroundColor: colors.surface, paddingBottom: insets.bottom + Space.sm }]}>
+              <View style={[styles.effectsSheetHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.effectsSheetTitle, { color: colors.textPrimary }]}>
+                  Effects
+                </Text>
+                <PressScale
+                  onPress={handleCloseSurface}
+                  style={styles.effectsSheetDone}
+                  accessibilityLabel="Done"
+                  accessibilityHint="Closes the effects panel and returns to tools"
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text style={[styles.effectsSheetDoneText, { color: colors.brand }]}>
+                    Done
+                  </Text>
+                </PressScale>
+              </View>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+              style={styles.effectsSheetScroll}
+            >
+              <Text style={[styles.effectsSectionLabel, { color: colors.textMuted }]}>
+                Filters
+              </Text>
+              <EffectPreviewRail
+                sourceUri={effectsSourceUri}
+                presets={FILTER_PRESETS}
+                selectedId={selectedFilterId}
+                onSelect={handleEffectFilterSelect}
+              />
+              {/* ── AI Effects entry (folded under Effects) ── */}
+              {/* Opens the AIEffectBrowserSheet from within the effects
+                  panel. AI effects are not a separate destination — they
+                  live inside the effects surface. */}
+              <PressScale
+                onPress={() => { haptic.medium(); setShowAIEffects(true); }}
+                style={[styles.aiEffectsBtn, { backgroundColor: colors.brandSubtle, borderColor: colors.brand }]}
+                accessibilityLabel="AI Effects"
+                accessibilityHint="Opens the AI effects browser to browse and apply AI-powered effects"
+                scale={0.97}
+              >
+                <Ionicons name="sparkles" size={18} color={colors.brand} />
+                <Text style={[styles.aiEffectsBtnText, { color: colors.brand }]}>
+                  AI Effects
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+              </PressScale>
+              <View style={[styles.effectsAdjustWrap, { borderTopColor: colors.border }]}>
+                <View style={styles.effectsAutoRow}>
+                  <AutoAdjustButton
+                    isActive={autoAdjustActive}
+                    onApply={handleAutoAdjust}
+                  />
+                </View>
+                <AdjustPanel
+                  values={currentAdjustments}
+                  onChange={handleEffectAdjustChange}
+                  onReset={handleEffectReset}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+        </SlideUpSurface>
+      )}
 
       {/* ── Overflow menu (compact) ───────────────────────────────────── */}
       {showOverflow && (
@@ -2140,84 +2262,49 @@ function LookComposerInner() {
           }
         }}
       />
-      {/* ── Effects sheet ─────────────────────────────────────────────── */}
-      {/* Bottom sheet showing the EffectPreviewRail (filter thumbnails
-          rendered from the selected media layer's own source URI) and
-          the AdjustPanel (fine-tuning sliders). Filter selection and
-          adjustment changes commit to the layer's non-destructive
-          `effects` array (EffectNode[]) via updateLayer. */}
-      {showEffects && selectedMediaLayer && (
-        <View style={styles.effectsSheetBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowEffects(false)} />
-          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm, backgroundColor: colors.surface }]}>
-            <View style={[styles.effectsSheetHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.effectsSheetTitle, { color: colors.textPrimary }]}>
-                Effects
-              </Text>
-              <PressScale
-                onPress={() => { haptic.light(); setShowEffects(false); }}
-                style={styles.effectsSheetDone}
-                accessibilityLabel="Done"
-                accessibilityHint="Closes the effects panel"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.effectsSheetDoneText, { color: colors.brand }]}>
-                  Done
-                </Text>
-              </PressScale>
-            </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={styles.effectsSheetScroll}
-            >
-              <Text style={[styles.effectsSectionLabel, { color: colors.textMuted }]}>
-                Filters
-              </Text>
-              <EffectPreviewRail
-                sourceUri={effectsSourceUri}
-                presets={FILTER_PRESETS}
-                selectedId={selectedFilterId}
-                onSelect={handleEffectFilterSelect}
-              />
-              {/* ── AI Effects entry point ── */}
-              {/* A compact button that opens the AIEffectBrowserSheet, where
-                  the user can browse and apply AI-powered effects from the
-                  AIEffectRegistry. Each AI effect is a composed stack of
-                  real Skia render nodes (color matrices, blur, grain, etc.)
-                  — not CSS filter strings (AGENTS.md §11). */}
-              <PressScale
-                onPress={() => { haptic.medium(); setShowAIEffects(true); }}
-                style={[styles.aiEffectsBtn, { backgroundColor: colors.brandSubtle, borderColor: colors.brand }]}
-                accessibilityLabel="AI Effects"
-                accessibilityHint="Opens the AI effects browser to browse and apply AI-powered effects"
-                scale={0.97}
-              >
-                <Ionicons name="sparkles" size={18} color={colors.brand} />
-                <Text style={[styles.aiEffectsBtnText, { color: colors.brand }]}>
-                  AI Effects
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.brand} />
-              </PressScale>
-              <View style={[styles.effectsAdjustWrap, { borderTopColor: colors.border }]}>
-                <View style={styles.effectsAutoRow}>
-                  <AutoAdjustButton
-                    isActive={autoAdjustActive}
-                    onApply={handleAutoAdjust}
-                  />
-                </View>
-                <AdjustPanel
-                  values={currentAdjustments}
-                  onChange={handleEffectAdjustChange}
-                  onReset={handleEffectReset}
-                />
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
+
+// ── LayoutPanel — bottom surface for layout selection ─────────────────
+// A panel with a header (title + Done button) that wraps the
+// LookAutoLayoutBar and LayoutPreviewRail. Replaces the ContextToolRail
+// temporarily when the user taps "Layout".
+const LayoutPanel = React.memo(function LayoutPanel({
+  title,
+  onClose,
+  colors,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.layoutPanel}>
+      <View style={[styles.effectsSheetHeader, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.effectsSheetTitle, { color: colors.textPrimary }]}>
+          {title}
+        </Text>
+        <PressScale
+          onPress={onClose}
+          style={styles.effectsSheetDone}
+          accessibilityLabel="Done"
+          accessibilityHint="Closes the layout panel and returns to tools"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={[styles.effectsSheetDoneText, { color: colors.brand }]}>
+            Done
+          </Text>
+        </PressScale>
+      </View>
+      <View style={styles.layoutPanelContent}>
+        {children}
+      </View>
+    </View>
+  );
+});
 
 // ── Overflow menu item ───────────────────────────────────────────────
 const OverflowItem = React.memo(function OverflowItem({
@@ -2508,25 +2595,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.25)',
     textAlign: 'center',
   },
-  // ── Layout preview rail container ──
-  // Sits above the bottom ContextToolRail and source tray. Only visible
-  // when there are 2+ media assets and no layer is selected.
-  layoutRailContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 98,
-  },
-  // ── Auto layout bar container ──
-  // Sits just above the bottom ContextToolRail. The LookAutoLayoutBar
-  // is a compact horizontal scroll of layout preset buttons.
-  autoLayoutBarContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 97,
-  },
-  // ── AI Effects button (inside the effects sheet) ──
+  // ── AI Effects button (inside the effects surface) ──
   aiEffectsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2543,7 +2612,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.body,
     fontFamily: FontFamily.semibold,
   },
-  // ── Bottom ContextToolRail container ──
+  // ── Bottom surface container (shared by all surfaces) ──
   bottomBarContainer: {
     position: 'absolute',
     bottom: 0,
@@ -2551,21 +2620,32 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
   },
-  // ── Source tray container ──
-  // Sits above the bottom action bar. The LookSourceTray component
-  // manages its own expand/collapse content; this container positions it.
-  sourceTrayContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 99,
-  },
   bottomBar: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
   },
   toolRail: {
     flex: 1,
+  },
+  // ── Layout panel ──
+  layoutPanel: {
+    maxHeight: '70%',
+  },
+  layoutPanelContent: {
+    paddingVertical: Space.sm,
+  },
+  layoutEmptyText: {
+    fontFamily: FontFamily.regular,
+    fontSize: FontSize.body,
+    textAlign: 'center',
+    paddingVertical: Space.lg,
+    paddingHorizontal: Space.md,
+  },
+  // ── Effects surface ──
+  effectsSurface: {
+    borderTopLeftRadius: Radius.md,
+    borderTopRightRadius: Radius.md,
+    maxHeight: '85%',
   },
   // ── Overflow menu ──
   overflowContainer: {
@@ -2635,18 +2715,7 @@ const styles = StyleSheet.create({
     minWidth: 36,
     textAlign: 'right',
   },
-  // ── Effects sheet ──
-  effectsSheetBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    zIndex: 200,
-    justifyContent: 'flex-end',
-  },
-  effectsSheet: {
-    borderTopLeftRadius: Radius.md,
-    borderTopRightRadius: Radius.md,
-    maxHeight: '85%',
-  },
+  // ── Effects surface (shared header styles) ──
   effectsSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
