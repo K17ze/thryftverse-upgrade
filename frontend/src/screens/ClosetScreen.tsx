@@ -103,6 +103,8 @@ export default function ClosetScreen() {
     brandChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
     brandChipText: { color: colors.textSecondary },
     brandChipTextActive: { color: colors.background },
+    closetToolbarBadge: { backgroundColor: colors.textPrimary },
+    closetToolbarBadgeText: { color: colors.background },
   });
 
   const navigation = useNavigation<NavT>();
@@ -733,8 +735,8 @@ export default function ClosetScreen() {
               >
                 <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
                 {activeBrand ? (
-                  <View style={styles.closetToolbarBadge}>
-                    <Text style={styles.closetToolbarBadgeText}>1</Text>
+                  <View style={[styles.closetToolbarBadge, t.closetToolbarBadge]}>
+                    <Text style={[styles.closetToolbarBadgeText, t.closetToolbarBadgeText]}>1</Text>
                   </View>
                 ) : null}
               </AnimatedPressable>
@@ -956,16 +958,14 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: Radius.full,
-    backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
   closetToolbarBadgeText: {
-    color: '#fff',
-    fontSize: 10,
     fontFamily: Typography.family.bold,
-    lineHeight: 12,
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
   },
   tabsWrap: {
     paddingHorizontal: Space.md,

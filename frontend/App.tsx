@@ -31,7 +31,7 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
 import { SettingsPreferencesProvider } from './src/context/SettingsPreferencesContext';
 import { AccessibilityPreferencesProvider } from './src/context/AccessibilityPreferencesContext';
-import { ToastContainer } from './src/components/Toast';
+import { ToastContainer, PushSoftAskOverlay } from './src/components/Toast';
 import { AppErrorBoundary, initSentry, installGlobalErrorHandler, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
 import { registerAppNavigationRef } from './src/platform/monitoring/appNavigation';
 import { KeyboardProvider } from './src/platform/keyboard';
@@ -526,6 +526,7 @@ export default function App() {
                 </CurrencyProvider>
               </BackendDataProvider>
               <ToastContainer />
+              <PushSoftAskOverlay />
             </ToastProvider>
           </ServerStateProvider>
           </KeyboardProvider>

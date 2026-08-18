@@ -1,10 +1,19 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   StyleSheet,
-  Animated,
   ViewStyle,
 } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withDelay,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -18,6 +27,19 @@ interface TypingIndicatorProps {
   style?: ViewStyle;
 }
 
+/**
+ * TypingIndicator — animated chat typing dots.
+ *
+ * Migrated from the legacy React Native `Animated` API (JS-thread driver)
+ * to Reanimated 4 worklets (UI-thread) per the research doc §5/§3d:
+ * "no synchronous work on the JS thread during scroll" and "Reanimated
+ * worklets run on the UI thread." The typing indicator runs continuously
+ * during chat sessions — keeping it on the UI thread prevents JS-thread
+ * contention that causes scroll jank in conversation lists.
+ *
+ * Each dot owns its own shared value and animation with a staggered delay
+ * so they bounce in sequence, matching the original behaviour exactly.
+ */
 export function TypingIndicator({
   dotCount = 3,
   dotSize = 8,
@@ -29,98 +51,102 @@ export function TypingIndicator({
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const resolvedDotColor = dotColor ?? colors.textMuted;
-  const animations = useRef(
-    Array.from({ length: dotCount }, () => new Animated.Value(0))
-  ).current;
-
-  useEffect(() => {
-    // Reduced motion: show static dots at a fixed opacity (no travel).
-    if (reducedMotion) {
-      animations.forEach((a) => a.setValue(0.6));
-      return;
-    }
-    // Create staggered animations for each dot
-    const createAnimation = (index: number) => {
-      return Animated.loop(
-        Animated.sequence([
-          Animated.timing(animations[index], {
-            toValue: 1,
-            duration: animationDuration / 2,
-            useNativeDriver: true,
-          }),
-          Animated.timing(animations[index], {
-            toValue: 0,
-            duration: animationDuration / 2,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-    };
-
-    // Start animations with stagger
-    const animations_started = animations.map((_, index) => {
-      const anim = createAnimation(index);
-      // Add delay based on index
-      setTimeout(() => {
-        anim.start();
-      }, index * (animationDuration / 3));
-      return anim;
-    });
-
-    return () => {
-      animations_started.forEach(anim => anim.stop());
-    };
-  }, [reducedMotion]);
 
   return (
     <View style={StyleSheet.flatten([styles.container, style])}>
-      {animations.map((anim, index) => {
-        const translateY = anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -8],
-        });
-
-        const scale = anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 1.2],
-        });
-
-        const opacity = anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.4, 1],
-        });
-
-        return (
-          <Animated.View
-            key={index}
-            style={[
-              styles.dot,
-              {
-                width: dotSize,
-                height: dotSize,
-                borderRadius: dotSize / 2,
-                backgroundColor: resolvedDotColor,
-                marginHorizontal: dotSpacing / 2,
-                transform: [
-                  { translateY },
-                  { scale },
-                ],
-                opacity,
-              },
-            ]}
-          />
-        );
-      })}
+      {Array.from({ length: dotCount }, (_, index) => (
+        <TypingDot
+          key={index}
+          index={index}
+          dotSize={dotSize}
+          dotColor={resolvedDotColor}
+          dotSpacing={dotSpacing}
+          animationDuration={animationDuration}
+          reducedMotion={reducedMotion}
+        />
+      ))}
     </View>
   );
 }
+
+/**
+ * Single typing dot — memoized so it only re-renders when its own props
+ * change. Owns its own shared value and runs a staggered bounce animation
+ * on the UI thread via Reanimated worklets.
+ */
+const TypingDot = React.memo(function TypingDot({
+  index,
+  dotSize,
+  dotColor,
+  dotSpacing,
+  animationDuration,
+  reducedMotion,
+}: {
+  index: number;
+  dotSize: number;
+  dotColor: string;
+  dotSpacing: number;
+  animationDuration: number;
+  reducedMotion: boolean;
+}) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      cancelAnimation(progress);
+      progress.value = 0.6;
+      return;
+    }
+
+    const halfDuration = animationDuration / 2;
+    const staggerDelay = index * (animationDuration / 3);
+
+    progress.value = 0;
+    progress.value = withDelay(
+      staggerDelay,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: halfDuration, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0, { duration: halfDuration, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        false,
+      ),
+    );
+
+    return () => {
+      cancelAnimation(progress);
+    };
+  }, [progress, index, animationDuration, reducedMotion]);
+
+  const dotStyle = useAnimatedStyle(() => {
+    const v = progress.value;
+    const translateY = -8 * v;
+    const scale = 1 + 0.2 * v;
+    const opacity = 0.4 + 0.6 * v;
+
+    return {
+      width: dotSize,
+      height: dotSize,
+      borderRadius: dotSize / 2,
+      backgroundColor: dotColor,
+      marginHorizontal: dotSpacing / 2,
+      transform: [{ translateY }, { scale }],
+      opacity,
+    };
+  });
+
+  return <Reanimated.View style={[styles.dot, dotStyle]} />;
+});
 
 // Compact version for use inside message bubbles
 export function CompactTypingIndicator({
   dotSize = 6,
   dotColor = '#FFFFFF',
   style,
-}: Omit<TypingIndicatorProps, 'dotCount' | 'dotSpacing' | 'animationDuration'>) {
+}: Omit<TypingIndicatorProps, 'dotCount' | 'dotSpacing' | 'animationDuration'> & {
+  dotColor?: string;
+}) {
   return (
     <TypingIndicator
       dotCount={3}
@@ -142,7 +168,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   dot: {
-    // Base styles applied dynamically
+    // Base styles applied via animated style
   },
   compactContainer: {
     height: 20,

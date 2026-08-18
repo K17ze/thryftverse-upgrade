@@ -90,7 +90,7 @@ interface CachedImageProps {
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
 
-export function CachedImage({
+function CachedImageComponent({
   uri,
   previewUri,
   style,
@@ -380,6 +380,74 @@ export function CachedImage({
     </View>
   );
 }
+
+/**
+ * Custom comparator for React.memo — checks the props that actually affect
+ * the rendered output, skipping `style`/`containerStyle` when they are
+ * StyleSheet references (referentially stable). This prevents the 565
+ * CachedImage instances from re-rendering on every parent update (research
+ * doc §5: "76 React.memo usages for 565 CachedImage usages").
+ */
+function cachedImagePropsEqual(prev: CachedImageProps, next: CachedImageProps): boolean {
+  if (
+    prev.uri !== next.uri ||
+    prev.previewUri !== next.previewUri ||
+    prev.contentFit !== next.contentFit ||
+    prev.transition !== next.transition ||
+    prev.blurhash !== next.blurhash ||
+    prev.priority !== next.priority ||
+    prev.isVisible !== next.isVisible ||
+    prev.cacheBuster !== next.cacheBuster ||
+    prev.downscaleWidth !== next.downscaleWidth ||
+    prev.sharedTransitionTag !== next.sharedTransitionTag ||
+    prev.shouldPlay !== next.shouldPlay ||
+    prev.isLooping !== next.isLooping ||
+    prev.showPlayBadge !== next.showPlayBadge ||
+    prev.emptyLabel !== next.emptyLabel ||
+    prev.emptyIcon !== next.emptyIcon ||
+    prev.accessibilityRole !== next.accessibilityRole ||
+    prev.accessibilityLabel !== next.accessibilityLabel ||
+    prev.accessibilityElementsHidden !== next.accessibilityElementsHidden ||
+    prev.onError !== next.onError ||
+    prev.onLoad !== next.onLoad
+  ) {
+    return false;
+  }
+  // Focal point is an object — shallow compare
+  const pf = prev.focalPoint;
+  const nf = next.focalPoint;
+  if (pf && nf) {
+    if (pf.x !== nf.x || pf.y !== nf.y) return false;
+  } else if (pf !== nf) {
+    return false;
+  }
+  // Skip style comparison when both are StyleSheet references (numbers —
+  // StyleSheet.create returns opaque numeric IDs that are referentially
+  // stable). Only deep-check when at least one side is a dynamic object.
+  if (prev.style !== next.style) {
+    // If either is a number (StyleSheet ID), they're stable — only
+    // re-render if the reference actually changed, which the !== above
+    // already caught. For dynamic style objects/arrays we let React's
+    // default shallow compare handle it by returning false.
+    if (typeof prev.style !== 'number' && typeof next.style !== 'number') {
+      return false;
+    }
+  }
+  if (prev.containerStyle !== next.containerStyle) {
+    if (typeof prev.containerStyle !== 'number' && typeof next.containerStyle !== 'number') {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Memoized CachedImage — prevents unnecessary re-renders across the 565
+ * usage sites. The custom comparator checks content-affecting props and
+ * skips style comparison when styles are StyleSheet references (research
+ * doc §6: "Wrap CachedImage in React.memo with a custom comparator").
+ */
+export const CachedImage = React.memo(CachedImageComponent, cachedImagePropsEqual);
 
 const styles = StyleSheet.create({
   container: {

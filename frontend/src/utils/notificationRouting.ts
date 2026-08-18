@@ -19,6 +19,7 @@ export type ResolvedRoute =
   | { screen: 'Chat'; params: { conversationId: string; partnerUserId?: string } }
   | { screen: 'LiveStreamViewer'; params: { sessionId: string } }
   | { screen: 'AssetDetail'; params: { assetId: string } }
+  | { screen: 'VerificationResponse'; params: { assetId: string; demandId: number } }
   | { screen: 'CollectionDetail'; params: { collectionId: string } }
   | { screen: ScreenName; params?: Record<string, unknown> }
   | null;
@@ -39,6 +40,11 @@ const VALID_SCREENS: ReadonlySet<string> = new Set<ScreenName>([
   'Portfolio',
   'CoOwnOrderHistory',
   'SellerVerification',
+  'VerificationResponse',
+  'Withdraw',
+  'SellerEarnings',
+  'WalletActivity',
+  'LiveShopping',
 ]);
 
 export function resolveNotificationRoute(
@@ -84,6 +90,16 @@ export function resolveNotificationRoute(
     }
     if (screen === 'AssetDetail' && typeof params.assetId === 'string') {
       return { screen: 'AssetDetail', params: { assetId: params.assetId } };
+    }
+    if (
+      screen === 'VerificationResponse' &&
+      typeof params.assetId === 'string' &&
+      typeof params.demandId === 'number'
+    ) {
+      return {
+        screen: 'VerificationResponse',
+        params: { assetId: params.assetId, demandId: params.demandId },
+      };
     }
     if (screen === 'CollectionDetail' && typeof params.collectionId === 'string') {
       return { screen: 'CollectionDetail', params: { collectionId: params.collectionId } };

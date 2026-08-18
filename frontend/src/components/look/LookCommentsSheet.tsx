@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TextInput,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { SlideInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -55,7 +55,7 @@ export function LookCommentsSheet({
   const [isLoading, setIsLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const flatListRef = useRef<FlatList<LookCommentApiItem>>(null);
+  const flatListRef = useRef<FlashListRef<LookCommentApiItem>>(null);
 
   const loadComments = useCallback(async () => {
     setIsLoading(true);
@@ -180,7 +180,7 @@ export function LookCommentsSheet({
           </AnimatedPressable>
         </View>
 
-        <FlatList
+        <FlashList
           ref={flatListRef}
           data={comments}
           keyExtractor={(c) => c.id}

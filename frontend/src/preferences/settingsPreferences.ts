@@ -73,6 +73,7 @@ export interface PushNotificationDefinition {
 
 export const PUSH_NOTIFICATION_DEFINITIONS: PushNotificationDefinition[] = [
   { key: 'orderUpdates', label: 'Order updates', subtitle: 'Shipping and delivery status changes', icon: 'cube-outline', group: 'orders' },
+  { key: 'auctionAlerts', label: 'Auction alerts', subtitle: 'Outbid, auction ending, and auction won alerts', icon: 'trophy-outline', group: 'orders' },
   { key: 'offers', label: 'Offers received', subtitle: 'When buyers make an offer on your item', icon: 'pricetags-outline', group: 'orders' },
   { key: 'priceDrops', label: 'Price drops', subtitle: 'For items on your wishlist', icon: 'pricetag-outline', group: 'orders' },
   { key: 'messages', label: 'New messages', subtitle: 'When someone sends you a message', icon: 'chatbubble-outline', group: 'social' },

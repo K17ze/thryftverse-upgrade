@@ -1,0 +1,34 @@
+Wave 8: Push notifications, performance, growth/retention, email truthfulness
+
+Push notifications (subagent 95150065):
+- pushPermission: soft-ask pre-prompt system (value-explaining copy per context,
+  preserves OS prompt for when user is ready), 8 contextual triggers, 5 per-category
+  Android notification channels (orders/auctions HIGH, messages/social DEFAULT, news LOW)
+- Toast: PushSoftAskOverlay component (BottomSheet with Allow/Not now)
+- App.tsx: mounted PushSoftAskOverlay
+- NotificationPreferences: added Auction alerts category toggle
+- notificationRouting: added VerificationResponse/Withdraw/SellerEarnings/WalletActivity/
+  LiveShopping deep-link routes
+- Chat/AuctionDetail/CoOwnWatch: switched to soft-ask permission flow
+
+Performance perceived speed (subagent 43738d9d):
+- CachedImage: wrapped in React.memo with custom comparator (addresses 489 unmemoized
+  instances), skips style comparison for StyleSheet refs
+- FlagshipState: extracted LoadingShimmer bar() into memoized ShimmerBar component
+  (eliminates inline style re-creation on every render)
+- TypingIndicator: migrated from JS-thread Animated to Reanimated 4 UI-thread worklets
+- LookCommentsSheet: migrated FlatList → FlashList
+- PublicProfileConnectionsSheet: migrated both FlatLists → FlashList
+
+Growth retention email (subagent be1680e5):
+- InviteFriendsScreen: removed fabricated loyalty perks (no backend support), honest
+  stats-unavailable state, removed fabricated £5 reward amount, truthful give-get copy
+- DataExportScreen: removed fabricated email notification promise (backend returns
+  export synchronously, no email sent), fixed raw #FFFFFF literals
+- AddBankAccountScreen: removed fabricated payout confirmation email promise
+- ClosetScreen: replaced raw color/font literals with canonical tokens
+- pushPermission: fixed pre-existing syntax error (unescaped apostrophe)
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

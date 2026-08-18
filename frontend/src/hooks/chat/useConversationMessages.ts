@@ -32,7 +32,7 @@ import {
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
 } from "../../services/chatApi";
-import { requestPushPermissionOnce } from "../../lib/pushPermission";
+import { requestPushPermissionWithSoftAsk } from "../../lib/pushPermission";
 import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarnings";
 import { isVideoUri } from "../../utils/media";
 import { makeStableId } from "../../utils/createStableId";
@@ -373,7 +373,7 @@ export function useConversationMessages({
 
       if (!pushPermissionAskedRef.current) {
         pushPermissionAskedRef.current = true;
-        requestPushPermissionOnce("chat").catch(() => undefined);
+        requestPushPermissionWithSoftAsk("chat").catch(() => undefined);
       }
 
       performance.mark("chat:send");
@@ -478,7 +478,7 @@ export function useConversationMessages({
 
       if (!pushPermissionAskedRef.current) {
         pushPermissionAskedRef.current = true;
-        requestPushPermissionOnce("chat").catch(() => undefined);
+        requestPushPermissionWithSoftAsk("chat").catch(() => undefined);
       }
     },
     [conversationId, show],

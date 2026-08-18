@@ -182,6 +182,14 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             disabled={!masterOn}
           />
           <SettingsRow
+            icon="trophy-outline"
+            title="Auction alerts"
+            subtitle="Outbid, auction ending, and auction won alerts"
+            toggleValue={!!toggles.auctionAlerts}
+            onToggle={() => toggleCategory('auctionAlerts')}
+            disabled={!masterOn}
+          />
+          <SettingsRow
             icon="videocam-outline"
             title="Live shopping notifications"
             subtitle="When sellers you follow go live"

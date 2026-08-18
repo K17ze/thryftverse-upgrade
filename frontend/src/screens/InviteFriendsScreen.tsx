@@ -49,21 +49,29 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   );
   const inviteLink = `https://thryftverse.app/invite/${referralCode}`;
 
-  // Fetch referral stats from backend, with graceful fallback to zeros
+  // Fetch referral stats from backend. Per AGENTS.md §6 (truthful UI), a
+  // backend failure must NOT silently show fabricated zeros — the screen
+  // surfaces a "Stats unavailable" state instead (research §5, defect at
+  // InviteFriendsScreen.tsx:63-76).
   const [referralStats, setReferralStats] = React.useState({
     invited: 0,
     joined: 0,
     rewarded: 0,
     creditsBalance: 0,
   });
+  const [statsUnavailable, setStatsUnavailable] = React.useState(false);
 
   React.useEffect(() => {
     if (!currentUser?.id) return;
     let mounted = true;
+    setStatsUnavailable(false);
     fetch(`${process.env.EXPO_PUBLIC_API_URL ?? ''}/users/${currentUser.id}/referral-stats`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (!mounted || !data) return;
+        if (!mounted || !data) {
+          if (mounted) setStatsUnavailable(true);
+          return;
+        }
         setReferralStats({
           invited: data.invited ?? 0,
           joined: data.joined ?? 0,
@@ -72,7 +80,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
         });
       })
       .catch(() => {
-        // Backend endpoint not available — keep zeros
+        if (mounted) setStatsUnavailable(true);
       });
     return () => { mounted = false; };
   }, [currentUser?.id]);
@@ -88,7 +96,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Join me on Thryftverse - the premium marketplace for second-hand fashion! Use my code ${referralCode} at signup. ${inviteLink}`,
+        message: `Join me on Thryftverse — the marketplace for second-hand fashion. Use my code ${referralCode} and we both earn credit when you make your first sale. ${inviteLink}`,
         title: 'Invite to Thryftverse',
       });
     } catch {}
@@ -116,7 +124,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
         <Ionicons name="gift-outline" size={48} color={ACCENT} />
         <Text style={styles.heroTitle}>Invite & earn</Text>
         <Text style={styles.heroSubtitle}>
-          Invite friends to Thryftverse. When they make their first sale, you both get a reward.
+          Invite friends to Thryftverse. When they make their first sale, you both earn Thryftverse credit — give credit, get credit.
         </Text>
       </View>
 
@@ -176,34 +184,47 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             <Ionicons name="ribbon-outline" size={18} color={ACCENT} />
             <Text style={styles.rewardsTitle}>Your rewards</Text>
           </View>
-          <View style={styles.statsRow}>
-            <View style={styles.statCell}>
-              <Text style={styles.statValue}>{referralStats.invited}</Text>
-              <Text style={styles.statLabel}>Invited</Text>
+          {statsUnavailable ? (
+            <View style={styles.statsUnavailableRow}>
+              <Ionicons name="cloud-offline-outline" size={20} color={MUTED} />
+              <Text style={styles.statsUnavailableText}>
+                Stats unavailable right now. Pull down to refresh or try again later.
+              </Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCell}>
-              <Text style={styles.statValue}>{referralStats.joined}</Text>
-              <Text style={styles.statLabel}>Joined</Text>
+          ) : (
+            <View style={styles.statsRow}>
+              <View style={styles.statCell}>
+                <Text style={styles.statValue}>{referralStats.invited}</Text>
+                <Text style={styles.statLabel}>Invited</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statCell}>
+                <Text style={styles.statValue}>{referralStats.joined}</Text>
+                <Text style={styles.statLabel}>Joined</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statCell}>
+                <Text style={[styles.statValue, { color: SUCCESS }]}>{referralStats.rewarded}</Text>
+                <Text style={styles.statLabel}>Rewarded</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statCell}>
+                <Text style={[styles.statValue, { color: ACCENT }]}>£{referralStats.creditsBalance}</Text>
+                <Text style={styles.statLabel}>Credits</Text>
+              </View>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCell}>
-              <Text style={[styles.statValue, { color: SUCCESS }]}>{referralStats.rewarded}</Text>
-              <Text style={styles.statLabel}>Rewarded</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCell}>
-              <Text style={[styles.statValue, { color: ACCENT }]}>£{referralStats.creditsBalance}</Text>
-              <Text style={styles.statLabel}>Credits</Text>
-            </View>
-          </View>
+          )}
           <Text style={styles.rewardsFootnote}>
-            Earn £5 credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
+            Earn Thryftverse credit for each friend who completes their first sale. Credits apply to platform fees on your next listing.
           </Text>
         </View>
       </View>
 
-      {/* Loyalty Tier Card */}
+      {/* Loyalty Tier Card — tier is derived from referral activity only.
+          Per research §5, the loyalty tier is one-dimensional (referrals).
+          We do NOT fabricate perks (reduced fees, priority support, exclusive
+          drops) that the backend does not actually provide. The card is
+          honest about what the tier measures: successful referrals. */}
       <View>
         <View style={styles.loyaltyCard}>
           <View style={styles.loyaltyHeader}>
@@ -214,28 +235,17 @@ export default function InviteFriendsScreen({ navigation }: Props) {
               <Text style={styles.loyaltyTierName}>{loyaltyTier.name} Member</Text>
               <Text style={styles.loyaltySubtext}>
                 {loyaltyTier.nextThreshold
-                  ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more referrals to reach ${loyaltyTier.name === 'Bronze' ? 'Silver' : 'Gold'}`
-                  : 'Highest tier reached'}
+                  ? `${loyaltyTier.nextThreshold - referralStats.rewarded} more successful referrals to reach ${loyaltyTier.name === 'Bronze' ? 'Silver' : 'Gold'}`
+                  : 'Highest referral tier reached'}
               </Text>
             </View>
           </View>
           <View style={styles.loyaltyProgressTrack}>
             <View style={[styles.loyaltyProgressFill, { width: `${Math.min(loyaltyTier.progress, 100)}%`, backgroundColor: loyaltyTier.color }]} />
           </View>
-          <View style={styles.loyaltyBenefitsRow}>
-            <View style={styles.loyaltyBenefit}>
-              <Ionicons name="pricetag-outline" size={16} color={MUTED} />
-              <Text style={styles.loyaltyBenefitText}>Reduced fees</Text>
-            </View>
-            <View style={styles.loyaltyBenefit}>
-              <Ionicons name="speedometer-outline" size={16} color={MUTED} />
-              <Text style={styles.loyaltyBenefitText}>Priority support</Text>
-            </View>
-            <View style={styles.loyaltyBenefit}>
-              <Ionicons name="star-outline" size={16} color={MUTED} />
-              <Text style={styles.loyaltyBenefitText}>Exclusive drops</Text>
-            </View>
-          </View>
+          <Text style={styles.loyaltyFootnote}>
+            Tier is based on successful referrals only.
+          </Text>
         </View>
       </View>
 
@@ -247,7 +257,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             { icon: 'share-outline', text: 'Share your referral link with friends' },
             { icon: 'person-add-outline', text: 'They sign up and create an account' },
             { icon: 'pricetag-outline', text: 'They list their first item for sale' },
-            { icon: 'gift-outline', text: 'You both get £5 credit automatically' },
+            { icon: 'gift-outline', text: 'You both earn Thryftverse credit' },
           ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((step, i) => (
             <View key={i} style={styles.stepRow}>
               <View style={styles.stepIconWrap}>
@@ -470,18 +480,22 @@ function createStyles(colors: ThemeColors) {
       height: '100%',
       borderRadius: Radius.sm,
     },
-    loyaltyBenefitsRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: Space.sm,
+    loyaltyFootnote: {
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight + 2,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
     },
-    loyaltyBenefit: {
+    statsUnavailableRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
+      gap: Space.sm,
+      paddingVertical: Space.md,
     },
-    loyaltyBenefitText: {
-      fontSize: Type.meta.size,
+    statsUnavailableText: {
+      flex: 1,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight + 2,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
     },

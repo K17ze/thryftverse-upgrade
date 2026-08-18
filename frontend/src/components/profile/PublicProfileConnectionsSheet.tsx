@@ -5,9 +5,10 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  FlatList,
   useWindowDimensions,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+// FlashList v2 measures actual item heights — no estimatedItemSize needed.
 import { Ionicons } from '@expo/vector-icons';
 import { NativeSheet } from '../../platform/native';
 import { CachedImage } from '../CachedImage';
@@ -116,6 +117,15 @@ export function PublicProfileConnectionsSheet({
     );
   };
 
+  // FlashList does not support ItemSeparatorComponent — render the divider
+  // as part of each item so recycling stays correct.
+  const renderItemWithDivider = ({ item }: { item: FollowListUser }) => (
+    <View>
+      {renderItem({ item })}
+      <View style={styles.rowDivider} />
+    </View>
+  );
+
   const renderSkeletonRow = ({ index }: { index: number }) => (
     <View style={styles.skeletonRow} key={`skel-${index}`}>
       <View style={styles.skeletonAvatar} />
@@ -147,7 +157,7 @@ export function PublicProfileConnectionsSheet({
         />
 
         {isLoading ? (
-          <FlatList
+          <FlashList
             data={Array.from({ length: 8 })}
             keyExtractor={(_, i) => `skel-${i}`}
             renderItem={renderSkeletonRow}
@@ -183,10 +193,10 @@ export function PublicProfileConnectionsSheet({
             </Text>
           </View>
         ) : (
-          <FlatList
+          <FlashList
             data={items}
             keyExtractor={(item) => item.id}
-            renderItem={renderItem}
+            renderItem={renderItemWithDivider}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.4}
             ListFooterComponent={
@@ -199,7 +209,6 @@ export function PublicProfileConnectionsSheet({
             contentContainerStyle={{ paddingBottom: Space.xl, paddingTop: Space.sm }}
             showsVerticalScrollIndicator={false}
             key={`conn-${segment}`}
-            ItemSeparatorComponent={() => <View style={styles.rowDivider} />}
           />
         )}
       </View>

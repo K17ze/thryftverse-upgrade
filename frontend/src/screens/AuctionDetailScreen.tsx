@@ -26,7 +26,7 @@ import { haptics } from '../utils/haptics';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { parseApiError } from '../lib/apiClient';
-import { requestPushPermissionOnce } from '../lib/pushPermission';
+import { requestPushPermissionWithSoftAsk } from '../lib/pushPermission';
 import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
 import { Space, FontFamily, DockConstants, LetterSpacing } from '../theme/designTokens';
@@ -137,7 +137,8 @@ export default function AuctionDetailScreen() {
   // Per App Store / Google Play 2026 guidelines, push permission is requested
   // only after a meaningful user action — here, after the user watches/favorites
   // an auction for the first time. The ref guards within-session re-prompting;
-  // requestPushPermissionOnce persists an AsyncStorage flag across sessions.
+  // requestPushPermissionWithSoftAsk shows an in-app pre-prompt before the
+  // one-shot OS prompt and persists an AsyncStorage flag across sessions.
   const favoritePushAskedRef = React.useRef(false);
   const [isTransitionRefreshing, setIsTransitionRefreshing] = React.useState(false);
   const [bidHistorySheetVisible, setBidHistorySheetVisible] = React.useState(false);
@@ -294,7 +295,7 @@ export default function AuctionDetailScreen() {
         // item to their watchlist. Best-effort; never blocks the watch flow.
         if (!favoritePushAskedRef.current) {
           favoritePushAskedRef.current = true;
-          requestPushPermissionOnce('favorite').catch(() => undefined);
+          requestPushPermissionWithSoftAsk('favorite').catch(() => undefined);
         }
       }
     } catch {
