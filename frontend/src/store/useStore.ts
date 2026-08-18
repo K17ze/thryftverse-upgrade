@@ -23,6 +23,7 @@ import {
   createSupportTicket as createSupportTicketOnApi,
   listSupportTickets as listSupportTicketsFromApi,
   listSupportTicketsForOrder as listSupportTicketsForOrderFromApi,
+  updateSupportTicketStatus as updateSupportTicketStatusOnApi,
 } from '../services/supportApi';
 import {
   createCollection as createCollectionOnApi,
@@ -492,7 +493,7 @@ interface StoreState {
   createSupportTicketOnApi: (ticket: Omit<SupportTicket, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   loadSupportTicketsFromApi: () => Promise<void>;
   loadSupportTicketsForOrderFromApi: (orderId: string) => Promise<void>;
-  updateSupportTicketStatus: (id: string, status: SupportTicket['status']) => void;
+  updateSupportTicketStatus: (id: string, status: SupportTicket['status']) => Promise<void>;
   getSupportTicketsForOrder: (orderId: string) => SupportTicket[];
   // Marketplace chat settings
   offersInChatEnabled: boolean;
@@ -1653,12 +1654,14 @@ export const useStore = create<StoreState>()(
       return { supportTickets: [...existingOther, ...incoming] };
     });
   },
-  updateSupportTicketStatus: (id, status) =>
+  updateSupportTicketStatus: async (id, status) => {
+    await updateSupportTicketStatusOnApi(id, status);
     set((state) => ({
       supportTickets: state.supportTickets.map((t) =>
         t.id === id ? { ...t, status, updatedAt: Date.now() } : t
       ),
-    })),
+    }));
+  },
   getSupportTicketsForOrder: (orderId) =>
     get().supportTickets.filter((t) => t.orderId === orderId),
   enabledBotIds: [],

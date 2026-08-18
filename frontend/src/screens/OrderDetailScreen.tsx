@@ -41,7 +41,6 @@ import { OrderTrackingTimeline, TimelineEntry } from '../components/orders/Order
 import { OrderActionFooter, OrderActionConfig } from '../components/orders/OrderActionFooter';
 import { OrderActionsSheet, OrderActionItem } from '../components/orders/OrderActionsSheet';
 import { DispatchCountdown } from '../components/orders/DispatchCountdown';
-import { OrderStatusStepper, OrderStepperStage } from '../components/orders/OrderStatusStepper';
 import { ReviewPromptSheet } from '../components/orders/ReviewPromptSheet';
 import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
 import {
@@ -241,6 +240,8 @@ type TimelineSemanticKey =
   | 'completed'
   | 'processing'
   | 'preparing'
+  | 'issue_reported'
+  | 'review_submitted'
   | 'unknown';
 
 const PARCEL_EVENT_SEMANTIC_KEY: Record<OrderParcelEvent['eventType'], TimelineSemanticKey> = {
@@ -286,10 +287,20 @@ function parcelEventTimestamp(event: OrderParcelEvent): number {
 
 // --- Timeline builder ---
 
+interface TimelineExtras {
+  /** Whether the buyer has an open dispute/resolution on this order. */
+  hasOpenResolution?: boolean;
+  /** Whether a review has been submitted for this order. */
+  hasReview?: boolean;
+  /** ISO timestamp of delivery (used to place the review entry). */
+  deliveredAt?: string | null;
+}
+
 function buildTimelineEntries(
   normalisedStatus: string,
   order: CommerceOrder | null,
-  parcelEvents: OrderParcelEvent[]
+  parcelEvents: OrderParcelEvent[],
+  extras?: TimelineExtras
 ): TimelineEntry[] {
   const entries: TimelineEntry[] = [];
   const represented = new Set<TimelineSemanticKey>();
@@ -386,6 +397,30 @@ function buildTimelineEntries(
       state: isFailure ? 'failure' : isTerminal ? 'completed' : 'active',
     });
     represented.add(currentSemanticKey);
+  }
+
+  // 7. Dispute / issue reported — appears on the same timeline as lifecycle
+  // events so the buyer sees "you reported an issue" in line with tracking.
+  if (extras?.hasOpenResolution && !represented.has('issue_reported')) {
+    entries.push({
+      id: 'issue_reported',
+      label: 'Issue reported',
+      subtitle: 'A support request is open for this order. Funds remain held in escrow.',
+      state: 'active',
+    });
+    represented.add('issue_reported');
+  }
+
+  // 8. Review submitted — appears after delivery on the unified timeline.
+  if (extras?.hasReview && !represented.has('review_submitted')) {
+    entries.push({
+      id: 'review_submitted',
+      label: 'Review submitted',
+      subtitle: 'You reviewed this order.',
+      date: formatTimelineDate(extras?.deliveredAt),
+      state: 'completed',
+    });
+    represented.add('review_submitted');
   }
 
   return entries;
@@ -875,22 +910,64 @@ export default function OrderDetailScreen() {
   const supportTickets = getSupportTicketsForOrder(orderId);
   const openTicket = supportTickets.find((t) => t.status === 'open');
 
-  // --- Auto-surface review prompt once after delivery ---
+  // --- Auto-surface review prompt after delivery ---
+  // Per research: the prompt should fire no earlier than 72h after delivery
+  // (or a server-derived reviewEligibleAt), not immediately on delivery.
+  // "Maybe later" defers by 48h with a re-prompt. This aligns with the 3–5
+  // day research consensus for physical goods.
+  const REVIEW_DEFER_HOURS = 48;
+  const REVIEW_ELIGIBLE_HOURS = 72;
+
+  const reviewEligibleAtMs = useMemo(() => {
+    if (!backendOrder) return null;
+    // Prefer server-derived eligibility timestamp if provided
+    const serverEligible = (backendOrder as any)?.reviewEligibleAt;
+    if (serverEligible) {
+      const ms = new Date(serverEligible).getTime();
+      if (Number.isFinite(ms)) return ms;
+    }
+    // Fall back to deliveredAt + 72h
+    const deliveredAt = backendOrder.deliveredAt;
+    if (!deliveredAt) return null;
+    const ms = new Date(deliveredAt).getTime();
+    if (!Number.isFinite(ms)) return null;
+    return ms + REVIEW_ELIGIBLE_HOURS * 60 * 60 * 1000;
+  }, [backendOrder]);
+
+  const [reviewDeferredUntil, setReviewDeferredUntil] = useState<number | null>(null);
+
   useEffect(() => {
     if (!backendOrder || reviewPromptShown) return;
     const normalised = normaliseOrderStatus(backendOrder.status);
     const isDelivered = normalised === 'delivered' || normalised === 'completed';
     const buyerId = backendOrder.buyerId;
-    if (isDelivered && currentUser?.id === buyerId) {
+    if (!isDelivered || currentUser?.id !== buyerId) return;
+
+    const now = Date.now();
+    const eligibleMs = reviewEligibleAtMs ?? now;
+    const effectiveMs = reviewDeferredUntil ?? eligibleMs;
+
+    // If not yet eligible, schedule for the eligibility time
+    if (now < effectiveMs) {
+      const delay = effectiveMs - now;
       const timer = setTimeout(() => {
         if (isMountedRef.current && !reviewPromptShown) {
           setReviewPromptVisible(true);
           setReviewPromptShown(true);
         }
-      }, 1200);
+      }, Math.min(delay, 2_147_483_000)); // clamp to max setTimeout delay
       return () => clearTimeout(timer);
     }
-  }, [backendOrder, reviewPromptShown, currentUser?.id]);
+
+    // Already eligible — surface after a short delay for natural feel
+    const timer = setTimeout(() => {
+      if (isMountedRef.current && !reviewPromptShown) {
+        setReviewPromptVisible(true);
+        setReviewPromptShown(true);
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [backendOrder, reviewPromptShown, currentUser?.id, reviewEligibleAtMs, reviewDeferredUntil]);
 
   // --- Derived data ---
   const normalisedStatus = backendOrder ? normaliseOrderStatus(backendOrder.status) : '';
@@ -974,67 +1051,12 @@ export default function OrderDetailScreen() {
   // --- Timeline ---
   const timelineEntries = useMemo(() => {
     if (!backendOrder) return [];
-    return buildTimelineEntries(normalisedStatus, backendOrder, parcelEvents);
-  }, [backendOrder, normalisedStatus, parcelEvents]);
-
-  // --- Stepper stage ---
-  const stepperStage = useMemo<OrderStepperStage>(() => {
-    const key = getStatusSemanticKey(normalisedStatus);
-    switch (key) {
-      case 'created':
-        return 'placed';
-      case 'paid':
-      case 'processing':
-      case 'preparing':
-        return 'paid';
-      case 'shipped':
-      case 'picked_up':
-        return 'shipped';
-      case 'in_transit':
-      case 'out_for_delivery':
-        return 'in_transit';
-      case 'delivered':
-      case 'completed':
-      case 'collection_confirmed':
-        return 'delivered';
-      default:
-        // For cancelled/refunded/returned/delivery_failed, show as paid (the furthest confirmed stage)
-        return 'paid';
-    }
-  }, [normalisedStatus]);
-
-  const stepperIsFailure = useMemo(() => {
-    const key = getStatusSemanticKey(normalisedStatus);
-    return key === 'cancelled' || key === 'refunded' || key === 'returned' || key === 'delivery_failed';
-  }, [normalisedStatus]);
-
-  const stepperFailureLabel = useMemo(() => {
-    const key = getStatusSemanticKey(normalisedStatus);
-    if (key === 'cancelled') return 'Order cancelled';
-    if (key === 'refunded') return 'Refunded';
-    if (key === 'returned') return 'Returned to sender';
-    if (key === 'delivery_failed') return 'Delivery failed';
-    return 'Cancelled';
-  }, [normalisedStatus]);
-
-  const stepperTimestamps = useMemo(() => {
-    if (!backendOrder) return undefined;
-    const ts: Partial<Record<OrderStepperStage, string>> = {};
-    if (backendOrder.createdAt) ts.placed = backendOrder.createdAt;
-    // Paid timestamp — use createdAt as proxy if no separate paidAt
-    if (backendOrder.shippedAt) {
-      ts.shipped = backendOrder.shippedAt;
-    }
-    if (backendOrder.deliveredAt) {
-      ts.delivered = backendOrder.deliveredAt;
-    }
-    // In-transit timestamp from first in_transit parcel event
-    const inTransitEvent = parcelEvents.find((e) => e.eventType === 'in_transit' || e.eventType === 'picked_up');
-    if (inTransitEvent) {
-      ts.in_transit = inTransitEvent.occurredAt ?? inTransitEvent.receivedAt;
-    }
-    return ts;
-  }, [backendOrder, parcelEvents]);
+    return buildTimelineEntries(normalisedStatus, backendOrder, parcelEvents, {
+      hasOpenResolution: Boolean(openTicket),
+      hasReview: false,
+      deliveredAt: backendOrder.deliveredAt,
+    });
+  }, [backendOrder, normalisedStatus, parcelEvents, openTicket]);
 
   // --- Shipment details ---
   const latestParcelEvent = parcelEvents.length > 0
@@ -1191,7 +1213,11 @@ export default function OrderDetailScreen() {
   const handleIssueCategorySelect = useCallback((category: IssueCategory) => {
     setIssueSelectorVisible(false);
     haptics.tap();
-    navigation.navigate('OrderSupport', { orderId });
+    navigation.navigate('OrderSupport', {
+      orderId,
+      categoryId: category.id,
+      categoryLabel: category.label,
+    });
   }, [navigation, orderId]);
 
   // --- Action availability (canonical resolver) ---
@@ -1648,6 +1674,7 @@ export default function OrderDetailScreen() {
           {capabilities?.canDispatch && backendOrder.createdAt && (
             <DispatchCountdown
               createdAt={backendOrder.createdAt}
+              shipByDate={capabilities.shipByDate}
               shipped={!!backendOrder.shippedAt}
             />
           )}
@@ -1736,19 +1763,6 @@ export default function OrderDetailScreen() {
         ) : null}
 
         <View style={[styles.sectionDivider, t.sectionDivider]} />
-
-        {/* 4b. Visual status stepper — hidden when completed (operational chrome collapsed) */}
-        {!isCompleted ? (
-          <View style={styles.timelineSection}>
-            <Text style={[styles.sectionLabel, t.sectionLabel]}>Progress</Text>
-            <OrderStatusStepper
-              currentStage={stepperStage}
-              isFailure={stepperIsFailure}
-              failureLabel={stepperFailureLabel}
-              stageTimestamps={stepperTimestamps}
-            />
-          </View>
-        ) : null}
 
         {/* 4c. Escrow status indicator — shows when funds are held */}
         {!isCompleted && isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
@@ -2019,9 +2033,14 @@ export default function OrderDetailScreen() {
         itemImage={backendOrder?.listingImageUrl ?? null}
         sellerName={counterparty?.username}
         onClose={() => setReviewPromptVisible(false)}
-        onWriteReview={(_rating) => {
+        onDefer={() => {
           setReviewPromptVisible(false);
-          navigation.navigate('WriteReview', { orderId });
+          setReviewPromptShown(false);
+          setReviewDeferredUntil(Date.now() + REVIEW_DEFER_HOURS * 60 * 60 * 1000);
+        }}
+        onWriteReview={(rating) => {
+          setReviewPromptVisible(false);
+          navigation.navigate('WriteReview', { orderId, initialRating: rating });
         }}
       />
 

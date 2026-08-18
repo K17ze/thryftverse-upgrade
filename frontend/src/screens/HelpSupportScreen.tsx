@@ -9,7 +9,6 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'HelpSupport'>;
@@ -35,24 +34,29 @@ export default function HelpSupportScreen({ navigation }: Props) {
   const allFaqs = useMemo(
     () => [
       {
+        category: 'Buying',
         q: 'How does the platform charge work?',
         a: "Thryftverse applies a platform charge to each checkout. It funds secure payments, delivery issue handling, and buyer support if an item doesn't arrive or is significantly misdescribed. File a claim within 2 days of delivery.",
       },
       {
+        category: 'Selling',
         q: 'How do I withdraw my balance?',
         a: "Go to Profile -> Balance -> Withdraw. Add a bank account first if you haven't already. Withdrawals typically take 1-3 business days.",
       },
       {
+        category: 'Selling',
         q: 'What fees does Thryftverse charge?',
         a: `Thryftverse charges a 5% service fee on each sale, plus a fixed transaction fee of ${fixedFeeLabel}. Buyers also pay a platform charge on top of the item price.`,
       },
       {
+        category: 'Buying',
         q: 'Can I cancel or return an order?',
         a: 'Buyers can request a cancellation within 1 hour of purchase. Returns and issue handling are covered under our platform charge support policy when items do not match the description.',
       },
       {
+        category: 'Safety',
         q: 'How do I report a fake or misleading listing?',
-        a: 'On any item page, tap the three-dot menu and select "Report". Our trust team reviews flagged items within 24 hours.',
+        a: 'On any item page, tap the three-dot menu and select "Report". Our moderation team reviews flagged items as quickly as we can.',
       },
     ],
     [fixedFeeLabel]
@@ -61,31 +65,88 @@ export default function HelpSupportScreen({ navigation }: Props) {
   const filteredFaqs = useMemo(() => {
     if (!faqSearch.trim()) return allFaqs;
     const query = faqSearch.toLowerCase();
-    return allFaqs.filter((f) => f.q.toLowerCase().includes(query) || f.a.toLowerCase().includes(query));
+    return allFaqs.filter(
+      (f) =>
+        f.q.toLowerCase().includes(query) ||
+        f.a.toLowerCase().includes(query) ||
+        f.category.toLowerCase().includes(query)
+    );
   }, [allFaqs, faqSearch]);
 
+  const categories = useMemo(() => {
+    const map = new Map<string, typeof allFaqs>();
+    for (const faq of filteredFaqs) {
+      const list = map.get(faq.category) ?? [];
+      list.push(faq);
+      map.set(faq.category, list);
+    }
+    return Array.from(map.entries());
+  }, [filteredFaqs]);
+
   return (
-    <FlagshipScreen header={<FlagshipHeader title="Help & Support" subtitle="Get answers and contact us" onBack={() => navigation.goBack()} />} keyboardAvoiding>
-        {/* Hero summary */}
-        <View>
-          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.heroRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="help-circle" size={20} color={colors.textInverse} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>We're here to help</Text>
-                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                  Average response time ~2 hours
-                </Text>
-              </View>
-            </View>
+    <FlagshipScreen header={<FlagshipHeader title="Help & Support" subtitle="Find answers fast" onBack={() => navigation.goBack()} />} keyboardAvoiding>
+        {/* Search as the hero — self-serve first */}
+        <View style={{ paddingHorizontal: Space.md, paddingTop: Space.md, paddingBottom: Space.sm }}>
+          <View style={styles.searchWrap}>
+            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+            <TextInput
+              style={styles.searchInput}
+              value={faqSearch}
+              onChangeText={setFaqSearch}
+              placeholder="Search for help…"
+              placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Search help articles"
+            />
+            {faqSearch ? (
+              <AnimatedPressable onPress={() => setFaqSearch('')} hitSlop={8} accessibilityLabel="Clear search">
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </AnimatedPressable>
+            ) : null}
           </View>
         </View>
 
-        {/* Contact options */}
+        {/* Categorized help articles */}
+        {categories.length === 0 ? (
+          <View style={styles.emptyFaqs}>
+            <Ionicons name="search-outline" size={28} color={colors.textMuted} />
+            <Text style={styles.emptyFaqsText}>No articles match "{faqSearch}"</Text>
+            <Text style={styles.emptyFaqsHint}>Try different words, or contact us below.</Text>
+          </View>
+        ) : (
+          categories.map(([category, faqs]) => (
+            <View key={category}>
+              <SettingsSection title={category}>
+                {faqs.map((faq, idx) => (
+                  <View key={faq.q}>
+                    <AnimatedPressable
+                      onPress={() => setExpanded((prev) => (prev === faq.q ? null : faq.q))}
+                      hapticFeedback="light"
+                      scaleValue={0.995}
+                    >
+                      <View style={[styles.faqRow, idx < faqs.length - 1 && styles.border]}>
+                        <Text style={styles.faqQ} numberOfLines={expanded === faq.q ? undefined : 2}>
+                          {faq.q}
+                        </Text>
+                        <Ionicons
+                          name={expanded === faq.q ? 'chevron-up' : 'chevron-down'}
+                          size={18}
+                          color={colors.textMuted}
+                        />
+                      </View>
+                      {expanded === faq.q && (
+                        <Text style={styles.faqA}>{faq.a}</Text>
+                      )}
+                    </AnimatedPressable>
+                  </View>
+                ))}
+              </SettingsSection>
+            </View>
+          ))
+        )}
+
+        {/* Contact us — last resort, not the first option */}
         <View>
-          <SettingsSection title="Contact us">
+          <SettingsSection title="Still need help?">
             <SettingsRow
               icon="mail-outline"
               title="Email support"
@@ -98,86 +159,12 @@ export default function HelpSupportScreen({ navigation }: Props) {
               title="Report a problem"
               subtitle="Something not working right? Let us know"
               onPress={() => void handleOpenExternal('mailto:support@thryftverse.com?subject=Report%20a%20problem')}
-            />
-            <SettingsRow
-              icon="shield-checkmark-outline"
-              title="Safety and scams"
-              subtitle="Tips to stay safe while buying and selling"
-              onPress={() => void handleOpenExternal('https://thryftverse.app/safety')}
-            />
-            <SettingsRow
-              icon="document-text-outline"
-              title="Legal and privacy help"
-              onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
               isLast
             />
           </SettingsSection>
         </View>
 
-        {/* FAQ Banner */}
-        <View style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
-          <SettingsInfoBanner
-            text="Search our FAQs below for quick answers to common questions."
-            icon="help-circle-outline"
-            variant="info"
-          />
-        </View>
-
-        {/* FAQ Search */}
-        <View style={{ marginHorizontal: Space.md, marginBottom: Space.md }}>
-          <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              value={faqSearch}
-              onChangeText={setFaqSearch}
-              placeholder="Search FAQs..."
-              placeholderTextColor={colors.textMuted}
-            />
-            {faqSearch ? (
-              <AnimatedPressable onPress={() => setFaqSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-              </AnimatedPressable>
-            ) : null}
-          </View>
-        </View>
-
-        {/* FAQ Accordion */}
-        <View>
-          <SettingsSection title="Frequently asked">
-            {filteredFaqs.length === 0 ? (
-              <View style={styles.emptyFaqs}>
-                <Text style={styles.emptyFaqsText}>No FAQs match your search</Text>
-              </View>
-            ) : (
-              filteredFaqs.map((faq, idx) => (
-                <View key={faq.q}>
-                  <AnimatedPressable
-                    onPress={() => setExpanded((prev) => (prev === faq.q ? null : faq.q))}
-                    hapticFeedback="light"
-                    scaleValue={0.995}
-                  >
-                    <View style={[styles.faqRow, idx < filteredFaqs.length - 1 && styles.border]}>
-                      <Text style={styles.faqQ} numberOfLines={expanded === faq.q ? undefined : 2}>
-                        {faq.q}
-                      </Text>
-                      <Ionicons
-                        name={expanded === faq.q ? 'chevron-up' : 'chevron-down'}
-                        size={18}
-                        color={colors.textMuted}
-                      />
-                    </View>
-                    {expanded === faq.q && (
-                      <Text style={styles.faqA}>{faq.a}</Text>
-                    )}
-                  </AnimatedPressable>
-                </View>
-              ))
-            )}
-          </SettingsSection>
-        </View>
-
-        {/* External links */}
+        {/* Legal */}
         <View>
           <SettingsSection title="Legal">
             <SettingsRow
@@ -201,42 +188,13 @@ export default function HelpSupportScreen({ navigation }: Props) {
         </View>
 
         {/* Version */}
-        <Text style={styles.version}>Thryftverse v1.0.0 · Response time ~2 hours</Text>
+        <Text style={styles.version}>Thryftverse v1.0.0</Text>
     </FlagshipScreen>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs - 2,
-  },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -257,14 +215,24 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: 0,
   },
   emptyFaqs: {
-    paddingVertical: Space.lg,
+    paddingVertical: Space.xl,
     alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
   },
   emptyFaqsText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     letterSpacing: Type.body.letterSpacing,
+    textAlign: 'center',
+  },
+  emptyFaqsHint: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    letterSpacing: Type.caption.letterSpacing,
+    textAlign: 'center',
   },
   faqRow: {
     flexDirection: 'row',

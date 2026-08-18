@@ -77,9 +77,6 @@ export default function ClosetScreen() {
     tabIndicator: { backgroundColor: colors.textPrimary },
     countPill: { backgroundColor: 'transparent', borderColor: colors.border },
     countBadge: { color: colors.textMuted },
-    resultCount: { color: colors.textSecondary },
-    sortBtn: { backgroundColor: 'transparent', borderColor: colors.border },
-    sortLabel: { color: colors.textSecondary },
     sortMenu: { backgroundColor: 'transparent', borderColor: 'transparent' },
     sortOption: { borderBottomColor: colors.border },
     sortOptionActive: { backgroundColor: 'transparent' },
@@ -89,7 +86,14 @@ export default function ClosetScreen() {
     filterChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
     filterChipText: { color: colors.brand },
     filterChipTextActive: { color: colors.background },
-    statsCard: { backgroundColor: 'transparent', borderColor: colors.border },
+    identityStrip: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
+    marginBottom: Space.sm,
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border,
+  },
     statDivider: { backgroundColor: colors.border },
     statValue: { color: colors.textPrimary },
     statLabel: { color: colors.textMuted },
@@ -401,82 +405,6 @@ export default function ClosetScreen() {
     WISHLIST: 'heart-outline' as const,
     COLLECTIONS: 'folder-open-outline' as const,
     OUTFITS: 'shirt-outline' as const,
-  };
-
-  const renderFilterPanel = () => {
-    if (!showFilters) return null;
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.brandChipScroll}
-        contentContainerStyle={styles.brandChipContent}
-      >
-        <AnimatedPressable
-          style={[styles.brandChip, t.brandChip, !activeBrand && styles.brandChipActive, !activeBrand && t.brandChipActive]}
-          onPress={() => { haptic.light(); setActiveBrand(null); }}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityState={{ selected: !activeBrand }}
-          accessibilityLabel="All brands"
-        >
-          <Text style={[styles.brandChipText, t.brandChipText, !activeBrand && styles.brandChipTextActive, !activeBrand && t.brandChipTextActive]}>All</Text>
-        </AnimatedPressable>
-        {availableBrands.map((brand) => (
-          <AnimatedPressable
-            key={brand}
-            style={[styles.brandChip, t.brandChip, activeBrand === brand && styles.brandChipActive, activeBrand === brand && t.brandChipActive]}
-            onPress={() => {
-              haptic.light();
-              setActiveBrand((prev) => (prev === brand ? null : brand));
-            }}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityState={{ selected: activeBrand === brand }}
-            accessibilityLabel={`Filter by brand ${brand}`}
-          >
-            <Text style={[styles.brandChipText, t.brandChipText, activeBrand === brand && styles.brandChipTextActive, activeBrand === brand && t.brandChipTextActive]}>{brand}</Text>
-          </AnimatedPressable>
-        ))}
-      </ScrollView>
-    );
-  };
-
-  const renderSortBar = () => (
-    <View style={styles.sortBar}>
-      <Text style={[styles.resultCount, t.resultCount]}>{tabCount} {tabCount === 1 ? 'item' : 'items'}</Text>
-      <AnimatedPressable
-        style={[styles.sortBtn, t.sortBtn]}
-        onPress={() => setShowSortMenu((v) => !v)}
-        activeOpacity={0.85}
-      >
-        <Text style={[styles.sortLabel, t.sortLabel]}>{sortBy}</Text>
-        <Ionicons name={showSortMenu ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
-      </AnimatedPressable>
-    </View>
-  );
-
-  const renderSortMenu = () => {
-    if (!showSortMenu || activeTab === 'COLLECTIONS') return null;
-    return (
-      <View style={[styles.sortMenu, t.sortMenu]}>
-        {SORT_OPTIONS.map((opt) => (
-          <AnimatedPressable
-            key={opt}
-            style={[styles.sortOption, t.sortOption, sortBy === opt && styles.sortOptionActive, sortBy === opt && t.sortOptionActive]}
-            onPress={() => {
-              haptic.light();
-              setSortBy(opt);
-              setShowSortMenu(false);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.sortOptionText, t.sortOptionText, sortBy === opt && styles.sortOptionTextActive, sortBy === opt && t.sortOptionTextActive]}>{opt}</Text>
-            {sortBy === opt && <Ionicons name="checkmark" size={16} color={colors.brand} />}
-          </AnimatedPressable>
-        ))}
-      </View>
-    );
   };
 
   const renderLoadingSkeleton = () => (
@@ -894,15 +822,13 @@ export default function ClosetScreen() {
           </View>
         ) : null}
 
-        {/* Content — grid is the FIRST visible content after tabs+toolbar */}
-        {activeTab === 'SAVED' && renderSavedContent()}
-        {activeTab === 'WISHLIST' && renderWishlistContent()}
-        {activeTab === 'COLLECTIONS' && renderCollectionsContent()}
-        {activeTab === 'OUTFITS' && renderOutfitsContent()}
-
-        {/* Closet stats — below the fold, after content */}
+        {/* Content — grid follows the identity strip */}
+        {/* Closet identity strip — flat canvas + hairline dividers, no card.
+            This is the closet's headline (value, items, collections, savings),
+            promoted to the first viewport so the surface reads as an identity
+            moment, not a footer (AGENTS.md §4 — no card-on-card, hierarchy). */}
         {closetStats.totalItems > 0 ? (
-          <View style={[styles.statsCard, t.statsCard, styles.statsCardBelowFold]}>
+          <View style={t.identityStrip}>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, t.statValue]}>{closetStats.totalItems}</Text>
@@ -929,6 +855,11 @@ export default function ClosetScreen() {
             ) : null}
           </View>
         ) : null}
+
+        {activeTab === 'SAVED' && renderSavedContent()}
+        {activeTab === 'WISHLIST' && renderWishlistContent()}
+        {activeTab === 'COLLECTIONS' && renderCollectionsContent()}
+        {activeTab === 'OUTFITS' && renderOutfitsContent()}
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
@@ -1036,39 +967,12 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.bold,
     lineHeight: 12,
   },
-  statsCardBelowFold: {
-    marginTop: Space.xl,
-  },
   tabsWrap: {
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
   },
   scrollContent: {
     paddingTop: Space.xs,
-  },
-  sortBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
-  resultCount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  sortBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.hairline,
-  },
-  sortLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
   },
   sortMenu: {
     marginHorizontal: Space.md,
@@ -1153,13 +1057,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  statsCard: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.lg,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.hairline,
-    padding: Space.md,
-  },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1174,7 +1071,7 @@ const styles = StyleSheet.create({
     height: Space.lg + 4,
   },
   statValue: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.sectionTitle.size,
     fontFamily: Typography.family.bold,
     letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
   },

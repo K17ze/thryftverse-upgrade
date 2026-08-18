@@ -17,6 +17,8 @@ export interface ReviewPromptSheetProps {
   sellerName?: string;
   onClose: () => void;
   onWriteReview: (rating?: number) => void;
+  /** Called when the user taps "Maybe later" — defers the prompt to a better moment. */
+  onDefer?: () => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -28,6 +30,7 @@ export function ReviewPromptSheet({
   sellerName,
   onClose,
   onWriteReview,
+  onDefer,
 }: ReviewPromptSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -45,8 +48,12 @@ export function ReviewPromptSheet({
 
   const handleSkip = useCallback(() => {
     haptics.tap();
-    onClose();
-  }, [onClose]);
+    if (onDefer) {
+      onDefer();
+    } else {
+      onClose();
+    }
+  }, [onClose, onDefer]);
 
   const ratingLabel = selectedRating > 0
     ? ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][selectedRating - 1]

@@ -340,7 +340,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs,
   },
   seamStatValue: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.sectionTitle.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.3,

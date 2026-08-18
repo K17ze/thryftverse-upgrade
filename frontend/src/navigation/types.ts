@@ -276,7 +276,7 @@ export type RootStackParamList = {
   ForgotPassword: undefined;
   ChangePassword: undefined;
   TwoFactorSetup: undefined;
-  WriteReview: { orderId: string };
+  WriteReview: { orderId: string; initialRating?: number };
 
   // ── Support & Help ──
   Report: { type: 'item' | 'user'; targetId?: string };
@@ -363,7 +363,7 @@ export type RootStackParamList = {
   CreateCollection: undefined;
 
   // ── Support & Help ── (order support, buyer protection)
-  OrderSupport: { orderId: string };
+  OrderSupport: { orderId: string; categoryId?: string; categoryLabel?: string };
   BuyerProtection: { orderId: string };
 
   // ── Settings & Account ── (connected accounts, accessibility, co-own prefs)

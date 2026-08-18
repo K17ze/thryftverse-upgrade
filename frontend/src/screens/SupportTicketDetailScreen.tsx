@@ -77,20 +77,28 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
         {
           text: 'Close',
           style: 'destructive',
-          onPress: () => {
-            updateSupportTicketStatus(ticket.id, 'closed');
-            show('Request closed', 'info');
+          onPress: async () => {
+            try {
+              await updateSupportTicketStatus(ticket.id, 'closed');
+              show('Request closed', 'info');
+            } catch {
+              show('Could not close the request. Check your connection and try again.', 'error');
+            }
           },
         },
       ]
     );
   }, [ticket, haptic, updateSupportTicketStatus, show]);
 
-  const handleReopen = useCallback(() => {
+  const handleReopen = useCallback(async () => {
     if (!ticket) return;
     haptic.medium();
-    updateSupportTicketStatus(ticket.id, 'open');
-    show('Request reopened', 'success');
+    try {
+      await updateSupportTicketStatus(ticket.id, 'open');
+      show('Request reopened', 'success');
+    } catch {
+      show('Could not reopen the request. Check your connection and try again.', 'error');
+    }
   }, [ticket, haptic, updateSupportTicketStatus, show]);
 
   if (!ticket) {
@@ -149,43 +157,39 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
           </View>
         )}
 
-        {/* Status header */}
+        {/* Status header — flat canvas, no nested surface */}
         <View>
-          <View style={styles.statusCard}>
-            <View style={styles.statusHeader}>
-              <View style={styles.statusIconWrap}>
-                <Ionicons name="checkmark-circle-outline" size={28} color={colors.brand} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <BodyEmphasis style={styles.statusTitle}>{ticket.topicLabel}</BodyEmphasis>
-                <Caption color={colors.textMuted} style={styles.statusId}>
-                  Ticket #{ticket.id.slice(-8).toUpperCase()}
-                </Caption>
-              </View>
-              {config && (
-                <PremiumStatusPill
-                  tone={config.tone}
-                  label={config.label}
-                  icon={
-                    ticket.status === 'open'
-                      ? 'time-outline'
-                      : ticket.status === 'resolved'
-                      ? 'checkmark-circle-outline'
-                      : 'close-circle-outline'
-                  }
-                />
-              )}
+          <View style={styles.statusHeader}>
+            <Ionicons name="checkmark-circle-outline" size={28} color={colors.brand} />
+            <View style={{ flex: 1 }}>
+              <BodyEmphasis style={styles.statusTitle}>{ticket.topicLabel}</BodyEmphasis>
+              <Caption color={colors.textMuted} style={styles.statusId}>
+                Ticket #{ticket.id.slice(-8).toUpperCase()}
+              </Caption>
             </View>
+            {config && (
+              <PremiumStatusPill
+                tone={config.tone}
+                label={config.label}
+                icon={
+                  ticket.status === 'open'
+                    ? 'time-outline'
+                    : ticket.status === 'resolved'
+                    ? 'checkmark-circle-outline'
+                    : 'close-circle-outline'
+                }
+              />
+            )}
+          </View>
 
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <Meta color={colors.textMuted}>ORDER</Meta>
-                <Text style={styles.metaValue}>#{ticket.orderId.slice(-8).toUpperCase()}</Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Meta color={colors.textMuted}>DATE</Meta>
-                <Text style={styles.metaValue}>{createdDate}</Text>
-              </View>
+          <View style={styles.metaRow}>
+            <View style={styles.metaItem}>
+              <Meta color={colors.textMuted}>ORDER</Meta>
+              <Text style={styles.metaValue}>#{ticket.orderId.slice(-8).toUpperCase()}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Meta color={colors.textMuted}>DATE</Meta>
+              <Text style={styles.metaValue}>{createdDate}</Text>
             </View>
           </View>
         </View>
@@ -235,17 +239,6 @@ export default function SupportTicketDetailScreen({ navigation, route }: Props) 
                 </Text>
               </View>
             </View>
-          </View>
-        </View>
-
-        {/* Support note */}
-        <View style={styles.timelineCard}>
-          <Ionicons name="time-outline" size={20} color={colors.textMuted} />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.timelineTitle}>Typical response time</Text>
-            <Text style={styles.timelineSub}>
-              Our support team typically responds within 24 hours. For urgent issues, contact us through the Help & Support page.
-            </Text>
           </View>
         </View>
 
@@ -312,25 +305,10 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
     textAlign: 'center',
   },
-  statusCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.lg,
-    ...Elevation.subtle,
-    gap: Space.lg,
-  },
   statusHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-  },
-  statusIconWrap: {
-    width: Control.hit + Space.sm,
-    height: Control.hit + Space.sm,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   statusTitle: {
     fontSize: Type.title.size,
@@ -346,6 +324,7 @@ function createStyles(colors: ThemeColors) {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingTop: Space.md,
+    marginTop: Space.md,
   },
   metaItem: {
     gap: Space.xs,
@@ -380,18 +359,6 @@ function createStyles(colors: ThemeColors) {
     padding: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-  },
-  timelineTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  timelineSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    marginTop: Space.xs,
-    lineHeight: Type.caption.lineHeight + 2,
   },
   actionsCard: {
     gap: Space.md,
