@@ -259,7 +259,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
@@ -328,7 +328,7 @@ function createStyles(colors: ThemeColors) {
   },
   limitationText: {
     flex: 1,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
   });
 }

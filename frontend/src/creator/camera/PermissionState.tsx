@@ -133,7 +133,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   btnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textInverse,
   },
   galleryFallbackBtn: {

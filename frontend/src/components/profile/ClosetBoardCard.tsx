@@ -210,7 +210,7 @@ function createStyles(colors: ThemeColors) {
   title: {
     flexShrink: 1,
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },

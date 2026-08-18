@@ -204,7 +204,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   memberAvatarText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

@@ -1457,8 +1457,8 @@ function createStyles(colors: ThemeColorsType) {
     publishBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      fontSize: Type.bodyStrong.size,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     centerState: {
       alignItems: 'center',
@@ -1545,8 +1545,8 @@ function createStyles(colors: ThemeColorsType) {
     viewBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      fontSize: Type.bodyStrong.size,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     createBtn: {
       flexDirection: 'row',

@@ -260,13 +260,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -299,7 +299,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   itemTitle: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     lineHeight: 17,

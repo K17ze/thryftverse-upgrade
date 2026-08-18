@@ -340,9 +340,9 @@ function createStyles(colors: ThemeColors) {
     },
     copyBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
     copyText: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
-      letterSpacing: Type.captionElevated.letterSpacing,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
+      letterSpacing: Type.caption.letterSpacing,
       fontFamily: Typography.family.semibold,
       color: colors.brand,
     },

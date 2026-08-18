@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   errorTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     textAlign: 'center',
   },
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   scrollContent: {
@@ -520,12 +520,12 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   successTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
   },
   successSubtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   receiptCard: {
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   receiptTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
   orderIdRow: {
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   sectionLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps + 0.38,
@@ -589,11 +589,11 @@ const styles = StyleSheet.create({
     paddingTop: Space.xs,
   },
   totalLabel: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
   totalValue: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
   immutableNotice: {
@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   nextStepsTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.sm,
     letterSpacing: Type.body.letterSpacing,
@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
     minHeight: Space.xxl,
   },
   viewDetailBtnText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
 });

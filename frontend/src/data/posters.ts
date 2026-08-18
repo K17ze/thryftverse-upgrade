@@ -108,7 +108,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     id: 'tpl_auction_live', name: 'Auction Live', category: 'auction', layout: 'single',
     backgroundColor: '#0f3460', filter: 'juno',
     textLayers: [
-      { text: 'LIVE AUCTION', color: '#9b0202', fontFamily: 'bold', fontSize: Type.priceLarge.size, x: 30, y: 100 },
+      { text: 'LIVE AUCTION', color: '#9b0202', fontFamily: 'bold', fontSize: Type.priceHero.size, x: 30, y: 100 },
       { text: 'Bid now!', color: '#ffffff', fontFamily: 'classic', fontSize: 18, x: 30, y: 150 },
     ],
     stickers: [
@@ -122,7 +122,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     backgroundColor: '#16213e', filter: 'ludwig',
     textLayers: [
       { text: 'CO-OWN', color: '#215634', fontFamily: 'bold', fontSize: 30, x: 40, y: 110 },
-      { text: 'Split the cost', color: '#ffffff', fontFamily: 'modern', fontSize: Type.bodyLarge.size, x: 40, y: 160 },
+      { text: 'Split the cost', color: '#ffffff', fontFamily: 'modern', fontSize: Type.body.size, x: 40, y: 160 },
     ],
     stickers: [{ type: 'emoji', content: '🤝', x: 290, y: 110 }],
     thumbnailColor: '#16213e', icon: 'people',
@@ -142,7 +142,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     backgroundColor: '#1C5631', filter: 'perpetua',
     textLayers: [
       { text: 'NEW WITH TAGS', color: '#ffffff', fontFamily: 'bold', fontSize: 26, x: 30, y: 120 },
-      { text: 'Never worn', color: '#16213e', fontFamily: 'modern', fontSize: Type.bodyLarge.size, x: 30, y: 170 },
+      { text: 'Never worn', color: '#16213e', fontFamily: 'modern', fontSize: Type.body.size, x: 30, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🏷️', x: 300, y: 120 }],
     thumbnailColor: '#1C5631', icon: 'pricetag',
@@ -152,7 +152,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     backgroundColor: '#d4a76a', filter: 'reyes',
     textLayers: [
       { text: 'VINTAGE', color: '#3d2b1f', fontFamily: 'typewriter', fontSize: Type.display.size, x: 40, y: 120 },
-      { text: 'One of a kind', color: '#5a3e2b', fontFamily: 'typewriter', fontSize: Type.bodyLarge.size, x: 40, y: 170 },
+      { text: 'One of a kind', color: '#5a3e2b', fontFamily: 'typewriter', fontSize: Type.body.size, x: 40, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🕰️', x: 300, y: 120 }],
     thumbnailColor: '#d4a76a', icon: 'time',
@@ -174,8 +174,8 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     id: 'tpl_mystery', name: 'Mystery Box', category: 'general', layout: 'single',
     backgroundColor: '#6B3245', filter: 'slumber',
     textLayers: [
-      { text: 'MYSTERY BOX', color: '#ffffff', fontFamily: 'bold', fontSize: Type.priceLarge.size, x: 30, y: 120 },
-      { text: 'Worth £200+ inside', color: '#C9A46A', fontFamily: 'modern', fontSize: Type.bodyLarge.size, x: 30, y: 170 },
+      { text: 'MYSTERY BOX', color: '#ffffff', fontFamily: 'bold', fontSize: Type.priceHero.size, x: 30, y: 120 },
+      { text: 'Worth £200+ inside', color: '#C9A46A', fontFamily: 'modern', fontSize: Type.body.size, x: 30, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🎁', x: 300, y: 120 }],
     thumbnailColor: '#6B3245', icon: 'gift',
@@ -184,7 +184,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     id: 'tpl_quick_sell', name: 'Quick Sell', category: 'sale', layout: 'split-h',
     backgroundColor: '#8A6A3F', filter: 'juno',
     textLayers: [
-      { text: 'QUICK SELL', color: '#ffffff', fontFamily: 'bold', fontSize: Type.priceLarge.size, x: 30, y: 80 },
+      { text: 'QUICK SELL', color: '#ffffff', fontFamily: 'bold', fontSize: Type.priceHero.size, x: 30, y: 80 },
     ],
     stickers: [{ type: 'emoji', content: '💨', x: 280, y: 80 }],
     thumbnailColor: '#8A6A3F', icon: 'speedometer',
@@ -193,7 +193,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     id: 'tpl_bundle', name: 'Bundle Deal', category: 'sale', layout: 'grid-2x2',
     backgroundColor: '#06489A', filter: 'lark',
     textLayers: [
-      { text: 'BUNDLE', color: '#ffffff', fontFamily: 'bold', fontSize: Type.priceLarge.size, x: 30, y: 80 },
+      { text: 'BUNDLE', color: '#ffffff', fontFamily: 'bold', fontSize: Type.priceHero.size, x: 30, y: 80 },
       { text: '3 for £50', color: '#0f3460', fontFamily: 'classic', fontSize: 18, x: 30, y: 130 },
     ],
     stickers: [{ type: 'emoji', content: '📦', x: 280, y: 80 }],
@@ -204,7 +204,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     backgroundColor: '#222f3e', filter: 'moon',
     textLayers: [
       { text: 'RARE', color: '#C9A46A', fontFamily: 'bold', fontSize: 36, x: 40, y: 120 },
-      { text: 'Limited edition', color: '#c8d6e5', fontFamily: 'modern', fontSize: Type.bodyLarge.size, x: 40, y: 180 },
+      { text: 'Limited edition', color: '#c8d6e5', fontFamily: 'modern', fontSize: Type.body.size, x: 40, y: 180 },
     ],
     stickers: [{ type: 'emoji', content: '💎', x: 290, y: 120 }],
     thumbnailColor: '#222f3e', icon: 'diamond',
@@ -214,7 +214,7 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     backgroundColor: '#4A7AC4', filter: 'aden',
     textLayers: [
       { text: 'SWAP?', color: '#ffffff', fontFamily: 'bold', fontSize: 36, x: 40, y: 120 },
-      { text: 'Open to trades', color: '#ffffff', fontFamily: 'modern', fontSize: Type.bodyLarge.size, x: 40, y: 180 },
+      { text: 'Open to trades', color: '#ffffff', fontFamily: 'modern', fontSize: Type.body.size, x: 40, y: 180 },
     ],
     stickers: [{ type: 'emoji', content: '🔄', x: 280, y: 120 }],
     thumbnailColor: '#4A7AC4', icon: 'repeat',

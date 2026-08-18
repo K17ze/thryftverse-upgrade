@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
     marginHorizontal: Space.xs,

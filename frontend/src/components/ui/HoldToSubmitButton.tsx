@@ -170,8 +170,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
 });

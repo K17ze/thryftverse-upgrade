@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     lineHeight: 17,
   },

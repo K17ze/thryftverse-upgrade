@@ -758,7 +758,7 @@ function createStyles(colors: ThemeColors) {
     },
     tabLabel: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     tabLabelActive: {
       fontFamily: Typography.family.semibold,
@@ -777,7 +777,7 @@ function createStyles(colors: ThemeColors) {
     },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     originalBody: {
       paddingVertical: Space.sm,
@@ -824,7 +824,7 @@ function createStyles(colors: ThemeColors) {
     },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     trackMetaRow: {
       flexDirection: 'row',
@@ -940,7 +940,7 @@ function createStyles(colors: ThemeColors) {
     },
     doneBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
   });
 }

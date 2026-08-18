@@ -27,7 +27,7 @@ export interface CommerceDetailMetricRowProps {
   /** When true, the row reads as a summary total: the value uses
    * `Type.priceList` and the label is emphasized. Per Design.md
    * checkout summary spec: "Type.priceList for line items,
-   * Type.priceLarge for total, right-aligned, tabular alignment for
+   * Type.priceHero for total, right-aligned, tabular alignment for
    * numbers." Used for the estimated-total row in cost breakdowns. */
   emphasis?: boolean;
   /** When true, a hairline separator is drawn above the row. Used to
@@ -121,8 +121,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   value: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
     flexShrink: 1,

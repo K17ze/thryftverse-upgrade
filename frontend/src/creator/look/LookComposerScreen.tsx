@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, Radius, Type, Typography, FontFamily, FontSize, Control } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, FontSize, Control, IconGrammar } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { makeStableId } from '../../utils/createStableId';
@@ -1081,10 +1081,20 @@ function LookComposerInner() {
           </View>
         )}
 
-        {/* Empty canvas hint */}
+        {/* Empty canvas hint — capture-first CTA */}
         {!hasContent && !isLoadingSourceLook && !isLoadingDraft && entryComplete && !selectedLayer && (
-          <View style={styles.canvasEmptyHint} pointerEvents="none">
-            <Text style={styles.canvasEmptyHintTitle}>Add photos to start</Text>
+          <View style={styles.canvasEmptyHint}>
+            <PressScale
+              onPress={() => { haptic.light(); setPickerMode('media'); }}
+              style={styles.canvasEmptyCta}
+              accessibilityLabel="Add photos"
+              accessibilityHint="Opens the media picker to add photos to your look"
+              accessibilityRole="button"
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            >
+              <Ionicons name="images-outline" size={IconGrammar.hero} color="rgba(255,255,255,0.5)" />
+              <Text style={styles.canvasEmptyHintTitle}>Add photos to start</Text>
+            </PressScale>
           </View>
         )}
 
@@ -1779,7 +1789,7 @@ const OpacityBar = React.memo(function OpacityBar({ value, onChange, onCommit }:
 
   return (
     <View style={styles.opacityBar}>
-      <Ionicons name="contrast-outline" size={16} color="rgba(255,255,255,0.7)" />
+      <Ionicons name="contrast-outline" size={IconGrammar.metadata} color="rgba(255,255,255,0.7)" />
       <GestureDetector gesture={panGesture}>
         <View style={styles.opacitySliderTrack} onLayout={handleLayout}>
           <View style={styles.opacitySliderTrackBg} />
@@ -1910,11 +1920,11 @@ const styles = StyleSheet.create({
   },
   titleText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   doneText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   topRight: {
     flexDirection: 'row',
@@ -1985,9 +1995,13 @@ const styles = StyleSheet.create({
     zIndex: 40,
     gap: Space.xs,
   },
+  canvasEmptyCta: {
+    alignItems: 'center',
+    gap: Space.sm,
+  },
   canvasEmptyHintTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: 'rgba(255,255,255,0.4)',
   },
   // ── AI Effects button (inside the effects surface) ──
@@ -2121,7 +2135,7 @@ const styles = StyleSheet.create({
   },
   effectsSheetTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   effectsSheetDone: {
     minWidth: 44,

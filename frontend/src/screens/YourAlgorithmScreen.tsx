@@ -1076,10 +1076,10 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       minHeight: Control.hit,
     },
     howItWorksTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     howItWorksContent: {
       paddingBottom: Space.md,
@@ -1108,10 +1108,10 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginBottom: Space.lg,
     },
     sectionTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
       marginBottom: Space.xs,
     },
     sectionCaption: {
@@ -1344,9 +1344,9 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       justifyContent: 'center',
     },
     addBtnText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
 
     // Empty state

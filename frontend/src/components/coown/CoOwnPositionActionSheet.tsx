@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     lineHeight: 20,
     letterSpacing: -0.2,

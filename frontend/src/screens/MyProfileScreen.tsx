@@ -167,14 +167,18 @@ export default function MyProfileScreen() {
   // Seller trust summary — verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
 
-  // Follow counts — followers/following for the stats row
+  // Follow counts — followers/following for the seam row.
+  // Status distinguishes loading/error from a real zero so the UI never
+  // displays an unknown count as a factual "0 followers" (M2 — truthful UI).
   const [followCounts, setFollowCounts] = React.useState<{ followerCount: number; followingCount: number }>({ followerCount: 0, followingCount: 0 });
+  const [followCountsStatus, setFollowCountsStatus] = React.useState<'loading' | 'error' | 'loaded'>('loading');
   React.useEffect(() => {
     if (!currentUser?.id) return;
     let cancelled = false;
+    setFollowCountsStatus('loading');
     fetchFollowCounts(currentUser.id)
-      .then((counts) => { if (!cancelled) setFollowCounts(counts); })
-      .catch(() => { /* follow counts are non-critical */ });
+      .then((counts) => { if (!cancelled) { setFollowCounts(counts); setFollowCountsStatus('loaded'); } })
+      .catch(() => { if (!cancelled) setFollowCountsStatus('error'); });
     return () => { cancelled = true; };
   }, [currentUser?.id]);
 
@@ -381,7 +385,7 @@ export default function MyProfileScreen() {
   // completion requirements. Each CTA routes to a truthful destination:
   // "List your first item" → Sell, "Grow your audience" → creator analytics.
   const showFirstListingGrowth = allOwnedListings.length === 0;
-  const showAudienceGrowth = followCounts.followerCount === 0;
+  const showAudienceGrowth = followCountsStatus === 'loaded' && followCounts.followerCount === 0;
   const [growthDismissed, setGrowthDismissed] = React.useState(false);
   const showGrowthPrompt = !growthDismissed && (showFirstListingGrowth || showAudienceGrowth);
 
@@ -649,17 +653,16 @@ export default function MyProfileScreen() {
             bio={user.bio ?? undefined}
             location={user.location ?? undefined}
             memberSince={memberSince}
-            listingCount={allOwnedListings.length}
-            lookCount={myLooks.length}
             sellerTrust={sellerTrust}
             emailVerified={user.emailVerified}
+            ratingAverage={sellerTrust?.rating ?? null}
+            reviewCount={sellerTrust?.reviewCount}
             followerCount={followCounts.followerCount}
             followingCount={followCounts.followingCount}
+            followCountsStatus={followCountsStatus}
             onEditAvatar={pickAvatar}
             onEditProfile={() => navigation.navigate('EditProfile', {})}
             onShare={handleShare}
-            onPressListings={() => { haptic.light(); navigation.navigate('MyListings'); }}
-            onPressLooks={() => { haptic.light(); setActiveTab('looks'); scrollRef.current?.scrollTo({ y: tabContentY.current, animated: true }); }}
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
             onPressFollowers={() => { haptic.light(); navigation.navigate('Followers', { userId: currentUser!.id }); }}
             onPressFollowing={() => { haptic.light(); navigation.navigate('Following', { userId: currentUser!.id }); }}

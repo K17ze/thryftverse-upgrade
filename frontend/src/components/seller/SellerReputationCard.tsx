@@ -127,12 +127,12 @@ function createStyles(colors: ThemeColors) {
     borderBottomColor: colors.borderSubtle,
   },
   title: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     marginBottom: Space.sm,
   },
   metricsList: {
@@ -174,11 +174,11 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.body.letterSpacing,
   },
   metricValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   progressTrack: {

@@ -83,7 +83,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
   },
   optionText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },

@@ -383,10 +383,10 @@ const styles$inline = StyleSheet.create({
   },
   requestName: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: undefined,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   requestTime: {
     fontSize: Type.caption.size,
@@ -489,7 +489,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     },
     listingPrice: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.textPrimary,
     },

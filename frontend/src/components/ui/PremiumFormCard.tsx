@@ -67,7 +67,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.3,

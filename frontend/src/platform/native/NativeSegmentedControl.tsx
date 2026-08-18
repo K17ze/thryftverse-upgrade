@@ -75,7 +75,7 @@ function createStyles(colors: ThemeColors) {
     elevation: 2,
   },
   optionText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },

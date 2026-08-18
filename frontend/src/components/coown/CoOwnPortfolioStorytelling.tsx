@@ -187,10 +187,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   headerTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   comparisonRow: {
     flexDirection: 'row',
@@ -204,14 +204,14 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   comparisonValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   comparisonAge: {
@@ -237,10 +237,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
   premiumValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   premiumGlyph: {

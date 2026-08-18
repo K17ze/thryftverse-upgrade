@@ -362,12 +362,12 @@ function createStyles(colors: ThemeColors) {
 
     // Section headers — flat, no count badge dashboard
     sectionTitle: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.metaElevated.letterSpacing,
-      lineHeight: Type.metaElevated.lineHeight,
+      letterSpacing: Type.label.letterSpacing,
+      lineHeight: Type.label.lineHeight,
       marginTop: Space.lg,
       marginBottom: Space.sm,
       paddingHorizontal: Space.xs,
@@ -402,17 +402,17 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
       textTransform: 'uppercase',
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       lineHeight: Type.meta.lineHeight,
     },
     alertPrice: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       marginTop: Space.xs / 2,
       fontVariant: ['tabular-nums'],
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     alertDate: {
       fontSize: Type.meta.size,

@@ -267,8 +267,8 @@ const styles = StyleSheet.create({
   },
   price: {
     color: '#FFFFFF',
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
     flexShrink: 0,

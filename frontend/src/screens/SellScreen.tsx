@@ -2510,15 +2510,15 @@ const styles = StyleSheet.create({
     borderBottomColor: '#00000000', // themed inline
   },
   shippingSummaryLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    lineHeight: Type.bodyStrong.lineHeight,
     marginBottom: Space.xxs,
   },
   shippingSummaryValue: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: FontFamily.regular,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
   shippingSheetBackdrop: {
     flex: 1,
@@ -2549,9 +2549,9 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   shippingSheetTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   shippingSheetSectionLabel: {
     fontSize: Type.meta.size,
@@ -2571,9 +2571,9 @@ const styles = StyleSheet.create({
   },
   shippingSheetRowLabel: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.regular,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   shippingSheetRadioOuter: {
     width: 20,

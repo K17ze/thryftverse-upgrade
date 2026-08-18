@@ -513,9 +513,9 @@ function createStyles(colors: ThemeColors) {
     fontVariant: ['tabular-nums'],
   },
   amountLabel: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: Type.priceHero.letterSpacing,
     marginTop: Space.sm,
   },
   totalLabel: {

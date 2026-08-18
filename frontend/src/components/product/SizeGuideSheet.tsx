@@ -321,13 +321,13 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
   },
   closeText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   guideTitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
@@ -387,8 +387,8 @@ const styles = StyleSheet.create({
   },
   measureTipText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.medium,
   },
   footerNote: {
@@ -400,8 +400,8 @@ const styles = StyleSheet.create({
   },
   footerText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
   },
   // ── Empty state ──
@@ -419,14 +419,14 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   emptyTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.xs,
   },
   emptyText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
   },

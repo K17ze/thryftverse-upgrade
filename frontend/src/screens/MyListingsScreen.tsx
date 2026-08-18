@@ -373,7 +373,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   row: {
     flexDirection: 'row',

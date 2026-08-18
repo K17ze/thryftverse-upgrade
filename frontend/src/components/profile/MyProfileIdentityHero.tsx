@@ -7,10 +7,12 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius, Type } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
-import { ProfileTrustSignals } from './ProfileTrustSignals';
 import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 
-const AVATAR_SIZE = 84;
+const AVATAR_SIZE = 88; // design contract: 88pt seam avatar — matches ProfileHero
+const AVATAR_OVERLAP = AVATAR_SIZE / 2;
+const ACTION_RADIUS = 11;
+const ACTION_HEIGHT = 44;
 
 interface MyProfileIdentityHeroProps {
   avatarUri: string | null;
@@ -24,10 +26,12 @@ interface MyProfileIdentityHeroProps {
   sellerTrust?: SellerTrustSummary | null;
   emailVerified?: boolean;
   ratingAverage?: number | null;
-  reviewCount?: number;
+  reviewCount?: number | null;
   soldCount?: number;
   followerCount?: number;
   followingCount?: number;
+  /** Distinguishes loading/error from a real zero count (M2 — truthful UI). */
+  followCountsStatus?: 'loading' | 'error' | 'loaded';
   onEditAvatar: () => void;
   onEditProfile: () => void;
   onShare: () => void;
@@ -45,8 +49,6 @@ export function MyProfileIdentityHero({
   bio,
   location,
   memberSince,
-  listingCount = 0,
-  lookCount = 0,
   sellerTrust,
   emailVerified,
   ratingAverage,
@@ -54,167 +56,179 @@ export function MyProfileIdentityHero({
   soldCount,
   followerCount = 0,
   followingCount = 0,
+  followCountsStatus = 'loaded',
   onEditAvatar,
   onEditProfile,
   onShare,
-  onPressListings,
-  onPressLooks,
   onPressSold,
   onPressFollowers,
   onPressFollowing,
 }: MyProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const context = [
-    location,
-    memberSince ? `Member since ${memberSince}` : undefined,
-  ].filter(Boolean);
+
   const verified =
     sellerTrust?.verified === true || emailVerified === true;
   const verificationTier: VerificationTier | null =
     sellerTrust?.verificationTier ?? (verified ? 'email' : null);
   const completedSales = sellerTrust?.completedSales ?? soldCount ?? 0;
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.identityTop}>
-        <View style={styles.avatarWrap}>
-          {avatarUri ? (
-            <CachedImage
-              uri={avatarUri}
-              style={styles.avatar}
-              containerStyle={styles.avatar}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
-              <Ionicons name="person-outline" size={34} color={colors.textMuted} />
-            </View>
-          )}
-          <Pressable
-            style={({ pressed }) => [styles.editAvatarHit, pressed && { opacity: 0.6 }]}
-            onPress={onEditAvatar}
-            accessibilityLabel="Edit profile photo"
-            accessibilityRole="button"
-          >
-            <View style={styles.editAvatarVisible}>
-              <Ionicons name="camera-outline" size={13} color={colors.textInverse} />
-            </View>
-          </Pressable>
-        </View>
+  const hasRating = ratingAverage !== null && ratingAverage !== undefined && (reviewCount ?? 0) > 0;
 
-        <View style={styles.stats}>
-          <ProfileStat value={listingCount} label="Listings" styles={styles} onPress={onPressListings} a11yLabel={`${formatFullCount(listingCount)} listings`} />
-          <ProfileStat value={lookCount} label="Looks" styles={styles} onPress={onPressLooks} a11yLabel={`${formatFullCount(lookCount)} looks`} />
-          <ProfileStat value={completedSales} label="Sold" styles={styles} onPress={onPressSold} a11yLabel={`${formatFullCount(completedSales)} sold`} />
-        </View>
+  // Trust line: "4.9 ★ · 47 sold · Joined June 2026" — one row, no chips
+  const trustParts: string[] = [];
+  if (hasRating && ratingAverage !== null && ratingAverage !== undefined) {
+    trustParts.push(`${ratingAverage.toFixed(1)} ★`);
+  }
+  if (completedSales > 0) trustParts.push(`${completedSales} sold`);
+  if (memberSince) trustParts.push(`Joined ${memberSince}`);
+  const trustLine = trustParts.join(' · ');
+
+  // Follow-count display: show a muted dash while loading or on error so a
+  // real zero is distinguishable from an unknown count (M2 — truthful UI).
+  const countsUnknown = followCountsStatus === 'loading' || followCountsStatus === 'error';
+  const followerDisplay = countsUnknown ? '—' : formatCompactCount(followerCount);
+  const followingDisplay = countsUnknown ? '—' : formatCompactCount(followingCount);
+  const followerA11y = countsUnknown
+    ? 'Followers count loading'
+    : `${formatFullCount(followerCount)} followers`;
+  const followingA11y = countsUnknown
+    ? 'Following count loading'
+    : `${formatFullCount(followingCount)} following`;
+
+  return (
+    <View style={styles.heroRoot}>
+      {/* ── Seam row: avatar (left, overlapping cover) + 3 stats (right) ── */}
+      <View style={styles.avatarAbsolute}>
+        {avatarUri ? (
+          <CachedImage
+            uri={avatarUri}
+            style={styles.avatar}
+            containerStyle={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[styles.avatar, styles.avatarMonogram]}>
+            <Ionicons name="person-outline" size={32} color={colors.textMuted} />
+          </View>
+        )}
+        <Pressable
+          style={({ pressed }) => [styles.editAvatarHit, pressed && { opacity: 0.6 }]}
+          onPress={onEditAvatar}
+          accessibilityLabel="Edit profile photo"
+          accessibilityRole="button"
+        >
+          <View style={styles.editAvatarVisible}>
+            <Ionicons name="camera-outline" size={13} color={colors.textInverse} />
+          </View>
+        </Pressable>
       </View>
 
-      <View style={styles.displayNameRow}>
-        <Text style={styles.displayName} numberOfLines={1}>
-          {displayName}
+      {/* Identity canvas — paddingTop reserves avatar space */}
+      <View style={styles.identityCanvas}>
+        {/* ── Seam row — avatar (left) + Followers · Following · Sold (right) ──
+            Followers is the hero stat (parasocial proof). Following is
+            secondary. Sold is marketplace proof. Listings/Looks counts are
+            already visible in the tab rail below — no duplication here. */}
+        <View style={styles.seamRow}>
+          <View style={styles.seamSpacer} />
+          <View style={styles.seamStats}>
+            <ProfileStat
+              value={followerDisplay}
+              label="Followers"
+              styles={styles}
+              onPress={onPressFollowers}
+              a11yLabel={followerA11y}
+            />
+            <View style={styles.seamStatDivider} />
+            <ProfileStat
+              value={followingDisplay}
+              label="Following"
+              styles={styles}
+              onPress={onPressFollowing}
+              a11yLabel={followingA11y}
+            />
+            <View style={styles.seamStatDivider} />
+            <ProfileStat
+              value={countsUnknown ? '—' : formatCompactCount(completedSales)}
+              label="Sold"
+              styles={styles}
+              onPress={onPressSold}
+              a11yLabel={countsUnknown ? 'Sold count loading' : `${formatFullCount(completedSales)} sold`}
+            />
+          </View>
+        </View>
+
+        {/* Identity — full-width, left-aligned */}
+        <View style={styles.displayNameRow}>
+          <Text style={styles.displayName} numberOfLines={1}>
+            {displayName}
+          </Text>
+          {verificationTier ? (
+            <Ionicons
+              name={
+                VERIFICATION_TIERS[verificationTier]
+                  .icon as keyof typeof Ionicons.glyphMap
+              }
+              size={17}
+              color={
+                VERIFICATION_TIERS[verificationTier].color === 'brand'
+                  ? colors.brand
+                  : colors.success
+              }
+              accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
+            />
+          ) : null}
+        </View>
+        <Text style={styles.username} numberOfLines={1}>
+          @{username}
         </Text>
-        {verificationTier ? (
-          <Ionicons
-            name={
-              VERIFICATION_TIERS[verificationTier]
-                .icon as keyof typeof Ionicons.glyphMap
-            }
-            size={17}
-            color={
-              VERIFICATION_TIERS[verificationTier].color === 'brand'
-                ? colors.brand
-                : colors.success
-            }
-            accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
-          />
+
+        {bio ? <Text style={styles.bio} numberOfLines={2}>{bio}</Text> : null}
+
+        {location ? (
+          <Text style={styles.contextLine} numberOfLines={1}>{location}</Text>
+        ) : null}
+
+        {/* Trust line — one row, no chips, no second trust surface */}
+        {trustLine ? (
+          <View style={styles.trustRow}>
+            {hasRating && ratingAverage !== null && ratingAverage !== undefined ? (
+              <Text style={styles.trustLink}>{ratingAverage.toFixed(1)} ★</Text>
+            ) : null}
+            {hasRating && completedSales > 0 ? <Text style={styles.trustDot}> · </Text> : null}
+            {completedSales > 0 ? (
+              <Text style={styles.trustLink}>{completedSales} sold</Text>
+            ) : null}
+            {(hasRating || completedSales > 0) && memberSince ? <Text style={styles.trustDot}> · </Text> : null}
+            {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
+          </View>
         ) : null}
       </View>
-      <Text style={styles.username} numberOfLines={1}>
-        @{username}
-      </Text>
 
-      {bio ? <Text style={styles.bio}>{bio}</Text> : null}
-      {context.length > 0 ? (
-        <Text style={styles.context} numberOfLines={1}>
-          {context.join(' · ')}
-        </Text>
-      ) : null}
-
-      <ProfileTrustSignals
-        sellerTrust={sellerTrust}
-        emailVerified={emailVerified}
-        ratingAverage={ratingAverage}
-        reviewCount={reviewCount}
-        soldCount={soldCount}
-        align="left"
-        hideSoldChip
-      />
-
-      {/* ── SOCIAL INLINE — followers / following ──
-          Flat inline row, no bordered container. Matches the public profile's
-          restrained trust-line pattern: spacing and a dot separator, not a
-          boxed surface. Compact count notation for scannability; accessibility
-          labels carry the full count for screen readers. */}
-      <View style={styles.socialInline}>
-        {onPressFollowers ? (
-          <Pressable
-            style={({ pressed }) => [styles.socialInlineItem, pressed && { opacity: 0.55 }]}
-            onPress={onPressFollowers}
-            accessibilityRole="button"
-            accessibilityLabel={`${formatFullCount(followerCount)} followers`}
-          >
-            <Text style={styles.socialInlineValue}>{formatCompactCount(followerCount)}</Text>
-            <Text style={styles.socialInlineLabel}> followers</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.socialInlineItem} accessible accessibilityLabel={`${formatFullCount(followerCount)} followers`}>
-            <Text style={styles.socialInlineValue}>{formatCompactCount(followerCount)}</Text>
-            <Text style={styles.socialInlineLabel}> followers</Text>
-          </View>
-        )}
-        <Text style={styles.socialInlineDot}>·</Text>
-        {onPressFollowing ? (
-          <Pressable
-            style={({ pressed }) => [styles.socialInlineItem, pressed && { opacity: 0.55 }]}
-            onPress={onPressFollowing}
-            accessibilityRole="button"
-            accessibilityLabel={`${formatFullCount(followingCount)} following`}
-          >
-            <Text style={styles.socialInlineValue}>{formatCompactCount(followingCount)}</Text>
-            <Text style={styles.socialInlineLabel}> following</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.socialInlineItem} accessible accessibilityLabel={`${formatFullCount(followingCount)} following`}>
-            <Text style={styles.socialInlineValue}>{formatCompactCount(followingCount)}</Text>
-            <Text style={styles.socialInlineLabel}> following</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.actions}>
+      {/* Actions — flat, single row, clear primary/secondary hierarchy */}
+      <View style={styles.actionRow}>
         <AnimatedPressable
           style={[styles.action, styles.editAction]}
           onPress={onEditProfile}
-          activeOpacity={0.78}
-          scaleValue={0.985}
+          activeOpacity={0.88}
           hapticFeedback="light"
           accessibilityLabel="Edit profile"
           accessibilityRole="button"
         >
+          <Ionicons name="create-outline" size={15} color={colors.textInverse} />
           <Text style={styles.editActionText}>Edit profile</Text>
         </AnimatedPressable>
         <AnimatedPressable
           style={[styles.action, styles.shareAction]}
           onPress={onShare}
-          activeOpacity={0.78}
-          scaleValue={0.985}
+          activeOpacity={0.88}
           hapticFeedback="light"
           accessibilityLabel="Share profile"
           accessibilityRole="button"
         >
           <Ionicons name="share-outline" size={17} color={colors.textPrimary} />
-          <Text style={styles.shareActionText}>Share profile</Text>
+          <Text style={styles.shareActionText}>Share</Text>
         </AnimatedPressable>
       </View>
     </View>
@@ -222,49 +236,47 @@ export function MyProfileIdentityHero({
 }
 
 function ProfileStat({ value, label, styles, onPress, a11yLabel }: {
-  value: number;
+  value: string;
   label: string;
   styles: ReturnType<typeof createStyles>;
   onPress?: () => void;
   a11yLabel?: string;
 }) {
-  const displayValue = formatCompactCount(value);
   if (onPress) {
     return (
       <Pressable
-        style={styles.stat}
+        style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.55 }]}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={a11yLabel ?? `${formatFullCount(value)} ${label}`}
+        accessibilityLabel={a11yLabel ?? value}
         hitSlop={4}
       >
-        <Text style={styles.statValue}>{displayValue}</Text>
-        <Text style={styles.statLabel}>{label}</Text>
+        <Text style={styles.seamStatValue} numberOfLines={1}>{value}</Text>
+        <Text style={styles.seamStatLabel} numberOfLines={1}>{label}</Text>
       </Pressable>
     );
   }
   return (
-    <View style={styles.stat} accessible accessibilityLabel={a11yLabel ?? `${formatFullCount(value)} ${label}`}>
-      <Text style={styles.statValue}>{displayValue}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.seamStat} accessible accessibilityLabel={a11yLabel ?? value}>
+      <Text style={styles.seamStatValue} numberOfLines={1}>{value}</Text>
+      <Text style={styles.seamStatLabel} numberOfLines={1}>{label}</Text>
     </View>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
-    paddingBottom: 12,
-  },
-  identityTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 11,
-  },
-  avatarWrap: {
+  heroRoot: {
     position: 'relative',
+    backgroundColor: colors.background,
+  },
+
+  // Avatar — absolutely positioned at the cover/canvas seam
+  avatarAbsolute: {
+    position: 'absolute',
+    top: -AVATAR_OVERLAP,
+    left: Space.md,
+    zIndex: 10,
   },
   avatar: {
     width: AVATAR_SIZE,
@@ -273,7 +285,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: 3,
     borderColor: colors.background,
   },
-  avatarFallback: {
+  avatarMonogram: {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
@@ -297,32 +309,57 @@ function createStyles(colors: ThemeColors) {
     borderWidth: 2,
     borderColor: colors.background,
   },
-  stats: {
+
+  // Identity canvas — no top padding; seamRow reserves avatar overlap space
+  identityCanvas: {
+    paddingHorizontal: Space.md,
+    paddingTop: 0,
+    paddingBottom: Space.sm,
+  },
+
+  // Seam row — begins immediately at canvas boundary, reserves avatar overlap height
+  seamRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: AVATAR_OVERLAP + Space.sm,
+    marginBottom: Space.xs,
+  },
+  seamSpacer: {
+    width: AVATAR_SIZE + Space.sm,
+  },
+  seamStats: {
     flex: 1,
     flexDirection: 'row',
-    alignSelf: 'flex-end',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingLeft: Space.md,
-    marginTop: Space.xs,
   },
-  stat: {
-    minWidth: Space.xxl + Space.xl + Space.xs,
+  seamStat: {
+    flex: 1,
     alignItems: 'center',
-    gap: Space.xs / 4,
+    justifyContent: 'center',
+    paddingVertical: Space.xs,
   },
-  statValue: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
+  seamStatValue: {
     fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  statLabel: {
-    color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
+  seamStatLabel: {
     fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+    color: colors.textMuted,
+    marginTop: 1,
+    letterSpacing: Type.caption.letterSpacing,
   },
+  seamStatDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: Space.lg,
+    backgroundColor: colors.borderSubtle,
+  },
+
+  // Identity — full-width, left-aligned
   displayNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -332,86 +369,89 @@ function createStyles(colors: ThemeColors) {
     flexShrink: 1,
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyLarge.size + 1,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    fontSize: Type.priceList.size,
+    letterSpacing: -0.4,
+    marginBottom: 2,
   },
   username: {
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    marginTop: 1,
+    fontSize: Type.body.size,
+    marginBottom: Space.xs,
   },
   bio: {
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    marginTop: Space.sm,
+    marginBottom: Space.xs,
   },
-  context: {
+  contextLine: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: Type.caption.size,
-    marginTop: 5,
+    marginBottom: Space.xs,
   },
-  // Social inline — flat followers/following row, no bordered container.
-  // Matches the public profile's restrained pattern: spacing + dot separator,
-  // not a boxed surface. Removes a non-media panel from the surface budget.
-  socialInline: {
+
+  // Trust line — compact, no badge container
+  trustRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.sm + 2,
+    flexWrap: 'wrap',
+    paddingVertical: 2,
+    marginBottom: Space.xs,
   },
-  socialInlineItem: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  socialInlineValue: {
-    fontSize: Type.bodyEmphasis.size,
+  trustLink: {
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  socialInlineLabel: {
+  trustStatic: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
-  socialInlineDot: {
+  trustDot: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
-  actions: {
+
+  // Actions — flat, single row
+  actionRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.md + 1,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    backgroundColor: colors.background,
   },
   action: {
     flex: 1,
-    minHeight: Space.xl + Space.sm + 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs + 2,
-    borderRadius: Radius.lg,
+    gap: Space.xs + 3,
+    height: ACTION_HEIGHT,
+    borderRadius: ACTION_RADIUS,
   },
   editAction: {
-    backgroundColor: colors.textPrimary,
+    backgroundColor: colors.brand,
   },
   editActionText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: Type.bodyStrong.size,
   },
   shareAction: {
-    backgroundColor: colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
   },
   shareActionText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: Type.bodyStrong.size,
   },
   });
 }

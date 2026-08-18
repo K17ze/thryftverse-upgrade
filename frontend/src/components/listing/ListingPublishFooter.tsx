@@ -198,12 +198,12 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
   },
   qualityLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   qualityScore: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -231,7 +231,7 @@ function createStyles(colors: ThemeColors) {
     transform: [{ scale: 0.97 }],
   },
   previewText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -251,7 +251,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
   },
   publishText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
   },

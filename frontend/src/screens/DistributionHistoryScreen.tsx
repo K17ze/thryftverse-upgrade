@@ -304,9 +304,9 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.caption.letterSpacing,
   },
   summaryValue: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: Type.priceHero.letterSpacing,
   },
   summaryCount: {
     fontSize: Type.meta.size,
@@ -397,7 +397,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   dripTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -405,7 +405,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     marginTop: Space.xs - 2,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
   dripAssetList: {
     borderTopWidth: StyleSheet.hairlineWidth,

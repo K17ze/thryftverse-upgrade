@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
   },
   valueText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     letterSpacing: LetterSpacing.normal,
     minWidth: 56,
     textAlign: 'center',
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   },
   deleteLabel: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: '#FFFFFF',
     letterSpacing: LetterSpacing.normal,
   },

@@ -362,12 +362,12 @@ function createStyles(colors: ThemeColors) {
     },
     rowText: {
       flex: 1,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
     },
     rowTextBase: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
     },

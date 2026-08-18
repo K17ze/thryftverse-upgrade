@@ -144,7 +144,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   primaryText: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textInverse,
     letterSpacing: 0.2,
   },
@@ -158,7 +158,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   secondaryText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textPrimary,
   },
   terminalRow: {

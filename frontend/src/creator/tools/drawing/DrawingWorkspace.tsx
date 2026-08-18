@@ -977,9 +977,9 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       justifyContent: 'center',
     },
     doneText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: FontFamily.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     panel: {
       position: 'absolute',
@@ -1060,8 +1060,8 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     },
     emojiTabLabel: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       color: colors.textSecondary,
     },
     emojiTabLabelActive: {

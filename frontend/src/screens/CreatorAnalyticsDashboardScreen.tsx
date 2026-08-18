@@ -894,14 +894,14 @@ function createMetricTileStyles(colors: ThemeColors) {
     deltaText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.captionElevated.letterSpacing,
+      letterSpacing: Type.caption.letterSpacing,
       fontVariant: ['tabular-nums'] as any,
     },
     tileValue: {
-      fontSize: Type.priceLarge.size,
+      fontSize: Type.priceHero.size,
       fontFamily: Typography.family.bold,
-      lineHeight: Type.priceLarge.lineHeight,
-      letterSpacing: Type.priceLarge.letterSpacing,
+      lineHeight: Type.priceHero.lineHeight,
+      letterSpacing: Type.priceHero.letterSpacing,
       fontVariant: ['tabular-nums'] as any,
     },
     tileLabel: {
@@ -933,7 +933,7 @@ function createEngagementStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     barCount: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       fontVariant: ['tabular-nums'] as any,
     },
@@ -1022,7 +1022,7 @@ function createTopContentStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     rankText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       fontVariant: ['tabular-nums'] as any,
     },
@@ -1043,7 +1043,7 @@ function createTopContentStyles(colors: ThemeColors) {
     rowMetaText: {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.regular,
-      letterSpacing: Type.captionElevated.letterSpacing,
+      letterSpacing: Type.caption.letterSpacing,
     },
     rowDot: {
       fontSize: Type.meta.size - 1,

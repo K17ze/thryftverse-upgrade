@@ -90,10 +90,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   subtitle: {
     fontSize: Type.caption.size,

@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     marginBottom: Space.md,
   },
-  searchInput: { flex: 1, marginLeft: 10, color: Colors.textPrimary, fontFamily: Typography.family.medium, fontSize: Type.bodyLarge.size, letterSpacing: 0.08 },
+  searchInput: { flex: 1, marginLeft: 10, color: Colors.textPrimary, fontFamily: Typography.family.medium, fontSize: Type.body.size, letterSpacing: 0.08 },
 
   scrollList: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: OPTION_BORDER,
   },
-  optionText: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.medium, color: Colors.textPrimary, letterSpacing: 0.08 },
+  optionText: { fontSize: Type.body.size, fontFamily: Typography.family.medium, color: Colors.textPrimary, letterSpacing: 0.08 },
   optionTextActive: { fontFamily: Typography.family.semibold, color: Colors.brand },
 
   noResultsText: { textAlign: 'center', color: Colors.textMuted, marginTop: 40, fontFamily: Typography.family.medium },

@@ -1062,7 +1062,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
   footerNote: {
     fontSize: Type.caption.size,

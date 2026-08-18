@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Typography, Radius, Type, IconGrammar } from '../../theme/designTokens';
 import { SupportedCurrencyCode } from '../../constants/currencies';
 import { CurrencyDisplayMode } from '../../utils/currency';
 import type { ListingApiItem } from '../../services/listingsApi';
@@ -42,6 +43,8 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const showSold = isSold || item.status === 'sold';
+  const imageUri = item.images?.[0] ?? item.imageUrl ?? '';
+  const hasImage = imageUri.length > 0;
   return (
     <AnimatedPressable
       style={[styles.gridCard, { width: cardWidth, marginBottom: Space.sm }]}
@@ -55,13 +58,19 @@ const ProfileShopTile = React.memo(function ProfileShopTile({
         style={[styles.gridImageWrap, { width: cardWidth, height: cardHeight }]}
         sharedTransitionTag={`image-${item.id}-0`}
       >
-        <CachedImage
-          uri={item.images?.[0] ?? item.imageUrl ?? ''}
-          style={styles.gridImage}
-          containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
-          contentFit="cover"
-          downscaleWidth={cardWidth}
-        />
+        {hasImage ? (
+          <CachedImage
+            uri={imageUri}
+            style={styles.gridImage}
+            containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
+            contentFit="cover"
+            downscaleWidth={cardWidth}
+          />
+        ) : (
+          <View style={styles.imagePlaceholder}>
+            <Ionicons name="shirt-outline" size={IconGrammar.metadata} color={colors.textMuted} />
+          </View>
+        )}
         {/* Quiet lower-edge sold marker — real short fade, image stays readable */}
         {showSold ? (
           <>
@@ -98,6 +107,16 @@ function createStyles(colors: ThemeColors) {
     position: 'relative',
   },
   gridImage: { width: '100%', height: '100%' },
+  // Restrained placeholder for listings with no image — surfaceAlt fill with a
+  // category glyph. Never a broken-image tile; never a grey card shell that
+  // competes with real media tiles in the grid (M7).
+  imagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
   // Real short fade from bottom — no hard translucent rectangle
   soldFade: {
     position: 'absolute',
@@ -120,7 +139,7 @@ function createStyles(colors: ThemeColors) {
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  gridPrice: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: Space.xs + 1, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+  gridPrice: { fontSize: Type.caption.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: Space.xs + 1, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   gridBrand: { fontSize: Type.meta.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
   });
 }

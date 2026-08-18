@@ -1009,7 +1009,7 @@ function createStyles(colors: ThemeColors) {
     },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     sectionDivider: {
       height: StyleSheet.hairlineWidth,
@@ -1031,7 +1031,7 @@ function createStyles(colors: ThemeColors) {
     },
     autoBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     noticeBox: {
       flexDirection: 'row',
@@ -1087,7 +1087,7 @@ function createStyles(colors: ThemeColors) {
     },
     addBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     // ── List ──
     listHeader: {
@@ -1318,7 +1318,7 @@ function createStyles(colors: ThemeColors) {
     },
     doneBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
   });
 }

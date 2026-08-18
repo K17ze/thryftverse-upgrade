@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   // ── Input labels — captionElevated for quiet, professional hierarchy ──
-  // Per Design.md: "Labels: Type.captionElevated."
+  // Per Design.md: "Labels: Type.caption."
   inputLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,

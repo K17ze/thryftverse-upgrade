@@ -395,8 +395,8 @@ function createStyles(colors: ThemeColors) {
   emptyText: {
     textAlign: 'center',
     maxWidth: Space.xxl * 6 + Space.lg - 2,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 1,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 1,
   },
   createEmptyBtn: {
     backgroundColor: colors.brand,

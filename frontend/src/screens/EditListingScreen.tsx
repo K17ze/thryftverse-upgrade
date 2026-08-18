@@ -1283,7 +1283,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xl,
   },
   errorTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   retryBtn: {
@@ -1309,7 +1309,7 @@ const styles = StyleSheet.create({
   },
   statusDotActive: {},
   statusText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   restrictedRow: {
@@ -1328,7 +1328,7 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
   },
   sectionHeading: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1338,7 +1338,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   fieldLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     marginBottom: Space.xs,
   },
@@ -1390,11 +1390,11 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   descInput: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     minHeight: Space.xxl + Space.xxl + Space.sm,
     paddingVertical: Space.sm,
-    lineHeight: Type.bodyEmphasis.lineHeight + 1,
+    lineHeight: Type.bodyStrong.lineHeight + 1,
   },
   charCount: {
     fontSize: Type.meta.size,
@@ -1429,7 +1429,7 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   photoGuideTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   photoGuideMin: {
@@ -1527,7 +1527,7 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   qualityBarLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   qualityBarRight: {
@@ -1536,7 +1536,7 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   qualityBarScore: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
   },
   qualityBarTier: {

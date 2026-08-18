@@ -346,17 +346,17 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     replyTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      lineHeight: Type.bodyStrong.lineHeight,
       marginBottom: 2,
     },
     replyText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      lineHeight: Type.captionElevated.lineHeight,
+      lineHeight: Type.caption.lineHeight,
     },
     iconBtn: {
       width: Control.hit,

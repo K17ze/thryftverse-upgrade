@@ -849,10 +849,10 @@ const localStyles = StyleSheet.create({
     minHeight: Control.hit,
   },
   viewResultsText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
 
   // Refinement suggestions
@@ -942,10 +942,10 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   suggestionChipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
 
   // Error state
@@ -973,10 +973,10 @@ const localStyles = StyleSheet.create({
     marginTop: Space.sm,
   },
   retryBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
 
   // Input bar

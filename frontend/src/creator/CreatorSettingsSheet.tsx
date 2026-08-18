@@ -499,7 +499,7 @@ function createStyles(colors: ThemeColors) {
   },
   saveBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.surface,
   },
   attributionBox: {

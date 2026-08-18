@@ -1397,7 +1397,7 @@ const styles = StyleSheet.create({
   },
   zoomIndicatorText: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     color: '#fff',
   },
   // Capture flash — full-screen white overlay

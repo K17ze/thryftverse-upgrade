@@ -599,7 +599,7 @@ function useStyles() {
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
           opacity: 0.85,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
         },
         heroTitle: {
           fontSize: Type.title.size,
@@ -643,7 +643,7 @@ function useStyles() {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
           color: colors.textMuted,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
         },
         // ── Masonry ──
         masonryGrid: {
@@ -673,19 +673,19 @@ function useStyles() {
           gap: Space.xs / 2,
         },
         assetTitle: {
-          fontSize: Type.bodyEmphasis.size,
-          lineHeight: Type.bodyEmphasis.lineHeight,
+          fontSize: Type.bodyStrong.size,
+          lineHeight: Type.bodyStrong.lineHeight,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
           letterSpacing: Type.body.letterSpacing,
         },
         assetValuation: {
-          fontSize: Type.bodyLarge.size,
+          fontSize: Type.body.size,
           lineHeight: Type.body.lineHeight,
           fontFamily: Typography.family.bold,
           color: colors.textPrimary,
           fontVariant: ['tabular-nums'],
-          letterSpacing: Type.bodyLarge.letterSpacing,
+          letterSpacing: Type.body.letterSpacing,
         },
       }),
     [colors],

@@ -168,7 +168,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 2,
   },
   bidInfoValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   bidInfoMin: {
     color: colors.brand,

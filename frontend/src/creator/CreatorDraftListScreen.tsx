@@ -88,7 +88,7 @@ function DraftListSkeleton() {
           <SkeletonBlock width={100} height={100} radius={Radius.lg} />
           {/* Two text lines */}
           <View style={{ flex: 1, gap: Space.xs }}>
-            <SkeletonBlock width={'60%'} height={Type.bodyEmphasis.size + 4} radius={Radius.sm} />
+            <SkeletonBlock width={'60%'} height={Type.bodyStrong.size + 4} radius={Radius.sm} />
             <SkeletonBlock width={'40%'} height={Type.caption.size + 2} radius={Radius.sm} />
           </View>
           {/* Action icons placeholder */}
@@ -671,7 +671,7 @@ function UndoToast({
         <Text
           style={{
             fontFamily: Typography.family.semibold,
-            fontSize: Type.bodyEmphasis.size,
+            fontSize: Type.bodyStrong.size,
             color: colors.textInverse,
           }}
         >
@@ -973,7 +973,7 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
           accessibilityLabel="Confirm delete"
           accessibilityRole="button"
         >
-          <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textInverse }}>
+          <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textInverse }}>
             Delete
           </Text>
         </Pressable>
@@ -1094,7 +1094,7 @@ function createStyles(colors: ThemeColors) {
   },
   draftTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textPrimary,
   },
   draftMeta: {
@@ -1166,7 +1166,7 @@ function createStyles(colors: ThemeColors) {
   },
   emptyCtaText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textInverse,
   },
   });

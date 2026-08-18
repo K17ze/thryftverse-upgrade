@@ -218,10 +218,10 @@ function createStyles(colors: ThemeColors) {
   avatarWrap: {},
   avatar: { width: 44, height: 44, borderRadius: Radius.xxl },
   avatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  avatarInitials: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
+  avatarInitials: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
   identityCol: { flex: 1 },
-  displayName: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  handle: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
+  displayName: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  handle: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
   // Skeleton rows
   skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: Space.xxl + Space.xxl + Space.xs },
   skeletonAvatar: { width: Space.xl + Space.smMd, height: Space.xl + Space.smMd, borderRadius: Radius.xxl, backgroundColor: colors.surfaceAlt },
@@ -230,8 +230,8 @@ function createStyles(colors: ThemeColors) {
   skeletonHandle: { width: Space.xxl + Space.xxl - Space.xs, height: Type.caption.size, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt },
   // States
   stateWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl * 2, gap: Space.sm, paddingHorizontal: Space.md },
-  stateTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  stateSub: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
+  stateTitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  stateSub: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
   footerIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   });
 }

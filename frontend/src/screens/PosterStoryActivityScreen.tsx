@@ -755,19 +755,19 @@ function createStyles(colors: ThemeColors) {
     avatarText: {
       color: colors.textSecondary,
       fontFamily: Typography.family.bold,
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
     },
     rowContent: {
       flex: 1,
       gap: Space.xs - 2,
     },
     rowTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
     rowSubtitle: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
     },
@@ -798,7 +798,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     emptyTitle: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
     },
@@ -827,7 +827,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     errorTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },

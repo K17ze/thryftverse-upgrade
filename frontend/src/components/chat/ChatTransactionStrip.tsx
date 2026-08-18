@@ -200,7 +200,7 @@ function createStyles(colors: ThemeColors) {
       gap: 1,
     },
     statusLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
     deadline: {

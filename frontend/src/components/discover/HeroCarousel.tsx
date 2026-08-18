@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     color: '#fff',
     letterSpacing: -0.6,
     lineHeight: 34,
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   },
   visitBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: '#fff',
   },
   dotsRow: {

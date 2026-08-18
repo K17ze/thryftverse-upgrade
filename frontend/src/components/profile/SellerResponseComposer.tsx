@@ -195,10 +195,10 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
   guidanceBox: {
     flexDirection: 'row',

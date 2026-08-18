@@ -69,7 +69,6 @@ import { ProfileLookTile } from '../components/profile/ProfileLookTile';
 import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
-import { SellerReputationCard } from '../components/seller/SellerReputationCard';
 
 // AnimatedFlashList crashes on web with Reanimated 4.x (issue #9266).
 // Use plain FlashList on web; animated version on native for UI-thread perf.
@@ -87,7 +86,7 @@ const LOOK_GAP = 4;
 const LOOK_COLS = 3;
 const COLLAPSED_BAR_HEIGHT = 50;
 
-type Tab = 'Shop' | 'Looks' | 'Collections' | 'Drops' | 'Reviews';
+type Tab = 'Shop' | 'Looks' | 'Reviews';
 type ShopSegment = 'forsale' | 'sold';
 
 const PROFILE_WEB_BASE = 'https://thryftverse.app';
@@ -170,19 +169,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Seller trust summary - verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
 
-  // Idle query placeholder for tabs that have no backend data source yet
-  // (Collections, Drops). Provides the same surface as React Query infinite
-  // hooks so the shared scroll/refresh/load-more logic works without branching.
-  const idleQuery = useMemo(() => ({
-    isRefetching: false,
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    fetchNextPage: () => {},
-    refetch: () => {},
-    isLoading: false,
-    error: null as unknown,
-  } as any), []);
-
   const followMutation = useFollowMutation(targetUserId ?? '');
   const blockMutation = useBlockMutation(targetUserId ?? '');
   const reportMutation = useReportUserMutation(targetUserId ?? '');
@@ -233,16 +219,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       for (const page of pages) for (const item of page.items) items.push(item);
       return items;
     }
-    if (activeTab === 'Collections' || activeTab === 'Drops') {
-      return [];
-    }
     const pages = reviewsQuery.data?.pages ?? [];
     const items: SellerReviewItem[] = [];
     for (const page of pages) for (const item of page.items) items.push(item);
     return items;
   }, [activeTab, shopSegment, activeListingsQuery.data, soldListingsQuery.data, looksQuery.data, reviewsQuery.data]);
 
-  const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : (activeTab === 'Collections' || activeTab === 'Drops') ? idleQuery : reviewsQuery;
+  const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : reviewsQuery;
   const isRefreshing = activeQuery.isRefetching;
   const hasNextPage = Boolean(activeQuery.hasNextPage);
   const isFetchingNextPage = activeQuery.isFetchingNextPage;
@@ -477,7 +460,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // -----------------------------------------------------------------------
   // MAIN RENDER
   // -----------------------------------------------------------------------
-  const numColumns = (activeTab === 'Reviews' || activeTab === 'Collections' || activeTab === 'Drops') ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
+  const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
 
   const listHeader = (
     <View>
@@ -524,10 +507,6 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           </View>
         </View>
       ) : null}
-
-      {/* Seller reputation metrics - prominent trust display */}
-      <SellerReputationCard seller={sellerTrust ?? null} />
-
 
       {/* Tab rail - measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>

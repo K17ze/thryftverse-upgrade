@@ -290,9 +290,9 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.sm,
     },
     sectionLabel: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       textTransform: 'uppercase',
     },
     listCard: {
@@ -326,7 +326,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     entryLabel: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
       flex: 1,
@@ -383,7 +383,7 @@ function createStyles(colors: ThemeColors) {
       minWidth: 0,
     },
     clearBtn: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
       paddingHorizontal: Space.xs,

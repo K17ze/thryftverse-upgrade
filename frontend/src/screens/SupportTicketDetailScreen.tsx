@@ -338,7 +338,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs / 2,
   },
   statusId: {
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   metaRow: {
     flexDirection: 'row',

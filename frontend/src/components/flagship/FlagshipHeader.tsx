@@ -68,7 +68,7 @@ export function FlagshipHeader({
             {
               color: colors.textPrimary,
               fontSize: isLarge ? Type.title.size : Type.subtitle.size,
-              fontFamily: isLarge ? TypeStyles.title.fontFamily : TypeStyles.bodyEmphasis.fontFamily,
+              fontFamily: isLarge ? TypeStyles.title.fontFamily : TypeStyles.bodyStrong.fontFamily,
               lineHeight: isLarge ? Type.title.lineHeight : Type.subtitle.lineHeight,
               letterSpacing: isLarge ? Type.title.letterSpacing : Type.subtitle.letterSpacing,
               opacity: compactTitleOpacity,
@@ -113,7 +113,7 @@ export function FlagshipHeader({
             onPress={onTitlePress}
             accessibilityRole="button"
             accessibilityLabel={titleAccessibilityLabel ?? `${title} details`}
-            scaleValue={0.98}
+            scaleValue={PressScale.gentle}
             hapticFeedback="light"
           >
             {identity}
@@ -135,7 +135,7 @@ const ICON_SIZE = Control.hit;
 const styles = StyleSheet.create({
   root: {
     paddingHorizontal: Space.md,
-    paddingVertical: 6,
+    paddingVertical: Space.xs,
     minHeight: 56,
   },
   row: {
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: Type.caption.size,
     fontFamily: TypeStyles.body.fontFamily,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
     letterSpacing: Type.caption.letterSpacing,
     lineHeight: Type.caption.lineHeight,
   },

@@ -645,7 +645,7 @@ function createStyles(colors: ThemeColors) {
     },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     // ── Toggle ──
     toggleRow: {
@@ -689,7 +689,7 @@ function createStyles(colors: ThemeColors) {
     },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     emptySubtitle: {
       fontFamily: Typography.family.regular,

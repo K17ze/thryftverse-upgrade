@@ -155,8 +155,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   headerTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   previewWrap: {

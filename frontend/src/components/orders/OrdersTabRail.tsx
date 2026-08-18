@@ -69,12 +69,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'flex-start',
   },
   tabText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   tabTextActive: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

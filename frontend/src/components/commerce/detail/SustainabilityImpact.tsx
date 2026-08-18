@@ -126,8 +126,8 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     sectionLabel: {
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -151,8 +151,8 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs,
     },
     statValue: {
-      fontSize: Type.bodyLarge.size,
-      lineHeight: Type.bodyLarge.lineHeight,
+      fontSize: Type.body.size,
+      lineHeight: Type.body.lineHeight,
       fontFamily: Typography.family.bold,
       fontVariant: ['tabular-nums'],
     },
@@ -179,8 +179,8 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
     },
     tagText: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.semibold,
     },
     badgeWrap: {

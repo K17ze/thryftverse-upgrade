@@ -748,8 +748,8 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
   },
   itemListingPrice: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // ── Message seller action ──
@@ -762,8 +762,8 @@ const styles = StyleSheet.create({
   },
   messageActionText: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.medium,
   },
   // ── Price input section ──
@@ -772,10 +772,10 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
   },
   sectionLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.md,
   },
@@ -803,8 +803,8 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   discountText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   // ── Quick offer chips ──
@@ -822,8 +822,8 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   quickOfferChipLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   quickOfferChipSub: {
@@ -839,8 +839,8 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   contextText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // ── Counter-offer side-by-side compare ──
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   counterCompareValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -886,13 +886,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   expiryChipText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   expiryHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
     marginTop: Space.sm,
   },
@@ -919,8 +919,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   summaryValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
@@ -932,8 +932,8 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   totalLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   totalValue: {
@@ -952,22 +952,22 @@ const styles = StyleSheet.create({
   },
   trustText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
   },
   // ── Tip ──
   tipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 4,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 4,
     fontFamily: Typography.family.regular,
     paddingTop: Space.md,
   },
   // ── Error ──
   errorText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
   },
   errorBlock: {
@@ -987,7 +987,7 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   retryBtnText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   // ── Footer ──
@@ -1061,8 +1061,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   reviewItemPrice: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   reviewAmountBox: {
@@ -1072,9 +1072,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   reviewAmountLabel: {
-    fontSize: Type.metaElevated.size,
+    fontSize: Type.label.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.xs,
   },
@@ -1102,7 +1102,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs / 2,
   },
   reviewCompareValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
@@ -1125,7 +1125,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   reviewSummaryValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
@@ -1137,7 +1137,7 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   reviewTotalLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   reviewTotalValue: {
@@ -1160,7 +1160,7 @@ const styles = StyleSheet.create({
     minHeight: Control.hit,
   },
   reviewCancelText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   reviewConfirmBtn: {

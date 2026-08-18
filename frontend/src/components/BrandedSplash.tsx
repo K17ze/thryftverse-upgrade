@@ -103,7 +103,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: 14,
     color: colors.brand,
     fontFamily: Typography.family.medium,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     letterSpacing: 0.22,
   },
   });

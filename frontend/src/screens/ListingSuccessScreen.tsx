@@ -549,7 +549,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   tipsTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -577,7 +577,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   smartSellBannerTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     marginBottom: Space.xs / 2,

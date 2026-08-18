@@ -117,8 +117,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     },
     primaryText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      fontSize: Type.bodyStrong.size,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     secondaryButton: {
       height: 52,

@@ -1419,7 +1419,7 @@ function createStyles(colors: any) {
   input: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     padding: 0,
   },
@@ -1518,7 +1518,7 @@ function createStyles(colors: any) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + Space.xs,
     color: colors.textPrimary,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     minHeight: Control.hit,
   },
@@ -1589,7 +1589,7 @@ function createStyles(colors: any) {
   },
   addToFrameBtnText: {
     color: colors.textInverse,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   quizOptionRow: {
@@ -1618,7 +1618,7 @@ function createStyles(colors: any) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     color: colors.textPrimary,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     minHeight: Control.hit,
   },

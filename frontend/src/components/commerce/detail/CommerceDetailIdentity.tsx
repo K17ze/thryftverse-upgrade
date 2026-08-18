@@ -233,44 +233,44 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   eyebrow: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   eyebrowMedia: {
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     textShadowColor: MEDIA_SHADOW_SOFT,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
   title: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight + 2,
+    fontSize: Type.priceHero.size,
+    lineHeight: Type.priceHero.lineHeight + 2,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.5,
   },
   titleDirect: {
-    fontSize: Type.priceLarge.size + 2,
-    lineHeight: Type.priceLarge.lineHeight + 3,
+    fontSize: Type.priceHero.size + 2,
+    lineHeight: Type.priceHero.lineHeight + 3,
     letterSpacing: -0.65,
   },
   titleAuction: {
-    fontSize: Type.priceLarge.size - 2,
-    lineHeight: Type.priceLarge.lineHeight - 1,
+    fontSize: Type.priceHero.size - 2,
+    lineHeight: Type.priceHero.lineHeight - 1,
     letterSpacing: -0.4,
   },
   titleCoOwn: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight + 1,
+    fontSize: Type.priceHero.size,
+    lineHeight: Type.priceHero.lineHeight + 1,
     letterSpacing: -0.45,
   },
   titleMedia: {
-    fontSize: Type.priceLarge.size - 1,
-    lineHeight: Type.priceLarge.lineHeight - 1,
+    fontSize: Type.priceHero.size - 1,
+    lineHeight: Type.priceHero.lineHeight - 1,
     letterSpacing: -0.6,
     textShadowColor: MEDIA_SHADOW,
     textShadowOffset: { width: 0, height: 1 },
@@ -285,8 +285,8 @@ const styles = StyleSheet.create({
   // Per spec 05 §3: compact width uses 26pt title with tighter line
   // height so long titles do not crowd the first viewport.
   titleCompact: {
-    fontSize: Type.priceLarge.size - 2,
-    lineHeight: Type.priceLarge.lineHeight - 1,
+    fontSize: Type.priceHero.size - 2,
+    lineHeight: Type.priceHero.lineHeight - 1,
   },
   // Value row: price + secondary line sit on one baseline row. The
   // price is dominant; the secondary line is a quiet truth partner.

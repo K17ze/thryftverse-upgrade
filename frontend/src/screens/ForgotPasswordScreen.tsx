@@ -138,20 +138,20 @@ function createStyles(colors: ThemeColors) {
   content: { flex: 1, paddingHorizontal: Space.lg },
   contentContainer: { justifyContent: 'center', flexGrow: 1, paddingBottom: Space.xl },
   title: { fontSize: Type.display.size + Space.sm + Space.xs, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight + 10, letterSpacing: Type.display.letterSpacing * 2, marginBottom: Space.lg },
-  subtitle: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginBottom: Space.xl, lineHeight: Type.subtitle.lineHeight },
+  subtitle: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginBottom: Space.xl, lineHeight: Type.subtitle.lineHeight },
 
   form: { marginBottom: Space.xl },
   inputGroup: { marginBottom: Space.xl },
 
   footer: { paddingBottom: Space.xl },
-  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, marginBottom: Space.xs },
+  errorText: { color: colors.danger, fontSize: Type.caption.size, fontFamily: Typography.family.medium, marginBottom: Space.xs },
 
   successState: {
     alignItems: 'center',
     paddingTop: Space.lg,
   },
   successText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',

@@ -541,7 +541,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   emptyTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     textAlign: 'center',
@@ -569,7 +569,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   errorTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

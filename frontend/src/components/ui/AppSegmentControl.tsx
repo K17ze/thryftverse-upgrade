@@ -162,8 +162,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
   },
 });

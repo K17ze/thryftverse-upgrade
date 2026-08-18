@@ -867,7 +867,7 @@ function createStyles(colors: ThemeColors) {
     },
     doneBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     // ── Empty states ──
     emptyBody: {
@@ -877,7 +877,7 @@ function createStyles(colors: ThemeColors) {
     },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       textAlign: 'center',
     },
     emptySubtitle: {

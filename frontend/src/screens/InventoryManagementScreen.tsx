@@ -946,9 +946,9 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs,
     },
     summaryValue: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
-      letterSpacing: Type.bodyLarge.letterSpacing,
+      letterSpacing: Type.body.letterSpacing,
     },
     summaryLabel: {
       fontSize: Type.meta.size,
@@ -997,7 +997,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
     },
     sortTriggerText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
     },
@@ -1086,9 +1086,9 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     rowPrice: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.bold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
       color: colors.textPrimary,
     },
     rowMetaRow: {
@@ -1149,7 +1149,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     bulkBarCount: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -1166,12 +1166,12 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs,
     },
     bulkActionText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
     bulkCancelText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
     },

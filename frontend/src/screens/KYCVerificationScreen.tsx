@@ -1097,10 +1097,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     privacyTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     privacyBody: {
       fontSize: Type.caption.size,
@@ -1129,7 +1129,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     stepDotText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
     stepConnector: {
@@ -1186,9 +1186,9 @@ function createStyles(colors: ThemeColors) {
     },
     trustNoteText: {
       flex: 1,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      lineHeight: Type.captionElevated.lineHeight,
+      lineHeight: Type.caption.lineHeight,
       color: colors.textSecondary,
     },
     // Document step
@@ -1205,9 +1205,9 @@ function createStyles(colors: ThemeColors) {
     },
     qualityNoteText: {
       flex: 1,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      lineHeight: Type.captionElevated.lineHeight,
+      lineHeight: Type.caption.lineHeight,
       color: colors.textSecondary,
     },
     // Capture tile
@@ -1215,7 +1215,7 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.sm,
     },
     captureLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
       marginBottom: Space.xs,
@@ -1281,7 +1281,7 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
     },
     retakeText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -1302,9 +1302,9 @@ function createStyles(colors: ThemeColors) {
     },
     livenessNoteText: {
       flex: 1,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
-      lineHeight: Type.captionElevated.lineHeight,
+      lineHeight: Type.caption.lineHeight,
       color: colors.textSecondary,
     },
     // Business toggle
@@ -1335,9 +1335,9 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
     },
     reviewSectionLabel: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       color: colors.textMuted,
       textTransform: 'uppercase',
       marginBottom: Space.xs,
@@ -1403,9 +1403,9 @@ function createStyles(colors: ThemeColors) {
     },
     submitErrorText: {
       flex: 1,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
-      lineHeight: Type.captionElevated.lineHeight,
+      lineHeight: Type.caption.lineHeight,
     },
     // Submission loading overlay
     submittingOverlay: {

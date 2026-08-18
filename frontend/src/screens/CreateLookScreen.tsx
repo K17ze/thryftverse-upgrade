@@ -334,7 +334,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     minHeight: Space.xxl + Space.lg,
@@ -391,7 +391,7 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.4,
   },
   publishBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse,
   },

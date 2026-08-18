@@ -171,6 +171,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm + 2,
     paddingHorizontal: Space.md,
   },
-  stateText: { fontSize: Type.bodyLarge.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  stateText: { fontSize: Type.body.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   stateSubtext: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center' },
 });

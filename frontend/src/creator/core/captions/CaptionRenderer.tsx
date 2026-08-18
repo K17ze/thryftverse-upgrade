@@ -68,13 +68,13 @@ const CAPTION_STYLE_MAP: Record<string, Partial<TextStyle>> = {
   },
   bubble: {
     fontFamily: 'Pacifico_400Regular',
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.size * 1.2,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.size * 1.2,
   },
   deco: {
     fontFamily: 'Lobster_400Regular',
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.size * 1.3,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.size * 1.3,
   },
   poster: {
     fontFamily: 'BebasNeue_400Regular',
@@ -89,8 +89,8 @@ const CAPTION_STYLE_MAP: Record<string, Partial<TextStyle>> = {
   signature: {
     fontFamily: 'PlayfairDisplay_400Regular',
     fontStyle: 'italic',
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.size * 1.4,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.size * 1.4,
   },
 };
 

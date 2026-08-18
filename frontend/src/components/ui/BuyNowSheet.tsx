@@ -461,12 +461,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     flex: 1,
   },
   itemTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   itemSeller: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textSecondary,
     marginTop: 2,
   },
@@ -509,7 +509,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     fontVariant: ['tabular-nums'],
   },
   fixedPriceEquivalent: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
@@ -548,7 +548,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   },
   errorText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.danger,
     fontFamily: Typography.family.medium,
     lineHeight: 18,
@@ -568,7 +568,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     gap: Space.md,
   },
   submittingText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },
@@ -576,7 +576,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     marginBottom: Space.xs,
   },
   submittingDetail: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
   },
@@ -589,7 +589,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     color: colors.textPrimary,
   },
   successDetail: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
@@ -606,7 +606,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     marginBottom: Space.xs,
   },
   errorTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -614,7 +614,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   },
   // R09: Unknown-outcome recovery hint
   ambiguousHint: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     textAlign: 'center',

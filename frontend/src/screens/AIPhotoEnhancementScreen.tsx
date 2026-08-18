@@ -934,7 +934,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     processingText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
     },
@@ -947,7 +947,7 @@ function createStyles(colors: ThemeColors) {
     },
     // Section label
     sectionLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
       marginBottom: Space.sm,

@@ -434,8 +434,8 @@ function usePickerStyles(colors: ThemeColors) {
         },
         sectionLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.metaElevated.size,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          fontSize: Type.label.size,
+          letterSpacing: Type.label.letterSpacing,
           color: colors.textSecondary,
           textTransform: 'uppercase',
         },

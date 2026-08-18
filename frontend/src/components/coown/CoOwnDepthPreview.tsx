@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   barRow: {
@@ -127,10 +127,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   barLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     minWidth: 36,
     fontVariant: ['tabular-nums'],
     textAlign: 'right',

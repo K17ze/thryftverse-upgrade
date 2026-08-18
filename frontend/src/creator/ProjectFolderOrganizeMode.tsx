@@ -697,7 +697,7 @@ function createStyles(colors: ThemeColors) {
     },
     newFolderText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.brand,
     },
     scrollArea: {
@@ -730,7 +730,7 @@ function createStyles(colors: ThemeColors) {
     dropZoneTitle: {
       flex: 1,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
     },
     dropZoneCount: {
@@ -821,7 +821,7 @@ function createStyles(colors: ThemeColors) {
     },
     nameInput: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
       borderWidth: 1,
       borderColor: colors.border,
@@ -845,7 +845,7 @@ function createStyles(colors: ThemeColors) {
     },
     manageConfirmText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textInverse,
     },
     manageDangerBtn: {
@@ -859,7 +859,7 @@ function createStyles(colors: ThemeColors) {
     },
     manageDangerText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textInverse,
     },
     manageCancelBtn: {

@@ -187,7 +187,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: `${colors.danger}15`,
   },
   failureLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
 });

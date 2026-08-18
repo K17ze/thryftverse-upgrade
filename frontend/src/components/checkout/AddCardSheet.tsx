@@ -358,6 +358,6 @@ const createStyles = (themed: {
   primaryActionText: {
     color: themed.textInverse,
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
   },
 });

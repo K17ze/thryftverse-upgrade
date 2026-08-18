@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     textAlign: 'center',
   },
   subtitle: {

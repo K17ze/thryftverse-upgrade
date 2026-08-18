@@ -1867,15 +1867,15 @@ const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: React.Com
 const TEXT_STYLE_PREVIEW: Record<string, { fontFamily: string; fontSize: number; lineHeight: number }> = {
   clean: { fontFamily: Typography.family.medium, fontSize: Type.body.size, lineHeight: Type.body.size * 1.3 },
   headline: { fontFamily: Typography.family.bold, fontSize: Type.title.size, lineHeight: Type.title.size * 1.15 },
-  editorial: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 2, lineHeight: (Type.bodyEmphasis.size + 2) * 1.2 },
+  editorial: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 2, lineHeight: (Type.bodyStrong.size + 2) * 1.2 },
   compact: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, lineHeight: Type.caption.size * 1.3 },
   handwritten: { fontFamily: Typography.family.regular, fontSize: Type.body.size, lineHeight: Type.body.size * 1.35 },
-  bubble: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 4, lineHeight: (Type.bodyEmphasis.size + 4) * 1.2 },
-  deco: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size, lineHeight: Type.bodyEmphasis.size * 1.3 },
+  bubble: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 4, lineHeight: (Type.bodyStrong.size + 4) * 1.2 },
+  deco: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size, lineHeight: Type.bodyStrong.size * 1.3 },
   poster: { fontFamily: Typography.family.bold, fontSize: Type.title.size - 4, lineHeight: (Type.title.size - 4) * 1.1 },
   squeeze: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.size * 1.1 },
-  signature: { fontFamily: Typography.family.regular, fontSize: Type.bodyEmphasis.size, lineHeight: Type.bodyEmphasis.size * 1.4 },
-  neon: { fontFamily: Typography.family.bold, fontSize: Type.bodyEmphasis.size + 4, lineHeight: (Type.bodyEmphasis.size + 4) * 1.2 },
+  signature: { fontFamily: Typography.family.regular, fontSize: Type.bodyStrong.size, lineHeight: Type.bodyStrong.size * 1.4 },
+  neon: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 4, lineHeight: (Type.bodyStrong.size + 4) * 1.2 },
 };
 
 function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
@@ -3389,7 +3389,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
     <PickerShell title={isEditing ? 'Edit Countdown' : 'Countdown'} onClose={onClose}>
       <View style={styles.textPickerBody}>
         <View style={[styles.textPreview, { backgroundColor: color }]}>
-          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size }}>
+          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size }}>
             {label.trim() || 'Event countdown'}
           </Text>
           <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: Typography.family.medium, fontSize: Type.title.size, marginTop: Space.xs }}>
@@ -4342,7 +4342,7 @@ function createStyles(colors: ThemeColors) {
   },
   albumDisclosureText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     flex: 1,
   },
   albumPickerDropdown: {
@@ -4518,7 +4518,7 @@ function createStyles(colors: ThemeColors) {
   },
   mediaGridSelectionText: {
     color: '#000',
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
   },
   headerRight: {
@@ -4533,7 +4533,7 @@ function createStyles(colors: ThemeColors) {
   },
   addBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   mediaGridFooter: {
     paddingVertical: Space.md,
@@ -4629,7 +4629,7 @@ function createStyles(colors: ThemeColors) {
   },
   saveBtn: { height: 48, borderRadius: Radius.lg, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
   saveBtnDisabled: { opacity: 0.35 },
-  saveBtnText: { color: colors.textInverse, fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, letterSpacing: 0.3 },
+  saveBtnText: { color: colors.textInverse, fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, letterSpacing: 0.3 },
   pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
   styleScroll: { marginHorizontal: -Space.md, paddingHorizontal: Space.md },
   styleOption: { paddingHorizontal: Space.md + 2, paddingVertical: Space.sm + 2, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt },
@@ -4683,7 +4683,7 @@ function createStyles(colors: ThemeColors) {
   drawActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   drawActionLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
   drawDoneBtn: { paddingHorizontal: Space.xl, paddingVertical: Space.sm, borderRadius: Radius.full, marginLeft: 'auto' },
-  drawDoneBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: '#fff' },
+  drawDoneBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: '#fff' },
   // ── GIF picker ──
   gifList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   gifRow: { gap: Space.xs, marginBottom: Space.xs },
@@ -4699,7 +4699,7 @@ function createStyles(colors: ThemeColors) {
   musicPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginHorizontal: Space.md, marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   musicPreviewArt: { width: 48, height: 48, borderRadius: Radius.md },
   musicPreviewInfo: { flex: 1, gap: 2 },
-  musicPreviewTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary },
+  musicPreviewTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary },
   musicPreviewArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
   musicPreviewPlayBtn: { width: 32, height: 32, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
   musicLoadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.sm },
@@ -4707,7 +4707,7 @@ function createStyles(colors: ThemeColors) {
   musicRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   musicArtwork: { width: 56, height: 56, borderRadius: Radius.md, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   musicInfo: { flex: 1, gap: 2 },
-  musicTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary },
+  musicTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary },
   musicArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
   musicAddBtn: { width: 36, height: 36, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
   // ── Quiz picker ──
@@ -4726,7 +4726,7 @@ function createStyles(colors: ThemeColors) {
   stickerCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.xs },
   stickerCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
   stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
-  stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, color: colors.textSecondary },
+  stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
   stickerGridScroll: { flex: 1 },
   stickerGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   stickerCategorySection: { marginBottom: Space.lg },
@@ -4752,7 +4752,7 @@ function createStyles(colors: ThemeColors) {
   weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   weatherCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
   weatherCellActive: { backgroundColor: colors.brand },
-  weatherCellEmoji: { fontSize: Type.priceLarge.size },
+  weatherCellEmoji: { fontSize: Type.priceHero.size },
   weatherCellLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
   inputCardLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, marginBottom: 6, marginTop: Space.sm },
   inputCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.xs },
@@ -4791,7 +4791,7 @@ function createStyles(colors: ThemeColors) {
   gifCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.sm },
   gifCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
   gifCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
-  gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, color: colors.textSecondary },
+  gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
   // ── Vote preview ──
   votePreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   votePreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
@@ -4801,7 +4801,7 @@ function createStyles(colors: ThemeColors) {
   addOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm, marginBottom: Space.xs },
   addOptionBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.brand },
   timerChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: Space.sm },
-  timerChipText: { fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, color: colors.textSecondary },
+  timerChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
   // ── Quiz preview ──
   quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
   quizPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
@@ -4813,7 +4813,7 @@ function createStyles(colors: ThemeColors) {
   // ── Question preview (improved) ──
   questionPreviewWrap: { borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
   questionPreviewIconRow: { marginBottom: Space.xs },
-  questionPreviewPrompt: { fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: '#fff', lineHeight: Type.bodyEmphasis.size * 1.3 },
+  questionPreviewPrompt: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: '#fff', lineHeight: Type.bodyStrong.size * 1.3 },
   questionPreviewInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.md, paddingVertical: Space.sm, paddingHorizontal: Space.md },
   questionPreviewPlaceholder: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.6)' },
   questionPreviewSendDot: { width: 24, height: 24, borderRadius: Radius.full, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
@@ -4831,6 +4831,6 @@ function createStyles(colors: ThemeColors) {
   productTabBarContent: { gap: Space.xs, paddingVertical: Space.xs },
   productTab: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingVertical: Space.sm - 2, paddingHorizontal: Space.md, borderRadius: Radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
   productTabActive: { borderColor: colors.brand, backgroundColor: colors.brand + '14' },
-  productTabLabel: { fontFamily: Typography.family.medium, fontSize: Type.captionElevated.size, color: colors.textSecondary },
+  productTabLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
   });
 }

@@ -54,7 +54,7 @@ import Reanimated, {
   runOnJS,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, FontFamily, Stroke, IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
@@ -112,7 +112,7 @@ function CutoutPreviewSkeleton({ width, height }: { width: number; height: numbe
   return (
     <View style={{ alignItems: 'center', paddingVertical: Space.sm }}>
       <SkeletonBlock width={width} height={height} radius={Radius.md} />
-      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.bodyEmphasis.size, color: colors.textPrimary, marginTop: Space.md }}>
+      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary, marginTop: Space.md }}>
         Removing background…
       </Text>
       <Text style={{ fontFamily: Typography.family.regular, fontSize: Type.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs }}>
@@ -272,6 +272,25 @@ export function CutoutPreviewSheet({
 
     return () => { cancelled = true; };
   }, [visible, imageUri, haptic]);
+
+  // ── Retry segmentation after a failure ──────────────────────────────
+  // Re-runs removeBackground with the same image URI. Clears the error
+  // state and shows the processing skeleton while the operation runs.
+  const handleRetry = useCallback(async () => {
+    if (processing) return;
+    haptic.light();
+    setError(null);
+    setProcessing(true);
+    const res = await removeBackground(imageUri);
+    if (!res) {
+      setError('Could not remove the background. Try a different photo.');
+      setProcessing(false);
+      return;
+    }
+    setResult(res);
+    setProcessing(false);
+    haptic.medium();
+  }, [processing, imageUri, haptic]);
 
   // ── Load image dimensions for display fitting ─────────────────────
   useEffect(() => {
@@ -433,7 +452,7 @@ export function CutoutPreviewSheet({
             accessibilityLabel="Close cutout"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
 
@@ -464,6 +483,17 @@ export function CutoutPreviewSheet({
             <Text style={[styles.messageBody, { color: colors.textSecondary }]}>
               {error}
             </Text>
+            <PressScale
+              onPress={handleRetry}
+              style={[styles.retryBtn, { backgroundColor: colors.brand }]}
+              accessibilityLabel="Retry cutout"
+              accessibilityHint="Attempts the background removal again"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.retryBtnText, { color: colors.textInverse }]}>
+                Retry
+              </Text>
+            </PressScale>
           </View>
         )}
 
@@ -602,7 +632,7 @@ export function CutoutPreviewSheet({
               >
                 <Ionicons
                   name="brush-outline"
-                  size={18}
+                  size={IconGrammar.metadata}
                   color={refineMode ? colors.textInverse : colors.textSecondary}
                 />
                 <Text
@@ -631,7 +661,7 @@ export function CutoutPreviewSheet({
                 accessibilityLabel="Hold to compare original"
                 accessibilityRole="button"
               >
-                <Ionicons name="eye-outline" size={18} color={colors.textSecondary} />
+                <Ionicons name="eye-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
                 <Text style={[styles.controlBtnLabel, { color: colors.textSecondary }]}>
                   Hold to Compare
                 </Text>
@@ -655,7 +685,7 @@ export function CutoutPreviewSheet({
               >
                 <Ionicons
                   name="swap-horizontal-outline"
-                  size={18}
+                  size={IconGrammar.metadata}
                   color={invert ? colors.textInverse : colors.textSecondary}
                 />
                 <Text
@@ -879,7 +909,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   closeBtn: {
     width: 36,
@@ -897,7 +927,7 @@ const styles = StyleSheet.create({
   },
   messageTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     textAlign: 'center',
   },
   messageBody: {
@@ -905,6 +935,19 @@ const styles = StyleSheet.create({
     fontSize: Type.body.size,
     textAlign: 'center',
     lineHeight: Type.body.lineHeight,
+  },
+  retryBtn: {
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.lg,
+    marginTop: Space.sm,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  retryBtnText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyEmphasis.size,
   },
   // ── Preview ──
   previewContainer: {
@@ -1060,13 +1103,13 @@ const styles = StyleSheet.create({
   },
   footerCancelText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   footerConfirm: {
     // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
 });

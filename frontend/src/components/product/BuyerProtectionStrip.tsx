@@ -90,7 +90,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs / 2,
   },
   title: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     letterSpacing: 0.1,

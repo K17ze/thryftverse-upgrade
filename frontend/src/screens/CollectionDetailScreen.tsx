@@ -511,7 +511,7 @@ function createStyles(colors: ThemeColors) {
   },
   floatingTitle: {
     flex: 1,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -571,7 +571,7 @@ function createStyles(colors: ThemeColors) {
     textShadowRadius: 4,
   },
   coverMeta: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.85)',
     marginTop: Space.xs,
@@ -583,12 +583,12 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
   },
   coverMetaDot: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.5)',
   },
   coverMetaUpdated: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.7)',
   },
@@ -628,7 +628,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
   },
   noCoverMeta: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     marginTop: Space.xs / 2,
@@ -640,12 +640,12 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs / 2,
   },
   noCoverMetaDot: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
   noCoverMetaUpdated: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -655,13 +655,13 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   coverDesc: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: 'rgba(255,255,255,0.85)',
     marginTop: Space.xs / 2,
   },
   noCoverDesc: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     marginTop: Space.xs / 2,
@@ -734,7 +734,7 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.xxl * 2 + Space.xl,
   },
   moreTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     marginBottom: Space.md - 2,

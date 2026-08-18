@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   },
   overflowItemText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   overflowDivider: {
     height: StyleSheet.hairlineWidth,

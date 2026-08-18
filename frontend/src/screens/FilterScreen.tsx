@@ -819,7 +819,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  clearText: { color: colors.brand, fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
+  clearText: { color: colors.brand, fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold },
   statusRow: {
     paddingHorizontal: Space.lg,
     paddingBottom: Space.sm,
@@ -830,7 +830,7 @@ function createStyles(colors: ThemeColors) {
   },
   statusMeta: {
     color: colors.textMuted,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
   },
   contextActionRow: {
@@ -885,7 +885,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   presetsSaveLink: {
@@ -914,7 +914,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 2,
   },
   presetChipText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     maxWidth: Space.xxl + Space.xxl + Space.lg,
@@ -975,7 +975,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: 'transparent',
   },
   presetsEmptyCtaText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.brand,
   },
@@ -1008,12 +1008,12 @@ function createStyles(colors: ThemeColors) {
   },
 
   sectionHeading: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     paddingHorizontal: Space.xl,
     marginBottom: Space.md,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -1065,7 +1065,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   mySizesLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -1087,7 +1087,7 @@ function createStyles(colors: ThemeColors) {
   },
   saveSizesBtnText: {
     color: colors.brand,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   chipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
@@ -1120,7 +1120,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'column',
   },
   sustainableTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -1170,7 +1170,7 @@ function createStyles(colors: ThemeColors) {
   },
   applyBtnText: {
     color: colors.textPrimary,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     letterSpacing: LetterSpacing.wide,
   },
@@ -1206,7 +1206,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.background,
   },
   priceRangeDash: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: Space.md + Space.xs,

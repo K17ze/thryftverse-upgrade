@@ -232,10 +232,10 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   addressLinkTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   addressLinkSubtitle: {
     fontSize: Type.caption.size,
@@ -317,7 +317,7 @@ function createStyles(colors: ThemeColors) {
   },
   heroText: { flex: 1 },
   heroTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },

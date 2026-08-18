@@ -309,7 +309,7 @@ function createStyles(colors: ThemeColors) {
   filterText: {
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
   },
   filterTextSelected: {
     color: colors.textPrimary,
@@ -332,13 +332,13 @@ function createStyles(colors: ThemeColors) {
   agentName: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   agentDescription: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
   },
   agentMeta: {
     flexDirection: 'row',

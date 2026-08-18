@@ -202,7 +202,7 @@ function createStyles(colors: ThemeColors) {
   },
   soldText: {
     color: colors.background,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 1,
   },

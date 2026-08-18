@@ -52,7 +52,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 12,
   },
   label: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     marginBottom: 6,

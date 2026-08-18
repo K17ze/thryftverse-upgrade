@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
@@ -491,9 +491,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   lastValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   lastAge: {
@@ -526,9 +526,9 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   rfqTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   rfqSubtitle: {
     fontSize: Type.caption.size,
@@ -558,9 +558,9 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   haltedTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   haltedSubtitle: {
     fontSize: Type.caption.size,

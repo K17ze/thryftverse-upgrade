@@ -89,7 +89,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 4,
   },
   title: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     lineHeight: 21,
@@ -100,12 +100,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
   },
   sellerName: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   price: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     marginTop: 2,

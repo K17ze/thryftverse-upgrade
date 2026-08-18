@@ -452,7 +452,7 @@ function createStyles(colors: ThemeColors) {
   featuredName: {
     flex: 1,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textPrimary,
   },
   featuredDesc: {

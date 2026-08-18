@@ -59,6 +59,12 @@ const SKEL_TILE_W =
   (SCREEN_W - SKEL_PADDING * 2 - SKEL_GAP * (SKEL_COLUMNS - 1)) / SKEL_COLUMNS;
 const SKEL_TILE_H = SKEL_TILE_W / AspectRatio.portrait;
 
+// ── Board card skeleton geometry — matches ClosetBoardCard 2-column grid ──
+const BOARD_COLS = 2;
+const BOARD_GAP = Space.sm;
+const BOARD_CARD_W = (SCREEN_W - Space.md * 2 - BOARD_GAP) / BOARD_COLS;
+const BOARD_CARD_H = BOARD_CARD_W / AspectRatio.portrait + 8;
+
 export default function ClosetScreen() {
   const { colors, isDark } = useAppTheme();
 
@@ -106,6 +112,7 @@ export default function ClosetScreen() {
   const [showPriceDropsOnly, setShowPriceDropsOnly] = useState(false);
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
   const [collectionsSyncError, setCollectionsSyncError] = useState(false);
+  const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [manageMode, setManageMode] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -127,9 +134,10 @@ export default function ClosetScreen() {
   const { listings, refreshListings, isSyncing, lastError } = useBackendData();
   React.useEffect(() => {
     let mounted = true;
+    setCollectionsLoading(true);
     void loadCollectionsFromApi()
-      .then(() => { if (mounted) setCollectionsSyncError(false); })
-      .catch(() => { if (mounted) setCollectionsSyncError(true); });
+      .then(() => { if (mounted) { setCollectionsSyncError(false); setCollectionsLoading(false); } })
+      .catch(() => { if (mounted) { setCollectionsSyncError(true); setCollectionsLoading(false); } });
     return () => {
       mounted = false;
       if (refreshTimerRef.current) {
@@ -486,6 +494,19 @@ export default function ClosetScreen() {
     </View>
   );
 
+  const renderCollectionsSkeleton = () => (
+    <View style={styles.boardSkeletonWrap}>
+      <View style={styles.boardSkeletonRow}>
+        <SkeletonLoader width={BOARD_CARD_W} height={BOARD_CARD_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={BOARD_CARD_W} height={BOARD_CARD_H} borderRadius={Radius.lg} />
+      </View>
+      <View style={styles.boardSkeletonRow}>
+        <SkeletonLoader width={BOARD_CARD_W} height={BOARD_CARD_H} borderRadius={Radius.lg} />
+        <SkeletonLoader width={BOARD_CARD_W} height={BOARD_CARD_H} borderRadius={Radius.lg} />
+      </View>
+    </View>
+  );
+
   const renderSavedContent = () => {
     if (isSyncing && listings.length === 0) return renderLoadingSkeleton();
     if (filteredSaved.length === 0) {
@@ -536,6 +557,7 @@ export default function ClosetScreen() {
   };
 
     const renderCollectionsContent = () => {
+    if (collectionsLoading && collections.length === 0) return renderCollectionsSkeleton();
     if (filteredCollections.length === 0) {
       return (
         <EmptyState
@@ -949,7 +971,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
   },
   tabLabelActive: {
@@ -1119,6 +1141,15 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   skeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  boardSkeletonWrap: {
+    paddingHorizontal: Space.md,
+    gap: BOARD_GAP,
+    marginTop: Space.sm,
+  },
+  boardSkeletonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },

@@ -267,8 +267,8 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
   },
   reasons: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -299,8 +299,8 @@ function createStyles(colors: ThemeColors) {
   reasonDescription: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
   },
   radio: {
     width: Space.lg - Space.xs,
@@ -327,8 +327,8 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs + 2,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
   },
   detailsInput: {
     minHeight: Space.xl * 3 + Space.md + Space.xs,
@@ -386,8 +386,8 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     textAlign: 'center',
   },
   doneAction: {

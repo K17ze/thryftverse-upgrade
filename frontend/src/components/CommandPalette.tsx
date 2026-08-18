@@ -529,7 +529,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.meta.size,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       textTransform: 'uppercase',
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
@@ -600,10 +600,10 @@ function createRowStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     rowTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.medium,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     rowSubtitle: {
       fontSize: Type.caption.size,

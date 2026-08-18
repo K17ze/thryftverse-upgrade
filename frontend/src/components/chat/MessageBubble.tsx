@@ -382,7 +382,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   bubble: {
     paddingHorizontal: Space.sm + 2,
@@ -426,7 +426,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   draftLabel: {
     fontSize: Type.meta.size - 2,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   draftConfirmBadge: {
     flexDirection: 'row',
@@ -576,7 +576,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: `${colors.brand}12`,
   },
   reactionEmoji: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
   },
   reactionCount: {
     fontSize: Type.meta.size,

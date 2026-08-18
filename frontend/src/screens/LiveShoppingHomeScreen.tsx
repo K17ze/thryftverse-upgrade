@@ -585,7 +585,7 @@ function useStyles() {
           gap: Space.sm,
         },
         headerTitle: {
-          fontSize: Type.priceLarge.size,
+          fontSize: Type.priceHero.size,
           fontFamily: Typography.family.bold,
           letterSpacing: -0.8,
           color: colors.textPrimary,
@@ -682,7 +682,7 @@ function useStyles() {
         liveBadgeText: {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.bold,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
           color: '#FFFFFF',
         },
         liveBadgeTextCompact: {
@@ -742,7 +742,7 @@ function useStyles() {
           gap: Space.xs,
         },
         featuredSellerName: {
-          fontSize: Type.captionElevated.size,
+          fontSize: Type.caption.size,
           fontFamily: Typography.family.semibold,
           color: '#FFFFFF',
           letterSpacing: -0.1,
@@ -754,11 +754,11 @@ function useStyles() {
           letterSpacing: 0.2,
         },
         featuredTitle: {
-          fontSize: Type.bodyLarge.size,
+          fontSize: Type.body.size,
           fontFamily: Typography.family.bold,
           color: '#FFFFFF',
-          letterSpacing: Type.bodyLarge.letterSpacing,
-          lineHeight: Type.bodyLarge.lineHeight,
+          letterSpacing: Type.body.letterSpacing,
+          lineHeight: Type.body.lineHeight,
         },
         featuredBidRow: {
           flexDirection: 'row',
@@ -767,11 +767,11 @@ function useStyles() {
           marginTop: Space.xs / 2,
         },
         featuredBidLabel: {
-          fontSize: Type.metaElevated.size,
-          lineHeight: Type.metaElevated.lineHeight,
+          fontSize: Type.label.size,
+          lineHeight: Type.label.lineHeight,
           fontFamily: Typography.family.semibold,
           color: 'rgba(255,255,255,0.7)',
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
           textTransform: 'uppercase',
         },
         featuredBidValue: {
@@ -837,11 +837,11 @@ function useStyles() {
           letterSpacing: -0.1,
         },
         upcomingTitle: {
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
-          letterSpacing: Type.bodyEmphasis.letterSpacing,
-          lineHeight: Type.bodyEmphasis.lineHeight,
+          letterSpacing: Type.bodyStrong.letterSpacing,
+          lineHeight: Type.bodyStrong.lineHeight,
         },
         upcomingMetaRow: {
           flexDirection: 'row',
@@ -853,7 +853,7 @@ function useStyles() {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.medium,
           color: colors.textMuted,
-          letterSpacing: Type.captionElevated.letterSpacing,
+          letterSpacing: Type.caption.letterSpacing,
           fontVariant: ['tabular-nums'],
         },
         notifyBtn: {

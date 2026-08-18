@@ -336,7 +336,7 @@ function createStyles(colors: ThemeColors) {
       textAlign: 'center',
     },
     subtext: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       textAlign: 'center',
@@ -344,7 +344,7 @@ function createStyles(colors: ThemeColors) {
       lineHeight: 21,
     },
     devMessage: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.danger,
       textAlign: 'center',
@@ -364,7 +364,7 @@ function createStyles(colors: ThemeColors) {
     },
     primaryBtnText: {
       color: colors.background,
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
     },
     secondaryBtn: {
@@ -379,7 +379,7 @@ function createStyles(colors: ThemeColors) {
     },
     secondaryBtnText: {
       color: colors.textPrimary,
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
     },
     tertiaryBtn: {
@@ -392,7 +392,7 @@ function createStyles(colors: ThemeColors) {
     },
     tertiaryBtnText: {
       color: colors.textSecondary,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.medium,
     },
     feedbackBtn: {

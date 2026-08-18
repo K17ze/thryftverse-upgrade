@@ -159,7 +159,7 @@ export default function BrowseScreen() {
     filterPillActive: {
       backgroundColor: `${colors.brand}1A`,
     },
-    filterPillTextActive: { color: colors.textPrimary, fontSize: Type.captionElevated.size, fontFamily: Typography.family.semibold },
+    filterPillTextActive: { color: colors.textPrimary, fontSize: Type.caption.size, fontFamily: Typography.family.semibold },
     filterPillOutline: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -169,7 +169,7 @@ export default function BrowseScreen() {
       borderRadius: Radius.full,
       backgroundColor: 'transparent',
     },
-    filterPillText: { color: colors.textMuted, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium },
+    filterPillText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
     saveSearchPillActive: {
       backgroundColor: colors.surfaceAlt,
     },
@@ -189,7 +189,7 @@ export default function BrowseScreen() {
     sortTriggerActive: {
       backgroundColor: `${colors.brand}1A`,
     },
-    sortTriggerText: { color: colors.textMuted, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium },
+    sortTriggerText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
     sortTriggerTextActive: { color: colors.textPrimary, fontFamily: Typography.family.semibold },
     sortMenu: {
       marginHorizontal: Space.md,
@@ -318,9 +318,9 @@ export default function BrowseScreen() {
       justifyContent: 'space-between',
       marginBottom: Space.xs,
     },
-    priceText: { color: colors.textPrimary, fontSize: Type.bodyLarge.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
+    priceText: { color: colors.textPrimary, fontSize: Type.body.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
     brandText: { color: colors.textSecondary, fontSize: Type.caption.size, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
-    sizeText: { color: colors.textMuted, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium },
+    sizeText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
     sellerActionRow: {
       marginTop: Space.sm,
       flexDirection: 'row',

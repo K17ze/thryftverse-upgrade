@@ -140,8 +140,8 @@ const styles = StyleSheet.create({
   value: {
     ...Numeric.numericMeta,
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     textAlign: 'right',
   },
   valueEmphasis: {

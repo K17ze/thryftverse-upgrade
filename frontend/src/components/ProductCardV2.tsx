@@ -479,8 +479,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     justifyContent: 'center',
   },
   soldLabelCenter: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
     // Fixed white ink — the scrim is always dark, so a theme text token
     // (black in dark mode) would render invisible.
@@ -572,11 +572,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   // Price elevated to hero — 16pt bold, clearly dominant over 14pt title.
   // This is the Vestiaire/StockX move: price is the visual anchor.
   priceHero: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   sellerRow: {
@@ -798,11 +798,11 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     letterSpacing: Type.body.letterSpacing,
   },
   price: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyLarge.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
 });

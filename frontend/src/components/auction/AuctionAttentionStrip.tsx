@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     letterSpacing: -0.2,
     lineHeight: 17,
   },

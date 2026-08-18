@@ -93,7 +93,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.md,
   },
   label: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
@@ -120,7 +120,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   valueText: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },

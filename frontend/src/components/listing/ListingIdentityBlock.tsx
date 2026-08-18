@@ -68,13 +68,13 @@ function createStyles(colors: ThemeColors) {
     gap: 10,
   },
   price: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.6,
   },
   originalPrice: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     textDecorationLine: 'line-through',

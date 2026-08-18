@@ -232,6 +232,12 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
     letterSpacing: Type.bodyEmphasis.letterSpacing,
     lineHeight: Type.bodyEmphasis.lineHeight,
   },
+  bodyStrong: {
+    fontFamily: FontFamily.semibold,
+    fontSize: Type.bodyStrong.size,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
+  },
   caption: {
     fontFamily: FontFamily.regular,
     fontSize: Type.caption.size,

@@ -276,7 +276,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   overflowLabel: {
     flex: 1,
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textPrimary,
   },
   overflowBadge: {

@@ -321,10 +321,10 @@ const styles = StyleSheet.create({
     marginVertical: Space.xs,
   },
   summaryLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     marginBottom: Space.xs / 2,
   },
   summaryValue: {
@@ -360,10 +360,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.subtitle.letterSpacing,
   },
   scheduleHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   emptySchedule: {
     flexDirection: 'row',
@@ -375,10 +375,10 @@ const styles = StyleSheet.create({
   },
   emptyScheduleText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   scheduleList: {
     gap: Space.xs,
@@ -401,10 +401,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   scheduleItemMeta: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     marginTop: Space.xs / 2,
   },
   scheduleItemAmount: {

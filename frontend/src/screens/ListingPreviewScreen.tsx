@@ -362,7 +362,7 @@ function createStyles(colors: ThemeColors) {
   },
   contextText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -371,7 +371,7 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.lg,
   },
   sectionHeading: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
@@ -409,7 +409,7 @@ function createStyles(colors: ThemeColors) {
     flexShrink: 1,
   },
   descriptionText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     lineHeight: Type.body.lineHeight + Space.xs,

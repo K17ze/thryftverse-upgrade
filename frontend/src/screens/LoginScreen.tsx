@@ -638,10 +638,10 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   twoFactorTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   twoFactorHint: {
     color: colors.textMuted,
@@ -658,7 +658,7 @@ function createStyles(colors: ThemeColors) {
   },
   magicLinkText: {
     color: colors.textSecondary,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     textDecorationLine: 'underline',
   },
@@ -675,8 +675,8 @@ function createStyles(colors: ThemeColors) {
   },
 
   footer: { paddingTop: Space.sm, position: 'relative' },
-  infoText: { color: colors.success, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  infoText: { color: colors.success, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.danger, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: colors.brand, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0 },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.textInverse, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
@@ -689,12 +689,12 @@ function createStyles(colors: ThemeColors) {
   },
   switchText: {
     color: colors.textSecondary,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
   switchLink: {
     color: colors.textPrimary,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     textDecorationLine: 'underline',
   },

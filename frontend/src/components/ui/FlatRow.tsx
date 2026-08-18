@@ -343,16 +343,16 @@ const styles = StyleSheet.create({
     gap: Space.xs / 4,
   },
   label: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   secondary: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    lineHeight: Type.captionElevated.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
   trailing: {
     flexDirection: 'row',
@@ -375,9 +375,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   value: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     textAlign: 'right',
   },
   children: {

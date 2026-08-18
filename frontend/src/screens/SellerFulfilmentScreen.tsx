@@ -767,7 +767,7 @@ function createStyles(colors: ThemeColors) {
       gap: 2,
     },
     deadlineDate: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
     },
     deadlineSub: {
@@ -798,10 +798,10 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     itemTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
-      lineHeight: Type.bodyEmphasis.size + 5,
+      lineHeight: Type.bodyStrong.size + 5,
     },
     itemMeta: {
       fontSize: Type.caption.size,
@@ -809,7 +809,7 @@ function createStyles(colors: ThemeColors) {
       color: colors.textMuted,
     },
     itemPrice: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       marginTop: 2,
@@ -823,7 +823,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.sm,
     },
     serviceName: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       marginBottom: Space.xs,
@@ -867,7 +867,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs / 2,
     },
     escrowTitle: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -890,7 +890,7 @@ function createStyles(colors: ThemeColors) {
       marginVertical: Space.sm,
     },
     sectionLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',
@@ -1008,7 +1008,7 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs,
     },
     waitingStateLabel: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       marginTop: Space.sm,
@@ -1039,7 +1039,7 @@ function createStyles(colors: ThemeColors) {
       minHeight: Space.xl + Space.xl - 4,
     },
     carrierSelectorText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
     },
@@ -1063,7 +1063,7 @@ function createStyles(colors: ThemeColors) {
       minHeight: Control.hit,
     },
     carrierOptionText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
     },
@@ -1076,17 +1076,17 @@ function createStyles(colors: ThemeColors) {
       height: Space.xl + Space.xl - 4,
       borderRadius: Radius.lg,
       backgroundColor: colors.surface,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
       minHeight: Space.xl + Space.xl - 4,
     },
     hintText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textMuted,
       marginTop: Space.xs,
-      lineHeight: Type.captionElevated.size + 5,
+      lineHeight: Type.caption.size + 5,
     },
     // ─── Warning ───
     warningBanner: {
@@ -1100,7 +1100,7 @@ function createStyles(colors: ThemeColors) {
     },
     warningText: {
       flex: 1,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.danger,
     },
@@ -1128,7 +1128,7 @@ function createStyles(colors: ThemeColors) {
       opacity: 0.6,
     },
     dispatchBtnText: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
       color: colors.textInverse,
     },
@@ -1150,7 +1150,7 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
     recoveryStateLabel: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       marginBottom: Space.sm,

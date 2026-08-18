@@ -1067,7 +1067,7 @@ function createStyles(colors: ThemeColors) {
     creatorAvatarImg: { width: Space.xl + Space.sm, height: Space.xl + Space.sm, borderRadius: Radius.xxl },
     creatorInfo: { flex: 1, gap: Space.xs - 2 },
     creatorName: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },
@@ -1289,7 +1289,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
     },
     inspectCtaText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textInverse,
     },

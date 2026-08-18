@@ -136,7 +136,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
 const styles = StyleSheet.create({
   label: {
     marginBottom: 6,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     lineHeight: 18,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0,
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     paddingVertical: 10,
   },

@@ -46,7 +46,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: 12,
   },
   label: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
     flex: 1,

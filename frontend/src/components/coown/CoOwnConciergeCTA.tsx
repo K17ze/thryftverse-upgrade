@@ -230,10 +230,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   assetTitle: {
     fontSize: Type.caption.size,
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   contextValue: {
@@ -282,10 +282,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   auctionTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
   },
   auctionTime: {
     fontSize: Type.body.size,

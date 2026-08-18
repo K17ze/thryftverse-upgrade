@@ -93,7 +93,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
   },
   messageBtnText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },

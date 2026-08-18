@@ -175,7 +175,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: `${colors.brand}15`,
   },
   walletIconText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontWeight: '700',
     color: colors.textPrimary,
   },
@@ -189,12 +189,12 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: 6,
   },
   methodLabel: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   methodDetails: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -233,7 +233,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   addCardText: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.brand,
   },

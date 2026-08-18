@@ -562,7 +562,7 @@ function createStyles(colors: any) {
     },
     mediaErrorText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       color: '#fff',
     },
     retryBtn: {

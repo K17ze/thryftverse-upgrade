@@ -277,7 +277,7 @@ function createStyles(colors: ThemeColors) {
     },
     descriptionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     descriptionBody: {
       fontFamily: Typography.family.regular,
@@ -305,7 +305,7 @@ function createStyles(colors: ThemeColors) {
     },
     applyBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
   });
 }

@@ -683,12 +683,12 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
     },
     statusPillFlatText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: LetterSpacing.wide,
     },
     statusMeta: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
       flexShrink: 1,
@@ -732,7 +732,7 @@ function createStyles(colors: ThemeColors) {
 
     // ── Section labels (flat, no card) ──
     sectionLabel: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',

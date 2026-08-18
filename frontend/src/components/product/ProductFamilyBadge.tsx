@@ -78,8 +78,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
   },
   familyLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
     color: '#fff',
     letterSpacing: 0.2,
@@ -93,8 +93,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
   },
   accentLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.bold,
     color: '#fff',
     letterSpacing: 0.2,

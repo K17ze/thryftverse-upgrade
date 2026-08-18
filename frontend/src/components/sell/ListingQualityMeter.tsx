@@ -88,6 +88,15 @@ function scoreBand(score: number): string {
   return 'Strong listing';
 }
 
+/**
+ * Round a score to the nearest 5 so the display does not overstate
+ * precision. A seller seeing "67/100" believes the score is meaningful at
+ * that resolution; it is a heuristic, so "65/100" is more honest.
+ */
+function roundToBand(value: number): number {
+  return Math.round(value / 5) * 5;
+}
+
 export function ListingQualityMeter({ score }: ListingQualityMeterProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -96,13 +105,15 @@ export function ListingQualityMeter({ score }: ListingQualityMeterProps) {
 
   const overallColor = scoreColor(score.overall, colors);
   const band = scoreBand(score.overall);
+  // Round to nearest 5 — the heuristic is not precise to single digits.
+  const displayOverall = roundToBand(score.overall);
 
   const subScores: SubScoreRow[] = [
-    { key: 'photo', label: 'Photos', value: score.photoScore, icon: 'camera-outline' },
-    { key: 'title', label: 'Title', value: score.titleScore, icon: 'text-outline' },
-    { key: 'description', label: 'Description', value: score.descriptionScore, icon: 'document-text-outline' },
-    { key: 'pricing', label: 'Pricing', value: score.pricingScore, icon: 'pricetag-outline' },
-    { key: 'completeness', label: 'Completeness', value: score.completenessScore, icon: 'checkmark-circle-outline' },
+    { key: 'photo', label: 'Photos', value: roundToBand(score.photoScore), icon: 'camera-outline' },
+    { key: 'title', label: 'Title', value: roundToBand(score.titleScore), icon: 'text-outline' },
+    { key: 'description', label: 'Description', value: roundToBand(score.descriptionScore), icon: 'document-text-outline' },
+    { key: 'pricing', label: 'Pricing', value: roundToBand(score.pricingScore), icon: 'pricetag-outline' },
+    { key: 'completeness', label: 'Completeness', value: roundToBand(score.completenessScore), icon: 'checkmark-circle-outline' },
   ];
 
   const toggleExpanded = useCallback(() => {
@@ -115,7 +126,7 @@ export function ListingQualityMeter({ score }: ListingQualityMeterProps) {
     });
   }, [haptic]);
 
-  const accessibleLabel = `Listing quality ${score.overall} out of 100. ${band}. ${
+  const accessibleLabel = `Listing quality ${displayOverall} out of 100. ${band}. ${
         score.suggestions.length
       } suggestions.`;
 
@@ -130,7 +141,7 @@ export function ListingQualityMeter({ score }: ListingQualityMeterProps) {
         style={styles.header}
         onPress={toggleExpanded}
         accessibilityRole="button"
-        accessibilityLabel={`Listing quality ${score.overall} out of 100, ${band}. ${
+        accessibilityLabel={`Listing quality ${displayOverall} out of 100, ${band}. ${
           expanded ? 'Collapse' : 'Expand'
         } details.`}
         accessibilityHint="Shows detailed sub-scores and suggestions"
@@ -138,7 +149,7 @@ export function ListingQualityMeter({ score }: ListingQualityMeterProps) {
       >
         <View style={styles.scoreBlock}>
           <Text style={[styles.scoreNumber, { color: overallColor }]}>
-            {score.overall}
+            {displayOverall}
           </Text>
           <Text style={styles.scoreMax}>/100</Text>
         </View>
@@ -158,13 +169,13 @@ export function ListingQualityMeter({ score }: ListingQualityMeterProps) {
       {/* Overall progress bar */}
       <View
         style={styles.progressTrack}
-        accessibilityLabel={`Overall quality ${score.overall} percent`}
+        accessibilityLabel={`Overall quality ${displayOverall} percent`}
         accessibilityRole="adjustable"
       >
         <View
           style={[
             styles.progressFill,
-            { width: `${score.overall}%`, backgroundColor: overallColor },
+            { width: `${displayOverall}%`, backgroundColor: overallColor },
           ]}
         />
       </View>
@@ -314,8 +325,8 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       alignItems: 'baseline',
     },
     scoreNumber: {
-      fontSize: Type.priceLarge.size,
-      lineHeight: Type.priceLarge.lineHeight,
+      fontSize: Type.priceHero.size,
+      lineHeight: Type.priceHero.lineHeight,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '700',
       letterSpacing: -0.5,
@@ -330,7 +341,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       flex: 1,
     },
     title: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
     },
@@ -396,7 +407,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderTopColor: colors.borderSubtle,
     },
     suggestionsTitle: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
       marginBottom: Space.sm,

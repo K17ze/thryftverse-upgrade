@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
   },
   heroText: { flex: 1 },
   heroTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
   defaultBadgeText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   editAction: {
     fontSize: Type.body.size,
@@ -449,10 +449,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   addressName: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
     marginBottom: Space.xs / 2,
   },
   addressLine: {

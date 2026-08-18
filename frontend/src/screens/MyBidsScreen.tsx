@@ -419,7 +419,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.brand,
   },
   stateRailText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
   },

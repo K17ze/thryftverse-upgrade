@@ -139,7 +139,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
   },
   emptyCoverText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -156,7 +156,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
   },
   name: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     flex: 1,

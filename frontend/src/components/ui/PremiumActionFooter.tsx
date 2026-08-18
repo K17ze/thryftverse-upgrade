@@ -97,7 +97,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
   },
   errorBannerText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.danger,
     textAlign: 'center',
@@ -114,7 +114,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   primaryText: {
     color: colors.background,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
   secondaryBtn: {
@@ -128,7 +128,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   secondaryText: {
     color: colors.textSecondary,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
 });

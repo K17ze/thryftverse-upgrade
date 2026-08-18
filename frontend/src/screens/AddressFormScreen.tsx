@@ -752,7 +752,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   headerCancelText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -785,10 +785,10 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
   },
   introBody: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
 
   // Section
@@ -796,13 +796,13 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
   },
   sectionLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     marginBottom: Space.xs + 2,
   },
   input: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
     paddingVertical: Space.sm + 2,
@@ -822,7 +822,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
   },
   errorText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.danger,
   },
@@ -840,7 +840,7 @@ function createStyles(colors: ThemeColors) {
   },
   postcodeSuggestionText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
@@ -857,7 +857,7 @@ function createStyles(colors: ThemeColors) {
   },
   saveErrorText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.danger,
   },
@@ -871,7 +871,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
   },
   countryText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
@@ -888,10 +888,10 @@ function createStyles(colors: ThemeColors) {
   },
   defaultNoteText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
 
   // Remove
@@ -930,7 +930,7 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.7,
   },
   saveBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },
@@ -950,11 +950,11 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.sm,
   },
   signedOutBody: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   signedOutBtn: {
     marginTop: Space.md,
@@ -966,7 +966,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   signedOutBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
   },

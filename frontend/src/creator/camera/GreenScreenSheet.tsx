@@ -24,7 +24,8 @@ import {
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, FontFamily, Control, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, Control, Stroke, IconGrammar } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -174,7 +175,7 @@ export function GreenScreenSheet({
           <View style={styles.infoBanner}>
             <Ionicons
               name="information-circle-outline"
-              size={20}
+              size={IconGrammar.standard}
               color={colors.textSecondary}
               style={styles.infoIcon}
             />
@@ -203,7 +204,7 @@ export function GreenScreenSheet({
                   source={{ uri: backgroundUri }}
                   style={styles.bgThumb}
                   contentFit="cover"
-                  transition={150}
+                  transition={Motion.transitions.mediaLoad.duration}
                 />
               </PressScale>
               <PressScale
@@ -447,8 +448,8 @@ const styles = StyleSheet.create({
   },
   bgChooseText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   bgPreviewRow: {
     flexDirection: 'row',
@@ -524,7 +525,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
 });

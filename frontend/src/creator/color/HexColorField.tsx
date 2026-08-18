@@ -137,14 +137,14 @@ function useHexFieldStyles(colors: ThemeColors) {
         },
         label: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.metaElevated.size,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          fontSize: Type.label.size,
+          letterSpacing: Type.label.letterSpacing,
           color: colors.textSecondary,
           textTransform: 'uppercase',
         },
         input: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           color: colors.textPrimary,
           borderWidth: Stroke.standard,
           borderColor: colors.border,

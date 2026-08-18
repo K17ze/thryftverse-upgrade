@@ -467,7 +467,7 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
     retryLink: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.brand,
     },

@@ -216,10 +216,10 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }],
   },
   modeLabel: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   separator: {
     fontSize: Type.meta.size,
@@ -242,13 +242,13 @@ const styles = StyleSheet.create({
   sessionLabel: {
     flex: 1,
     fontSize: Type.meta.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.regular,
     letterSpacing: Type.meta.letterSpacing,
   },
   countdown: {
     fontSize: Type.meta.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
     letterSpacing: 0,

@@ -21,7 +21,7 @@ import React from 'react';
 import { View, Text, StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily, Control } from '../../theme/designTokens';
+import { Space, Type, FontFamily, Control, IconGrammar, PressScale } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export interface FlagshipNavigationRowProps {
@@ -131,7 +131,7 @@ export function FlagshipNavigationRow({
           <View style={styles.trailing}>{trailing}</View>
         ) : resolvedShowChevron ? (
           <View style={styles.trailing}>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} />
           </View>
         ) : null}
       </View>
@@ -158,7 +158,7 @@ export function FlagshipNavigationRow({
     <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
-      scaleValue={0.98}
+      scaleValue={PressScale.gentle}
       activeOpacity={0.6}
       hapticFeedback="light"
       accessibilityRole="button"
@@ -196,16 +196,16 @@ const styles = StyleSheet.create({
     gap: Space.xxs,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    lineHeight: Type.captionElevated.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
   trailing: {
     flexDirection: 'row',

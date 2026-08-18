@@ -370,7 +370,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   personalActionText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textInverse,
     letterSpacing: 0.3,
   },

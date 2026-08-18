@@ -106,13 +106,13 @@ describe('commerce-detail family art direction (spec 05)', () => {
     it('compact density uses 26pt title', () => {
       const src = readDetailComponent('CommerceDetailIdentity');
       expect(src).toContain('titleCompact');
-      // titleCompact uses Type.priceLarge.size - 2 (28 - 2 = 26pt)
+      // titleCompact uses Type.priceHero.size - 2 (28 - 2 = 26pt)
       expect(src).toMatch(/fontSize: Type\.priceLarge\.size - 2/);
     });
 
     it('standard density uses 28pt title', () => {
       const src = readDetailComponent('CommerceDetailIdentity');
-      expect(src).toMatch(/title:[\s\S]*fontSize: Type.priceLarge.size/);
+      expect(src).toMatch(/title:[\s\S]*fontSize: Type.priceHero.size/);
     });
   });
 
@@ -181,8 +181,8 @@ describe('commerce-detail family art direction (spec 05)', () => {
 
     it('uses design tokens (Type) not hardcoded font sizes for primary values', () => {
       const surface = readDetailComponent('CommerceDetailTransactionSurface');
-      expect(surface).toContain('Type.priceLarge');
-      expect(surface).toContain('Type.bodyEmphasis');
+      expect(surface).toContain('Type.priceHero');
+      expect(surface).toContain('Type.bodyStrong');
     });
   });
 

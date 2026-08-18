@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     lineHeight: 20,
     letterSpacing: -0.2,
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   valueAmount: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
@@ -575,10 +575,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   markValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   localFiat: {
@@ -610,10 +610,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.meta.letterSpacing,
   },
   premiumValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   premiumNote: {

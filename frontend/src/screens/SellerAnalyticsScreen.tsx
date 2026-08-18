@@ -504,7 +504,7 @@ function createStyles(colors: ThemeColors) {
       minHeight: 36,
     },
     periodSegmentText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
     },
@@ -531,7 +531,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: Typography.family.regular,
     },
     kpiValue: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       fontVariant: ['tabular-nums'],
     },
@@ -587,13 +587,13 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     topListingTitle: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.semibold,
     },
     topListingRevenue: {
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: Type.bodyStrong.size,
+      lineHeight: Type.bodyStrong.lineHeight,
       fontFamily: Typography.family.bold,
       fontVariant: ['tabular-nums'],
     },

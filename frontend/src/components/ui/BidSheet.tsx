@@ -717,12 +717,12 @@ const createStyles = (themed: {
     flex: 1,
   },
   itemTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: themed.textPrimary,
   },
   itemSeller: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.textSecondary,
     marginTop: 2,
   },
@@ -759,7 +759,7 @@ const createStyles = (themed: {
     flex: 1,
   },
   amountIzeEquivalent: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.brand,
     fontFamily: Typography.family.medium,
     textAlign: 'center',
@@ -787,7 +787,7 @@ const createStyles = (themed: {
     textTransform: 'uppercase',
   },
   bidContextValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: themed.textPrimary,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
@@ -885,7 +885,7 @@ const createStyles = (themed: {
     marginBottom: Space.xs,
   },
   countdownText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.textSecondary,
     fontFamily: Typography.family.medium,
   },
@@ -914,7 +914,7 @@ const createStyles = (themed: {
     opacity: 0.7,
   },
   incrementText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: themed.textPrimary,
   },
@@ -945,7 +945,7 @@ const createStyles = (themed: {
   },
   errorText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.danger,
     fontFamily: Typography.family.medium,
     lineHeight: 18,
@@ -975,7 +975,7 @@ const createStyles = (themed: {
     paddingVertical: Space.xs / 2,
   },
   commitmentText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
   },
@@ -985,7 +985,7 @@ const createStyles = (themed: {
     gap: Space.md,
   },
   submittingText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: themed.textPrimary,
   },
@@ -993,7 +993,7 @@ const createStyles = (themed: {
     marginBottom: Space.xs,
   },
   submittingDetail: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: themed.textMuted,
     fontFamily: Typography.family.regular,
   },
@@ -1006,7 +1006,7 @@ const createStyles = (themed: {
     color: themed.textPrimary,
   },
   successDetail: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     color: themed.textSecondary,
     fontFamily: Typography.family.medium,
   },
@@ -1021,7 +1021,7 @@ const createStyles = (themed: {
     marginBottom: Space.xs,
   },
   errorTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.medium,
     color: themed.textPrimary,
     textAlign: 'center',
@@ -1039,7 +1039,7 @@ const createStyles = (themed: {
     marginBottom: Space.xs,
   },
   conflictExplanation: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
@@ -1061,7 +1061,7 @@ const createStyles = (themed: {
     color: themed.textSecondary,
   },
   conflictPriceValue: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: themed.textPrimary,
   },

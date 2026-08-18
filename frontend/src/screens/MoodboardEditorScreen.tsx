@@ -1069,7 +1069,7 @@ function useStyles() {
           backgroundColor: colors.brand,
         },
         savingText: {
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
         },

@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   title: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   scoreWrap: {
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     gap: Space.xs + 2,
   },
   score: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
   },
   tierBadge: {

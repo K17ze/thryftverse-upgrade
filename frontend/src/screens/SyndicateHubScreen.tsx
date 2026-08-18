@@ -899,8 +899,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     letterSpacing: LetterSpacing.normal - 0.1,
     textAlign: 'center',
   },
@@ -950,8 +950,8 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   sectionActionText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   positionsContent: {
@@ -981,8 +981,8 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   inlineStateTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   inlineStateText: {
@@ -1109,8 +1109,8 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   creatorTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   creatorText: {

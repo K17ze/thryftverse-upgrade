@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   progressLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.wide + 0.18,
   },

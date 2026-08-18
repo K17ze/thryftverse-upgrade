@@ -53,7 +53,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: 12,
   },
   label: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     marginBottom: 6,
@@ -64,7 +64,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
   },

@@ -262,10 +262,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.sm,
   },
   statusText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   // Order number — monospace-feel reference, muted
   orderNumber: {
@@ -277,7 +277,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     lineHeight: 20,
@@ -300,17 +300,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   context: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
   },
   tracking: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.textMuted,
     marginTop: 1,
   },
@@ -347,10 +347,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: Space.xs,
   },
   nextActionText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     color: colors.brand,
   },
   // Deadline badge — urgent ship-by indicator for seller needs-action rows

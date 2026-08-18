@@ -112,10 +112,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterChipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   listWrap: {
     flex: 1,

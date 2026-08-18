@@ -339,7 +339,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   setupScroll: { flex: 1 },
@@ -374,7 +374,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   inputGroup: { gap: Space.xs + 2 },
   inputLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   titleInput: {
@@ -458,7 +458,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     opacity: 0.4,
   },
   goLiveBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
@@ -550,7 +550,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
   },
   sellerLotPrice: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },
@@ -589,7 +589,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textPrimary,
   },
   upcomingLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: 'rgba(255,255,255,0.5)',
     paddingHorizontal: Space.md,
@@ -681,7 +681,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
   },
   summaryDoneBtnText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

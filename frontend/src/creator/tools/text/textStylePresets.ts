@@ -219,7 +219,7 @@ export function getPresetById(id: string): TextStylePreset | undefined {
  */
 export function resolvePreviewStyle(
   presetId: string,
-  baseSize: number = Type.bodyEmphasis.size,
+  baseSize: number = Type.bodyStrong.size,
 ): { fontFamily: string; fontSize: number; lineHeight: number } {
   const preset = PRESET_BY_ID[presetId] ?? PRESET_BY_ID.clean;
   const multiplier = preset?.lineHeightMultiplier ?? 1.25;

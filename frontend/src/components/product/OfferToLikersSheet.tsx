@@ -406,13 +406,13 @@ const createStyles = (themed: {
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: themed.textSecondary,
     lineHeight: 17,
   },
   closeText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: themed.brand,
     marginTop: Space.xs,
@@ -451,21 +451,21 @@ const createStyles = (themed: {
     flex: 1,
   },
   itemTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     color: themed.textPrimary,
     marginBottom: Space.xs,
     lineHeight: 19,
   },
   itemPrice: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: themed.textMuted,
   },
 
   // Section labels
   sectionLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: themed.textSecondary,
     letterSpacing: 0.2,
@@ -532,12 +532,12 @@ const createStyles = (themed: {
     gap: Space.xs,
   },
   currencySymbol: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: themed.brand,
   },
   customPriceInput: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: themed.textPrimary,
     minWidth: 60,
@@ -647,7 +647,7 @@ const createStyles = (themed: {
     color: themed.textSecondary,
   },
   summaryValue: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: themed.textPrimary,
   },

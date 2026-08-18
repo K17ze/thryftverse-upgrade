@@ -871,10 +871,10 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
   },
   refinementLabel: {
-    fontSize: Type.metaElevated.size,
+    fontSize: Type.label.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   textInputWrap: {
@@ -913,7 +913,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.brand,
   },
   categoryPillText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },
@@ -937,7 +937,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
   },
@@ -1051,7 +1051,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
   },
   categoryChipText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textPrimary,
   },

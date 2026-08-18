@@ -985,14 +985,14 @@ function createStyles(colors: ThemeColors) {
     },
     footerCancelText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     footerConfirm: {
       // backgroundColor set inline
     },
     footerConfirmText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
   });
 }

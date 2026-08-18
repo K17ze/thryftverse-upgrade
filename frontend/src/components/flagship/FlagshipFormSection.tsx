@@ -106,12 +106,12 @@ const styles = StyleSheet.create({
     marginBottom: Space.lg,
   },
   sectionTitle: {
-    fontSize: Type.metaElevated.size,
+    fontSize: Type.label.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: 0.3,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
-    lineHeight: Type.metaElevated.lineHeight,
+    lineHeight: Type.label.lineHeight,
   },
   sectionDescription: {
     fontSize: Type.caption.size,

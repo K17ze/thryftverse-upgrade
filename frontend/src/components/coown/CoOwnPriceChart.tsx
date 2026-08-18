@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },

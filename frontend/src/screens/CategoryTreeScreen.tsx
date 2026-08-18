@@ -168,7 +168,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.xl,
     },
     viewAllText: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
       color: colors.background,
       letterSpacing: LetterSpacing.wide + 0.18,
@@ -204,7 +204,7 @@ function createStyles(colors: ThemeColors) {
     },
     subPillText: {
       color: colors.textPrimary,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
     },
   });

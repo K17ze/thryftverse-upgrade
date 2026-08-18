@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   subtitle: {
     fontSize: Type.meta.size,

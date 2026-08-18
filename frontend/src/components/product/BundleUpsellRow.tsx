@@ -155,7 +155,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 2,
   },
   sectionTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     letterSpacing: 0.2,
@@ -222,12 +222,12 @@ function createStyles(colors: ThemeColors) {
     borderTopColor: colors.border,
   },
   totalLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
   },
   totalValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

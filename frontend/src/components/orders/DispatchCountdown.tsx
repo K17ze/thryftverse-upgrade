@@ -139,7 +139,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   label: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
   },
   countdown: {

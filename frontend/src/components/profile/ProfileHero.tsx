@@ -430,7 +430,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   monogramText: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
     color: colors.textSecondary,
     letterSpacing: -0.5,
@@ -533,7 +533,7 @@ function createStyles(colors: ThemeColors) {
 
   // Context line — no icons
   contextLine: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginBottom: Space.xs,
@@ -545,7 +545,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   websiteText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     textDecorationLine: 'underline',
@@ -560,17 +560,17 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xs,
   },
   trustLink: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
   trustStatic: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
   trustDot: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -597,7 +597,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  followBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold },
+  followBtnText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold },
   followActiveBtnText: { color: colors.textInverse },
   followingBtnText: { color: colors.textPrimary },
   messageBtn: {
@@ -612,7 +612,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  messageBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  messageBtnText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   moreBtn: {
     width: ACTION_HEIGHT,
     height: ACTION_HEIGHT,
@@ -635,7 +635,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  editProfileBtnText: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  editProfileBtnText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
   btnDisabled: { opacity: 0.5 },
   });
 }

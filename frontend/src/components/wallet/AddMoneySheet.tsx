@@ -506,16 +506,16 @@ const styles = StyleSheet.create({
     letterSpacing: Type.title.letterSpacing,
   },
   sheetHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   stepLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     marginTop: Space.xs,
   },
   sourceList: {
@@ -548,10 +548,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   sourceHint: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   amountInput: {
     borderWidth: Stroke.standard,
@@ -575,10 +575,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   reviewLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   reviewFiat: {
     fontSize: Type.priceList.size,
@@ -588,10 +588,10 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   offlineNote: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   confirmBtn: {
     marginTop: Space.xs,
@@ -618,10 +618,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   receiptSubtitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight + 2,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     textAlign: 'center',
   },
   receiptDoneBtn: {

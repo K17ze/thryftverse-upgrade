@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     textAlign: 'center',
   },
   emptySubtext: {
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   readoutText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontVariant: ['tabular-nums'],
   },
   actionGrid: {
@@ -334,8 +334,8 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.metaElevated.size,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: Type.label.size,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   stackContainer: {
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   },
   stackIndex: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     width: 24,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],

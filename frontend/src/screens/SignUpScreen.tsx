@@ -336,7 +336,7 @@ function createStyles(colors: ThemeColors) {
 
   footer: { paddingBottom: Space.sm, position: 'relative' },
   termsText: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textMuted, textAlign: 'center', marginBottom: Space.lg - 4, lineHeight: Type.caption.lineHeight + 2 },
-  errorText: { color: colors.danger, fontSize: Type.captionElevated.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.danger, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: colors.brand, height: 56, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.textInverse, fontSize: Type.body.size + 2, fontFamily: Typography.family.bold },

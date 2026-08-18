@@ -316,10 +316,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   columnHeader: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     marginBottom: Space.xs,
   },
   cell: {
@@ -327,10 +327,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   cellLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   bidAskRow: {
     flexDirection: 'row',

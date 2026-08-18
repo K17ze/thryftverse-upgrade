@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   summaryStatValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     letterSpacing: Type.body.letterSpacing,
   },

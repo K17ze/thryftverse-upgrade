@@ -300,11 +300,11 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.sm,
     },
     sectionTitle: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
     },
     sectionCount: {
       fontSize: Type.caption.size,
@@ -353,7 +353,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs / 2,
     },
     rowPrice: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       letterSpacing: Type.body.letterSpacing,

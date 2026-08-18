@@ -116,7 +116,7 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Space.sm,
   },
   brand: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.xs,
@@ -136,7 +136,7 @@ function createStyles(colors: ThemeColors) {
     minWidth: 0,
   },
   price: {
-    fontSize: Type.priceLarge.size,
+    fontSize: Type.priceHero.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -0.6,
@@ -144,7 +144,7 @@ function createStyles(colors: ThemeColors) {
     minWidth: 0,
   },
   originalPrice: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     textDecorationLine: 'line-through',
@@ -191,13 +191,13 @@ function createStyles(colors: ThemeColors) {
     color: colors.danger,
   },
   protectionTotal: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: Space.xs,
   },
   izeText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textSecondary,
     marginTop: 2,

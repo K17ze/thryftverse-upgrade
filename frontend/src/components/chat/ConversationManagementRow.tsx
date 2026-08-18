@@ -191,8 +191,8 @@ const styles = StyleSheet.create({
   },
   preview: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
   },
   action: {
     width: 52,

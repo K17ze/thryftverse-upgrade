@@ -375,7 +375,7 @@ export function TextEditorSheet({
 
   // ── Preview style ──
   const previewFontStyle = useMemo(
-    () => resolveFontPreviewStyle(fontId, Type.bodyEmphasis.size + 2),
+    () => resolveFontPreviewStyle(fontId, Type.bodyStrong.size + 2),
     [fontId],
   );
 
@@ -1018,8 +1018,8 @@ function useEditorStyles(colors: ThemeColors) {
         },
         sectionLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.metaElevated.size,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          fontSize: Type.label.size,
+          letterSpacing: Type.label.letterSpacing,
           textTransform: 'uppercase',
           color: colors.textSecondary,
           marginTop: Space.xs,
@@ -1159,7 +1159,7 @@ function useEditorStyles(colors: ThemeColors) {
         },
         confirmBtnText: {
           fontFamily: FontFamily.semibold,
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           color: colors.textInverse,
         },
       }),

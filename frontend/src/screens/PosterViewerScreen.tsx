@@ -1610,11 +1610,11 @@ const styles = StyleSheet.create({
   authorAvatarText: {
     color: '#fff',
     fontFamily: Typography.family.bold,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
   },
   authorName: {
     color: '#fff',
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
@@ -1700,7 +1700,7 @@ const styles = StyleSheet.create({
   },
   mediaErrorText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     color: '#fff',
   },
   retryBtn: {
@@ -1735,7 +1735,7 @@ const styles = StyleSheet.create({
   },
   pauseIndicatorText: {
     color: 'rgba(255,255,255,0.85)',
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.wide,
   },
@@ -1797,7 +1797,7 @@ const styles = StyleSheet.create({
   },
   tagLabelText: {
     color: '#fff',
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.wide,
   },

@@ -364,7 +364,7 @@ function useSheetStyles(colors: ThemeColors) {
         } as ViewStyle,
         removeBtnText: {
           fontFamily: FontFamily.medium,
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
         } as ViewStyle,
         applyBtn: {
           height: 50,
@@ -374,7 +374,7 @@ function useSheetStyles(colors: ThemeColors) {
         } as ViewStyle,
         applyBtnText: {
           fontFamily: FontFamily.semibold,
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
         } as ViewStyle,
       }),
     [colors],

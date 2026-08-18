@@ -1231,7 +1231,7 @@ function createStyles(colors: ThemeColors) {
     },
     tabLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
 
     // ── Album list ──
@@ -1268,7 +1268,7 @@ function createStyles(colors: ThemeColors) {
     },
     albumRowText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     albumRowSubtext: {
       fontFamily: Typography.family.regular,
@@ -1289,7 +1289,7 @@ function createStyles(colors: ThemeColors) {
     limitedBannerText: {
       flex: 1,
       fontFamily: Typography.family.medium,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
     },
 
     // ── Media grid ──
@@ -1407,7 +1407,7 @@ function createStyles(colors: ThemeColors) {
     },
     confirmBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
   });
 }

@@ -440,10 +440,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     warningTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     warningSubtitle: {
       fontSize: Type.caption.size,
@@ -507,7 +507,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.xl,
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.medium,
       minHeight: Space.xxl,
     },

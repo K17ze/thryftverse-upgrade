@@ -679,7 +679,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   title: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
   },
   closeBtn: {
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   instructions: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingBottom: 4,
@@ -772,13 +772,13 @@ const styles = StyleSheet.create({
   },
   footerCancelText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   footerConfirm: {
     // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
 });

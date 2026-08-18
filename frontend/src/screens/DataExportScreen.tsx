@@ -298,10 +298,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     heroSubtitle: {
       fontSize: Type.caption.size,
@@ -362,10 +362,10 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     stateTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     stateSubtitle: {
       fontSize: Type.body.size,
@@ -397,10 +397,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     successTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     successSubtitle: {
       fontSize: Type.caption.size,
@@ -458,10 +458,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     errorTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      letterSpacing: Type.bodyStrong.letterSpacing,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     errorSubtitle: {
       fontSize: Type.body.size,

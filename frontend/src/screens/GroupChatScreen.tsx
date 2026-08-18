@@ -749,7 +749,7 @@ const createStyles = (colors: ThemeColors) =>
       gap: Space.sm,
     },
     sectionLabel: {
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
     },
     memberRow: {
       flexDirection: 'row',

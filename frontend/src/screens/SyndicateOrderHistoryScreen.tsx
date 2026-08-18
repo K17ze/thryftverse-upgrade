@@ -412,8 +412,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   sideTabText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
   },
   sideTabTextActive: {

@@ -179,7 +179,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
   },
   price: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
   },

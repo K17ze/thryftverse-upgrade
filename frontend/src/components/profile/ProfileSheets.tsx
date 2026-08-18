@@ -313,8 +313,8 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   sheetItemText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.regular,
     flex: 1,
   },
@@ -352,15 +352,15 @@ const styles = StyleSheet.create({
   },
   reportReasonLabel: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // ── Details field ──
   detailsWrap: { marginTop: Space.md },
   detailsLabel: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     marginBottom: Space.xs,
   },
@@ -386,8 +386,8 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   submitBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   // ── Block confirmation ──
@@ -405,8 +405,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   confirmBlockBtn: {
@@ -417,8 +417,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   confirmBlockBtnText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
 });

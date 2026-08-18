@@ -336,10 +336,10 @@ function createStyles(colors: ThemeColors) {
     avatarWrap: {},
     avatar: { width: 44, height: 44, borderRadius: Radius.xxl },
     avatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-    avatarInitials: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
+    avatarInitials: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textSecondary },
     identityCol: { flex: 1 },
-    displayName: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-    handle: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
+    displayName: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+    handle: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginTop: 1 },
     followBtn: {
       minWidth: Control.hit + Space.sm,
       height: Control.hit - 4,
@@ -357,7 +357,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
     },
     followBtnText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
     notFollowingBtnText: {

@@ -391,7 +391,7 @@ function createStyles(colors: ThemeColors) {
   },
   heroText: { flex: 1 },
   heroTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -457,10 +457,10 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
   },
   optionTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   optionSubtitle: {
     fontSize: Type.caption.size,
@@ -574,7 +574,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Space.xs / 2,
     minHeight: Space.xxl,

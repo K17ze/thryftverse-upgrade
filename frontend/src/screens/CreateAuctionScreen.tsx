@@ -908,7 +908,7 @@ function createStyles(colors: ThemeColors) {
   },
   // ── Review ──
   reviewHeadline: {
-    fontSize: Type.priceLarge.size - 2,
+    fontSize: Type.priceHero.size - 2,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
     letterSpacing: Type.title.letterSpacing,
@@ -991,12 +991,12 @@ function createStyles(colors: ThemeColors) {
   },
   termsInlineLabel: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
   },
   termsInlineValue: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textPrimary,
     fontFamily: Typography.family.medium,
   },
@@ -1040,7 +1040,7 @@ function createStyles(colors: ThemeColors) {
   resultTitle: {
     fontSize: Type.title.size,
     textAlign: 'center',
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: Type.priceHero.letterSpacing,
   },
   resultSubtitle: {
     color: colors.textMuted,

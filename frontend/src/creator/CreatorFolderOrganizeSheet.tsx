@@ -588,7 +588,7 @@ function createStyles(colors: ThemeColors) {
     },
     newFolderText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.brand,
     },
     scrollArea: {
@@ -599,8 +599,8 @@ function createStyles(colors: ThemeColors) {
     },
     sectionLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.metaElevated.size,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      fontSize: Type.label.size,
+      letterSpacing: Type.label.letterSpacing,
       color: colors.textMuted,
       marginTop: Space.sm,
       marginBottom: Space.xs,
@@ -629,7 +629,7 @@ function createStyles(colors: ThemeColors) {
     },
     folderName: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
     },
     folderNameSelected: {
@@ -665,7 +665,7 @@ function createStyles(colors: ThemeColors) {
     assignTitle: {
       flex: 1,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
     },
     assignConfirmBtn: {
@@ -800,7 +800,7 @@ function createStyles(colors: ThemeColors) {
     },
     nameInput: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textPrimary,
       borderWidth: 1,
       borderColor: colors.border,
@@ -821,7 +821,7 @@ function createStyles(colors: ThemeColors) {
     },
     manageConfirmText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textInverse,
     },
     manageDangerBtn: {
@@ -833,7 +833,7 @@ function createStyles(colors: ThemeColors) {
     },
     manageDangerText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textInverse,
     },
     manageCancelBtn: {

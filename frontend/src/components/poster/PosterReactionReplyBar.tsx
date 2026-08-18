@@ -579,7 +579,7 @@ function createStyles(colors: any) {
       fontSize: Type.body.size,
     },
     quickReplyText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: 'rgba(255,255,255,0.9)',
     },
@@ -638,7 +638,7 @@ function createStyles(colors: any) {
       paddingVertical: 0,
       color: 'rgba(255,255,255,0.95)',
       fontFamily: Typography.family.regular,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
     },
     replyCounter: {
       position: 'absolute',

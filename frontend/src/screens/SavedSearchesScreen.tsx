@@ -135,7 +135,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       borderColor: colors.brand,
     },
     tabText: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.medium,
       color: colors.textMuted,
     },
@@ -199,7 +199,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       gap: Space.xs / 2 + 1,
     },
     searchQuery: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
       flexShrink: 1,
@@ -234,7 +234,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     },
     newMatchesText: {
       flex: 1,
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       color: colors.brand,
     },

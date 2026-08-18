@@ -254,7 +254,7 @@ function createStyles(colors: ThemeColors) {
     },
     heroText: { flex: 1 },
     heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -293,9 +293,9 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     safetyTipsTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
     safetyTipsList: {
       gap: Space.sm,

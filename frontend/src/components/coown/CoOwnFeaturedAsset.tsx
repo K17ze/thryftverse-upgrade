@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   eyebrow: {
-    fontSize: Type.metaElevated.size,
+    fontSize: Type.label.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 1.0,
     textTransform: 'uppercase',

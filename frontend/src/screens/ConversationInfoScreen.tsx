@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   },
   handle: {
     fontFamily: TypeStyles.body.fontFamily,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     marginTop: Space.xs / 2 + 1,
   },
   quickActions: {

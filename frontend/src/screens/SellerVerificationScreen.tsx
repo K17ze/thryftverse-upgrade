@@ -344,9 +344,9 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     summaryNumber: {
-      fontSize: Type.priceLarge.size,
+      fontSize: Type.priceHero.size,
       fontFamily: Typography.family.bold,
-      lineHeight: Type.priceLarge.lineHeight,
+      lineHeight: Type.priceHero.lineHeight,
     },
     summaryLabel: {
       fontSize: Type.caption.size,
@@ -392,9 +392,9 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs - 2,
     },
     assetTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      lineHeight: Type.bodyStrong.lineHeight,
     },
     demandType: {
       fontSize: Type.caption.size,

@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     textAlign: 'center',
   },
   emptySubtext: {
@@ -405,13 +405,13 @@ const styles = StyleSheet.create({
   },
   readoutLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.metaElevated.size,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: Type.label.size,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   readoutValue: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontVariant: ['tabular-nums'],
   },
   toggleRow: {
@@ -472,13 +472,13 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.metaElevated.size,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: Type.label.size,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   input: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     borderWidth: Stroke.standard,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
   },
   applyBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   centerBtn: {
     flexDirection: 'row',
@@ -506,6 +506,6 @@ const styles = StyleSheet.create({
   },
   centerBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
 });

@@ -763,7 +763,7 @@ function createStyles(colors: ThemeColors) {
       minWidth: 0,
     },
     flatRowTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -786,9 +786,9 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.sm,
     },
     sectionLabel: {
-      fontSize: Type.metaElevated.size,
+      fontSize: Type.label.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
       textTransform: 'uppercase',
     },
     providerRow: {
@@ -812,7 +812,7 @@ function createStyles(colors: ThemeColors) {
       minWidth: 0,
     },
     providerName: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -969,7 +969,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     securityTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },

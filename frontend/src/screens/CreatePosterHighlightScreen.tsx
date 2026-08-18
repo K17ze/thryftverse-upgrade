@@ -461,7 +461,7 @@ function createStyles(colors: ThemeColors) {
       opacity: 0.4,
     },
     saveBtnText: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
       color: colors.textInverse,
     },
@@ -475,7 +475,7 @@ function createStyles(colors: ThemeColors) {
     titleInput: {
       flex: 1,
       height: Control.hit,
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.regular,
       color: colors.textPrimary,
       borderWidth: Stroke.standard,
@@ -669,7 +669,7 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
     },
     emptyTitle: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
     },

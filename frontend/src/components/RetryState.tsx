@@ -60,13 +60,13 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.lg,
     },
     title: {
-      fontSize: Type.priceLarge.size,
+      fontSize: Type.priceHero.size,
       fontFamily: Typography.family.bold,
       color: colors.textPrimary,
       marginBottom: 12,
     },
     subtext: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.medium,
       color: colors.textSecondary,
       textAlign: 'center',
@@ -81,7 +81,7 @@ function createStyles(colors: ThemeColors) {
     },
     retryBtnText: {
       color: colors.background,
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
     },
   });

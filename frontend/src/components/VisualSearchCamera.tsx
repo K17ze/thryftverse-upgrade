@@ -463,7 +463,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   modeText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: '#fff',
   },
 });

@@ -593,8 +593,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.semibold,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   closeTarget: {
@@ -626,8 +626,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.medium,
   },
   listingPrice: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     fontVariant: ['tabular-nums'],
   },
@@ -640,10 +640,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   amountValue: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight,
+    fontSize: Type.priceHero.size,
+    lineHeight: Type.priceHero.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: Type.priceHero.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   discountChip: {
@@ -652,8 +652,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   discountChipText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -700,8 +700,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   sweetSpotText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     flex: 1,
   },
@@ -721,8 +721,8 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   discountChipsRow: {
@@ -740,8 +740,8 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xs,
   },
   expiryText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
   },
   chip: {
@@ -758,8 +758,8 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   chipText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },
@@ -774,13 +774,13 @@ const styles = StyleSheet.create({
     minHeight: Control.hit + Space.xs,
   },
   manualPrefix: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     marginRight: Space.xs,
   },
   manualInput: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.medium,
     paddingVertical: Space.sm,
     fontVariant: ['tabular-nums'],
@@ -798,8 +798,8 @@ const styles = StyleSheet.create({
   },
   smartSellText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   errorRow: {
@@ -811,8 +811,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
   },
   sendButton: {

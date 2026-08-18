@@ -844,11 +844,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     pricePrefix: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
     rowPriceInput: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
       padding: 0,
       minWidth: Space.xxl + Space.xs,
@@ -993,7 +993,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     pickerLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: Typography.family.semibold,
     },
     pickerValueRow: {
@@ -1002,7 +1002,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
     },
     pickerValue: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.medium,
     },
     formErrorList: {

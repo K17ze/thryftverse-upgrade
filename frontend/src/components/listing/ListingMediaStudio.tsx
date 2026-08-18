@@ -653,13 +653,13 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     marginBottom: Space.md,
   },
   emptyTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     marginBottom: Space.xs,
   },
   emptySub: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
   },
@@ -1038,7 +1038,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     minHeight: 44,
   },
   studioActionText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },

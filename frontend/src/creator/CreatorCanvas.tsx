@@ -1389,16 +1389,16 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       // Playfair Display Regular — editorial serif for a restrained,
       // non-template feel (replaces round script Pacifico)
       fontFamily: 'PlayfairDisplay_400Regular',
-      fontSize: Type.bodyEmphasis.size + 6,
-      lineHeight: (Type.bodyEmphasis.size + 6) * 1.2,
+      fontSize: Type.bodyStrong.size + 6,
+      lineHeight: (Type.bodyStrong.size + 6) * 1.2,
       letterSpacing: 0.5,
     },
     deco: {
       // Anton — strong display (replaces retro Lobster for a more
       // cohesive, less template-like feel)
       fontFamily: 'Anton_400Regular',
-      fontSize: Type.bodyEmphasis.size + 2,
-      lineHeight: (Type.bodyEmphasis.size + 2) * 1.3,
+      fontSize: Type.bodyStrong.size + 2,
+      lineHeight: (Type.bodyStrong.size + 2) * 1.3,
       letterSpacing: 1.5,
     },
     poster: {
@@ -1420,8 +1420,8 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       // (replaces generic Dancing Script for a more editorial feel)
       fontFamily: 'PlayfairDisplay_400Regular',
       fontStyle: 'italic',
-      fontSize: Type.bodyEmphasis.size + 2,
-      lineHeight: (Type.bodyEmphasis.size + 2) * 1.4,
+      fontSize: Type.bodyStrong.size + 2,
+      lineHeight: (Type.bodyStrong.size + 2) * 1.4,
     },
   };
 
@@ -2704,7 +2704,7 @@ const questionStyles = StyleSheet.create({
   prompt: {
     color: '#fff',
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     marginBottom: Space.sm,
   },
   inputAffordance: {

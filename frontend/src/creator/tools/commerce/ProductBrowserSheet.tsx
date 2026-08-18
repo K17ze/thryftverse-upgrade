@@ -694,7 +694,7 @@ function createStyles(colors: ThemeColors) {
     },
     retryBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       color: colors.textInverse,
     },
   });

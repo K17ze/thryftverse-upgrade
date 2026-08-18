@@ -272,7 +272,7 @@ function createStyles(colors: ThemeColors) {
   },
   heroText: { flex: 1 },
   heroTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -411,12 +411,12 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs / 2,
   },
   summaryLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textSecondary,
   },
   summaryValue: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

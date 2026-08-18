@@ -159,10 +159,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   chipText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.1,
-    lineHeight: Type.captionElevated.lineHeight,
+    lineHeight: Type.caption.lineHeight,
   },
   separator: {
     width: 3,

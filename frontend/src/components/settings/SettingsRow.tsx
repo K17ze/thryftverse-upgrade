@@ -145,17 +145,17 @@ const styles = StyleSheet.create({
     gap: Space.xs / 4,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     marginTop: 0,
-    letterSpacing: Type.captionElevated.letterSpacing,
-    lineHeight: Type.captionElevated.lineHeight,
+    letterSpacing: Type.caption.letterSpacing,
+    lineHeight: Type.caption.lineHeight,
   },
   right: {
     flexDirection: 'row',
@@ -166,12 +166,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   value: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     flexShrink: 1,
     maxWidth: '100%',
     textAlign: 'right',
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
 });

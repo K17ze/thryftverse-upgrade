@@ -216,10 +216,10 @@ const styles = StyleSheet.create({
     textTransform: 'none',
   },
   primaryValue: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight,
+    fontSize: Type.priceHero.size,
+    lineHeight: Type.priceHero.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: Type.priceHero.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   primaryValueAuction: {
@@ -266,8 +266,8 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   secondaryValue: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
     fontVariant: ['tabular-nums'],
   },

@@ -383,8 +383,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   protectionText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
   },
   container: {
@@ -458,10 +458,10 @@ const styles = StyleSheet.create({
     // (13px) for trust copy and metadata labels. The value label
     // ("Current bid", "Your listing") is a metadata label that
     // benefits from slightly larger size for legibility in the dock.
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   actionCluster: {
     flexDirection: 'row',
@@ -502,8 +502,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   primaryActionText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   // Per Design.md: secondary is a quiet text control, not a full
@@ -526,8 +526,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   secondaryActionText: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   pressed: {
@@ -545,8 +545,8 @@ const styles = StyleSheet.create({
     // (13px) for trust copy and state explanations. The subtitle
     // ("Complete rights disclosure", "This item has been sold") is
     // contextual copy that benefits from the slightly larger size.
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   // Shipping hint — quiet, muted, shown below the price when shipping

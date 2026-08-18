@@ -273,7 +273,7 @@ function createStyles(colors: ThemeColors) {
     },
     heroText: { flex: 1 },
     heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -295,9 +295,9 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     statValue: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: Type.body.size,
       fontFamily: Typography.family.bold,
-      letterSpacing: Type.bodyLarge.letterSpacing,
+      letterSpacing: Type.body.letterSpacing,
     },
     statLabel: {
       fontSize: Type.caption.size,

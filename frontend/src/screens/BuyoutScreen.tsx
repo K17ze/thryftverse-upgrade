@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   positionValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   statusCard: {

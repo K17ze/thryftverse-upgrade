@@ -144,10 +144,10 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm + Space.xs,
   },
   label: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     textTransform: 'none',
   },
   // editorial: stronger heading — slightly larger, tighter tracking.
@@ -160,8 +160,8 @@ const styles = StyleSheet.create({
   },
   // legal: subdued — muted weight, smaller.
   labelLegal: {
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
     fontFamily: Typography.family.medium,
     textTransform: 'none',
   },

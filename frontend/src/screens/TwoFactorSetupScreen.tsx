@@ -648,7 +648,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.caps + 1.18,
     minHeight: Space.xxl,
@@ -779,7 +779,7 @@ function createStyles(colors: ThemeColors) {
   },
   recoveryCodeValue: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: LetterSpacing.caps + 1.18,
   },

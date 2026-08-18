@@ -196,12 +196,12 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
   amount: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
     fontVariant: ['tabular-nums'],

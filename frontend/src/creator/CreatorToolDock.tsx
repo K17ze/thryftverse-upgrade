@@ -667,6 +667,6 @@ const styles = StyleSheet.create({
   },
   publishBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
 });

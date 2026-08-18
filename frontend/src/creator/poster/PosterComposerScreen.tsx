@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, FontFamily, Radius } from '../../theme/designTokens';
+import { Space, FontFamily, Radius, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -46,7 +46,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import type { CreatorTemplate } from '../templates';
 import { FrameTray } from '../studio/FrameTray';
 import { PageMenu } from '../studio/PageMenu';
-import { FrameTool, OverflowItem, OpacityBar } from './PosterComposerParts';
+import { OverflowItem } from './PosterComposerParts';
 import { ContextToolRail } from '../surfaces/ContextToolRail';
 import { HelpShortcutsSheet } from '../surfaces/HelpShortcutsSheet';
 import {
@@ -1227,6 +1227,20 @@ function PosterComposerInner() {
     };
 
     // ── poster-media-selected: Replace, Crop, Auto, Adjust, Effects, More ──
+    // Edit Clip is conditionally included in overflow when the selected
+    // media is a video — it expands the timeline for drag-to-trim and
+    // volume controls. This replaces the legacy context toolbar which
+    // duplicated tools already available in the ContextToolRail.
+    const isVideoMedia = selectedLayer?.type === 'media' && selectedLayer.payload.mediaType === 'video';
+    const editClipOverflow: ToolDefinition[] = isVideoMedia
+      ? [mk('edit-clip', 'Edit Clip', 'film-outline', () => {
+          if (!selectedLayer) return;
+          haptic.light();
+          setSelectedClipId(selectedLayer.id);
+          setUserRequestedTimeline(true);
+          setBottomSurface('timeline');
+        }, 'Edit clip', 'Expands the timeline to trim and adjust the video clip')]
+      : [];
     const mediaSelected: ToolGroup = {
       context: 'poster-media-selected',
       primary: [
@@ -1237,6 +1251,7 @@ function PosterComposerInner() {
         mk('effects', 'Effects', 'sparkles-outline', handleAddEffects, 'Effects', 'Opens the effects panel for the selected media'),
       ],
       overflow: [
+        ...editClipOverflow,
         mk('cutout', cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'sparkles-outline' : 'crop-outline', handleCutoutAction, cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'Removes the background using on-device subject segmentation' : 'Crops the selected media to a rectangle'),
         mk('animation', 'Animation', 'analytics-outline', () => { haptic.light(); setShowKeyframes(true); }, 'Animation', 'Opens the keyframe editor for the selected layer'),
         mk('speed-curve', 'Speed Curve', 'speedometer-outline', () => { haptic.light(); setShowSpeedCurve(true); }, 'Speed Curve', 'Opens the speed curve editor for variable speed ramping'),
@@ -1369,7 +1384,7 @@ function PosterComposerInner() {
       {/* ── Crash recovery banner ────────────────────────────────────── */}
       {hasPendingRecovery && (
         <View style={styles.recoveryBanner}>
-          <Ionicons name="alert-circle-outline" size={20} color={colors.textPrimary} />
+          <Ionicons name="alert-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
           <Text style={styles.recoveryText}>Recover your last unsaved project?</Text>
           <PressScale
             onPress={() => { void recoverCrashedProject(); }}
@@ -1385,7 +1400,7 @@ function PosterComposerInner() {
             accessibilityLabel="Dismiss recovery prompt"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={18} color={colors.textSecondary} />
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
       )}
@@ -1443,13 +1458,13 @@ function PosterComposerInner() {
             <View style={styles.safeZoneOverlay} pointerEvents="none">
               <View style={[styles.safeZoneTop, { top: 0, height: insets.top + 56 }]}>
                 <View style={styles.safeZoneLabel}>
-                  <Ionicons name="shield-outline" size={10} color="#C9A46A" />
+                  <Ionicons name="shield-outline" size={IconGrammar.badge} color="#C9A46A" />
                   <Text style={styles.safeZoneLabelText}>Top chrome</Text>
                 </View>
               </View>
               <View style={[styles.safeZoneBottom, { bottom: 0, height: insets.bottom + 120 }]}>
                 <View style={styles.safeZoneLabel}>
-                  <Ionicons name="shield-outline" size={10} color="#C9A46A" />
+                  <Ionicons name="shield-outline" size={IconGrammar.badge} color="#C9A46A" />
                   <Text style={styles.safeZoneLabelText}>Tool dock</Text>
                 </View>
               </View>
@@ -1503,7 +1518,7 @@ function PosterComposerInner() {
                     accessibilityHint="Opens the overflow menu with undo, redo, preview and more"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
+                    <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color="#fff" />
                   </PressScale>
                 </View>
               </>
@@ -1518,7 +1533,7 @@ function PosterComposerInner() {
                     accessibilityHint="Closes the composer, offers to save draft if there are unsaved changes"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="close" size={26} color="#fff" />
+                    <Ionicons name="close" size={IconGrammar.standard} color="#fff" />
                   </PressScale>
                   {isDirty && <View style={styles.unsavedDot} />}
                 </View>
@@ -1534,7 +1549,7 @@ function PosterComposerInner() {
                     accessibilityState={{ disabled: !canUndo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-undo" size={22} color="#fff" />
+                    <Ionicons name="arrow-undo" size={IconGrammar.standard} color="#fff" />
                   </PressScale>
                   <PressScale
                     onPress={handleRedo}
@@ -1546,7 +1561,7 @@ function PosterComposerInner() {
                     accessibilityState={{ disabled: !canRedo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-redo" size={22} color="#fff" />
+                    <Ionicons name="arrow-redo" size={IconGrammar.standard} color="#fff" />
                   </PressScale>
                 </View>
 
@@ -1610,7 +1625,7 @@ function PosterComposerInner() {
               accessibilityHint="Shows or hides the bottom frame thumbnail tray"
               hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
             >
-              <Ionicons name="film-outline" size={14} color={showFrameTray ? '#fff' : 'rgba(255,255,255,0.5)'} />
+              <Ionicons name="film-outline" size={IconGrammar.metadata} color={showFrameTray ? '#fff' : 'rgba(255,255,255,0.5)'} />
             </PressScale>
             {/* Add frame */}
             {pageCount < 10 && (
@@ -1621,7 +1636,7 @@ function PosterComposerInner() {
                 accessibilityHint="Adds a new frame to the story"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Ionicons name="add" size={14} color="rgba(255,255,255,0.8)" />
+                <Ionicons name="add" size={IconGrammar.metadata} color="rgba(255,255,255,0.8)" />
               </PressScale>
             )}
           </View>
@@ -1663,7 +1678,7 @@ function PosterComposerInner() {
             >
               <Ionicons
                 name={playbackState.isPlaying ? 'pause' : 'play'}
-                size={20}
+                size={IconGrammar.standard}
                 color="#fff"
               />
             </PressScale>
@@ -1769,135 +1784,15 @@ function PosterComposerInner() {
         </View>
       )}
 
-      {/* ── Context toolbar (selected layer only) ────────────────────── */}
-      {/* Per spec 09 + 2026 HIG: selected object produces a context toolbar,
-          not a permanent dock. Only tools relevant to the current selection
-          are shown:
-            - Text: Edit (font/size/color/alignment via picker), alignment quick toggle
-            - Media: Replace, (crop/trim coming in future update)
-            - Product: Change link
-            - Sticker/decorative: no type-specific primary
-          Z-order (Front/Back) only appears when there are 2+ layers.
-          Opacity is shown only when multiple layers (advanced context).
-          Delete is always available, separated by a hairline. */}
-      {selectedLayer && (
-        <View style={[styles.contextToolbarContainer, { bottom: insets.bottom + 88 }]}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.contextToolbarContent}
-          >
-            {/* ── Text-specific controls ── */}
-            {selectedLayer.type === 'text' && (
-              <>
-                <FrameTool
-                  icon="create-outline"
-                  label="Edit"
-                  onPress={() => handleEditLayer(selectedLayer)}
-                />
-                {/* Alignment quick toggle — cycles left/center/right */}
-                <FrameTool
-                  icon={
-                    selectedLayer.payload.alignment === 'left' ? 'arrow-undo' :
-                    selectedLayer.payload.alignment === 'right' ? 'arrow-redo' :
-                    'remove'
-                  }
-                  label="Align"
-                  onPress={() => {
-                    haptic.light();
-                    const current = selectedLayer.payload.alignment ?? 'center';
-                    const next = current === 'left' ? 'center' : current === 'center' ? 'right' : 'left';
-                    updateLayer(selectedLayer.id, {
-                      type: 'text',
-                      payload: { ...selectedLayer.payload, alignment: next },
-                    }, 'Change alignment');
-                  }}
-                />
-              </>
-            )}
-
-            {/* ── Media-specific controls ── */}
-            {selectedLayer.type === 'media' && (
-              <>
-                <FrameTool
-                  icon="swap-horizontal-outline"
-                  label="Replace"
-                  onPress={() => handleEditLayer(selectedLayer)}
-                />
-                {/* Video trim/mute — expands the timeline (Edit Clip)
-                    which provides drag-to-trim and volume controls.
-                    The timeline is the canonical video editing surface. */}
-                {selectedLayer.payload.mediaType === 'video' && (
-                  <FrameTool
-                    icon="film-outline"
-                    label="Edit Clip"
-                    onPress={() => {
-                      haptic.light();
-                      setSelectedClipId(selectedLayer.id);
-                      setUserRequestedTimeline(true);
-                      setBottomSurface('timeline');
-                    }}
-                  />
-                )}
-              </>
-            )}
-
-            {/* ── Product-specific controls ── */}
-            {selectedLayer.type === 'product' && (
-              <FrameTool
-                icon="pricetag-outline"
-                label="Change"
-                onPress={() => handleEditLayer(selectedLayer)}
-              />
-            )}
-
-            {/* Z-order: front / back — only when there are 2+ layers to reorder */}
-            {page.layers.length > 1 && (
-              <>
-                <FrameTool
-                  icon="arrow-up"
-                  label="Front"
-                  onPress={() => handleReorderLayer(selectedLayer.id, 'forward')}
-                />
-                <FrameTool
-                  icon="arrow-down"
-                  label="Back"
-                  onPress={() => handleReorderLayer(selectedLayer.id, 'backward')}
-                />
-              </>
-            )}
-
-            {/* Duplicate */}
-            <FrameTool
-              icon="copy-outline"
-              label="Duplicate"
-              onPress={() => handleDuplicateLayer(selectedLayer.id)}
-            />
-
-            {/* Opacity — drag slider, only when multiple layers (advanced) */}
-            {page.layers.length > 1 && (
-              <View style={styles.opacityInline}>
-                <OpacityBar
-                  value={selectedLayer.opacity ?? 1}
-                  onChange={(v) => updateLayer(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
-                  onCommit={(v) => commitLayerTransform(selectedLayer.id, { opacity: v }, 'Adjust opacity')}
-                />
-              </View>
-            )}
-
-            {/* Delete — danger, separated */}
-            <View style={styles.contextDivider} />
-            <FrameTool
-              icon="trash-outline"
-              label="Delete"
-              onPress={() => handleDeleteLayer(selectedLayer.id)}
-              danger
-            />
-          </ScrollView>
-        </View>
-      )}
-
       {/* ── Bottom tool rail — ContextToolRail (context-sensitive) ────── */}
+      {/* The ContextToolRail is the single bottom surface for both default
+          and selection states. It adapts its visible tool set based on the
+          active ToolContext (editor mode + selection state). Up to 6
+          primary actions are always visible; additional tools (including
+          Edit Clip for video, z-order, duplicate, delete, opacity) are
+          revealed under the trailing "More" button. The legacy context
+          toolbar was removed — it duplicated tools already in the rail
+          and competed with the canvas per the surface budget constraint. */}
       {/* Replaces the static tool dock. The rail adapts its visible tool set
           based on the active ToolContext (editor mode + selection state).
           Up to 6 primary actions are always visible; additional tools are
@@ -2728,28 +2623,6 @@ const styles = StyleSheet.create({
   },
   bottomScrim: {
     flex: 1,
-  },
-  // ── Context toolbar (selection mode) ──
-  contextToolbarContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 95,
-  },
-  contextToolbarContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.sm,
-    gap: Space.sm,
-  },
-  contextDivider: {
-    width: 1,
-    height: 28,
-    marginHorizontal: Space.xs,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  opacityInline: {
-    minWidth: 120,
   },
   // ── Bottom tool rail (default mode) ──
   bottomRailContainer: {

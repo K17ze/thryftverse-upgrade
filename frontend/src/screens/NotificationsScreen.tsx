@@ -1022,8 +1022,8 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 1,
   },
   filterTabText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
   },
@@ -1179,10 +1179,10 @@ function createStyles(colors: ThemeColors) {
     marginRight: -Space.xs / 2,
   },
   sectionTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textMuted,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
   sectionTitleAttention: {
     color: colors.danger,

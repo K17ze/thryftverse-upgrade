@@ -214,13 +214,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  // Name: Type.bodyEmphasis — clear, readable, emphasis on identity
+  // Name: Type.bodyStrong — clear, readable, emphasis on identity
   name: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    letterSpacing: Type.bodyStrong.letterSpacing,
+    lineHeight: Type.bodyStrong.lineHeight,
   },
   nameUnread: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,

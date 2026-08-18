@@ -324,10 +324,10 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   bodyEmphasis: {
-    fontSize: Type.price.size,
-    lineHeight: Type.price.lineHeight,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.price.letterSpacing,
+    letterSpacing: Type.priceList.letterSpacing,
   },
   headline: {
     fontSize: Type.subtitle.size,
@@ -354,8 +354,8 @@ const styles = StyleSheet.create({
     letterSpacing: Type.title.letterSpacing,
   },
   price: {
-    fontSize: Type.price.size,
-    lineHeight: Type.price.lineHeight,
+    fontSize: Type.priceList.size,
+    lineHeight: Type.priceList.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: 0,
   },
@@ -366,10 +366,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   priceLarge: {
-    fontSize: Type.priceLarge.size,
-    lineHeight: Type.priceLarge.lineHeight,
+    fontSize: Type.priceHero.size,
+    lineHeight: Type.priceHero.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceLarge.letterSpacing,
+    letterSpacing: Type.priceHero.letterSpacing,
   },
   meta: {
     fontSize: Type.meta.size,

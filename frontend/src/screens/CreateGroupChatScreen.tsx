@@ -770,7 +770,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   memberAvatarText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.title.fontFamily,
     color: colors.textPrimary,
   },
@@ -908,7 +908,7 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.lg,
   },
   fieldLabel: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textPrimary,
     marginBottom: Space.xs + 2,
   },
@@ -968,7 +968,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
   },
   participantAvatarText: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.title.fontFamily,
     color: colors.textPrimary,
   },

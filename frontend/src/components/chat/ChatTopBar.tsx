@@ -286,7 +286,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
   },
   avatarText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },
@@ -302,10 +302,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     flexShrink: 1,
   },
   verifiedBadge: {

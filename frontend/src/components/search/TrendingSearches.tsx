@@ -155,7 +155,7 @@ function createStyles(colors: ThemeColors) {
     },
     rankText: {
       width: Control.chrome,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.bold,
       color: colors.textMuted,
       textAlign: 'center',

@@ -785,7 +785,7 @@ function useStyles() {
           fontSize: Type.caption.size,
           fontFamily: Typography.family.medium,
           color: colors.textMuted,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
         },
         // ── Hero — full-bleed, no card chrome ──
         heroContainer: {
@@ -827,7 +827,7 @@ function useStyles() {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
           opacity: 0.9,
         },
         heroTitle: {
@@ -856,7 +856,7 @@ function useStyles() {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
           color: colors.textMuted,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
           marginBottom: Space.xs,
         },
         sectionTitle: {
@@ -901,7 +901,7 @@ function useStyles() {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
           opacity: 0.85,
         },
         featuredCollectionTitle: {
@@ -961,7 +961,7 @@ function useStyles() {
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
           opacity: 0.85,
-          letterSpacing: Type.metaElevated.letterSpacing - 0.1,
+          letterSpacing: Type.label.letterSpacing - 0.1,
         },
         collectionTitle: {
           fontSize: Type.subtitle.size,
@@ -1016,22 +1016,22 @@ function useStyles() {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
           color: colors.textMuted,
-          letterSpacing: Type.metaElevated.letterSpacing - 0.2,
+          letterSpacing: Type.label.letterSpacing - 0.2,
         },
         assetTitle: {
-          fontSize: Type.bodyEmphasis.size,
-          lineHeight: Type.bodyEmphasis.lineHeight,
+          fontSize: Type.bodyStrong.size,
+          lineHeight: Type.bodyStrong.lineHeight,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
           letterSpacing: Type.body.letterSpacing,
         },
         assetValuation: {
-          fontSize: Type.bodyLarge.size,
-          lineHeight: Type.bodyLarge.size - 2,
+          fontSize: Type.body.size,
+          lineHeight: Type.body.size - 2,
           fontFamily: Typography.family.bold,
           color: colors.textPrimary,
           fontVariant: ['tabular-nums'],
-          letterSpacing: Type.bodyLarge.letterSpacing,
+          letterSpacing: Type.body.letterSpacing,
         },
         // ── Editorial list ──
         editorialItem: {
@@ -1067,7 +1067,7 @@ function useStyles() {
           fontSize: Type.meta.size,
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
-          letterSpacing: Type.metaElevated.letterSpacing - 0.2,
+          letterSpacing: Type.label.letterSpacing - 0.2,
           backgroundColor: 'rgba(0,0,0,0.45)',
           paddingHorizontal: Space.xs + 2,
           paddingVertical: Space.xs / 2,
@@ -1147,8 +1147,8 @@ function useStyles() {
           gap: Space.xs / 2,
         },
         moodboardCtaTitle: {
-          fontSize: Type.bodyEmphasis.size,
-          lineHeight: Type.bodyEmphasis.lineHeight,
+          fontSize: Type.bodyStrong.size,
+          lineHeight: Type.bodyStrong.lineHeight,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
           letterSpacing: Type.body.letterSpacing,

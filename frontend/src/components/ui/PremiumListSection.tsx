@@ -46,7 +46,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     letterSpacing: 0.2,

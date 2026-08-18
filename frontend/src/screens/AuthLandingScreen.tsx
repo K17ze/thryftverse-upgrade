@@ -469,10 +469,10 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.smMd,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: 'rgba(245,239,230,0.72)',
-    lineHeight: Type.captionElevated.size + 4,
+    lineHeight: Type.caption.size + 4,
     letterSpacing: 0.24,
   },
   trustRow: {
@@ -533,7 +533,7 @@ function createStyles(colors: ThemeColors) {
   },
   primaryText: {
     color: colors.textInverse,
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
   },

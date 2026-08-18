@@ -297,8 +297,8 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.xl,
   },
 
-  title: { fontSize: Type.priceLarge.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
-  subtitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: Type.priceHero.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
+  subtitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
   orderCardWrap: { width: '100%', marginTop: Space.lg },
   orderCard: {
@@ -311,9 +311,9 @@ function createStyles(colors: ThemeColors) {
   },
   orderImage: { width: Space.xxl + Space.xl + Space.xs, height: Space.xxl + Space.xl + Space.xs, borderRadius: Radius.md },
   orderInfo: { flex: 1, gap: 2 },
-  orderTitle: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  orderSeller: { fontSize: Type.captionElevated.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
-  orderAmount: { fontSize: Type.bodyEmphasis.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
+  orderTitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  orderSeller: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
+  orderAmount: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
 
   timelineWrap: {
     width: '100%',
@@ -321,7 +321,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xs,
   },
   timelineTitle: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     marginBottom: Space.sm + 2,
@@ -350,7 +350,7 @@ function createStyles(colors: ThemeColors) {
   },
   supportText: {
     flex: 1,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

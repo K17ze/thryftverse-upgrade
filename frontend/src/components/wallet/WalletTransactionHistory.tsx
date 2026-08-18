@@ -227,10 +227,10 @@ function createStyles(colors: ThemeColors) {
     },
     // Labels use captionElevated per spec — clear, scannable metadata
     txLabel: {
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
+      fontSize: Type.caption.size,
+      lineHeight: Type.caption.lineHeight,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.captionElevated.letterSpacing,
+      letterSpacing: Type.caption.letterSpacing,
       color: colors.textPrimary,
     },
     txTime: {
@@ -255,12 +255,12 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
     },
     sectionHeaderText: {
-      fontSize: Type.metaElevated.size,
-      lineHeight: Type.metaElevated.lineHeight,
+      fontSize: Type.label.size,
+      lineHeight: Type.label.lineHeight,
       fontFamily: Typography.family.semibold,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.metaElevated.letterSpacing,
+      letterSpacing: Type.label.letterSpacing,
     },
     separator: {
       height: StyleSheet.hairlineWidth,

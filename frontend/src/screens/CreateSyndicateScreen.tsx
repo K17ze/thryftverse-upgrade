@@ -882,7 +882,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   listingTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -922,7 +922,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   previewTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -948,7 +948,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   contextTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -1076,7 +1076,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.family.regular,
   },
   stableValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   reviewAssetCard: {
@@ -1097,7 +1097,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   reviewAssetTitle: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: Type.body.letterSpacing,
   },
@@ -1131,7 +1131,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   summaryValue: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     flex: 1,
     minWidth: 0,
@@ -1148,7 +1148,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   totalKey: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.bold,
     flexShrink: 1,
     minWidth: 0,

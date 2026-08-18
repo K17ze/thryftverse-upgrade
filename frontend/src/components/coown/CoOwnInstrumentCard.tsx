@@ -168,14 +168,14 @@ const styles = StyleSheet.create({
   },
   title: {
     minHeight: 38,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     lineHeight: 19,
     fontFamily: Typography.family.semibold,
     letterSpacing: -0.2,
   },
   price: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },

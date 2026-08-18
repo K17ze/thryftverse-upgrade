@@ -138,7 +138,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     setCategory(suggestion.suggestedCategory);
     setBrand(suggestion.suggestedBrand ?? '');
     setCondition(suggestion.suggestedCondition);
-    setPrice(String(suggestion.suggestedPrice));
+    // Price is NOT auto-filled — the suggested range is shown as guidance so
+    // the seller picks their own price (communicates uncertainty honestly).
     setTags(suggestion.suggestedTags);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [suggestion]);
@@ -552,6 +553,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               {/* Title */}
               <AIBadgeField
                 label="Title"
+                isAISuggested={title === suggestion.suggestedTitle}
                 colors={colors}
                 styles={styles}
               >
@@ -568,6 +570,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               {/* Description */}
               <AIBadgeField
                 label="Description"
+                isAISuggested={description === suggestion.suggestedDescription}
                 colors={colors}
                 styles={styles}
               >
@@ -587,6 +590,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               <View style={styles.fieldRow}>
                 <AIBadgeField
                   label="Category"
+                  isAISuggested={category === suggestion.suggestedCategory}
                   colors={colors}
                   styles={styles}
                   style={{ flex: 1, marginRight: Space.sm }}
@@ -612,6 +616,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
                 <AIBadgeField
                   label="Brand"
+                  isAISuggested={brand === (suggestion.suggestedBrand ?? '')}
                   colors={colors}
                   styles={styles}
                   style={{ flex: 1 }}
@@ -630,6 +635,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
               <View style={styles.fieldRow}>
                 <AIBadgeField
                   label="Condition"
+                  isAISuggested={condition === suggestion.suggestedCondition}
                   colors={colors}
                   styles={styles}
                   style={{ flex: 1, marginRight: Space.sm }}
@@ -655,6 +661,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
                 <AIBadgeField
                   label="Price (GBP)"
+                  isAISuggested={false}
                   colors={colors}
                   styles={styles}
                   style={{ flex: 1 }}
@@ -670,10 +677,11 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 </AIBadgeField>
               </View>
 
-              {/* Suggested price range helper */}
+              {/* Suggested price range helper — communicates uncertainty as a
+                  range, not a single number (§3.2 truthfulness) */}
               {suggestion.suggestedPriceRange && (
                 <Text style={[styles.priceRangeHint, { color: colors.textMuted }]}>
-                  Suggested range £{suggestion.suggestedPriceRange.min}–£{suggestion.suggestedPriceRange.max}
+                  Suggested range £{suggestion.suggestedPriceRange.min}–£{suggestion.suggestedPriceRange.max} · pick a price within this range
                 </Text>
               )}
 
@@ -1000,7 +1008,7 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
       </View>
 
       <Text style={[styles.analyzingHint, { color: colors.textMuted }]}>
-        Detecting brand, category, colour and estimated value
+        Reading photo metadata for brand, category and colour hints
       </Text>
     </View>
   );
@@ -1034,7 +1042,7 @@ function ListingFormSkeleton({
 
       {/* Title field placeholder */}
       <View style={styles.skeletonFieldGroup}>
-        <PremiumSkeletonTile width="30%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+        <PremiumSkeletonTile width="30%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
         <PremiumSkeletonTile
           width="100%"
           height={Type.body.size + Space.sm * 2 + 4}
@@ -1046,7 +1054,7 @@ function ListingFormSkeleton({
       {/* Category + Brand row placeholder */}
       <View style={[styles.fieldRow, styles.skeletonFieldGroup]}>
         <View style={{ flex: 1, marginRight: Space.sm }}>
-          <PremiumSkeletonTile width="40%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
             height={Type.body.size + Space.sm * 2 + 4}
@@ -1055,7 +1063,7 @@ function ListingFormSkeleton({
           />
         </View>
         <View style={{ flex: 1 }}>
-          <PremiumSkeletonTile width="40%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
             height={Type.body.size + Space.sm * 2 + 4}
@@ -1068,7 +1076,7 @@ function ListingFormSkeleton({
       {/* Condition + Price row placeholder */}
       <View style={[styles.fieldRow, styles.skeletonFieldGroup]}>
         <View style={{ flex: 1, marginRight: Space.sm }}>
-          <PremiumSkeletonTile width="40%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
             height={Type.body.size + Space.sm * 2 + 4}
@@ -1077,7 +1085,7 @@ function ListingFormSkeleton({
           />
         </View>
         <View style={{ flex: 1 }}>
-          <PremiumSkeletonTile width="40%" height={Type.captionElevated.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
             height={Type.body.size + Space.sm * 2 + 4}
@@ -1114,8 +1122,8 @@ function EmptyState({
         Snap to list
       </Text>
       <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-        Add photos above and AI will suggest a title, description, price and
-        category. Edit everything before publishing.
+        Add photos above and AI will suggest a title, description, category and
+        price range. Review and edit everything before publishing.
       </Text>
     </View>
   );
@@ -1169,21 +1177,27 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
 
 interface AIBadgeFieldProps {
   label: string;
+  /** Whether the field still holds the unedited AI suggestion. When false
+   *  (the seller has edited the field), the "Suggested" badge is hidden —
+   *  the field is now user-authored. */
+  isAISuggested: boolean;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }
 
-function AIBadgeField({ label, colors, styles, style, children }: AIBadgeFieldProps) {
+function AIBadgeField({ label, isAISuggested, colors, styles, style, children }: AIBadgeFieldProps) {
   return (
     <View style={[styles.fieldGroup, style]}>
       <View style={styles.fieldLabelRow}>
         <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
-        <View style={[styles.aiBadge, { backgroundColor: `${colors.brand}15` }]}>
-          <Ionicons name="bulb-outline" size={10} color={colors.brand} />
-          <Text style={[styles.aiBadgeText, { color: colors.brand }]}>Suggested</Text>
-        </View>
+        {isAISuggested && (
+          <View style={[styles.aiBadge, { backgroundColor: `${colors.brand}15` }]}>
+            <Ionicons name="bulb-outline" size={10} color={colors.brand} />
+            <Text style={[styles.aiBadgeText, { color: colors.brand }]}>Suggested</Text>
+          </View>
+        )}
       </View>
       {children}
     </View>
@@ -1406,7 +1420,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.sm,
     },
     analyzingTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
     },
@@ -1497,7 +1511,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     confidenceTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       fontWeight: '600',
     },
@@ -1526,7 +1540,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     fieldLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
     },
@@ -1590,7 +1604,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md,
     },
     attributeLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
       marginBottom: Space.xs,
@@ -1619,7 +1633,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs,
     },
     sectionLabel: {
-      fontSize: Type.captionElevated.size,
+      fontSize: Type.caption.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '600',
       letterSpacing: LetterSpacing.wide + 0.28,
@@ -1736,7 +1750,7 @@ const pickerStyles = StyleSheet.create({
     minHeight: Control.hit,
   },
   rowText: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: TypeStyles.body.fontFamily,
   },
 });

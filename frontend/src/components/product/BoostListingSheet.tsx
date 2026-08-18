@@ -148,8 +148,8 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   subtitle: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingHorizontal: Space.lg,
@@ -169,8 +169,8 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   activeBoostText: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.medium,
   },
   // ── Tier rows — flat, hairline separators ──
@@ -191,19 +191,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   tierLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.semibold,
   },
   tierPrice: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
   },
   tierDescription: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
   },
   footer: {

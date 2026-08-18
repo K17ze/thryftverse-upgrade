@@ -126,7 +126,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   label: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textSecondary,
     letterSpacing: -0.2,
   },

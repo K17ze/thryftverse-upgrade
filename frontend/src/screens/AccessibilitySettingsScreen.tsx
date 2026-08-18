@@ -331,7 +331,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       color: colors.textSecondary,
-      lineHeight: Type.captionElevated.lineHeight,
+      lineHeight: Type.caption.lineHeight,
       marginBottom: Space.md,
       paddingHorizontal: Space.xs,
     },

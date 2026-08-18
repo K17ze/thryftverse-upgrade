@@ -701,7 +701,7 @@ function useStyles() {
           borderRadius: Radius.full,
         },
         studioButtonText: {
-          fontSize: Type.captionElevated.size,
+          fontSize: Type.caption.size,
           fontFamily: Typography.family.semibold,
           color: colors.brand,
         },
@@ -715,7 +715,7 @@ function useStyles() {
           borderRadius: Radius.full,
         },
         createButtonText: {
-          fontSize: Type.captionElevated.size,
+          fontSize: Type.caption.size,
           fontFamily: Typography.family.semibold,
           color: colors.textInverse,
         },
@@ -729,10 +729,10 @@ function useStyles() {
           paddingBottom: Space.md,
         },
         sectionEyebrow: {
-          fontSize: Type.metaElevated.size,
+          fontSize: Type.label.size,
           fontFamily: Typography.family.semibold,
           color: colors.textMuted,
-          letterSpacing: Type.metaElevated.letterSpacing,
+          letterSpacing: Type.label.letterSpacing,
           marginBottom: Space.xs,
         },
         sectionTitle: {
@@ -766,7 +766,7 @@ function useStyles() {
           gap: Space.xs / 2 + 1,
         },
         userCardTitle: {
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
           letterSpacing: Type.body.letterSpacing,
@@ -802,7 +802,7 @@ function useStyles() {
           gap: Space.xs,
         },
         publicCardTitle: {
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.semibold,
           color: colors.textPrimary,
           letterSpacing: Type.body.letterSpacing,
@@ -870,7 +870,7 @@ function useStyles() {
           borderRadius: Radius.full,
         },
         inlineEmptyCtaText: {
-          fontSize: Type.bodyEmphasis.size,
+          fontSize: Type.bodyStrong.size,
           fontFamily: Typography.family.bold,
           color: colors.textInverse,
           letterSpacing: LetterSpacing.wide,

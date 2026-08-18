@@ -191,9 +191,9 @@ const styles = StyleSheet.create({
   },
   categoryTitle: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.metaElevated.size,
-    lineHeight: Type.metaElevated.lineHeight,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: Type.label.size,
+    lineHeight: Type.label.lineHeight,
+    letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
   },
   entryList: {
@@ -231,8 +231,8 @@ const styles = StyleSheet.create({
   },
   gotItText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     letterSpacing: 0.12,
   },
 });

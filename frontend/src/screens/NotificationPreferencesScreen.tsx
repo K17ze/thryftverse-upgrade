@@ -355,7 +355,7 @@ function createStyles(colors: ThemeColors) {
     },
     heroText: { flex: 1 },
     heroTitle: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
@@ -420,7 +420,7 @@ function createStyles(colors: ThemeColors) {
     },
     quietTimeValue: {
       flex: 1,
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       color: colors.textPrimary,
     },

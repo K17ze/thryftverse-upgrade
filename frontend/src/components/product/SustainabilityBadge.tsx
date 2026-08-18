@@ -241,8 +241,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   gradeChipLabel: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: 0.2,
   },
@@ -298,8 +298,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   factorValue: {
-    fontSize: Type.captionElevated.size,
-    lineHeight: Type.captionElevated.lineHeight,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
     textAlign: 'right',
     flexShrink: 0,
@@ -325,8 +325,8 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   statValue: {
-    fontSize: Type.bodyLarge.size,
-    lineHeight: Type.bodyLarge.lineHeight,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
     fontFamily: Typography.family.bold,
     letterSpacing: -0.2,
     fontVariant: ['tabular-nums'],

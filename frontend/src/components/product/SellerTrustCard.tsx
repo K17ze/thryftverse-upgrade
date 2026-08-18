@@ -232,7 +232,7 @@ function createStyles(colors: ThemeColors) {
     padding: Space.md,
   },
   sectionTitle: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
     marginBottom: Space.sm,
@@ -279,14 +279,14 @@ function createStyles(colors: ThemeColors) {
     minWidth: 0,
   },
   username: {
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
     flexShrink: 1,
     minWidth: 0,
   },
   location: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
     color: colors.textMuted,
     marginTop: 2,
@@ -383,7 +383,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
   },
   metricValue: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

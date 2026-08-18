@@ -377,7 +377,7 @@ function createStyles(colors: any) {
     gap: 8,
   },
   sectionLabel: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.bold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
@@ -423,7 +423,7 @@ function createStyles(colors: any) {
     justifyContent: 'center',
   },
   emptyText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
     color: colors.textMuted,
     paddingVertical: 20,
@@ -446,7 +446,7 @@ function createStyles(colors: any) {
     backgroundColor: colors.brand + '15',
   },
   expiryPillText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
     color: colors.textSecondary,
   },
@@ -487,7 +487,7 @@ function createStyles(colors: any) {
   },
   publishBtnText: {
     color: '#fff',
-    fontSize: Type.bodyLarge.size,
+    fontSize: Type.body.size,
     fontFamily: Typography.family.bold,
   },
 });

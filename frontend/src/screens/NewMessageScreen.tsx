@@ -125,7 +125,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       borderRadius: Radius.full,
     },
     contactAvatarText: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.title.fontFamily,
       color: colors.textPrimary,
     },

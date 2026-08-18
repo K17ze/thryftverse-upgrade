@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     fontFamily: Typography.family.semibold,
     lineHeight: 20,
     letterSpacing: -0.2,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     fontSize: Type.meta.size,
     lineHeight: Type.meta.lineHeight,
     fontFamily: Typography.family.semibold,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    letterSpacing: Type.label.letterSpacing,
   },
   marketTitle: {
     fontSize: Type.body.size,
@@ -332,10 +332,10 @@ const styles = StyleSheet.create({
     minWidth: 70,
   },
   marketPrice: {
-    fontSize: Type.bodyEmphasis.size,
-    lineHeight: Type.bodyEmphasis.lineHeight,
+    fontSize: Type.bodyStrong.size,
+    lineHeight: Type.bodyStrong.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
+    letterSpacing: Type.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   marketAge: {

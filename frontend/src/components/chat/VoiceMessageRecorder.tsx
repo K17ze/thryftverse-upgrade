@@ -150,7 +150,7 @@ const createIndicatorStyles = (colors: any) =>
       backgroundColor: colors.danger,
     },
     timer: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: Type.bodyStrong.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],

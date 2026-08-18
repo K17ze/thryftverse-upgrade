@@ -100,7 +100,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
     color: colors.textPrimary,
     marginBottom: 3,
     letterSpacing: -0.2,
@@ -112,7 +112,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   subtitle: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     color: colors.textSecondary,
   },
   meta: {
