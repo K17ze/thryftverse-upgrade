@@ -947,7 +947,7 @@ const styles = StyleSheet.create({
   },
   retryBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
+    fontSize: Type.bodyStrong.size,
   },
   // ── Preview ──
   previewContainer: {

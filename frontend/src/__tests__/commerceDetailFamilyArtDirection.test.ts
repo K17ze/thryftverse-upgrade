@@ -107,7 +107,7 @@ describe('commerce-detail family art direction (spec 05)', () => {
       const src = readDetailComponent('CommerceDetailIdentity');
       expect(src).toContain('titleCompact');
       // titleCompact uses Type.priceHero.size - 2 (28 - 2 = 26pt)
-      expect(src).toMatch(/fontSize: Type\.priceLarge\.size - 2/);
+      expect(src).toMatch(/fontSize: Type\.priceHero\.size - 2/);
     });
 
     it('standard density uses 28pt title', () => {

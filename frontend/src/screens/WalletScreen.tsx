@@ -17,7 +17,7 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type, Typography, DockConstants, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, IconGrammar } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
 import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
 import { parseApiError } from '../lib/apiClient';
@@ -378,7 +378,7 @@ export default function WalletScreen({ navigation }: Props) {
               accessibilityLabel="Activity"
               accessibilityHint="View all wallet activity"
             >
-              <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+              <Ionicons name="receipt-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             </AnimatedPressable>
           }
         />
@@ -419,7 +419,7 @@ export default function WalletScreen({ navigation }: Props) {
             >
               <Ionicons
                 name={balanceHidden ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
+                size={IconGrammar.standard}
                 color={colors.textSecondary}
               />
             </Pressable>
@@ -443,7 +443,7 @@ export default function WalletScreen({ navigation }: Props) {
           )}
           {localFiatLabel && !balanceHidden && (
             <View style={styles.localFiatRow}>
-              <Ionicons name="cash-outline" size={12} color={colors.textMuted} />
+              <Ionicons name="cash-outline" size={IconGrammar.badge} color={colors.textMuted} />
               <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1}>
                 {localFiatLabel}
                 {currencyCode ? ` · ${currencyCode}` : ''}
@@ -468,7 +468,7 @@ export default function WalletScreen({ navigation }: Props) {
             accessibilityLabel="Add money to your wallet"
             accessibilityHint="Opens the add money flow"
           >
-            <Ionicons name="add-circle-outline" size={20} color={colors.background} />
+            <Ionicons name="add-circle-outline" size={IconGrammar.standard} color={colors.background} />
             <Text style={[styles.actionBtnLabel, { color: colors.background }]}>Add money</Text>
           </Pressable>
           <Pressable
@@ -485,7 +485,7 @@ export default function WalletScreen({ navigation }: Props) {
             accessibilityLabel="Withdraw from your wallet"
             accessibilityHint="Opens the withdraw flow"
           >
-            <Ionicons name="arrow-down-circle-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="arrow-down-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Withdraw</Text>
           </Pressable>
           <Pressable
@@ -502,7 +502,7 @@ export default function WalletScreen({ navigation }: Props) {
             accessibilityLabel="Convert 1ZE to fiat"
             accessibilityHint="Opens the convert screen"
           >
-            <Ionicons name="swap-horizontal-outline" size={20} color={colors.textPrimary} />
+            <Ionicons name="swap-horizontal-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Convert</Text>
           </Pressable>
         </View>
@@ -575,7 +575,7 @@ export default function WalletScreen({ navigation }: Props) {
         {/* ── Withdrawable ── */}
         <View style={[styles.withdrawableRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
           <View style={styles.withdrawableLeft}>
-            <Ionicons name="arrow-down-circle-outline" size={15} color={colors.textSecondary} />
+            <Ionicons name="arrow-down-circle-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
             <Text style={[styles.withdrawableLabel, { color: colors.textSecondary }]}>Withdrawable</Text>
           </View>
           <Text style={[styles.withdrawableValue, { color: colors.textPrimary }]}>
@@ -604,7 +604,7 @@ export default function WalletScreen({ navigation }: Props) {
         <FlagshipFormSection variant="flat" style={{ marginTop: Space.lg }}>
           <View style={styles.infoContent}>
             <View style={styles.infoHeader}>
-              <Ionicons name="checkmark-circle-outline" size={15} color={colors.brand} />
+              <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.brand} />
               <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Safeguarding & redemption</Text>
             </View>
             <Text style={[styles.infoBody, { color: colors.textMuted }]}>
@@ -643,7 +643,7 @@ export default function WalletScreen({ navigation }: Props) {
             <View style={[styles.infoDivider, { borderColor: colors.border }]} />
 
             <View style={styles.infoHeader}>
-              <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
+              <Ionicons name="information-circle-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
               <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>About 1ZE</Text>
             </View>
             <Text style={[styles.infoBody, { color: colors.textMuted }]}>

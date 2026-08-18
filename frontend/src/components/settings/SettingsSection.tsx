@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Radius, Typography } from '../../theme/designTokens';
+import { Space, Type, Typography } from '../../theme/designTokens';
 
 export interface SettingsSectionProps {
   title: string;
@@ -13,6 +13,7 @@ export interface SettingsSectionProps {
   description?: string;
   children: React.ReactNode;
   style?: ViewStyle;
+  /** @deprecated Flat composition is now the default. Kept for backward compatibility. */
   noCard?: boolean;
 }
 
@@ -23,7 +24,7 @@ export function SettingsSection({
   description,
   children,
   style,
-  noCard,
+  noCard: _noCard,
 }: SettingsSectionProps) {
   const { colors } = useAppTheme();
   return (
@@ -37,16 +38,12 @@ export function SettingsSection({
             <Ionicons name={icon} size={20} color={colors.textSecondary} />
           </View>
         ) : null}
-        <Text style={[noCard ? styles.titleFlat : styles.title, { color: noCard ? colors.textPrimary : colors.textSecondary }]}>
+        <Text style={[styles.titleFlat, { color: colors.textPrimary }]}>
           {title}
         </Text>
       </View>
       {description ? <Text style={[styles.description, { color: colors.textMuted }]}>{description}</Text> : null}
-      {noCard ? (
-        <View style={styles.noCard}>{children}</View>
-      ) : (
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>{children}</View>
-      )}
+      <View style={styles.noCard}>{children}</View>
     </View>
   );
 }
@@ -78,22 +75,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: -2,
   },
-  title: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    marginBottom: Space.sm,
-    marginTop: Space.md + Space.xs,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    lineHeight: Type.caption.lineHeight,
-  },
   titleFlat: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.sectionTitle.size,
     fontFamily: Typography.family.semibold,
     marginBottom: Space.xs,
     marginTop: Space.xs,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
+    letterSpacing: Type.sectionTitle.letterSpacing,
+    lineHeight: Type.sectionTitle.lineHeight,
   },
   description: {
     fontSize: Type.caption.size,
@@ -102,12 +90,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     lineHeight: Type.caption.lineHeight,
     letterSpacing: Type.caption.letterSpacing,
-  },
-  card: {
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    elevation: 0,
   },
   noCard: {
     marginHorizontal: 0,
