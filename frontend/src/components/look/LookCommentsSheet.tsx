@@ -18,6 +18,7 @@ import { Space, Radius, Typography, Type } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
+import { FlagshipState } from '../flagship/FlagshipState';
 import {
   fetchLookCommentsFromApi,
   createLookCommentOnApi,
@@ -187,7 +188,7 @@ export function LookCommentsSheet({
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             isLoading ? (
-              <ActivityIndicator size="large" color={colors.brand} style={{ marginTop: 40 }} />
+              <FlagshipState variant="loading" style={{ marginTop: 40 }} />
             ) : (
               <View style={styles.emptyWrap}>
                 <Ionicons name="chatbubble-outline" size={32} color={colors.textMuted} />

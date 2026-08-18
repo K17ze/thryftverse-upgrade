@@ -4435,7 +4435,7 @@ function createStyles(colors: ThemeColors) {
     left: 4,
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },

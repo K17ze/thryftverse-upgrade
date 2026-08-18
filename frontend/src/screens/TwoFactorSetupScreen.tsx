@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Image,
-  ActivityIndicator,
   TextInput,
   Pressable,
 } from 'react-native';
@@ -13,6 +12,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { FlagshipState } from '../components/flagship/FlagshipState';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -332,8 +332,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
       <View style={styles.qrContainer}>
         {isLoadingEnrollment ? (
           <View style={styles.qrLoading}>
-            <ActivityIndicator color={colors.textPrimary} size="large" />
-            <Text style={[styles.qrLoadingText, { color: colors.textMuted }]}>Generating secure secret…</Text>
+            <FlagshipState variant="loading" title="Generating secure secret…" />
           </View>
         ) : qrDataUrl ? (
           <View style={[styles.qrFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>

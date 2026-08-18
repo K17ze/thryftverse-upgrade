@@ -65,7 +65,7 @@ import { BuyerProtectionStrip } from '../components/product';
 import { getIzePosition } from '../services/walletApi';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
-import { Space, FontFamily, Stroke, Control, LetterSpacing, Elevation } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Control, LetterSpacing, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { createStableId } from '../utils/createStableId';
@@ -2265,7 +2265,7 @@ const styles = StyleSheet.create({
     gap: Space.sm + 2,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    borderRadius: 0,
+    borderRadius: Radius.none,
     borderWidth: 0,
   },
   balanceTogglePressed: {

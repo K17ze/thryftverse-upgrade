@@ -258,7 +258,7 @@ export function CoOwnTradeReceipt({
 
       {/* Market & liquidity warning */}
       {marketWarning && (
-        <View style={[styles.warningCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
+        <View style={[styles.warningCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '40' }]}>
           <View style={styles.warningRow}>
             <Ionicons name="warning-outline" size={14} color={colors.warning} />
             <Text style={[styles.warningTitle, { color: colors.warning }]}>Market & liquidity</Text>
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
   statusIconWrap: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.xs,

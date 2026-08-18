@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius } from '../../theme/designTokens';
 
 type PublicationStage =
   | 'idle'
@@ -195,7 +195,7 @@ function createStyles(colors: ThemeColors) {
   qualityDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.full,
   },
   qualityLabel: {
     fontSize: Type.captionElevated.size,
@@ -219,7 +219,7 @@ function createStyles(colors: ThemeColors) {
   previewBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -238,7 +238,7 @@ function createStyles(colors: ThemeColors) {
   publishBtn: {
     flex: 1.5,
     height: 48,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',

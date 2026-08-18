@@ -18,6 +18,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 import { Space, Radius, Type, Typography, IconGrammar } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 
 export interface FlagshipStateProps {
   variant: 'loading' | 'empty' | 'error' | 'offline' | 'unavailable';
@@ -119,7 +120,7 @@ export function FlagshipState({
     onSecondaryAction?.();
   };
 
-  const enter = reducedMotionEnabled ? undefined : FadeIn.duration(220);
+  const enter = reducedMotionEnabled ? undefined : FadeIn.duration(Motion.transitions.listItem.duration);
 
   return (
     <Reanimated.View
@@ -204,7 +205,7 @@ function LoadingShimmer({
     }
     shimmerX.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.transitions.shimmer.duration, easing: Easing.inOut(Easing.ease) }),
         withTiming(-1, { duration: 0 })
       ),
       -1,
@@ -322,8 +323,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   secondaryText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    letterSpacing: Type.captionElevated.letterSpacing,
+    letterSpacing: Type.caption.letterSpacing,
   },
 });

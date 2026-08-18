@@ -261,13 +261,13 @@ const styles = StyleSheet.create({
   },
   allocationBarBg: {
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
     overflow: 'hidden',
     marginTop: Space.xs,
   },
   allocationBarFill: {
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
   },
   allocationText: {
     fontSize: Type.meta.size,
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   marketStatusDot: {
     width: 5,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
   },
   marketStatusText: {
     fontSize: Type.meta.size,

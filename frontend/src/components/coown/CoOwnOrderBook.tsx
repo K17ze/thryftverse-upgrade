@@ -139,7 +139,7 @@ export function CoOwnOrderBook({
       <View style={styles.headerRow}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order book</Text>
         {isCallAuction && (
-          <View style={[styles.auctionBadge, { backgroundColor: colors.warning + '22' }]}>
+          <View style={[styles.auctionBadge, { backgroundColor: colors.warningSubtle }]}>
             <Ionicons name="time-outline" size={11} color={colors.warning} />
             <Text style={[styles.auctionBadgeText, { color: colors.warning }]}>Call auction</Text>
           </View>

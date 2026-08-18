@@ -36,7 +36,7 @@ export function CommerceDetailOfflineBanner({
       style={[
         styles.container,
         {
-          backgroundColor: colors.warning + '12',
+          backgroundColor: colors.warningSubtle,
           borderColor: colors.warning + '30',
         },
       ]}

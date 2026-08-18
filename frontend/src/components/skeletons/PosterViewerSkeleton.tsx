@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { Space } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   progressTrack: {
     flex: 1,
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.2)',
     overflow: 'hidden',
   },

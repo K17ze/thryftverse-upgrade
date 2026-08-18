@@ -149,7 +149,7 @@ export function CoOwnPositionCard({
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
                 {isStaleMark && (
-                  <View style={[styles.staleBadge, { backgroundColor: colors.warning + '22' }]}>
+                  <View style={[styles.staleBadge, { backgroundColor: colors.warningSubtle }]}>
                     <Text style={[styles.staleBadgeText, { color: colors.warning }]}>Stale mark</Text>
                   </View>
                 )}
@@ -173,7 +173,7 @@ export function CoOwnPositionCard({
 
           {/* Doc 10 §3.3: settlement state badge for pending units */}
           {settlementState && settlementState === 'settling' && pendingInUnits > 0 && (
-            <View style={[styles.settlementBadge, { backgroundColor: colors.warning + '12' }]}>
+            <View style={[styles.settlementBadge, { backgroundColor: colors.warningSubtle }]}>
               <Ionicons name="hourglass-outline" size={11} color={colors.warning} />
               <Text style={[styles.settlementBadgeText, { color: colors.warning }]} numberOfLines={1}>
                 Settling{settlementEtaLabel ? ` · ${settlementEtaLabel}` : ''} · {pendingInUnits} units pending
@@ -439,12 +439,12 @@ const styles = StyleSheet.create({
   },
   ownershipBarBg: {
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
     overflow: 'hidden',
   },
   ownershipBarFill: {
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
   },
   actionRow: {
     flexDirection: 'row',

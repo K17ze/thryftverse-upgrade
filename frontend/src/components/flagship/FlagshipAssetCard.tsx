@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, IconGrammar, Control, ThumbSize } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 
 interface FlagshipAssetCardProps {
@@ -41,10 +42,10 @@ export function FlagshipAssetCard({
     <Pressable onPress={onPress} style={styles.root}>
       <View style={styles.imageWrap}>
         {imageUri ? (
-          <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
+          <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={Motion.transitions.mediaLoad.duration} />
         ) : (
           <View style={[styles.image, styles.imageFallback]}>
-            <Ionicons name="image-outline" size={28} color={colors.textMuted} />
+            <Ionicons name="image-outline" size={IconGrammar.hero} color={colors.textMuted} />
           </View>
         )}
         <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -84,7 +85,7 @@ export function FlagshipAssetCard({
   );
 }
 
-const IMAGE_SIZE = 80;
+const IMAGE_SIZE = ThumbSize.lg;
 
 const createStyles = (colors: any) => StyleSheet.create({
   root: {
@@ -116,11 +117,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   statusDot: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: Space.xs,
+    right: Space.xs,
     width: 10,
     height: 10,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
     borderWidth: 2,
     borderColor: colors.surface,
   },
@@ -128,7 +129,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     marginLeft: Space.sm,
     justifyContent: 'center',
-    gap: 4,
+    gap: Space.xs / 2,
   },
   name: {
     fontSize: Type.body.size,
@@ -139,10 +140,10 @@ const createStyles = (colors: any) => StyleSheet.create({
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 4,
+    gap: Space.xs / 2,
   },
   unitPrice: {
-    fontSize: Type.price.size,
+    fontSize: Type.priceList.size,
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
@@ -153,18 +154,18 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: colors.textSecondary,
   },
   ownershipRow: {
-    marginTop: 2,
-    gap: 4,
+    marginTop: Space.xs / 2,
+    gap: Space.xs / 2,
   },
   ownershipBarBg: {
     height: 4,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   ownershipBarFill: {
     height: 4,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.full,
   },
   ownershipText: {
     fontSize: Type.meta.size,
@@ -173,9 +174,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   actionBtn: {
     marginLeft: Space.sm,
-    paddingHorizontal: 14,
-    minHeight: 44,
-    paddingVertical: 10,
+    paddingHorizontal: Space.md,
+    minHeight: Control.hit,
+    paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.brand,
     alignItems: 'center',

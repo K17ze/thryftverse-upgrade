@@ -361,7 +361,7 @@ function createStyles(colors: ThemeColors) {
   },
   resetTile: {
     width: '100%',
-    backgroundColor: colors.danger + '18',
+    backgroundColor: colors.dangerSubtle,
     borderRadius: Radius.lg,
     paddingVertical: Space.md,
     paddingHorizontal: Space.sm,

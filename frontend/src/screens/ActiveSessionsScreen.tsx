@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, Platform, RefreshControl, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Alert, Platform, RefreshControl, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -171,7 +171,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
           </View>
 
         {error && (
-            <View style={[styles.errorBanner, { backgroundColor: colors.danger + '10', borderColor: colors.danger + '30' }]}>
+            <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.danger + '30' }]}>
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
               <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
             </View>
@@ -314,7 +314,7 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: Type.caption.letterSpacing,
   },
   currentBadge: {
-    backgroundColor: colors.success + '20',
+    backgroundColor: colors.successSubtle,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,

@@ -425,7 +425,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: colors.success + '14',
+    backgroundColor: colors.successSubtle,
     borderWidth: Stroke.standard,
     borderColor: colors.success + '33',
     paddingHorizontal: Space.sm,

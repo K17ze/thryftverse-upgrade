@@ -62,22 +62,16 @@ const SKELETON_ASPECT_RATIOS = [1.25, 1.0, 1.32, 0.92] as const;
 // ---------------------------------------------------------------------------
 const HeroEditorialCard = React.memo(function HeroEditorialCard({
   editorial,
-  onPress,
 }: {
   editorial: GalleriaEditorial;
-  onPress: () => void;
 }) {
   const styles = useStyles();
 
   return (
-    <AnimatedPressable
+    <View
       style={styles.heroContainer}
-      onPress={onPress}
-      activeOpacity={0.92}
-      scaleValue={0.99}
-      accessibilityRole="button"
+      accessibilityRole="image"
       accessibilityLabel={`Editorial: ${editorial.title}`}
-      accessibilityHint="Opens the editorial piece"
     >
       <CachedImage
         uri={editorial.heroImage}
@@ -101,7 +95,7 @@ const HeroEditorialCard = React.memo(function HeroEditorialCard({
           {editorial.author} · {editorial.readTime}
         </Text>
       </View>
-    </AnimatedPressable>
+    </View>
   );
 });
 
@@ -267,12 +261,10 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
 // ---------------------------------------------------------------------------
 const EditorialListItem = React.memo(function EditorialListItem({
   editorial,
-  onPress,
   isLast,
   size = 'standard',
 }: {
   editorial: GalleriaEditorial;
-  onPress: () => void;
   isLast: boolean;
   size?: 'large' | 'standard';
 }) {
@@ -283,13 +275,9 @@ const EditorialListItem = React.memo(function EditorialListItem({
 
   return (
     <View style={[styles.editorialItem, isLast && styles.editorialItemLast]}>
-      <AnimatedPressable
-        onPress={onPress}
-        activeOpacity={0.94}
-        scaleValue={0.99}
-        accessibilityRole="button"
+      <View
+        accessibilityRole="image"
         accessibilityLabel={`Editorial: ${editorial.title}`}
-        accessibilityHint="Opens the editorial piece"
       >
         <View style={[styles.editorialHeroWrap, { height: heroHeight }]}>
           <CachedImage
@@ -327,7 +315,7 @@ const EditorialListItem = React.memo(function EditorialListItem({
             </Text>
           </View>
         </View>
-      </AnimatedPressable>
+      </View>
       {!isLast && <View style={styles.editorialSeparator} />}
     </View>
   );
@@ -515,17 +503,6 @@ export default function GalleriaScreen() {
     [haptic, navigation],
   );
 
-  const handleEditorialPress = useCallback(
-    (editorial: GalleriaEditorial) => {
-      haptic.selection();
-      // Editorials are demo-only — no dedicated detail screen yet.
-      // Tapping is truthful: the action is acknowledged via haptic and
-      // the demo badge communicates the state. A real editorial reader
-      // screen will be added when the CMS backend is wired.
-    },
-    [haptic],
-  );
-
   const handleAssetPress = useCallback(
     (asset: GalleriaFeaturedAsset) => {
       haptic.selection();
@@ -628,7 +605,6 @@ export default function GalleriaScreen() {
         ) : heroEditorial ? (
           <HeroEditorialCard
             editorial={heroEditorial}
-            onPress={() => handleEditorialPress(heroEditorial)}
           />
         ) : null}
 
@@ -705,7 +681,6 @@ export default function GalleriaScreen() {
               <EditorialListItem
                 key={ed.id}
                 editorial={ed}
-                onPress={() => handleEditorialPress(ed)}
                 isLast={idx === remainingEditorials.length - 1}
                 size={idx === 0 ? 'large' : 'standard'}
               />

@@ -1504,7 +1504,7 @@ function createStyles(colors: ThemeColorsType) {
       width: 72,
       height: 72,
       borderRadius: Radius.full,
-      backgroundColor: colors.danger + '20',
+      backgroundColor: colors.dangerSubtle,
       justifyContent: 'center',
       alignItems: 'center',
     },

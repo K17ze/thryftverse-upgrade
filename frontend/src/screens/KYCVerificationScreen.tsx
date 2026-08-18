@@ -6,7 +6,6 @@ import {
   ScrollView,
   TextInput,
   Pressable,
-  ActivityIndicator,
   Image as RNImage,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -247,7 +246,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
         <View
           style={styles.submittedWrap}
         >
-          <View style={[styles.submittedIcon, { backgroundColor: colors.warning + '18' }]}>
+          <View style={[styles.submittedIcon, { backgroundColor: colors.warningSubtle }]}>
             <Ionicons name="hourglass-outline" size={44} color={colors.warning} />
           </View>
           <Text style={styles.submittedTitle}>Verification in review</Text>
@@ -432,15 +431,11 @@ export default function KYCVerificationScreen({ navigation }: Props) {
           accessibilityLiveRegion="polite"
           accessibilityLabel="Submitting verification, please wait"
         >
-          <View style={[styles.submittingCard, { backgroundColor: colors.surface }]}>
-            <ActivityIndicator size="large" color={colors.brand} />
-            <Text style={[styles.submittingText, { color: colors.textPrimary }]}>
-              Submitting verification…
-            </Text>
-            <Text style={[styles.submittingSubtext, { color: colors.textSecondary }]}>
-              Uploading documents securely
-            </Text>
-          </View>
+          <FlagshipState
+            variant="loading"
+            title="Submitting verification…"
+            subtitle="Uploading documents securely"
+          />
         </View>
       )}
     </FlagshipScreen>
@@ -935,7 +930,7 @@ function StepReview({
       ) : null}
 
       {submitError ? (
-        <View style={[styles.submitErrorWrap, { backgroundColor: colors.danger + '15' }]}>
+        <View style={[styles.submitErrorWrap, { backgroundColor: colors.dangerSubtle }]}>
           <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
           <Text style={[styles.submitErrorText, { color: colors.danger }]}>{submitError}</Text>
         </View>

@@ -993,7 +993,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
   // ── Edge Softness slider ──
   sliderRow: {
@@ -1024,20 +1024,20 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    borderRadius: 2,
+    borderRadius: Radius.none,
   },
   sliderFill: {
     position: 'absolute',
     left: 0,
     height: 3,
-    borderRadius: 2,
+    borderRadius: Radius.none,
   },
   sliderThumb: {
     position: 'absolute',
     width: 20,
     height: 20,
     marginLeft: -10,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     top: 4,
   },
   // ── Footer — premium Cancel / Apply buttons ──

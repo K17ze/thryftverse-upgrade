@@ -75,12 +75,6 @@ export default function CategoryDetailScreen() {
           fontSize: Type.body.size,
           lineHeight: Type.body.lineHeight,
         },
-        summaryText: {
-          color: colors.textSecondary,
-          fontFamily: Typography.family.regular,
-          fontSize: Type.captionElevated.size,
-          lineHeight: Type.captionElevated.lineHeight + 1,
-        },
         categoryRail: {
           paddingHorizontal: Space.md,
           paddingBottom: Space.lg,
@@ -157,9 +151,6 @@ export default function CategoryDetailScreen() {
         <View style={styles.summary}>
           <Text style={styles.count}>
             {gridData.length} {gridData.length === 1 ? 'listing' : 'listings'}
-          </Text>
-          <Text style={styles.summaryText}>
-            Browse the latest {category.name.toLocaleLowerCase()} pieces from the community.
           </Text>
         </View>
 

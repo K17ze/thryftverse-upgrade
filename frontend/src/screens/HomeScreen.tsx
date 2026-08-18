@@ -62,7 +62,7 @@ import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri, getCategoryFocalPoint } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, FontFamily, Stroke, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Type, Typography, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
@@ -256,27 +256,37 @@ function ListingMediaPlaceholder({ category }: { category?: string }) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const normalized = category?.toLowerCase() ?? '';
-  const icon: React.ComponentProps<typeof Ionicons>['name'] = normalized.includes('shoe')
-    ? 'footsteps-outline'
-    : normalized.includes('bag')
-      ? 'bag-handle-outline'
-      : normalized.includes('jewel') || normalized.includes('watch')
-        ? 'diamond-outline'
-        : 'shirt-outline';
 
-  // Neutral fallback art — flat canvas + category icon, no decorative orbs
-  // or gradients (audit §01: anti-AI art direction; fallback art made neutral).
-  // Uses the same quiet surface tokens as the rest of the feed so a missing
-  // image recedes rather than becoming a decorative element.
-  // No icon circle — the glyph sits directly on the flat canvas (anti-AI:
-  // icon circles with no state/function reason).
+  // Category-tinted neutral: a subtle hue derived from the garment category
+  // (warm beige tint for bags, cool grey for watches) layered over the
+  // surfaceAlt base. The tint uses existing *Subtle semantic tokens so the
+  // fallback reads as authored, not generic grey (audit §3.1, §4.1).
+  const tint = normalized.includes('bag')
+    ? colors.warningSubtle   // warm beige tint for bags/leather
+    : normalized.includes('shoe')
+      ? colors.brandSubtle   // neutral brand tint for footwear
+      : undefined;            // watches/jewellery/apparel → cool grey (surfaceAlt)
+
+  // Typographic treatment: the category name in a quiet weight replaces the
+  // decorative icon. This makes the fallback authored, not generic.
+  const label = normalized.includes('shoe') ? 'Footwear'
+    : normalized.includes('bag') ? 'Bags'
+    : normalized.includes('jewel') ? 'Jewellery'
+    : normalized.includes('watch') ? 'Watches'
+    : category ?? 'ThryftVerse';
+
   return (
     <View
       style={styles.listingMediaPlaceholder}
-      accessibilityLabel="Product image unavailable"
+      accessibilityLabel={`Product image unavailable — ${label}`}
       accessibilityRole="image"
     >
-      <Ionicons name={icon} size={32} color={colors.textMuted} />
+      {tint ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />
+      ) : null}
+      <Text style={styles.listingMediaPlaceholderText} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -1042,7 +1052,7 @@ export default function HomeScreen() {
                   <Pressable
                     key={look.id}
                     onPress={() => { haptic.light(); navigation.navigate('LookDetail', { lookId: look.id }); }}
-                    style={{ width: 120, borderRadius: 12, overflow: 'hidden' }}
+                    style={{ width: 120, borderRadius: Radius.lg, overflow: 'hidden' }}
                     accessibilityRole="button"
                     accessibilityLabel={`Open Look${look.title ? ` ${look.title}` : ''}${look.taggedCount ? `, ${look.taggedCount} tagged items` : ''}`}
                     accessibilityHint="Opens Look details"
@@ -1054,7 +1064,7 @@ export default function HomeScreen() {
                       downscaleWidth={120}
                     />
                     {look.taggedCount && look.taggedCount > 0 ? (
-                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: 2 }}>
                         <Text style={{ color: '#fff', fontSize: 10, fontFamily: Typography.family.semibold }}>
                           {look.taggedCount} items
                         </Text>
@@ -1564,7 +1574,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   storyCreateRing: {
     width: 62,
     height: 62,
-    borderRadius: 31,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 2,
@@ -1577,7 +1587,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   storyRingGradient: {
     width: 62,
     height: 62,
-    borderRadius: 31,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
@@ -1589,7 +1599,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   storyRingInner: {
     width: 58,
     height: 58,
-    borderRadius: 29,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.background,
@@ -1597,17 +1607,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   storyAvatarWrap: {
     width: 54,
     height: 54,
-    borderRadius: 27,
+    borderRadius: Radius.full,
   },
   storyAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 27,
+    borderRadius: Radius.full,
   },
   storyPulseDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
     position: 'absolute',
     right: 1,
@@ -1643,7 +1653,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   lookCard: {
     width: SCREEN_WIDTH * 0.82,
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -1659,7 +1669,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   lookFeedCard: {
     width: '100%',
-    borderRadius: 18,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -1691,12 +1701,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   lookOwnerAvatarWrap: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
   },
   lookOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 10,
+    borderRadius: Radius.full,
   },
   lookOwnerName: {
     color: colors.textInverse,
@@ -1728,7 +1738,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     backgroundColor: 'rgba(0,0,0,0.34)',
   },
   lookMetaText: {
@@ -1826,25 +1836,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 5,
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: colors.textInverse,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
+    ...Elevation.floating,
   },
   posterAvatarOverlayWrap: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
   },
   posterAvatarOverlayImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: Radius.full,
   },
   posterTopRow: {
     position: 'absolute',
@@ -1862,19 +1868,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 5,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     flex: 1,
     gap: 4,
   },
   posterOwnerAvatarWrap: {
     width: 14,
     height: 14,
-    borderRadius: 7,
+    borderRadius: Radius.full,
   },
   posterOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 7,
+    borderRadius: Radius.full,
   },
   posterOwnerName: {
     color: colors.textInverse,
@@ -1887,7 +1893,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
@@ -1939,7 +1945,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
@@ -1953,7 +1959,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 6,
     left: 6,
     backgroundColor: colors.brand,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
@@ -1965,13 +1971,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterFreshDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
   posterSeenDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
+    borderRadius: Radius.full,
     backgroundColor: colors.border,
   },
 
@@ -2012,6 +2018,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
+  },
+  listingMediaPlaceholderText: {
+    fontSize: Type.meta.size,
+    lineHeight: Type.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    color: colors.textMuted,
+    letterSpacing: Type.meta.letterSpacing,
   },
   exploreDetails: {
     display: 'none',
@@ -2204,7 +2217,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   peekPrimaryIconWrap: {
     width: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   peekPrimaryText: {

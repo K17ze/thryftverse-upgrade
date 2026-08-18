@@ -13,6 +13,8 @@ interface Props {
   width?: number;
   height?: number;
   style?: object;
+  /** Optional content rendered below the label (e.g. a retry control). */
+  children?: React.ReactNode;
 }
 
 const GRADIENT_PAIRS: [string, string][] = ActiveTheme === 'light'
@@ -35,6 +37,7 @@ export function ImageEmptyGraphic({
   width: w,
   height: h,
   style,
+  children,
 }: Props) {
   const pairIndex = (label?.length ?? 0) % GRADIENT_PAIRS.length;
   const [gradStart, gradEnd] = GRADIENT_PAIRS[pairIndex];
@@ -88,6 +91,7 @@ export function ImageEmptyGraphic({
             <Text style={styles.label}>{label}</Text>
           </View>
         ) : null}
+        {children}
       </View>
     </View>
   );

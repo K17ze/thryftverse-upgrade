@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-nati
 import { ScrollView } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius } from '../../theme/designTokens';
 import { haptics } from '../../utils/haptics';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -148,7 +148,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     bottom: 0,
     left: 0,
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     backgroundColor: colors.brand,
   },
 });

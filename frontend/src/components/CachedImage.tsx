@@ -17,6 +17,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isVideoUri } from '../utils/media';
 import { ImageEmptyGraphic } from './ImageEmptyGraphic';
 import { useAppTheme } from '../theme/ThemeContext';
+import { Radius } from '../theme/designTokens';
 
 interface CachedImageProps {
   uri: string;
@@ -72,6 +73,13 @@ interface CachedImageProps {
    * original URI is used as-is.
    */
   downscaleWidth?: number;
+  /**
+   * Optional Reanimated shared-element transition tag. When set, the
+   * image's animated wrapper participates in a shared-element transition
+   * (e.g. card → PDP hero). Allows focal-point art-directed images to
+   * retain the transition that `SharedTransitionImage` provides.
+   */
+  sharedTransitionTag?: string;
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
@@ -96,6 +104,7 @@ export function CachedImage({
   isLooping = true,
   showPlayBadge = false,
   downscaleWidth,
+  sharedTransitionTag,
 }: CachedImageProps) {
   const { colors } = useAppTheme();
   const [loaded, setLoaded] = useState(false);
@@ -294,7 +303,10 @@ export function CachedImage({
         </Reanimated.View>
       )}
 
-      <Reanimated.View style={[StyleSheet.absoluteFill, imageStyle]}>
+      <Reanimated.View
+        style={[StyleSheet.absoluteFill, imageStyle]}
+        sharedTransitionTag={sharedTransitionTag}
+      >
         {isVideoSource ? (
           <Video
             source={{ uri: sourceUri }}
@@ -366,7 +378,7 @@ const styles = StyleSheet.create({
   playBadgeCircle: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,

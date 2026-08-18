@@ -60,7 +60,6 @@ export default function CategoryTreeScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </AnimatedPressable>
           <Text style={styles.editorialTitle}>{resolvedPrefix}</Text>
-          <Text style={styles.editorialSubtitle}>Curated categories, handpicked for you</Text>
         </View>
 
         {/* Premium full-width View All */}
@@ -155,13 +154,6 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
       letterSpacing: Type.display.letterSpacing - 0.3,
       lineHeight: Type.display.lineHeight + 2,
-    },
-    editorialSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-      marginTop: Space.xs,
-      letterSpacing: LetterSpacing.wide + 0.08,
     },
 
     viewAllRow: {

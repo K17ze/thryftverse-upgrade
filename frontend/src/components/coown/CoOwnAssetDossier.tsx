@@ -78,7 +78,7 @@ function SectionHeader({
       <Ionicons name={icon} size={15} color={colors.textMuted} />
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
       {badge && (
-        <View style={[styles.badge, { backgroundColor: colors.warning + '22' }]}>
+        <View style={[styles.badge, { backgroundColor: colors.warningSubtle }]}>
           <Text style={[styles.badgeText, { color: colors.warning }]} numberOfLines={1}>
             {badge}
           </Text>

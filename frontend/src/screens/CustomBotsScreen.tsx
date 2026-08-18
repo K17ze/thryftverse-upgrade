@@ -338,7 +338,7 @@ function createStyles(colors: ThemeColors) {
   skeletonIcon: {
     width: Space.xl + Space.xs,
     height: Space.xl + Space.xs,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
   },
   skeletonCopy: {
@@ -347,7 +347,7 @@ function createStyles(colors: ThemeColors) {
   },
   skeletonLine: {
     height: 12,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
   },
   iconWrap: {

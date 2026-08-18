@@ -21,6 +21,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Canvas, Rect, Line, Text as SkiaText, useFont } from '@shopify/react-native-skia';
 import { FrameProfiler, TARGET_FRAME_MS, type FrameMetrics } from './FrameProfiler';
+import { Radius } from '../../../theme/designTokens';
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -336,7 +337,7 @@ const styles = StyleSheet.create({
   panel: {
     width: OVERLAY_WIDTH,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    borderRadius: 8,
+    borderRadius: Radius.md,
     padding: 8,
     gap: 4,
   },
@@ -359,7 +360,7 @@ const styles = StyleSheet.create({
   miniBtn: {
     width: 22,
     height: 22,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -424,7 +425,7 @@ const styles = StyleSheet.create({
   toggleBtn: {
     width: 44,
     height: 24,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     alignItems: 'center',
     justifyContent: 'center',

@@ -90,7 +90,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
   },
   errorBanner: {
-    backgroundColor: colors.danger + '12',
+    backgroundColor: colors.dangerSubtle,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,

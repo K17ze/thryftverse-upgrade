@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
   toolSelectorBtn: {
     flex: 1,

@@ -368,7 +368,7 @@ function createStyles(colors: any) {
     handle: {
       width: 36,
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.full,
       backgroundColor: colors.borderSubtle,
     },
     title: {

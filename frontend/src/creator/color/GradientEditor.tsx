@@ -636,7 +636,7 @@ const styles = StyleSheet.create({
     right: 0,
     // Track height is set inline via TRACK_HEIGHT; borderRadius keeps the bar
     // a pill — canvas-specific, no token.
-    borderRadius: 2,
+    borderRadius: Radius.full,
   },
   angleThumb: {
     position: 'absolute',

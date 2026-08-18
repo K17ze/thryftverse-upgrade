@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: Radius.full,
     borderWidth: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },

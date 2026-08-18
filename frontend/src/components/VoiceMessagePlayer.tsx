@@ -195,7 +195,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   waveformBar: {
     width: 3,
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
   },
   duration: {
     minWidth: 35,

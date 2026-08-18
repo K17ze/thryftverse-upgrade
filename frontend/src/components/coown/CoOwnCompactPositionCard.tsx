@@ -255,12 +255,12 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     overflow: 'hidden',
   },
   progressFill: {
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
   viewAffordance: {
     minHeight: 28,

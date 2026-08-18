@@ -980,7 +980,7 @@ function createStyles(colors: ThemeColors) {
       left: 0,
       right: 0,
       height: Stroke.emphasis,
-      borderRadius: 1, // Hairline indicator — intentionally 1pt
+      borderRadius: Radius.none, // Hairline indicator — intentionally 1pt
       backgroundColor: 'transparent',
     },
     sortRow: {

@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     paddingHorizontal: Space.md,
     height: 50,
-    borderRadius: 25,
+    borderRadius: Radius.full,
     marginBottom: Space.md,
   },
   searchInput: { flex: 1, marginLeft: 10, color: Colors.textPrimary, fontFamily: Typography.family.medium, fontSize: Type.bodyLarge.size, letterSpacing: 0.08 },

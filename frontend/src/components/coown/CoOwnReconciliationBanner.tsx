@@ -40,7 +40,7 @@ export function CoOwnReconciliationBanner({
   if (!isActive) return null;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '30' }]}>
+    <View style={[styles.container, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '30' }]}>
       <View style={styles.iconWrap}>
         <Ionicons name="sync-circle-outline" size={18} color={colors.warning} />
       </View>

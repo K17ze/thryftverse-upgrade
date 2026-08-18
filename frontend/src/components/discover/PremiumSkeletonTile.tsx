@@ -10,6 +10,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
 
@@ -27,9 +28,17 @@ export function PremiumSkeletonTile({
   style,
 }: Props) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const shimmerX = useSharedValue(-1);
 
   React.useEffect(() => {
+    // Under reduced motion, render a static surfaceAlt block with no
+    // animation cycles (AGENTS.md §17 — reduced-motion fallbacks for all
+    // motion; §14 — no decorative shimmer after loading).
+    if (reducedMotion) {
+      shimmerX.value = 0;
+      return;
+    }
     shimmerX.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
@@ -38,7 +47,7 @@ export function PremiumSkeletonTile({
       -1,
       false
     );
-  }, [shimmerX]);
+  }, [shimmerX, reducedMotion]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shimmerX.value * 140 }],
@@ -53,12 +62,14 @@ export function PremiumSkeletonTile({
       ]}
     >
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceAlt, borderRadius }]} />
-      <AnimatedLinearGradient
-        colors={['transparent', 'rgba(255,255,255,0.05)', 'transparent']}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={[StyleSheet.absoluteFill, shimmerStyle, { borderRadius }]}
-      />
+      {reducedMotion ? null : (
+        <AnimatedLinearGradient
+          colors={['transparent', 'rgba(255,255,255,0.05)', 'transparent']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={[StyleSheet.absoluteFill, shimmerStyle, { borderRadius }]}
+        />
+      )}
     </View>
   );
 }

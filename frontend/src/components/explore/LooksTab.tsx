@@ -19,6 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { EmptyState } from '../EmptyState';
+import { PremiumSkeletonTile } from '../discover/PremiumSkeletonTile';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
@@ -205,9 +206,49 @@ export default function LooksTab() {
 
   // ── Loading / error / empty states (preserved) ────────────────────────────
   if (isLoading) {
+    // Masonry skeleton matching the final layout — two columns of
+    // surfaceAlt blocks with varying heights that mirror the template
+    // set's aspect ratios (AGENTS.md §14: skeletons should resemble the
+    // final layout; no generic centred spinner).
+    const colWidth = (windowWidth - Space.md * 2 - Space.sm) / 2;
+    const skeletonHeights = [
+      Math.round(colWidth / AspectRatio.marketplace),
+      Math.round(colWidth / AspectRatio.wide),
+      Math.round(colWidth / AspectRatio.marketplace),
+      Math.round(colWidth / AspectRatio.marketplace),
+    ];
+    const leftCol = [skeletonHeights[0], skeletonHeights[2]];
+    const rightCol = [skeletonHeights[1], skeletonHeights[3]];
+
     return (
-      <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={styles.scrollContent}>
+        <View style={styles.headerWrap}>
+          <DiscoverySectionHeader kicker="Community" title="Looks" />
+        </View>
+        <View style={styles.masonrySkeletonGrid}>
+          <View style={styles.masonrySkeletonCol}>
+            {leftCol.map((h, i) => (
+              <PremiumSkeletonTile
+                key={`l-${i}`}
+                width={colWidth}
+                height={h}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            ))}
+          </View>
+          <View style={styles.masonrySkeletonCol}>
+            {rightCol.map((h, i) => (
+              <PremiumSkeletonTile
+                key={`r-${i}`}
+                width={colWidth}
+                height={h}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            ))}
+          </View>
+        </View>
       </View>
     );
   }
@@ -358,6 +399,18 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 80,
+    },
+    masonrySkeletonGrid: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: Space.sm,
+    },
+    masonrySkeletonCol: {
+      flexDirection: 'column',
+      gap: Space.sm,
+    },
+    masonrySkeletonTile: {
+      marginBottom: 0,
     },
     scrollContent: {
       paddingHorizontal: Space.md,

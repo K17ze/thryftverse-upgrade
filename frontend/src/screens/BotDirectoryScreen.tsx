@@ -8,7 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Space, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchAiCapability, type AiCapabilitySummary } from '../services/aiTruthApi';
 
@@ -383,7 +383,7 @@ function createStyles(colors: ThemeColors) {
   skeletonIcon: {
     width: Control.chromeCompact,
     height: Control.hit,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
   },
   skeletonCopy: {
@@ -392,7 +392,7 @@ function createStyles(colors: ThemeColors) {
   },
   skeletonLine: {
     height: 12,
-    borderRadius: 4,
+    borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
   },
   });

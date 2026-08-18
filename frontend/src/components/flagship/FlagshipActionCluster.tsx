@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
-import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { AppButton, AppButtonVariant, AppButtonSize } from '../ui/AppButton';
 
 export interface ActionItem {
@@ -54,9 +54,6 @@ export function FlagshipActionCluster({
             loading={action.loading}
             icon={action.icon}
             hapticFeedback={action.variant === 'danger' ? 'heavy' : 'medium'}
-            style={[
-              action.variant === 'primary' && styles.primaryShadow,
-            ]}
           />
         </View>
       ))}
@@ -86,8 +83,5 @@ const styles = StyleSheet.create({
   },
   rowItem: {
     flex: 1,
-  },
-  primaryShadow: {
-    ...Elevation.floating,
   },
 });

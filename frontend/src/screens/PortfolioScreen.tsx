@@ -525,7 +525,7 @@ export default function PortfolioScreen() {
 
               {/* Phase 3: data-quality note — only when true */}
               {staleMarkCount > 0 && (
-                <View style={[styles.dataQualityNote, { backgroundColor: colors.warning + '12' }]}>
+                <View style={[styles.dataQualityNote, { backgroundColor: colors.warningSubtle }]}>
                   <Ionicons name="time-outline" size={12} color={colors.warning} />
                   <Text style={[styles.dataQualityText, { color: colors.warning }]} numberOfLines={2}>
                     Data quality: {staleMarkCount} {staleMarkCount === 1 ? 'position has' : 'positions have'} stale marks ({'>'}24h)

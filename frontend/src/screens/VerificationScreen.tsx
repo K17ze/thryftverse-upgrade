@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
@@ -535,12 +535,11 @@ export default function VerificationScreen({ navigation }: Props) {
               ) : (
                 <View style={styles.uploadPlaceholder}>
                   {isUploadingDocument ? (
-                    <>
-                      <ActivityIndicator size="large" color={colors.brand} />
-                      <Text style={[styles.uploadText, { color: colors.textMuted }]}>
-                        Uploading your document...
-                      </Text>
-                    </>
+                    <FlagshipState
+                      variant="loading"
+                      title="Uploading your document..."
+                      style={{ paddingVertical: Space.xl }}
+                    />
                   ) : (
                     <>
                       <Ionicons name="cloud-upload-outline" size={32} color={colors.textMuted} />

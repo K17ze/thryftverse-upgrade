@@ -196,7 +196,7 @@ export default function DistributionHistoryScreen() {
                         {assetId.slice(0, 20)}…
                       </Text>
                       {enrolled && (
-                        <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.success + '18' }]}>
+                        <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.successSubtle }]}>
                           <Text style={[styles.dripEnrolledText, { color: colors.success }]}>Active</Text>
                         </View>
                       )}
@@ -241,7 +241,7 @@ export default function DistributionHistoryScreen() {
                       {formatDate(dist.settledAt ?? dist.createdAt)}
                     </Text>
                   </View>
-                  <View style={[styles.amountBadge, { backgroundColor: colors.success + '15' }]}>
+                  <View style={[styles.amountBadge, { backgroundColor: colors.successSubtle }]}>
                     <Text style={[styles.amountText, { color: colors.success }]}>
                       +{formatDistributionAmount(dist.amountGbpMinor)}
                     </Text>

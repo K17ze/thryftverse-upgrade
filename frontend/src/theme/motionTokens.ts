@@ -197,6 +197,12 @@ export const Motion = {
       duration: 250,
       easing: 'smooth' as const,
     },
+    /** Shimmer sweep — continuous skeleton shimmer loop. ≤600ms per audit M6.
+     *  Reduced-motion collapses this to a static placeholder (no animation). */
+    shimmer: {
+      duration: 600,
+      easing: 'smooth' as const,
+    },
   },
 
   // ── Gesture thresholds (audit §Gesture matrix) ───────────────────────────

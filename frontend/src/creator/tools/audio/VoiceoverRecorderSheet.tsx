@@ -605,7 +605,7 @@ function RecordButton({
             style={{
               width: size * 0.3,
               height: size * 0.3,
-              borderRadius: 4,
+              borderRadius: Radius.sm,
               backgroundColor: iconColor,
             }}
           />
@@ -614,7 +614,7 @@ function RecordButton({
             style={{
               width: size * 0.3,
               height: size * 0.3,
-              borderRadius: 4,
+              borderRadius: Radius.sm,
               backgroundColor: iconColor,
             }}
           />
@@ -662,7 +662,7 @@ const WaveformVisualization = React.memo(function WaveformVisualization({
               flex: barWidth,
               height,
               backgroundColor: color,
-              borderRadius: 1,
+              borderRadius: Radius.none,
               opacity: 0.4 + 0.6 * level,
             }}
           />

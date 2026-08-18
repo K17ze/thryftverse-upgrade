@@ -524,7 +524,7 @@ const videoControlStyles = StyleSheet.create({
     marginTop: -28,
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -816,13 +816,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   dot: {
     width: 5,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.45)',
   },
   dotActive: {
     width: 14,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
   },
   indexText: {

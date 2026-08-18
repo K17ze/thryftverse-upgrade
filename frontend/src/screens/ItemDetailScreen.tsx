@@ -793,6 +793,7 @@ export default function ItemDetailScreen() {
             (Back, Share, Save) + overflow (Fav, Watch, Report). */}
         <CommerceMediaStage
           images={item.images}
+          category={item.category ?? undefined}
           objectId={item.id}
           isFav={isFav}
           isSaved={isItemSavedAnywhere(item.id)}
@@ -967,7 +968,7 @@ export default function ItemDetailScreen() {
             hairlines for clear scanning. */}
         {(() => {
           const trustRows: { icon: keyof typeof Ionicons.glyphMap; label: string; dotColor?: string }[] = [];
-          // 1. Seller rating — social proof
+          // 1. Seller rating — social proof (review count/score summary)
           if (seller?.rating != null && seller.rating > 0) {
             const ratingText = seller.reviewCount != null && seller.reviewCount > 0
               ? `★ ${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
@@ -977,7 +978,26 @@ export default function ItemDetailScreen() {
               label: ratingText,
             });
           }
-          // 2. Dispatch time — when will it arrive?
+          // 2. Seller verification — trust badge for verified sellers
+          if (seller?.verified || seller?.verificationTier === 'seller' || seller?.verificationTier === 'id') {
+            const verifyLabel = seller.verificationTier === 'seller'
+              ? 'Trusted Seller'
+              : seller.verificationTier === 'id'
+                ? 'ID Verified'
+                : 'Verified';
+            trustRows.push({
+              icon: 'checkmark-circle-outline',
+              label: verifyLabel,
+            });
+          }
+          // 3. Response time — "Usually responds in 2h" signal
+          if (seller?.responseTimeLabel) {
+            trustRows.push({
+              icon: 'chatbubble-ellipses-outline',
+              label: seller.responseTimeLabel,
+            });
+          }
+          // 4. Dispatch time — when will it arrive?
           if (seller?.dispatchTimeLabel) {
             trustRows.push({
               icon: 'cube-outline',
@@ -989,6 +1009,17 @@ export default function ItemDetailScreen() {
               label: commerce.shippingPayer === 'seller'
                 ? `Free ${commerce.shippingMethod}`
                 : commerce.shippingMethod,
+            });
+          }
+          // 5. Buyer protection fallback — per research doc M1: when no
+          // seller rating or dispatch time exists, the first viewport
+          // must still carry at least one trust signal. For a
+          // stranger-to-stranger marketplace, buyer protection / escrow
+          // is the baseline trust guarantee.
+          if (trustRows.length === 0 && commerce.protectionPolicy?.available) {
+            trustRows.push({
+              icon: 'shield-checkmark-outline',
+              label: commerce.protectionPolicy.label ?? 'Buyer Protection',
             });
           }
           if (trustRows.length === 0) return null;

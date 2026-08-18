@@ -321,8 +321,8 @@ function createStyles(colors: ThemeColors) {
     iconBox: {
       width: 96,
       height: 96,
-      borderRadius: 48,
-      backgroundColor: colors.danger + '14',
+      borderRadius: Radius.full,
+      backgroundColor: colors.dangerSubtle,
       justifyContent: 'center',
       alignItems: 'center',
       marginBottom: Space.lg,

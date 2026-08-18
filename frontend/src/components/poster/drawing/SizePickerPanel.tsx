@@ -39,7 +39,7 @@ function createStyles(colors: ThemeColors) {
     sizePreview: {
       width: 44,
       height: 44,
-      borderRadius: 22,
+      borderRadius: Radius.full,
       backgroundColor: colors.glassBg,
       alignItems: 'center',
       justifyContent: 'center',

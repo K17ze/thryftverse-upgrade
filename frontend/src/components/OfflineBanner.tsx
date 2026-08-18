@@ -67,7 +67,7 @@ export function OfflineBanner({
         style={[
           styles.compact,
           {
-            backgroundColor: colors.warning + '14',
+            backgroundColor: colors.warningSubtle,
             borderColor: colors.warning + '30',
           },
           opacityStyle,
@@ -106,7 +106,7 @@ export function OfflineBanner({
       style={[
         styles.container,
         {
-          backgroundColor: colors.warning + '12',
+          backgroundColor: colors.warningSubtle,
           borderTopColor: colors.warning + '30',
           borderBottomColor: colors.warning + '30',
         },

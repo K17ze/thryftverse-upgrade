@@ -218,8 +218,8 @@ export default function BuyoutScreen() {
 
         {/* Status message */}
         {ownsAll ? (
-          <View style={[styles.statusCard, { backgroundColor: colors.success + '12', borderColor: colors.success + '40' }]}>
-            <View style={[styles.statusIconWrap, { backgroundColor: colors.success + '22' }]}>
+          <View style={[styles.statusCard, { backgroundColor: colors.successSubtle, borderColor: colors.success + '40' }]}>
+            <View style={[styles.statusIconWrap, { backgroundColor: colors.successSubtle }]}>
               <Ionicons name="checkmark-circle" size={28} color={colors.success} />
             </View>
             <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>You own 100% of this item</Text>

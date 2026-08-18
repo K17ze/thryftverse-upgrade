@@ -700,7 +700,7 @@ function createStyles(colors: ThemeColors) {
       left: 0,
       height: 3,
       backgroundColor: colors.brand,
-      borderRadius: 1.5,
+      borderRadius: Radius.full,
     },
     tabText: {
       fontSize: Type.body.size,

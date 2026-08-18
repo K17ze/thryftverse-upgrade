@@ -379,7 +379,7 @@ function createStyles(colors: ThemeColors) {
       width: Control.chrome,
       height: Control.chrome,
       borderRadius: Radius.full,
-      backgroundColor: colors.success + '15',
+      backgroundColor: colors.successSubtle,
       justifyContent: 'center',
       alignItems: 'center',
     },

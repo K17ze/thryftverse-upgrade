@@ -90,13 +90,18 @@ export type CreatorAcquisitionResult =
   | { mode: 'single_media'; media: CreatorInitialMedia };
 
 export type RootStackParamList = {
+  // ── Auth & Onboarding ──
   // Age gate — shown before onboarding/auth on first launch (18+ marketplace).
   AgeVerification: undefined;
   Onboarding: undefined;
   AuthLanding: undefined;
   Login: undefined;
   SignUp: undefined;
+
+  // ── Main Tabs ──
   MainTabs: NavigatorScreenParams<TabParamList> | undefined;
+
+  // ── Commerce ──
   CategoryDetail: { categoryId: string };
   Browse: {
     categoryId: string;
@@ -106,12 +111,16 @@ export type RootStackParamList = {
   };
   ItemDetail: { itemId: string };
   Closet: undefined;
+
+  // ── Creator Studio ──
   PosterViewer: { storyId: string; startFrameIndex?: number };
   CreatePoster: { mode?: 'poster' | 'look' } | undefined;
   PosterStoryActivity: { storyId: string };
   PosterArchive: undefined;
   PosterHighlightViewer: { highlightId: string };
   CreatePosterHighlight: { storyId?: string; frameIds?: string[] } | undefined;
+
+  // ── Auctions & Trading ──
   AuctionHome: undefined;
   Auctions: undefined;
   SellerAuctionCentre: undefined;
@@ -123,6 +132,8 @@ export type RootStackParamList = {
     /** Pre-fill the bid input with this amount (GBP) */
     initialBidAmount?: number;
   };
+
+  // ── Co-Own / Syndicate ──
   CreateCoOwn:
     | {
         listingId?: string;
@@ -156,6 +167,8 @@ export type RootStackParamList = {
     actionId?: string;
   };
   DistributionHistory: { assetId?: string } | undefined;
+
+  // ── Chat & Messaging ──
   Inbox: undefined;
   Chat: {
     conversationId: string;
@@ -182,17 +195,22 @@ export type RootStackParamList = {
   CustomBots: undefined;
   BotBuilder: { botId?: string };
   EditGroup: { conversationId: string };
+
+  // ── Social / Profile ──
   UserProfile: { userId: string };
   // Followers / following — full-screen people lists (spec 50)
   Followers: { userId: string };
   Following: { userId: string };
-  // Profile sub-screens
+
+  // ── Wallet & Payments ──
   Wallet: undefined;
   // Wallet V3 — focused money-movement destinations (spec 17)
   SellerEarnings: undefined;
   WalletConvert: undefined;
   WalletActivity: undefined;
   MyOrders: undefined;
+
+  // ── Settings & Account ──
   Personalisation: undefined;
   Settings: undefined;
   EditProfile: { focus?: 'avatar' | 'cover' };
@@ -200,6 +218,8 @@ export type RootStackParamList = {
   AccountControl: undefined;
   SavedAddresses: undefined;
   Payments: undefined;
+
+  // ── Commerce ── (orders, offers, checkout, listings)
   // Phase 16 new screens
   MakeOffer: { itemId: string; price: number; title: string; counterOffer?: boolean; previousOffer?: number; counterRound?: number; parentOfferId?: string };
   PushNotifications: undefined;
@@ -248,6 +268,8 @@ export type RootStackParamList = {
         smartSellEnabled?: boolean;
       }
     | undefined;
+
+  // ── Settings & Account ── (notifications, security)
   // Phase 27
   NotificationsList: undefined;
   // Phase 28
@@ -255,10 +277,18 @@ export type RootStackParamList = {
   ChangePassword: undefined;
   TwoFactorSetup: undefined;
   WriteReview: { orderId: string };
+
+  // ── Support & Help ──
   Report: { type: 'item' | 'user'; targetId?: string };
+
+  // ── Auctions & Trading ──
   MyBids: undefined;
+
+  // ── Seller Tools ──
   MyListings: { type?: 'coown' | 'auction' | 'standard' } | undefined;
   SavedSearches: undefined;
+
+  // ── Creator Studio ── (looks, camera, studio, outfits, explore)
   // Explore / Creator screens
   CreateLook: undefined;
   CreateCamera: { mode?: 'visual-search' | 'look' | 'poster' } | undefined;
@@ -307,6 +337,8 @@ export type RootStackParamList = {
       | { type: 'auction' };
   };
   StyleQuiz: undefined;
+
+  // ── Settings & Account ── (chat settings, sessions, privacy, about)
   // Phase 13 — Settings integrity
   ChatSettings: undefined;
   ActiveSessions: undefined;
@@ -316,6 +348,8 @@ export type RootStackParamList = {
   MutedConversations: undefined;
   ArchivedConversations: undefined;
   ManageQuickReplies: { role: 'seller' | 'buyer' };
+
+  // ── Chat & Messaging ── (conversations, messages, media)
   // VISUAL-15 — UI Architecture + Feature Depth
   ConversationInfo: { conversationId: string };
   MessageRequests: undefined;
@@ -323,21 +357,37 @@ export type RootStackParamList = {
     | { preselectedUserId?: string; preselectedDisplayName?: string }
     | undefined;
   SharedConversationMedia: { conversationId: string };
+
+  // ── Commerce ── (collections)
   ManageCollectionItems: { collectionId: string };
   CreateCollection: undefined;
+
+  // ── Support & Help ── (order support, buyer protection)
   OrderSupport: { orderId: string };
   BuyerProtection: { orderId: string };
+
+  // ── Settings & Account ── (connected accounts, accessibility, co-own prefs)
   ConnectedAccounts: undefined;
   EmailNotifications: undefined;
   AccessibilitySettings: undefined;
+
+  // ── Co-Own / Syndicate ── (price alerts, tax, recurring orders)
   CoOwnPriceAlerts: undefined;
   CoOwnTaxDocuments: undefined;
   CoOwnRecurringOrders: undefined;
+
+  // ── Chat & Messaging ── (media preview)
   ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
+
+  // ── Commerce ── (collection editing)
   // UI-18 — Reference-perfect product UX
   EditCollection: { collectionId: string };
+
+  // ── Support & Help ── (tickets, resolution centre)
   SupportTicketDetail: { ticketId: string };
   ResolutionCentre: undefined;
+
+  // ── Seller Tools ── (listing preview)
   // UI-19 — Sell / Co-own / Chat marketplace UX
   ListingPreview: {
     preview: {
@@ -378,8 +428,12 @@ export type RootStackParamList = {
     maxReserved1ze: number;
     marketDataTimestamp: string;
   };
+
+  // ── Auctions & Trading ── (trade confirm)
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
+
+  // ── Seller Tools ── (sell, trade hub, seller hub, analytics, verification)
   Sell: undefined;
   TradeHub: { destination?: 'auction' | 'co_own' } | undefined;
   // GDPR — Account deletion & data export
@@ -398,12 +452,16 @@ export type RootStackParamList = {
   // Seller verification response — sellers view and respond to Co-Own verification demands
   SellerVerification: undefined;
   VerificationResponse: { assetId: string; demandId: number } | undefined;
+
+  // ── Live Shopping ──
   // Live shopping — Whatnot/Tilt-style live commerce
   LiveShopping: undefined;
   // Live stream viewer — watch + bid + chat
   LiveStreamViewer: { sessionId: string };
   // Live stream seller — broadcast + manage lots
   LiveStreamSeller: { sessionId?: string };
+
+  // ── Seller Tools ── (AI listing, bulk, inventory, KYC)
   AIPoweredListing: undefined;
   // Pro seller tools
   BulkListing: undefined;
@@ -411,6 +469,8 @@ export type RootStackParamList = {
   InventoryManagement: undefined;
   // Full KYC verification flow — multi-step identity verification
   KYCVerification: undefined;
+
+  // ── Discovery & Editorial ── (galleria, algorithm, moodboards, AI search)
   // Galleria — editorial discovery surface for Co-Own assets & curated collections
   Galleria: undefined;
   GalleriaCollectionDetail: { collectionId: string };
@@ -423,6 +483,8 @@ export type RootStackParamList = {
   // Moodboard — user-generated editorial collage tools
   MoodboardHome: undefined;
   MoodboardEditor: { moodboardId?: string };
+
+  // ── Settings & Account ── (AI prefs, sustainability, data privacy, notifications)
   // Settings sub-departments — 2026 settings enhancement
   AIPreferences: undefined;
   SustainabilityPreferences: undefined;
@@ -434,6 +496,7 @@ export type RootStackParamList = {
   AgentActivity: undefined;
 };
 
+// ── Main Tabs ──
 export type TabParamList = {
   Home: undefined;
   Explore: undefined;

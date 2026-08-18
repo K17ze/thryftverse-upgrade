@@ -37,7 +37,7 @@ function resolveTone(tone: StatusPillTone, colors: ThemeColors) {
     case 'delivered':
     case 'success':
       return {
-        bg: colors.success + '12',
+        bg: colors.successSubtle,
         border: colors.success + '28',
         text: colors.success,
         dot: colors.success,
@@ -52,7 +52,7 @@ function resolveTone(tone: StatusPillTone, colors: ThemeColors) {
     case 'refunded':
     case 'error':
       return {
-        bg: colors.danger + '10',
+        bg: colors.dangerSubtle,
         border: colors.danger + '25',
         text: colors.danger,
         dot: colors.danger,

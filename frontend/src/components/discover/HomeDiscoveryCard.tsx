@@ -48,7 +48,7 @@ import { MediaPreview as CanonicalMediaPreview } from '../MediaPreview';
 import { useStore } from '../../store/useStore';
 import { useHaptic } from '../../hooks/useHaptic';
 import { ProductAnalytics } from '../../platform/product/productAnalytics';
-import { Space, FontFamily, Radius } from '../../theme/designTokens';
+import { Space, FontFamily, Radius, Type } from '../../theme/designTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import type { HomeDiscoveryItemVM } from '../../presentation/homeDiscoveryViewModel';
 
@@ -160,11 +160,12 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
                 />
               ) : (
                 <View style={styles.mediaPlaceholder}>
-                  <Ionicons
-                    name={getCategoryIcon(item.category)}
-                    size={32}
-                    color={colors.textMuted}
-                  />
+                  {getCategoryPlaceholderTint(item.category, colors) ? (
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: getCategoryPlaceholderTint(item.category, colors) }]} />
+                  ) : null}
+                  <Text style={styles.mediaPlaceholderText} numberOfLines={1}>
+                    {getCategoryPlaceholderLabel(item.category, item.identity.primary)}
+                  </Text>
                 </View>
               )}
             </SharedTransitionView>
@@ -251,14 +252,29 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
   );
 });
 
-// ── Category icon helper ──────────────────────────────────────────────────
+// ── Category placeholder helpers ───────────────────────────────────────────
 
-function getCategoryIcon(category?: string): keyof typeof Ionicons.glyphMap {
+/** Returns a subtle category-tinted background using existing *Subtle tokens,
+ *  or undefined for the default cool-grey surfaceAlt. */
+function getCategoryPlaceholderTint(category: string | undefined, colors: ThemeColors): string | undefined {
   const normalized = category?.toLowerCase() ?? '';
-  if (normalized.includes('shoe')) return 'footsteps-outline';
-  if (normalized.includes('bag')) return 'bag-handle-outline';
-  if (normalized.includes('jewel') || normalized.includes('watch')) return 'diamond-outline';
-  return 'shirt-outline';
+  if (normalized.includes('bag')) return colors.warningSubtle;   // warm beige tint
+  if (normalized.includes('shoe')) return colors.brandSubtle;    // neutral brand tint
+  return undefined; // watches/jewellery/apparel → cool grey (surfaceAlt)
+}
+
+/** Returns the category label or brand initial for the placeholder's
+ *  typographic treatment. Prefers brand initial when available. */
+function getCategoryPlaceholderLabel(category: string | undefined, brand?: string): string {
+  if (brand && brand.length > 0) {
+    return brand.charAt(0).toUpperCase();
+  }
+  const normalized = category?.toLowerCase() ?? '';
+  if (normalized.includes('shoe')) return 'Footwear';
+  if (normalized.includes('bag')) return 'Bags';
+  if (normalized.includes('jewel')) return 'Jewellery';
+  if (normalized.includes('watch')) return 'Watches';
+  return category ?? 'ThryftVerse';
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────
@@ -289,6 +305,14 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
+      overflow: 'hidden',
+    },
+    mediaPlaceholderText: {
+      fontSize: Type.meta.size,
+      lineHeight: Type.meta.lineHeight,
+      fontFamily: FontFamily.medium,
+      color: colors.textMuted,
+      letterSpacing: Type.meta.letterSpacing,
     },
     // Save glyph: 44pt transparent hit area, 22pt visible icon, top-right
     saveButton: {

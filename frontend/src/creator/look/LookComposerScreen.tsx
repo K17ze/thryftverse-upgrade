@@ -1861,7 +1861,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     backgroundColor: '#C9A46A',
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   recoveryBtnText: {
     color: '#0a0a0a',

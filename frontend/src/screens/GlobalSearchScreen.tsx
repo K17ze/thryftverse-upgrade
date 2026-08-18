@@ -275,12 +275,12 @@ const peopleRowStyles = StyleSheet.create({
   avatar: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
   },
   avatarFallback: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1681,7 +1681,7 @@ const styles = StyleSheet.create({
     right: 6,
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
@@ -1879,7 +1879,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
 
   // People results

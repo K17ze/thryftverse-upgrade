@@ -20,7 +20,7 @@ import Reanimated, {
   interpolate,
   SlideInRight,
 } from 'react-native-reanimated';
-import { Typography, Radius, Space, Type, Control, Stroke } from '../../theme/designTokens';
+import { Typography, Radius, Space, Type, Control, Stroke, Elevation } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -156,7 +156,7 @@ const StickerTabButton = React.memo(function StickerTabButton({
             {
               height: 2,
               marginTop: 4,
-              borderRadius: 1,
+              borderRadius: Radius.none,
               overflow: 'hidden',
             },
             underlineStyle,
@@ -229,7 +229,7 @@ const EmojiCell = React.memo(function EmojiCell({
           right: 2,
           width: 14,
           height: 14,
-          borderRadius: 7,
+          borderRadius: Radius.full,
           backgroundColor: colors.danger,
           alignItems: 'center',
           justifyContent: 'center',
@@ -286,7 +286,7 @@ const RailSticker = React.memo(function RailSticker({
           right: 2,
           width: 14,
           height: 14,
-          borderRadius: 7,
+          borderRadius: Radius.full,
           backgroundColor: colors.danger,
           alignItems: 'center',
           justifyContent: 'center',
@@ -1318,11 +1318,7 @@ function createStyles(colors: any) {
     borderTopRightRadius: Radius.xxl,
     overflow: 'hidden',
     paddingBottom: Space.lg,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 20,
-    elevation: 24,
+    ...Elevation.modal,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
   },

@@ -317,21 +317,25 @@ export const Elevation: Record<string, ShadowConfig> = {
 } as const;
 
 // ============================================================================
-// ANIMATION DURATIONS — semantic motion bands
-// Touch: 90–150ms | Micro state: 160–240ms | Sheet/route: 260–420ms
-// Celebratory: rare, under ~600ms
+// ANIMATION DURATIONS — single source of truth is Motion.duration in motionTokens.ts
+// This re-export preserves backward compatibility for existing imports from designTokens.
+// Do NOT add new duration values here — use Motion.duration.* or Motion.tier.* instead.
 // ============================================================================
+import { Motion } from './motionTokens';
+
+/** @deprecated Use `Motion.duration` from `motionTokens.ts` directly. This re-export
+ *  exists only for backward compatibility. The canonical duration scale is `Motion.duration`. */
 export const Duration = {
   /** 0ms — Immediate */
-  instant: 0,
+  instant: Motion.duration.instant,
   /** 120ms — Touch acknowledgement (button press, toggle) */
-  fast: 120,
-  /** 200ms — Micro state transition (segment switch, sheet slide) */
-  normal: 200,
-  /** 320ms — Emphasis / route continuity (content crossfade, screen push) */
-  slow: 320,
-  /** 500ms — Hero/page transitions, rare celebratory motion */
-  slower: 500,
+  fast: Motion.duration.fast,
+  /** 180ms — Micro state transition (segment switch, sheet slide) */
+  normal: Motion.duration.normal,
+  /** 280ms — Emphasis / route continuity (content crossfade, screen push) */
+  slow: Motion.duration.slow,
+  /** 400ms — Hero/page transitions, rare celebratory motion */
+  slower: Motion.duration.slower,
 } as const;
 
 // ============================================================================
@@ -505,6 +509,40 @@ export const Stroke = {
   standard: 1,
   /** Selection/focus only; never routine card decoration. */
   emphasis: 2,
+} as const;
+
+// ============================================================================
+// THUMBNAIL & AVATAR SIZES — canonical dimensions for card media and identity
+// Replaces hardcoded IMAGE_SIZE / AVATAR_SIZE in flagship primitives (audit M16).
+// ============================================================================
+export const ThumbSize = {
+  /** 40px — sticky dock anchor thumbnail */
+  dock: 40,
+  /** 64px — compact list row thumbnail */
+  sm: 64,
+  /** 72px — standard list row thumbnail (order cards, asset cards) */
+  md: 72,
+  /** 80px — large list row thumbnail (asset cards) */
+  lg: 80,
+} as const;
+
+export const AvatarSize = {
+  /** 24px — inline metadata avatar (comment rows, chat list) */
+  inline: 24,
+  /** 32px — compact avatar (notification rows) */
+  sm: 32,
+  /** 40px — standard list avatar (chat list, seller row) */
+  md: 40,
+  /** 56px — utility rail avatar */
+  lg: 56,
+  /** 76px — edit preview avatar */
+  edit: 76,
+  /** 84px — identity hero avatar */
+  identity: 84,
+  /** 88px — standard profile hero avatar */
+  hero: 88,
+  /** 104px — large profile hero avatar */
+  xl: 104,
 } as const;
 
 // ============================================================================

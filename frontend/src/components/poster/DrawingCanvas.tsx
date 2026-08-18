@@ -908,7 +908,7 @@ function createStyles(colors: any) {
   drawIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
@@ -954,7 +954,7 @@ function createStyles(colors: any) {
   drawColorOrb: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.full,
     borderWidth: Stroke.standard,
     borderColor: colors.borderSubtle,
     alignItems: 'center',
@@ -977,7 +977,7 @@ function createStyles(colors: any) {
   recentColorOrb: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     borderWidth: Stroke.hairline,
     borderColor: colors.borderSubtle,
   },
@@ -1017,7 +1017,7 @@ function createStyles(colors: any) {
   confirmHandle: {
     width: 36,
     height: 4,
-    borderRadius: 2,
+    borderRadius: Radius.full,
     alignSelf: 'center',
   },
   confirmTitle: {

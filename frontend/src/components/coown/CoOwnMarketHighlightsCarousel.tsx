@@ -302,13 +302,13 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
   progressFill: {
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.90)',
   },
   marketAction: {

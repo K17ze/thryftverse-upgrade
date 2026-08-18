@@ -193,7 +193,7 @@ function createStyles(colors: ThemeColors) {
     statusDot: {
       width: 8,
       height: 8,
-      borderRadius: 4,
+      borderRadius: Radius.full,
     },
     stripContent: {
       flex: 1,

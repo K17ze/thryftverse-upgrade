@@ -2293,7 +2293,7 @@ const styles = StyleSheet.create({
     height: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 11,
+    borderRadius: Radius.full,
   },
   authAddBtn: {
     width: Space.xxl + Space.xs,

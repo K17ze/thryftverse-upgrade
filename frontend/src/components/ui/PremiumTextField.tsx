@@ -92,7 +92,7 @@ export const PremiumTextField = forwardRef<TextInput, PremiumTextFieldProps>(
             backgroundColor: 'transparent',
             borderWidth: 0,
             borderBottomWidth: isFocused ? Stroke.emphasis : Stroke.standard,
-            borderRadius: 0,
+            borderRadius: Radius.none,
             paddingHorizontal: 0,
           };
         case 'filled':

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +16,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
 import { requestDataExport, type DataExportResult } from '../services/accountApi';
 import { AppButton } from '../components/ui/AppButton';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExport'>;
 
@@ -134,13 +133,11 @@ export default function DataExportScreen({ navigation }: Props) {
         {/* Loading state */}
         {exportState === 'loading' ? (
           <View style={[styles.stateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <ActivityIndicator size="large" color={colors.brand} />
-            <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
-              Generating your export
-            </Text>
-            <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>
-              We're collecting your data. This usually takes a few seconds.
-            </Text>
+            <FlagshipState
+              variant="loading"
+              title="Generating your export"
+              subtitle="We're collecting your data. This usually takes a few seconds."
+            />
           </View>
         ) : null}
 

@@ -201,7 +201,7 @@ function createStyles(colors: ThemeColors) {
   privacyBadge: {
     width: 18,
     height: 18,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',

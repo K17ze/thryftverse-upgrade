@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Alert,
   Pressable,
-  ActivityIndicator,
   Dimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,

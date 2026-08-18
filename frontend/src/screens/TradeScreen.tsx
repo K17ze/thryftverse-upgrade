@@ -406,7 +406,7 @@ export default function TradeScreen() {
         {/* Compliance alert */}
         {!eligibility.ok && (
           <View>
-            <View style={[styles.alertCard, { backgroundColor: colors.danger + '12', borderColor: colors.danger + '40' }]}>
+            <View style={[styles.alertCard, { backgroundColor: colors.dangerSubtle, borderColor: colors.danger + '40' }]}>
               <View style={styles.alertRow}>
                 <Ionicons name="warning-outline" size={16} color={colors.danger} />
                 <Text style={[styles.alertTitle, { color: colors.danger }]}>Trading restricted</Text>
@@ -419,7 +419,7 @@ export default function TradeScreen() {
         {/* Rights incomplete alert — spec 10 §9.3: TBC blocks trading on live instruments */}
         {hasIncompleteRights && (
           <View>
-            <View style={[styles.alertCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
+            <View style={[styles.alertCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '40' }]}>
               <View style={styles.alertRow}>
                 <Ionicons name="document-text-outline" size={16} color={colors.warning} />
                 <Text style={[styles.alertTitle, { color: colors.warning }]}>Rights incomplete</Text>
@@ -449,7 +449,7 @@ export default function TradeScreen() {
         <View style={[
           styles.illustrativeBanner,
           {
-            backgroundColor: marketIsAuthoritative ? colors.success + '10' : colors.warning + '12',
+            backgroundColor: marketIsAuthoritative ? colors.successSubtle : colors.warningSubtle,
             borderColor: marketIsAuthoritative ? colors.success + '35' : colors.warning + '40',
           },
         ]}>

@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     height: DIAMOND_SIZE,
     transform: [{ rotate: '45deg' }],
     borderWidth: Stroke.emphasis,
-    borderRadius: 2,
+    borderRadius: Radius.none,
   },
   inspector: {
     borderTopWidth: Stroke.hairline,

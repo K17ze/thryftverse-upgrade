@@ -2346,7 +2346,7 @@ const styles = StyleSheet.create({
   etaIconWrap: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2404,7 +2404,7 @@ const styles = StyleSheet.create({
   inspectionIcon: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },

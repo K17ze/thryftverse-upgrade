@@ -45,7 +45,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Type, Typography, Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
+import { Type, Typography, Space, Radius, Control, LetterSpacing, Elevation } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { PosterViewerSkeleton } from '../components/skeletons/PosterViewerSkeleton';
@@ -1776,11 +1776,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 4,
-    elevation: 4,
+    ...Elevation.floating,
   },
   tagDotPressed: {
     opacity: 0.7,

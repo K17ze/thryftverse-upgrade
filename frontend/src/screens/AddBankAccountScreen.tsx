@@ -7,7 +7,6 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -183,7 +182,7 @@ export default function AddBankAccountScreen({ navigation }: Props) {
                       Withdrawals take 1-3 business days
                     </Text>
                   </View>
-                  <View style={[styles.heroBadge, { backgroundColor: colors.success + '15' }]}>
+                  <View style={[styles.heroBadge, { backgroundColor: colors.successSubtle }]}>
                     <Ionicons name="lock-closed" size={12} color={colors.success} />
                     <Text style={[styles.heroBadgeText, { color: colors.success }]}>Secure</Text>
                   </View>

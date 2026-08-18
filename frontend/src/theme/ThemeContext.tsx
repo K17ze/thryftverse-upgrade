@@ -28,8 +28,14 @@ export interface ThemeColors {
   border: string;
   borderSubtle: string;
   danger: string;
+  /** Subtle danger tint — destructive surface backgrounds, danger badges. Replaces hex-alpha. */
+  dangerSubtle: string;
   success: string;
+  /** Subtle success tint — positive surface backgrounds, success badges. Replaces hex-alpha. */
+  successSubtle: string;
   warning: string;
+  /** Subtle warning tint — cautionary surface backgrounds, warning badges. Replaces hex-alpha. */
+  warningSubtle: string;
   /** Co-Own financial truth — up/down movement only. Per Design.md
    * proposed-semantic: coown-up #1C5631, coown-down #5F1616.
    * Used for price deltas, position P/L, and market direction. */
@@ -44,6 +50,12 @@ export interface ThemeColors {
    * verified status, authenticated value, or curated distinction. */
   antiqueGold: string;
   bronze: string;
+  /** Text over media scrims — always white regardless of theme, because
+   *  scrims are dark-on-image in both light and dark mode. Replaces
+   *  hardcoded `#fff` / `rgba(255,255,255,0.88)` in hero/media overlays. */
+  scrimTextPrimary: string;
+  /** Secondary text over media scrims — slightly translucent white. */
+  scrimTextSecondary: string;
   overlay: string;
   input: string;
   inputText: string;
@@ -72,8 +84,11 @@ const DARK_COLORS: ThemeColors = {
   border: '#262626',
   borderSubtle: '#1E1E1E',
   danger: '#9b0202',
+  dangerSubtle: 'rgba(155,2,2,0.10)',
   success: '#215634',
+  successSubtle: 'rgba(33,86,52,0.10)',
   warning: '#D49454', // Distinct from antiqueGold — warm amber, not gold
+  warningSubtle: 'rgba(212,148,84,0.12)',
   coownUp: '#1C5631',
   coownDown: '#5F1616',
   social: '#9A6B7A',
@@ -81,6 +96,8 @@ const DARK_COLORS: ThemeColors = {
   commerceTrust: '#4A7AC4',
   antiqueGold: '#C9A46A',
   bronze: '#8A6A3F',
+  scrimTextPrimary: '#FFFFFF',
+  scrimTextSecondary: 'rgba(255,255,255,0.88)',
   overlay: 'rgba(0,0,0,0.6)',
   input: '#1A1A1A',
   inputText: '#FFFFFF',
@@ -97,7 +114,7 @@ const LIGHT_COLORS: ThemeColors = {
   background: '#FFFFFF',
   surface: '#F5F5F5',
   surfaceAlt: '#EFEFEF',
-  surfaceRaised: '#F2F2F2',
+  surfaceRaised: '#F8F8F8', // Monotonic: surface(245) < surfaceRaised(248) < surfaceElevated(255)
   surfaceElevated: '#FFFFFF',
   brand: '#111111',
   brandPressed: '#333333',
@@ -109,8 +126,11 @@ const LIGHT_COLORS: ThemeColors = {
   border: '#E5E5E5',
   borderSubtle: '#F0F0F0',
   danger: '#9b0202',
+  dangerSubtle: 'rgba(155,2,2,0.08)',
   success: '#215634',
+  successSubtle: 'rgba(33,86,52,0.08)',
   warning: '#B8742E', // Distinct from antiqueGold — warm amber, not gold
+  warningSubtle: 'rgba(184,116,46,0.10)',
   coownUp: '#1C5631',
   coownDown: '#5F1616',
   social: '#6B3245',
@@ -118,6 +138,8 @@ const LIGHT_COLORS: ThemeColors = {
   commerceTrust: '#06489A',
   antiqueGold: '#C9A46A',
   bronze: '#8A6A3F',
+  scrimTextPrimary: '#FFFFFF',
+  scrimTextSecondary: 'rgba(255,255,255,0.88)',
   overlay: 'rgba(0,0,0,0.4)',
   input: '#FFFFFF',
   inputText: '#000000',

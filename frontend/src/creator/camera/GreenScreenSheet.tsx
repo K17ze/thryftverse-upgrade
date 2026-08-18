@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
   colorSwatch: {
     width: 12,
     height: 12,
-    borderRadius: 6,
+    borderRadius: Radius.full,
     borderWidth: Stroke.hairline,
     borderColor: 'rgba(255,255,255,0.2)',
   },

@@ -29,7 +29,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography, Space, Radius, Type, Control } from '../../theme/designTokens';
-import { isVideoUri } from '../../utils/media';
+import { isVideoUri, getCategoryFocalPoint } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
@@ -57,6 +57,21 @@ const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    minHeight: 44,
+  },
+  retryText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.semibold,
+    color: colors.textSecondary,
+  },
 });
 
 interface MediaPageProps {
@@ -82,6 +97,8 @@ function MediaPage({
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
   const [failed, setFailed] = useState(false);
+  // Retry key — incrementing forces CachedImage to remount and re-fetch.
+  const [retryKey, setRetryKey] = useState(0);
   // Track zoom state in React state so the pan gesture can be
   // disabled when not zoomed. This is critical: when the pan gesture
   // is always active, it captures horizontal swipes and prevents the
@@ -200,20 +217,33 @@ function MediaPage({
             icon="image-outline"
             label="Photo unavailable"
             style={subComponentStyles.image}
-          />
+          >
+            <Pressable
+              style={subComponentStyles.retryBtn}
+              onPress={() => { setFailed(false); setRetryKey((k) => k + 1); }}
+              accessibilityLabel="Retry loading image"
+              accessibilityRole="button"
+            >
+              <Ionicons name="refresh-outline" size={18} color={colors.textSecondary} />
+              <Text style={subComponentStyles.retryText}>Retry</Text>
+            </Pressable>
+          </ImageEmptyGraphic>
         ) : (
           item.focalPoint ? (
             <CachedImage
+              key={retryKey}
               uri={item.uri}
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
-              contentFit={item.fit ?? 'contain'}
+              contentFit={item.fit ?? 'cover'}
               focalPoint={item.focalPoint}
+              sharedTransitionTag={sharedTransitionTag}
               onError={() => setFailed(true)}
               downscaleWidth={width}
             />
           ) : (
             <SharedTransitionImage
+              key={retryKey}
               source={{ uri: item.uri }}
               style={subComponentStyles.image}
               resizeMode={item.fit ?? 'contain'}
@@ -595,7 +625,7 @@ const videoControlStyles = StyleSheet.create({
     marginTop: -28,
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -625,13 +655,13 @@ const videoControlStyles = StyleSheet.create({
   },
   scrubTrackBg: {
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.3)',
     overflow: 'visible',
   },
   scrubTrackFill: {
     height: '100%',
-    borderRadius: 1.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
   },
   scrubThumb: {
@@ -639,7 +669,7 @@ const videoControlStyles = StyleSheet.create({
     top: -5,
     width: 13,
     height: 13,
-    borderRadius: 6.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
     marginLeft: -6.5,
   },
@@ -702,6 +732,15 @@ export interface CommerceMediaStageProps {
    * Defaults to true for backward compatibility.
    */
   showPageIndicator?: boolean;
+  /**
+   * Category label used to derive category-sensitive default focal
+   * points for art-directed crops when the caller supplies raw image
+   * URIs (the `images` prop) rather than typed `media` with explicit
+   * focalPoint metadata. Per research doc 03 §Macro D: the gallery
+   * should default to category-appropriate focal positioning (e.g.
+   * centre-top for shoes, centre for bags) instead of blind cover.
+   */
+  category?: string | null;
 }
 
 export function CommerceMediaStage({
@@ -733,6 +772,7 @@ export function CommerceMediaStage({
   onActiveIndexChange,
   initialIndex = 0,
   showPageIndicator = true,
+  category,
 }: CommerceMediaStageProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -753,14 +793,21 @@ export function CommerceMediaStage({
   const mediaItems = React.useMemo<ProductMediaItem[]>(() => {
     if (media) return media.filter((item) => !!item.uri);
     const videoUriSet = new Set(videoUris);
+    // Per research doc 03 §Macro D: apply category-sensitive default
+    // focal points so PDP images use art-directed crops instead of blind
+    // `contentFit="contain"`. The focal point is only applied to images
+    // (videos use their own contentFit logic). `cover` + focalPoint
+    // preserves the most important region of the image.
+    const defaultFocalPoint = getCategoryFocalPoint(category);
     return images
       .filter(Boolean)
       .map((uri) => ({
         uri,
         kind: videoUriSet.has(uri) || isVideoUri(uri) ? 'video' : 'image',
-        fit: 'contain',
+        fit: videoUriSet.has(uri) || isVideoUri(uri) ? 'contain' : 'cover',
+        focalPoint: videoUriSet.has(uri) || isVideoUri(uri) ? null : defaultFocalPoint,
       }));
-  }, [images, media, videoUris]);
+  }, [images, media, videoUris, category]);
   React.useEffect(() => {
     if (reducedMotion || mediaItems.length === 0) return;
     zoomHintOpacity.value = withTiming(0.7, { duration: 300 });
@@ -1215,13 +1262,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   dot: {
     width: 5,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.45)',
   },
   dotActive: {
     width: 14,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     backgroundColor: '#fff',
   },
   indexText: {

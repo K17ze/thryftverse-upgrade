@@ -8,7 +8,7 @@ import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TabParamList, RootStackParamList } from './types';
-import { Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography, Type } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -30,8 +30,8 @@ import MyProfileScreen from '../screens/MyProfileScreen';
 const Tab = createBottomTabNavigator<TabParamList>();
 
 // Tab bar geometry — these are deliberate layout values, not token candidates.
-// They are tuned for the Liquid Glass tab bar with 24pt icons.
-const NAV_HEIGHT = 60;
+// Tuned for the Liquid Glass tab bar with 24pt icons + 10pt labels below.
+const NAV_HEIGHT = 68;
 // Create button: 52pt hit area (exceeds 44pt minimum), 40pt visible control
 const CREATE_HIT_SIZE = 52;
 const CREATE_CONTROL_SIZE = 40;
@@ -217,8 +217,18 @@ export default function TabNavigator() {
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
-          tabBarShowLabel: false,
+          // Labels visible — recognition over recall (research doc §2, §4.1).
+          // Create stays label-less via its custom tabBarButton (no label prop).
+          tabBarShowLabel: true,
           tabBarHideOnKeyboard: true,
+          // Compact 10pt label below each icon. Active/inactive tint is
+          // controlled by tabBarActiveTintColor / tabBarInactiveTintColor.
+          tabBarLabelStyle: {
+            fontSize: Type.meta.size,
+            fontFamily: Typography.family.medium,
+            letterSpacing: Type.meta.letterSpacing,
+            marginTop: Space.xs,
+          },
           // Edge-to-edge transparent bar with frosted
           // glass blur background. Content scrolls behind the bar, and the
           // LiquidGlassBackdrop applies iOS 26 Liquid Glass on supported
@@ -267,6 +277,7 @@ export default function TabNavigator() {
           name="Home"
           component={HomeScreen}
           options={{
+            tabBarLabel: 'Home',
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
             ),
@@ -277,6 +288,7 @@ export default function TabNavigator() {
           name="Explore"
           component={SearchScreen}
           options={{
+            tabBarLabel: 'Explore',
             tabBarIcon: ({ color, focused }) => (
               <TabIcon name={focused ? 'search' : 'search-outline'} color={color} focused={focused} />
             ),
@@ -311,6 +323,7 @@ export default function TabNavigator() {
           name="Inbox"
           component={InboxScreen}
           options={{
+            tabBarLabel: 'Inbox',
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
                 name={focused ? 'paper-plane' : 'paper-plane-outline'}
@@ -328,6 +341,7 @@ export default function TabNavigator() {
           name="Profile"
           component={MyProfileScreen}
           options={{
+            tabBarLabel: 'Profile',
             tabBarIcon: ({ color, focused }) => (
               <ProfileTabIcon color={color} focused={focused} />
             ),

@@ -1,4 +1,4 @@
----
+ on ---
 version: "1.5"
 name: "ThryftVerse Neutral Flagship Native Design System"
 benchmark-date: "2026-07-22"

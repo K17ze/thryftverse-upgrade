@@ -4,7 +4,8 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { Space, Radius, Type, FontFamily, IconGrammar, ThumbSize } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { PremiumStatusPill } from '../ui/PremiumStatusPill';
 
@@ -53,11 +54,11 @@ export function FlagshipOrderCard({
             uri={imageUri}
             style={styles.image}
             contentFit="cover"
-            transition={250}
+            transition={Motion.transitions.mediaLoad.duration}
           />
         ) : (
           <View style={[styles.image, styles.imageFallback]}>
-            <Ionicons name="cube-outline" size={28} color={colors.textMuted} />
+            <Ionicons name="cube-outline" size={IconGrammar.hero} color={colors.textMuted} />
           </View>
         )}
       </View>
@@ -82,12 +83,12 @@ export function FlagshipOrderCard({
       </View>
 
       {/* Chevron */}
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={styles.chevron} />
+      <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} style={styles.chevron} />
     </AnimatedPressable>
   );
 }
 
-const IMAGE_SIZE = 72;
+const IMAGE_SIZE = ThumbSize.md;
 
 const createStyles = (colors: any) => StyleSheet.create({
   root: {
@@ -120,7 +121,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     marginLeft: Space.sm,
     justifyContent: 'center',
-    gap: 4,
+    gap: Space.xs / 2,
   },
   topRow: {
     flexDirection: 'row',
@@ -136,7 +137,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     lineHeight: 20,
   },
   price: {
-    fontSize: Type.price.size,
+    fontSize: Type.priceList.size,
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
     letterSpacing: -0.2,
@@ -156,7 +157,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: Type.meta.size,
     fontFamily: FontFamily.regular,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: Space.xs / 2,
   },
   chevron: {
     marginLeft: Space.xs,

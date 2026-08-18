@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space, Typography, Type, Radius } from '../../theme/designTokens';
 
 export type OrdersTab = 'buying' | 'selling';
 
@@ -85,6 +85,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 0,
     height: 2,
     backgroundColor: colors.textPrimary,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
 });

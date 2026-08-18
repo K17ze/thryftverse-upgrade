@@ -114,7 +114,7 @@ export function LiveStreamSellerScreen() {
           <ScrollView style={styles.setupScroll} contentContainerStyle={styles.setupContent}>
             {/* Demo banner */}
             {isDemo && (
-              <View style={[styles.demoBanner, { backgroundColor: colors.warning + '18' }]} accessibilityRole="header">
+              <View style={[styles.demoBanner, { backgroundColor: colors.warningSubtle }]} accessibilityRole="header">
                 <Ionicons name="flask-outline" size={16} color={colors.warning} />
                 <Text style={[styles.demoBannerText, { color: colors.warning }]}>Demo Mode — sample lots loaded</Text>
               </View>
@@ -280,7 +280,7 @@ export function LiveStreamSellerScreen() {
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.summaryContainer}>
-          <View style={[styles.summaryIcon, { backgroundColor: colors.success + '20' }]}>
+          <View style={[styles.summaryIcon, { backgroundColor: colors.successSubtle }]}>
             <Ionicons name="checkmark-circle" size={48} color={colors.success} />
           </View>
           <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Stream Ended</Text>

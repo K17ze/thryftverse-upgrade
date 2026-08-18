@@ -3,6 +3,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
+import { Radius } from '../theme/designTokens';
 import { useStore } from '../store/useStore';
 import { isOnboardingComplete } from '../screens/OnboardingScreen';
 import { isAgeVerified } from '../screens/AgeVerificationScreen';
@@ -123,6 +124,7 @@ export default function AppNavigator() {
       }}
     >
 
+      {/* ── Auth & Onboarding ── */}
       {/* Age gate — 18+ marketplace verification, first-launch only */}
       <Stack.Screen name="AgeVerification" getComponent={() => require('../screens/AgeVerificationScreen').default} options={{ headerShown: false, gestureEnabled: false }} />
 
@@ -135,12 +137,17 @@ export default function AppNavigator() {
       <Stack.Screen name="SignUp" getComponent={() => require('../screens/SignUpScreen').default} />
       <Stack.Screen name="ForgotPassword" getComponent={() => require('../screens/ForgotPasswordScreen').default} />
 
+      {/* ── Main Tabs ── */}
       <Stack.Screen name="MainTabs" component={TabNavigator} />
+
+      {/* ── Commerce ── */}
       <Stack.Screen name="CategoryDetail" getComponent={() => require('../screens/CategoryDetailScreen').default} />
       <Stack.Screen name="Browse" getComponent={() => require('../screens/BrowseScreen').default} />
       <Stack.Screen name="ItemDetail" getComponent={() => require('../screens/ItemDetailScreen').default} />
       <Stack.Screen name="Closet" getComponent={() => require('../screens/ClosetScreen').default} />
       <Stack.Screen name="CollectionDetail" getComponent={() => require('../screens/CollectionDetailScreen').default} />
+
+      {/* ── Creator Studio ── */}
       <Stack.Screen name="PosterViewer" getComponent={() => require('../screens/PosterViewerScreen').default} options={{ ...modalScreenOptions, headerShown: false }} />
       <Stack.Screen name="CreatePoster" getComponent={() => require('../screens/CreatePosterRedirect').CreatePosterRedirect} options={modalScreenOptions} />
       <Stack.Screen name="PosterStoryActivity" getComponent={() => require('../screens/PosterStoryActivityScreen').default} options={modalScreenOptions} />
@@ -148,6 +155,7 @@ export default function AppNavigator() {
       <Stack.Screen name="PosterHighlightViewer" getComponent={() => require('../screens/PosterHighlightViewerScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="CreatePosterHighlight" getComponent={() => require('../screens/CreatePosterHighlightScreen').default} options={modalScreenOptions} />
 
+      {/* ── Auctions & Trading ── */}
       <Stack.Screen name="Sell" getComponent={() => require('../screens/SellScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="TradeHub" getComponent={() => require('../screens/TradeHubScreen').default} />
       <Stack.Screen name="Verification" getComponent={() => require('../screens/VerificationScreen').default} />
@@ -157,6 +165,8 @@ export default function AppNavigator() {
       <Stack.Screen name="SellerAuctionCentre" getComponent={() => require('../screens/SellerAuctionCentreScreen').default} />
       <Stack.Screen name="CreateAuction" getComponent={() => require('../screens/CreateAuctionScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="AuctionDetail" getComponent={() => require('../screens/AuctionDetailScreen').default} />
+
+      {/* ── Co-Own / Syndicate ── */}
       <Stack.Screen name="CreateCoOwn" getComponent={() => require('../screens/CreateSyndicateScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="MarketLedger" getComponent={() => require('../screens/MarketLedgerScreen').default} />
       <Stack.Screen name="CoOwnHub" getComponent={() => require('../screens/SyndicateHubScreen').default} />
@@ -179,6 +189,8 @@ export default function AppNavigator() {
       <Stack.Screen name="CorporateActionDetail" getComponent={() => require('../screens/CorporateActionDetailScreen').default} />
       <Stack.Screen name="DistributionHistory" getComponent={() => require('../screens/DistributionHistoryScreen').default} />
       <Stack.Screen name="CoOwnOnboarding" getComponent={() => require('../screens/SyndicateOnboardingScreen').default} options={modalScreenOptions} />
+
+      {/* ── Chat & Messaging ── */}
       <Stack.Screen name="Chat" getComponent={() => require('../screens/ChatScreen').default} />
       <Stack.Screen name="Inbox" getComponent={() => require('../screens/InboxScreen').default} />
       <Stack.Screen name="CreateGroupChat" getComponent={() => require('../screens/CreateGroupChatScreen').default} options={modalScreenOptions} />
@@ -191,15 +203,21 @@ export default function AppNavigator() {
       <Stack.Screen name="CustomBots" getComponent={() => require('../screens/CustomBotsScreen').default} />
       <Stack.Screen name="BotBuilder" getComponent={() => require('../screens/BotBuilderScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="EditGroup" getComponent={() => require('../screens/EditGroupScreen').default} />
+
+      {/* ── Social / Profile ── */}
       <Stack.Screen name="UserProfile" getComponent={() => require('../screens/UserProfileScreen').default} />
       <Stack.Screen name="Followers" getComponent={() => require('../screens/FollowersScreen').default} />
       <Stack.Screen name="Following" getComponent={() => require('../screens/FollowingScreen').default} />
+
+      {/* ── Wallet & Payments ── */}
       <Stack.Screen name="Wallet" getComponent={() => require('../screens/WalletScreen').default} />
       {/* Wallet V3 — focused money-movement destinations (spec 17) */}
       <Stack.Screen name="SellerEarnings" getComponent={() => require('../screens/SellerEarningsScreen').default} />
       <Stack.Screen name="WalletConvert" getComponent={() => require('../screens/WalletConvertScreen').default} />
       <Stack.Screen name="WalletActivity" getComponent={() => require('../screens/WalletActivityScreen').default} />
       <Stack.Screen name="MyOrders" getComponent={() => require('../screens/MyOrdersScreen').default} />
+
+      {/* ── Settings & Account ── */}
       <Stack.Screen name="Personalisation" getComponent={() => require('../screens/PersonalisationScreen').default} />
       <Stack.Screen name="Settings" getComponent={() => require('../screens/SettingsScreen').default} />
       <Stack.Screen name="EditProfile" getComponent={() => require('../screens/EditProfileScreen').default} />
@@ -210,6 +228,7 @@ export default function AppNavigator() {
       <Stack.Screen name="SavedAddresses" getComponent={() => require('../screens/SavedAddressesScreen').default} />
       <Stack.Screen name="Payments" getComponent={() => require('../screens/PaymentsScreen').default} />
 
+      {/* ── Commerce ── (orders, offers, checkout, listings) */}
       {/* Phase 16 new screens */}
       <Stack.Screen name="MakeOffer" getComponent={() => require('../screens/MakeOfferScreen').default} />
       <Stack.Screen name="PushNotifications" getComponent={() => require('../screens/PushNotificationsScreen').default} />
@@ -242,6 +261,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ListingSuccess" getComponent={() => require('../screens/ListingSuccessScreen').default} />
       <Stack.Screen name="EditListing" getComponent={() => require('../screens/EditListingScreen').default} options={modalScreenOptions} />
 
+      {/* ── Settings & Account ── (notifications, security) */}
       {/* Phase 27 new screens */}
       <Stack.Screen name="NotificationsList" getComponent={() => require('../screens/NotificationsScreen').default} />
 
@@ -249,9 +269,12 @@ export default function AppNavigator() {
       <Stack.Screen name="ChangePassword" getComponent={() => require('../screens/ChangePasswordScreen').default} />
       <Stack.Screen name="TwoFactorSetup" getComponent={() => require('../screens/TwoFactorSetupScreen').default} />
       <Stack.Screen name="WriteReview" getComponent={() => require('../screens/WriteReviewScreen').default} options={modalScreenOptions} />
+
+      {/* ── Support & Help ── (report) */}
       <Stack.Screen name="Report" getComponent={() => require('../screens/ReportScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="SavedSearches" getComponent={() => require('../screens/SavedSearchesScreen').default} />
 
+      {/* ── Creator Studio ── (visual search, camera, looks, studio, outfits, explore) */}
       {/* Visual Search — full-screen camera viewfinder with its own header on results */}
       <Stack.Screen name="VisualSearch" getComponent={() => require('../screens/VisualSearchScreen').default} options={{ headerShown: false }} />
 
@@ -270,6 +293,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ExploreCollection" getComponent={() => require('../screens/ExploreCollectionScreen').default} />
       <Stack.Screen name="StyleQuiz" getComponent={() => require('../screens/StyleQuizScreen').default} options={modalScreenOptions} />
 
+      {/* ── Settings & Account ── (chat settings, sessions, privacy, about) */}
       {/* Phase 13 — Settings integrity */}
       <Stack.Screen name="ChatSettings" getComponent={() => require('../screens/ChatSettingsScreen').default} />
       <Stack.Screen name="ActiveSessions" getComponent={() => require('../screens/ActiveSessionsScreen').default} />
@@ -280,43 +304,66 @@ export default function AppNavigator() {
       <Stack.Screen name="ArchivedConversations" getComponent={() => require('../screens/ArchivedConversationsScreen').default} />
       <Stack.Screen name="ManageQuickReplies" getComponent={() => require('../screens/ManageQuickRepliesScreen').default} />
 
+      {/* ── Chat & Messaging ── (conversations, messages, media) */}
       {/* VISUAL-15 — UI Architecture + Feature Depth */}
       <Stack.Screen name="ConversationInfo" getComponent={() => require('../screens/ConversationInfoScreen').default} />
       <Stack.Screen name="MessageRequests" getComponent={() => require('../screens/MessageRequestsScreen').default} />
       <Stack.Screen name="NewMessage" getComponent={() => require('../screens/NewMessageScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="SharedConversationMedia" getComponent={() => require('../screens/SharedConversationMediaScreen').default} />
+
+      {/* ── Commerce ── (collections) */}
       <Stack.Screen name="ManageCollectionItems" getComponent={() => require('../screens/ManageCollectionItemsScreen').default} />
       <Stack.Screen name="CreateCollection" getComponent={() => require('../screens/CreateCollectionScreen').default} options={modalScreenOptions} />
+
+      {/* ── Support & Help ── (order support, buyer protection) */}
       <Stack.Screen name="OrderSupport" getComponent={() => require('../screens/OrderSupportScreen').default} />
       <Stack.Screen name="BuyerProtection" getComponent={() => require('../screens/BuyerProtectionScreen').default} />
+
+      {/* ── Settings & Account ── (connected accounts, accessibility, co-own prefs) */}
       <Stack.Screen name="ConnectedAccounts" getComponent={() => require('../screens/ConnectedAccountsScreen').default} />
       <Stack.Screen name="EmailNotifications" getComponent={() => require('../screens/EmailNotificationsScreen').default} />
       <Stack.Screen name="AccessibilitySettings" getComponent={() => require('../screens/AccessibilitySettingsScreen').default} />
+
+      {/* ── Co-Own / Syndicate ── (price alerts, tax, recurring orders) */}
       <Stack.Screen name="CoOwnPriceAlerts" getComponent={() => require('../screens/CoOwnPriceAlertsScreen').default} />
       <Stack.Screen name="CoOwnTaxDocuments" getComponent={() => require('../screens/CoOwnTaxDocumentsScreen').default} />
       <Stack.Screen name="CoOwnRecurringOrders" getComponent={() => require('../screens/CoOwnRecurringOrdersScreen').default} />
+
+      {/* ── Chat & Messaging ── (media preview) */}
       <Stack.Screen name="ChatMediaPreview" getComponent={() => require('../screens/ChatMediaPreviewScreen').default} options={modalScreenOptions} />
+
+      {/* ── Commerce ── (collection editing) */}
       {/* UI-18 — Reference-perfect product UX */}
       <Stack.Screen name="EditCollection" getComponent={() => require('../screens/EditCollectionScreen').default} options={modalScreenOptions} />
+
+      {/* ── Support & Help ── (tickets, resolution centre) */}
       <Stack.Screen name="SupportTicketDetail" getComponent={() => require('../screens/SupportTicketDetailScreen').default} />
       <Stack.Screen name="ResolutionCentre" getComponent={() => require('../screens/ResolutionCentreScreen').default} />
+
+      {/* ── Seller Tools ── (listing preview) */}
       {/* UI-19 — Sell / Co-own / Chat marketplace UX */}
       <Stack.Screen name="ListingPreview" getComponent={() => require('../screens/ListingPreviewScreen').default} options={modalScreenOptions} />
+
+      {/* ── Auctions & Trading ── (trade confirm) */}
       <Stack.Screen name="TradeConfirm" getComponent={() => require('../screens/TradeConfirmScreen').default} options={modalScreenOptions} />
 
+      {/* ── Trust & Verification ── */}
       {/* Verification status dashboard */}
       <Stack.Screen name="VerificationStatus" getComponent={() => require('../screens/VerificationStatusScreen').default} />
 
+      {/* ── Live Shopping ── */}
       {/* Live shopping — Whatnot/Tilt-style live commerce */}
       <Stack.Screen name="LiveShopping" getComponent={() => require('../screens/LiveShoppingHomeScreen').default} />
       <Stack.Screen name="LiveStreamViewer" getComponent={() => require('../screens/LiveStreamViewerScreen').LiveStreamViewerScreen} options={{ headerShown: false }} />
       <Stack.Screen name="LiveStreamSeller" getComponent={() => require('../screens/LiveStreamSellerScreen').LiveStreamSellerScreen} options={{ headerShown: false }} />
 
+      {/* ── Seller Tools ── (AI listing, bulk, inventory, KYC) */}
       <Stack.Screen name="AIPoweredListing" getComponent={() => require('../screens/AIPoweredListingScreen').default} options={modalScreenOptions} />
 
       {/* Pro seller tools */}
       <Stack.Screen name="BulkListing" getComponent={() => require('../screens/BulkListingScreen').default} options={modalScreenOptions} />
 
+      {/* ── Discovery & Editorial ── (galleria, algorithm, moodboards, AI search) */}
       {/* Galleria — editorial discovery surface for Co-Own assets & curated collections */}
       <Stack.Screen name="Galleria" getComponent={() => require('../screens/GalleriaScreen').default} />
       <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../screens/GalleriaCollectionDetailScreen').default} />
@@ -334,6 +381,7 @@ export default function AppNavigator() {
       <Stack.Screen name="MoodboardHome" getComponent={() => require('../screens/MoodboardHomeScreen').default} />
       <Stack.Screen name="MoodboardEditor" getComponent={() => require('../screens/MoodboardEditorScreen').default} options={modalScreenOptions} />
 
+      {/* ── Settings & Account ── (AI prefs, sustainability, data privacy, notifications) */}
       {/* Settings sub-departments — 2026 settings enhancement */}
       <Stack.Screen name="AIPreferences" getComponent={() => require('../screens/AIPreferencesScreen').default} />
       <Stack.Screen name="SustainabilityPreferences" getComponent={() => require('../screens/SustainabilityPreferencesScreen').default} />
@@ -392,7 +440,7 @@ const triggerStyles = StyleSheet.create({
     bottom: 96,
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(120,120,120,0.55)',
     alignItems: 'center',
     justifyContent: 'center',

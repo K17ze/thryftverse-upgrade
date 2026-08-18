@@ -577,7 +577,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             style={[localStyles.demoBannerText, { color: colors.textMuted }]}
             accessibilityRole="text"
           >
-            AI search is in demo mode — using keyword matching. Full AI coming soon.
+            AI search is in demo mode — using keyword matching, not AI.
           </Text>
         </View>
       )}

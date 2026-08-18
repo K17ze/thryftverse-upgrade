@@ -23,13 +23,17 @@ const DARK_COLORS = {
   // 2. SURFACE - Slightly elevated (replaces `card`)
   surface: '#141414',
   // 2b. SURFACE ALT - More elevated tier (replaces `cardAlt`)
-  surfaceAlt: '#1F1F1F',
-  // 2c. SURFACE ELEVATED - Highest elevation tier (mirrors ThemeContext)
+  surfaceAlt: '#1C1C1C',
+  // 2c. SURFACE RAISED - Between surface and surfaceElevated (mirrors ThemeContext)
+  surfaceRaised: '#1F1F1F',
+  // 2d. SURFACE ELEVATED - Highest elevation tier (mirrors ThemeContext)
   surfaceElevated: '#242424',
 
   // 3. BRAND/PRIMARY - Warm off-white luxury accent (replaces gold)
   brand: '#F4F0E8',
   brandPressed: '#D8D0C3',
+  // Subtle brand tint — selected states, active tabs, focused fields
+  brandSubtle: 'rgba(244,240,232,0.08)',
 
   // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#FFFFFF',
@@ -41,12 +45,15 @@ const DARK_COLORS = {
   // 5. BORDERS - Subtle separators
   border: '#262626',
   // Canonical name (mirrors ThemeContext). borderLight kept as alias below.
-  borderSubtle: '#333333',
+  borderSubtle: '#1E1E1E',
 
   // Status (minimal set) — WCAG-compliant, mirrors ThemeContext
   danger: '#9b0202',
+  dangerSubtle: 'rgba(155,2,2,0.10)',
   success: '#215634',
-  warning: '#C9A46A',
+  successSubtle: 'rgba(33,86,52,0.10)',
+  warning: '#D49454',
+  warningSubtle: 'rgba(212,148,84,0.12)',
 
   // Co-Own financial truth — up/down movement only. Per Design.md
   // proposed-semantic: coown-up #1C5631, coown-down #5F1616.
@@ -63,6 +70,9 @@ const DARK_COLORS = {
   // verified status, authenticated value, or curated distinction.
   antiqueGold: '#C9A46A',
   bronze: '#8A6A3F',
+  // Text over media scrims — always white regardless of theme
+  scrimTextPrimary: '#FFFFFF',
+  scrimTextSecondary: 'rgba(255,255,255,0.88)',
 
   // Structural / utility colors (mirrors ThemeContext)
   overlay: 'rgba(0,0,0,0.6)',
@@ -84,13 +94,18 @@ const LIGHT_COLORS = {
   // 2. SURFACE - Light grey for cards (replaces `card`)
   surface: '#F5F5F5',
   // 2b. SURFACE ALT - More elevated tier (replaces `cardAlt`)
-  surfaceAlt: '#EBEBEB',
-  // 2c. SURFACE ELEVATED - Highest elevation tier (mirrors ThemeContext)
+  surfaceAlt: '#EFEFEF',
+  // 2c. SURFACE RAISED - Between surface and surfaceElevated (mirrors ThemeContext)
+  // Monotonic: surface(245) < surfaceAlt(239=darker=recessed) | surfaceRaised(248) > surface(245) = raised
+  surfaceRaised: '#F8F8F8',
+  // 2d. SURFACE ELEVATED - Highest elevation tier (mirrors ThemeContext)
   surfaceElevated: '#FFFFFF',
 
   // 3. BRAND/PRIMARY - Dark neutral luxury accent (replaces gold)
   brand: '#111111',
   brandPressed: '#333333',
+  // Subtle brand tint — selected states, active tabs, focused fields
+  brandSubtle: 'rgba(17,17,17,0.06)',
 
   // 4. TEXT - Three levels of hierarchy + inverse for on-brand surfaces
   textPrimary: '#000000',
@@ -106,8 +121,11 @@ const LIGHT_COLORS = {
 
   // Status (minimal set) — WCAG-compliant, mirrors ThemeContext
   danger: '#9b0202',
+  dangerSubtle: 'rgba(155,2,2,0.08)',
   success: '#215634',
-  warning: '#8A6A3F',
+  successSubtle: 'rgba(33,86,52,0.08)',
+  warning: '#B8742E',
+  warningSubtle: 'rgba(184,116,46,0.10)',
 
   // Co-Own financial truth — up/down movement only.
   coownUp: '#1C5631',
@@ -121,6 +139,9 @@ const LIGHT_COLORS = {
   // Premium accents — used sparingly.
   antiqueGold: '#C9A46A',
   bronze: '#8A6A3F',
+  // Text over media scrims — always white regardless of theme
+  scrimTextPrimary: '#FFFFFF',
+  scrimTextSecondary: 'rgba(255,255,255,0.88)',
 
   // Structural / utility colors (mirrors ThemeContext)
   overlay: 'rgba(0,0,0,0.4)',

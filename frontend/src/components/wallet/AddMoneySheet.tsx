@@ -293,7 +293,7 @@ export function AddMoneySheet({
       <View style={styles.body}>
         {receipt ? (
           <View style={styles.receiptWrap}>
-            <View style={[styles.receiptIcon, { backgroundColor: colors.success + '18' }]}>
+            <View style={[styles.receiptIcon, { backgroundColor: colors.successSubtle }]}>
               <Ionicons name="checkmark-circle" size={28} color={colors.success} />
             </View>
             <Text style={[styles.receiptTitle, { color: colors.textPrimary }]}>

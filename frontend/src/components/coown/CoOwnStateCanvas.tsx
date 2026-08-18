@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   skeletonGraphic: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(128,128,128,0.12)',
   },
   skeletonTitle: {

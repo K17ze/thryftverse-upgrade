@@ -552,7 +552,7 @@ function createEyedropperStyles(colors: ThemeColors) {
     loupeColorPreview: {
       width: 80,
       height: 80,
-      borderRadius: 40,
+      borderRadius: Radius.full,
       borderWidth: 3,
       borderColor: '#FFFFFF',
       alignItems: 'center',

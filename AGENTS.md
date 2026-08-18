@@ -36,6 +36,8 @@ This escalates context and memory usage geometrically and terminates in an **out
 - Subagents must not invoke `run_subagent` themselves. No recursive delegation.
 - If a subagent's task turns out to require broader orchestration, it should return its findings to the main agent, which decides the next step.
 - Keep fan-out shallow: one level of parallelism from the main agent, then stop.
+- There is no limit on the number of subagents the main agent may dispatch. Do not refuse to dispatch because "too many agents" — fan-out breadth is fine. The constraint is depth (no nesting), not breadth.
+- Both `is_background: true` and `is_background: false` are permitted. Choose the mode that fits the work: background for parallelisable tasks whose output is needed later, foreground when the main agent must block on the result before continuing.
 
 ---
 
@@ -160,6 +162,37 @@ Do not spend the task producing documentation instead of product improvement. A 
 ## 4. PUSH TO MAXIMUM QUALITY
 
 Every UI/UX task must be pushed to the highest quality the codebase and agent capability can produce.
+
+### ANTI-AI-MADE DESIGN — non-negotiable
+
+The single fastest way to ruin a flagship product surface is to ship work that **looks AI-generated**. Every reference app the user benchmarks against (Instagram, Pinterest, eBay, Snapchat, Linear, Things, Arc, Cash App, Stripe) was authored by senior product designers and senior full-stack engineers. ThryftVerse must read as their work, not as an LLM's first pass. This is a core principle, not a polish step.
+
+An AI-made surface is one or more of the following — every one of these is a defect, not a style choice:
+
+- **Generic dashboard silhouette.** Repeated rounded rectangles of equal weight stacked into a vertical list. The thumbnail test fails: at 25% scale the screen is a grid of identical grey cards, not a product.
+- **Symmetry-by-default.** Everything centred, every section the same height, every gap identical. Real product surfaces have intentional asymmetry, dominant objects, and breathing room that serves focus.
+- **Decorative chrome over composition.** Shadows on every card, pills around every control, gradients on every header, glass effects on every panel. This is the loudest tell that a surface was assembled, not authored.
+- **Label-everything disease.** Every row has an eyebrow, a title, a subtitle, a caption, a badge. Real apps show less: the object is the label.
+- **Duplicate or restated headings.** A screen header that repeats the section title that repeats the card title. Humans don't write this way; models do.
+- **Placeholder-grade media treatment.** Grey rectangles, `#ccc` covers, `contentFit="cover"` on everything with no focal-point logic. Reads as a scaffold, not a product.
+- **Over-scaffolded code.** Three layers of abstraction for one button. A `ButtonContainerWrapper` wrapping a `ButtonContainer` wrapping a `ButtonPrimitive`. Senior engineers delete this, not ship it.
+- **Inconsistent primitives.** Four different card radii, three different press feedbacks, two different chip styles in the same viewport. Reads as no one owned the system.
+- **Stateless UI.** Only the happy path exists. No loading, no empty, no error, no partial, no offline. Real engineers ship the full state machine.
+- **Verbose, explanatory copy in the UI.** "Welcome back! Here you can manage your items and discover new ones." Real apps say "Your items" and move on.
+- **Excessive motion.** Every mount animates, every press bounces, every transition slides. Flagship apps animate rarely and meaningfully.
+
+The bar is the bar a senior full-stack SWE and senior product designer would ship after a week of iteration on the same surface. Concretely:
+
+- **Composition first.** Decide the dominant object, the reading order, and the breathing room before touching a token. If the silhouette is wrong, no amount of colour or shadow fixes it.
+- **Restraint as a skill.** A surface that shows less but means more is the goal. Remove the eyebrow, the subtitle, the duplicate label, the decorative badge — keep the content that does work.
+- **One system, not many.** One radius grammar, one stroke grammar, one icon family, one press feedback, one motion language per surface. Inconsistency is the AI tell.
+- **Real media is the colour.** On discovery, profile, creator and commerce surfaces, real imagery is the primary visual anchor — not a grey card with a label on top.
+- **Full state coverage is not optional.** Loading, empty, error, partial, offline and populated are all part of the deliverable. A surface with only the happy path is unfinished.
+- **Code quality matches the design quality.** No over-scaffolding, no duplicate primitives, no dead wrappers, no fabricated types, no `any` to silence the compiler. Type-safe, single-source-of-truth, idiomatic to the codebase. A senior SWE reading the diff should not be able to tell it was agent-written.
+- **Full-stack correctness, not just the render.** The upgrade must be correct across the whole stack it touches: contracts, handlers, queries, cache, serializers, hooks, state, UI. A pretty screen backed by a broken or fabricated contract is not a flagship deliverable. Trace the data path end-to-end and make every layer the best version of itself.
+- **Self-critique before claiming done.** Run the thumbnail test and the squint test (§4) on the rendered surface. If it reads as a generic dashboard, it is not done — re-author it.
+
+If a reviewer's first reaction to a screen would be "this feels AI-generated", the task is failed. Re-author it until it reads as a product surface owned by a human who cares.
 
 ### Quality bar
 
@@ -959,16 +992,28 @@ These are the canonical spring configs for 2026 flagship feel. They are already 
 | Animation timing | 300–500ms | 200–300ms standard, 100–200ms feedback |
 | Gesture response | 50–100ms delay | <16ms (60fps) |
 | Loading states | Spinner | Skeleton matching final silhouette + shimmer |
-| Error handling | Alert dialog | Inline error + recovery action |
-| Empty states | "No items" text | Illustration + CTA + explanation |
-| Button press | Color change | Scale + color + haptic |
+| Error handling | Alert dialog | Inline error + recovery action (intensity matched to severity) |
+| Empty states | "No items" text | Intentional composition + appropriate next action (illustration optional — see below) |
+| Button press | Color change | Scale + color + haptic (only where press is a meaningful action) |
 | Toggle | Snap | Spring animation + shadow |
-| Success | Checkmark | Spring celebration + haptic + sound |
-| Error | Red border | Shake + inline message |
-| Pull to refresh | Spinner | Custom animation + physics |
+| Success | Checkmark | Feedback matched to significance tier (S0–S4, see §27.9) |
+| Error | Red border | Inline message; shake reserved for destructive/blocking errors only |
+| Pull to refresh | Spinner | Custom indicator with physics + progress haptic |
 | Product images | 2–3 photos | Zoom, video, swipe, pagination |
 | Search | Keyword only | Visual, voice, AI-powered, autocomplete |
 | Recommendations | Related items | Complete the look, style guide |
+
+**Empty states are not "illustration + CTA + explanation" by default.** A flagship empty state is an *intentional composition* with an *appropriate next action*. A generic SVG illustration slapped onto every empty state is itself an AI-made pattern. Sometimes illustration is justified (onboarding, first-run, emotionally significant absence). Sometimes it is worse than a quiet two-line message. Default to restraint:
+
+```
+No saved items yet
+
+Save products you like and they'll appear here.
+
+[ Explore ]
+```
+
+Add illustration only when it earns its place — when it does explanatory work the text cannot do alone.
 
 ### 27.5 2026 platform design languages
 
@@ -1006,32 +1051,77 @@ Trust is a critical necessity, not a nice-to-have:
 
 ### 27.8 Performance as flagship quality (2026)
 
-Performance is a flagship feature, not a technical concern:
+Performance is a flagship feature, not a technical concern. Targets must be **measurable and anchored to a defined start/end event**, not vague aspirations.
+
+**Measured performance targets:**
+
+| Metric | Target | Definition |
+|--------|--------|------------|
+| navigation → immediate shell | <100ms | Route mount renders the static screen frame (header, rails, background) |
+| navigation → first meaningful skeleton | <200ms | Skeleton matching final silhouette is visible |
+| cached feed → first useful content | <300ms | At least one real content tile decoded and visible from cached payload |
+| cold network → first useful content | <800ms | First real content tile from a network response (TTFB + decode) |
+| image decode → visible media | <150ms per image | From `onLoad` to painted pixels |
+| interaction → visual acknowledgement | <100ms | Press/scroll/tap produces a visible response within one frame budget |
+| frame budget | no dropped-frame clusters | No 3+ consecutive dropped frames during scroll or transition |
+
+Measure these in **release mode only** — dev mode is 2–5× slower and is not a valid measurement environment.
+
+**Implementation:**
 
 - **60fps minimum** for all scrolling and animations (120fps on ProMotion)
-- **<500ms feed load** time
 - **FlashList v2** with masonry prop for Pinterest-style feeds
 - **Reanimated 4 worklets** for all animations (off JS thread)
-- **React.memo** on all list item components
+- **Stabilise list-item renders where profiling shows meaningful rerender cost.** Use `React.memo` / `useMemo` / `useCallback` *intentionally and measurably*, not as blanket ceremony. Wrapping every list item in `memo()` by default is itself an AI-made code smell — it adds prop-equality overhead without proven benefit. Add memoization when a profiler run shows a rerender cost worth fixing, and remove it if it does not move the metric.
 - **useRecyclingState** for like/favorite buttons in recycled list items
-- **Profile in release mode only** — dev mode is 2–5× slower
 - **Hermes bytecode** for faster startup
 - **Image preloading** on onboarding for smooth initial scroll
 
 ### 27.9 Micro-interaction grammar (2026)
 
-Every interactive element must have purposeful micro-interactions:
+**Micro-interactions are semantic, not universal.** Feedback intensity must correspond to the significance of the state transition. This overrides any earlier table that suggested adding scale/haptic/shake/celebration to every element by default.
 
-| Element | Good | Flagship |
+Do **NOT** automatically add:
+- scale to every card
+- haptic to every tap
+- haptic at section boundaries
+- shake to every error
+- celebration to every success
+
+Haptic feedback on routine scrolling (e.g. "scroll past section → selection haptic") becomes annoying extremely quickly and is prohibited as a default. Reserve haptics for moments where the user's hand is the actor on a meaningful action, not where the user's eye is the observer of a passive transition.
+
+**Success feedback hierarchy (S0–S4):**
+
+| Tier | Feedback | Use when | Examples |
+|------|----------|----------|----------|
+| S0 — invisible | None. Local state updates silently. | Routine local state change with no user-visible consequence. | Filter chip toggle, sort order, internal flag. |
+| S1 — visual state only | Icon/state change, no haptic. | Low-stakes user action with immediate visual confirmation. | Like, save, follow, bookmark. |
+| S2 — visual + subtle haptic | State change + light impact haptic. | Meaningful confirmed user action that the user initiated deliberately. | Add to cart, send message, submit search, confirm selection. |
+| S3 — dedicated success state | Full success surface/spring + haptic. | Transactional or irreversible confirmed action. | Purchase, sale, payout, onboarding milestone, listing published. |
+| S4 — celebratory | Spring celebration + haptic + (optional) sound. | Rare achievement or emotionally significant event. | First sale, milestone reached, level-up, rare badge earned. |
+
+The vast majority of "success" moments in the app are S0 or S1. S3 and S4 are rare by design — if everything celebrates, nothing does.
+
+**Press feedback:** scale + spring back is appropriate for *primary* actions (a card opening, a CTA button). It is not required on every `Pressable`. Transparent 44pt hit targets (back, overflow, search, camera) need only a tint/opacity press state, not a scale animation.
+
+**Error feedback:** inline message is the default. Shake is reserved for destructive or blocking errors (failed purchase, invalid form submission that the user just tried to submit). A network error on a background fetch does not shake the screen.
+
+**Reference table (intensity-matched, not universal):**
+
+| Element | Good | Flagship (when justified) |
 |---------|------|----------|
-| Button press | Color change | Scale 0.95–0.97 + spring back + light haptic |
-| Tab switch | Instant | Sliding indicator + selection haptic + content crossfade |
-| Card tap | Background change | Scale 0.97 + light haptic + spring back |
-| Like | Icon swap | Heart burst animation + success haptic |
-| Pull to refresh | Spinner | Custom indicator with physics + progress haptic |
-| Error | Red text | Shake animation + error haptic + inline recovery |
-| Success | Text change | Spring celebration + success notification haptic |
-| Scroll past section | None | Subtle selection haptic at section boundary |
+| Primary button press | Color change | Scale 0.95–0.97 + spring back + light haptic |
+| Tab switch | Instant | Sliding indicator + content crossfade (haptic optional, not required) |
+| Card tap (opens detail) | Background change | Scale 0.97 + spring back (haptic optional) |
+| Like / save / follow | Icon swap | Heart burst or fill animation, no haptic (S1) |
+| Pull to refresh | Spinner | Custom indicator with physics + progress haptic at release |
+| Error (blocking) | Red text | Shake + error haptic + inline recovery |
+| Error (background) | Silent | Inline status row, no shake |
+| Success (S0–S1) | Text/icon change | State change only |
+| Success (S2) | Text change | State change + light haptic |
+| Success (S3) | Checkmark | Dedicated success surface + haptic |
+| Success (S4) | Checkmark | Spring celebration + haptic + optional sound |
+| Scroll past section | None | None — do not add haptics to passive scrolling |
 
 ### 27.10 Research protocol for 2026
 
@@ -1042,3 +1132,110 @@ Before implementing any UI/UX upgrade, research current best practices online. B
 3. Study reference apps' latest versions (e.g., "Depop UX redesign 2026")
 4. Check platform design language updates (e.g., "iOS 26 Liquid Glass guidelines")
 5. Implement findings — do not stop at research
+
+---
+
+## 28. RESEARCH PACK ROUTING
+
+The flagship research library is a **reference corpus, not a prompt to load wholesale**. When research documents are supplied with a task, treat them as reference material for the specific surface being changed — do not blindly enforce unrelated findings onto unrelated screens. A finding about feed masonry does not apply to a settings screen; a finding about media focal points does not apply to a text-only confirmation sheet.
+
+When supplied research conflicts, resolve in this priority order:
+
+```
+user requirement (explicit, current task)
+  → screen-specific research (department report for this surface)
+    → component research (primitive-level report)
+      → generic research (cross-cutting principles)
+```
+
+A higher tier overrides a lower tier. Generic research never overrides a screen-specific finding.
+
+---
+
+## 29. OPTICAL AUTHORITY
+
+Tokens establish consistency. **Rendered geometry establishes quality.** The native render wins over mathematical purity.
+
+Agents may use small, documented optical corrections when token-perfect geometry looks visually incorrect. This is not permission to ignore the token system — it is permission to fix the cases where the token system produces a visibly wrong result.
+
+**Permitted optical corrections:**
+
+- 1px icon baseline correction (icons rarely sit on the true baseline)
+- glyph optical-size compensation (same pt size renders different visual weight across families)
+- asymmetric visual centering (true geometric centre ≠ perceived centre for shapes with weight at the bottom)
+- category-specific media focal positioning (faces vs products vs landscapes need different crop anchors)
+- inner/outer corner compensation (stroke corners vs fill corners do not align geometrically)
+- typography baseline adjustment (cap height vs x-height vs descender alignment across mixed weights)
+
+**Rules:**
+
+- Every optical correction must be **documented inline** with a comment explaining why the value deviates from the token (e.g. `// optical: icon sits 1px below baseline to align with x-height`).
+- Optical corrections are **local to the component that needs them**. Do not propagate a correction into a shared token.
+- Never "clean up" an intentional optical exception merely because it does not match the spacing scale. If a value looks wrong after "fixing" it to the nearest token, revert it.
+- The test is the **rendered result**, not the token audit. A screen that is token-perfect but visually misaligned is a failure; a screen with one documented optical correction that looks right is a success.
+
+Without this rule, an agent can make the UI mathematically consistent while actually making it visually worse. The native render is the source of truth.
+
+---
+
+## 30. LAST-MILE VISUAL ACCEPTANCE
+
+Before claiming a UI/UX task is complete, the agent must inspect the rendered surface against this checklist. **Passing TypeScript and tests is not permission to skip this section.** This is the final gate.
+
+### Silhouette & first viewport
+- [ ] silhouette — at 25% scale, the primary object and reading order are obvious; repeated rounded rectangles do not dominate
+- [ ] first viewport — the most important content and actions are visible without scrolling
+- [ ] content density — useful objects per viewport is appropriate (4–6 rows for lists; ≥2 media objects for discovery)
+- [ ] outer rails — left/right edge alignment is intentional and consistent
+
+### Rhythm & alignment
+- [ ] vertical rhythm — spacing cadence is deliberate, not random
+- [ ] baseline alignment — text baselines align across columns and rows where they should
+- [ ] optical centering — centred elements are visually centred, not geometrically centred (see §29)
+
+### Corners, strokes & surfaces
+- [ ] corner continuity — inner and outer radii relate correctly (outer = inner + padding)
+- [ ] no unnecessary borders — hairlines only where they communicate a boundary
+- [ ] no unnecessary cards — flat canvas + spacing is the default; cards require a reason
+- [ ] separator consistency — one separator grammar per surface
+- [ ] shadow necessity — every shadow earns its place; no decorative shadows
+
+### Icons
+- [ ] icon optical weight — consistent line weight / fill rule within a viewport
+- [ ] icon baseline — icons align to text baseline, not to bounding box
+- [ ] icon/label gap — consistent gap between icon and its label across the surface
+
+### Media
+- [ ] media crop — focal point preserved; no blind `cover` on everything
+- [ ] focal point — faces/products/landscapes cropped to their meaningful anchor
+- [ ] repeated media proportions — consistent aspect ratios within a feed/grid
+- [ ] colour distribution in feeds — media provides the colour, not grey placeholders
+
+### Typography
+- [ ] typography hierarchy — clear type scale; no competing weights at the same role
+- [ ] number alignment — tabular/monospaced figures where numbers align vertically
+- [ ] truncation — long names/content truncate gracefully with ellipsis or fade
+- [ ] large text — display sizes are optically tuned, not just scaled up
+
+### States & transitions
+- [ ] press states — every interactive element has a visible press state
+- [ ] loading → final geometry — skeleton matches final layout; no layout shift on load
+- [ ] transition continuity — shared elements, position, and scroll offset persist across transitions
+- [ ] scroll restoration — returning to a list restores scroll position
+
+### Theme & device parity
+- [ ] light mode — renders correctly
+- [ ] dark mode — geometry, hierarchy, and density are identical to light mode (no added glow/translucency)
+- [ ] compact phone — no overflow, no clipped content, hit targets ≥44pt
+- [ ] standard phone — composition holds at 390–430pt width
+- [ ] large phone — composition scales gracefully; no stretched whitespace or oversized chrome
+
+### Sign-off
+
+Only after every applicable box above is checked may the agent claim:
+
+```
+COMPLETE — TARGET MET.
+```
+
+If any box fails, the task is not complete. Fix it and re-run the checklist. Do not claim completion with open failures.

@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
   cornerDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: Radius.full,
     borderWidth: 1.5,
     borderColor: '#fff',
   },
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   rotationHandleDot: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,

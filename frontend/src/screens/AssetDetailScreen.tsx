@@ -18,7 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, Radius, FontFamily, DockConstants, Stroke, Control, LetterSpacing, Numeric } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
@@ -1748,7 +1748,7 @@ const styles = StyleSheet.create({
   collectibleAvailabilityDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.full,
   },
   collectibleStaleText: {
     fontSize: TypographyV2.meta.size,
@@ -2085,7 +2085,7 @@ const styles = StyleSheet.create({
   marketLegendDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.full,
   },
   marketLegendText: {
     fontSize: TypographyV2.meta.size,

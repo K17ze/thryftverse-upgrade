@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
 
@@ -30,7 +31,7 @@ export function FlagshipHeroSection({
   return (
     <View style={[styles.root, { width, height }]}>
       {imageUri ? (
-        <CachedImage uri={imageUri} style={{ width, height }} contentFit="cover" transition={500} />
+        <CachedImage uri={imageUri} style={{ width, height }} contentFit="cover" transition={Motion.transitions.mediaLoad.duration} />
       ) : (
         <View style={[styles.imageFallback, { width, height }]} />
       )}
@@ -82,7 +83,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: Type.display.size,
     lineHeight: 38,
     fontFamily: FontFamily.bold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     letterSpacing: -0.5,
   },
   subtitle: {
@@ -90,7 +91,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: Type.body.size,
     lineHeight: 22,
     fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.88)',
+    color: colors.scrimTextSecondary,
   },
   ctaWrap: {
     marginTop: Space.md,

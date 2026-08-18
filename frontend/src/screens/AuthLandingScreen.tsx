@@ -15,7 +15,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
-import { Typography, Radius, Type, Space, FontSize, Stroke, Elevation, Control } from '../theme/designTokens';
+import { Typography, Radius, Type, Space, FontSize, Stroke, Control } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -530,11 +530,6 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: Space.xl,
-    elevation: Elevation.floating.elevation,
   },
   primaryText: {
     color: colors.textInverse,

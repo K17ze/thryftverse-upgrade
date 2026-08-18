@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
-  ActivityIndicator,
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';

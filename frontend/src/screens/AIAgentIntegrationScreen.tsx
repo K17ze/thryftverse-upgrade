@@ -43,7 +43,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
 import {
   AIProvider,
@@ -344,9 +344,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 
       {/* ── Provider list ── */}
       {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
+        <FlagshipState variant="loading" style={styles.loadingWrap} />
       ) : (
         <View>
           <View style={styles.sectionLabelWrap}>

@@ -826,7 +826,7 @@ function createStyles(colors: any) {
   cornerDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.full,
     backgroundColor: '#3B82F6',
     borderWidth: Stroke.standard,
     borderColor: '#FFFFFF',

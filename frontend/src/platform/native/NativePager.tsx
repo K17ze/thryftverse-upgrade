@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Type, Space } from '../../theme/designTokens';
+import { Typography, Type, Space, Radius } from '../../theme/designTokens';
 
 export interface NativePagerPage {
   key: string;
@@ -116,7 +116,7 @@ function createStyles(colors: ThemeColors) {
     width: 30,
     height: 2,
     backgroundColor: colors.brand,
-    borderRadius: 1,
+    borderRadius: Radius.full,
   },
   pager: {
     flex: 1,

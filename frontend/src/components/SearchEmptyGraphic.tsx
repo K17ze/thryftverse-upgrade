@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
   iconRing: {
     width: 72,
     height: 72,
-    borderRadius: 36,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor:

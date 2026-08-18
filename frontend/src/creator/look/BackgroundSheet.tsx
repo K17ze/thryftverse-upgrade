@@ -819,7 +819,7 @@ function createStyles(colors: ThemeColors) {
       position: 'absolute',
       bottom: 0,
       height: Stroke.emphasis,
-      borderRadius: 1,
+      borderRadius: Radius.full,
     },
     // ── Body ──
     body: {

@@ -421,7 +421,7 @@ export default function LiveShoppingHomeScreen() {
           <View style={styles.demoBanner}>
             <Ionicons name="flask-outline" size={16} color={colors.warning} />
             <Text style={styles.demoBannerText}>
-              Demo mode — live streams are simulated. Real video coming soon.
+              Demo mode — live streams are simulated.
             </Text>
           </View>
         )}
@@ -605,7 +605,7 @@ function useStyles() {
           paddingHorizontal: Space.sm + 2,
           paddingVertical: Space.sm,
           borderRadius: Radius.md,
-          backgroundColor: colors.warning + '18',
+          backgroundColor: colors.warningSubtle,
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: colors.warning + '40',
         },

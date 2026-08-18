@@ -267,7 +267,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   iconRing: {
     width: 96,
     height: 96,
-    borderRadius: 48,
+    borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
@@ -278,7 +278,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   iconRingCompact: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     marginBottom: Space.sm,
   },
   title: {

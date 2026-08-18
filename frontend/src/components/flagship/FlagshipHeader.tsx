@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Control, Type, TypeStyles } from '../../theme/designTokens';
+import { Space, Control, Type, TypeStyles, PressScale } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 export type FlagshipHeaderVariant = 'pushed' | 'modal' | 'large';
@@ -97,7 +97,7 @@ export function FlagshipHeader({
             accessibilityRole="button"
             accessibilityLabel={isModal ? 'Close' : 'Go back'}
             accessibilityHint={isModal ? 'Closes this screen' : 'Returns to the previous screen'}
-            scaleValue={0.9}
+            scaleValue={PressScale.icon}
             hapticFeedback="light"
             activeOpacity={0.62}
           >

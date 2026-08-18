@@ -27,7 +27,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
-import { FlagshipEmptyGraphic } from '../components/flagship';
+import { FlagshipEmptyGraphic, FlagshipHeader } from '../components/flagship';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
@@ -65,9 +65,6 @@ export default function ClosetScreen() {
   const t = StyleSheet.create({
     container: { backgroundColor: colors.background },
     headerBorder: { backgroundColor: colors.background, borderBottomColor: colors.border },
-    backBtn: { borderColor: colors.border, backgroundColor: 'transparent' },
-    shareBtn: { borderColor: colors.border, backgroundColor: 'transparent' },
-    headerTitle: { color: colors.textPrimary },
     tabBar: { borderBottomColor: colors.border },
     tabLabel: { color: colors.textSecondary },
     tabLabelActive: { color: colors.textPrimary },
@@ -668,28 +665,28 @@ export default function ClosetScreen() {
       {/* Animated Header Border */}
       <Reanimated.View style={[styles.headerBorder, t.headerBorder, headerBgStyle]} pointerEvents="none" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <AnimatedPressable style={[styles.backBtn, t.backBtn]} onPress={handleGoBack} activeOpacity={0.85}>
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, t.headerTitle]}>Closet</Text>
-        </View>
-        <AnimatedPressable
-          style={[styles.shareBtn, t.shareBtn]}
-          onPress={handleShareCloset}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Share closet"
-        >
-          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <View style={[styles.countPill, t.countPill]}>
-          <Ionicons name={TAB_ICONS[activeTab]} size={12} color={colors.textMuted} />
-          <Text style={[styles.countBadge, t.countBadge]}>{tabCount}</Text>
-        </View>
-      </View>
+      {/* Header — FlagshipHeader primitive (canonical header, 44pt back hit area) */}
+      <FlagshipHeader
+        title="Closet"
+        onBack={handleGoBack}
+        rightAction={
+          <View style={styles.headerRightActions}>
+            <AnimatedPressable
+              style={styles.shareBtn}
+              onPress={handleShareCloset}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Share closet"
+            >
+              <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+            </AnimatedPressable>
+            <View style={[styles.countPill, t.countPill]}>
+              <Ionicons name={TAB_ICONS[activeTab]} size={12} color={colors.textMuted} />
+              <Text style={[styles.countBadge, t.countBadge]}>{tabCount}</Text>
+            </View>
+          </View>
+        }
+      />
 
       <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
 
@@ -929,22 +926,10 @@ const styles = StyleSheet.create({
     height: Space.xxl + Space.xl + Space.sm + 2,
     zIndex: 1,
   },
-  header: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md - Space.xs,
+  headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    zIndex: 2,
-  },
-  backBtn: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.md,
-    borderWidth: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   shareBtn: {
     width: Space.xl + Space.sm,
@@ -953,11 +938,6 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
   },
   tabBar: {
     flexDirection: 'row',
@@ -1022,7 +1002,7 @@ const styles = StyleSheet.create({
     right: 6,
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: Radius.full,
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',

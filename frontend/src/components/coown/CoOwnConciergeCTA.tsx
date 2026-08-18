@@ -144,7 +144,7 @@ export function CoOwnConciergeCTA({
 
       {/* Auction info */}
       {nextAuctionLabel && (
-        <View style={[styles.auctionCard, { backgroundColor: colors.warning + '12', borderColor: colors.warning + '40' }]}>
+        <View style={[styles.auctionCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '40' }]}>
           <View style={styles.auctionHeader}>
             <Ionicons name="time-outline" size={14} color={colors.warning} />
             <Text style={[styles.auctionTitle, { color: colors.warning }]}>Next call auction</Text>

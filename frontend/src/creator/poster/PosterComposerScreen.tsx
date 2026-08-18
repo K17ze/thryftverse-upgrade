@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, FontFamily } from '../../theme/designTokens';
+import { Space, FontFamily, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -2474,7 +2474,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     backgroundColor: '#C9A46A',
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   recoveryBtnText: {
     color: '#0a0a0a',

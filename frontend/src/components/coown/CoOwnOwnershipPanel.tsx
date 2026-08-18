@@ -396,12 +396,12 @@ const styles = StyleSheet.create({
   },
   allocationBarBg: {
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
     overflow: 'hidden',
   },
   allocationBarFill: {
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: Radius.full,
   },
   viewerBlock: {
     borderRadius: Radius.md,

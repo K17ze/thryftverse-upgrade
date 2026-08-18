@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     zIndex: 10,
     overflow: 'hidden',
-    borderRadius: 999,
+    borderRadius: Radius.full,
   },
   skeletonBody: { paddingHorizontal: Space.md, paddingBottom: Space.sm },
   // Seam row — begins at canvas boundary, minHeight reserves avatar overlap

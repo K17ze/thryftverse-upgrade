@@ -1,17 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, ViewStyle, ActivityIndicator, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions, ViewStyle, ActivityIndicator, Pressable, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography, Type, IconGrammar, Control, Stroke, AvatarSize } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { ActiveTheme } from '../../constants/colors';
 import { FACE_FOCAL_POINT } from '../../utils/media';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Video, ResizeMode } from '../compat/Video';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 interface FlagshipProfileMediaProps {
   coverUri?: string | null;
@@ -50,6 +49,7 @@ export function FlagshipProfileMedia({
 }: FlagshipProfileMediaProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: screenWidth } = useWindowDimensions();
   const effectiveCover = coverVideoUri || coverUri;
   const hasCover = Boolean(effectiveCover);
   const showCoverError = coverError != null && !isUploadingCover;
@@ -60,13 +60,13 @@ export function FlagshipProfileMedia({
   const staticCover = Platform.OS === 'web' ? (coverUri ?? coverVideoUri) : effectiveCover;
 
   return (
-    <View style={[styles.root, style]}>
+    <View style={[styles.root, { width: screenWidth }, style]}>
       {/* Cover */}
-      <View style={[styles.coverWrap, { height: coverHeight }]}>
+      <View style={[styles.coverWrap, { height: coverHeight, width: screenWidth }]}>
         {showVideo ? (
           <Video
             source={{ uri: coverVideoUri }}
-            style={[styles.coverImage, { height: coverHeight }]}
+            style={[styles.coverImage, { height: coverHeight, width: screenWidth }]}
             resizeMode={ResizeMode.COVER}
             shouldPlay
             isLooping
@@ -75,15 +75,15 @@ export function FlagshipProfileMedia({
         ) : hasCover ? (
           <CachedImage
             uri={staticCover!}
-            style={[styles.coverImage, { height: coverHeight }]}
+            style={[styles.coverImage, { height: coverHeight, width: screenWidth }]}
             contentFit="cover"
-            transition={400}
+            transition={Motion.transitions.mediaLoad.duration}
             cacheBuster={cacheBuster}
           />
         ) : (
           <ImageEmptyGraphic
             icon="image-outline"
-            width={SCREEN_W}
+            width={screenWidth}
             height={coverHeight}
             style={styles.coverFallback}
           />
@@ -108,9 +108,9 @@ export function FlagshipProfileMedia({
           >
             <View style={styles.editCoverVisible}>
               {isUploadingCover ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
               ) : (
-                <Ionicons name="image-outline" size={17} color="#fff" />
+                <Ionicons name="image-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} />
               )}
             </View>
           </AnimatedPressable>
@@ -157,7 +157,7 @@ export function FlagshipProfileMedia({
                 uri={avatarUri}
                 style={styles.avatarImage}
                 contentFit="cover"
-                transition={300}
+                transition={Motion.transitions.mediaLoad.duration}
                 focalPoint={FACE_FOCAL_POINT}
                 cacheBuster={cacheBuster}
               />
@@ -173,7 +173,7 @@ export function FlagshipProfileMedia({
                 />
                 <Ionicons
                   name="person"
-                  size={32}
+                  size={IconGrammar.hero}
                   color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.22)'}
                 />
               </View>
@@ -191,9 +191,9 @@ export function FlagshipProfileMedia({
                 accessibilityRole="button"
               >
                 {isUploadingAvatar ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
                 ) : (
-                  <Ionicons name="camera" size={14} color="#fff" />
+                  <Ionicons name="camera" size={IconGrammar.badge} color={colors.scrimTextPrimary} />
                 )}
               </AnimatedPressable>
             )}
@@ -209,16 +209,16 @@ const AVATAR_SIZE = 104;
 
 const createStyles = (colors: any) => StyleSheet.create({
   root: {
-    width: SCREEN_W,
+    width: '100%',
   },
   coverWrap: {
-    width: SCREEN_W,
+    width: '100%',
     height: DEFAULT_COVER_H,
     position: 'relative',
     overflow: 'hidden',
   },
   coverImage: {
-    width: SCREEN_W,
+    width: '100%',
     height: DEFAULT_COVER_H,
   },
   coverFallback: {
@@ -233,10 +233,10 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   editCoverBtn: {
     position: 'absolute',
-    right: 16,
-    bottom: 14,
-    width: 44,
-    height: 44,
+    right: Space.md,
+    bottom: Space.smMd,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -247,19 +247,19 @@ const createStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1,
+    borderWidth: Stroke.hairline,
     borderColor: 'rgba(255,255,255,0.2)',
   },
   coverErrorRow: {
     position: 'absolute',
-    right: 16,
-    bottom: 14,
+    right: Space.md,
+    bottom: Space.smMd,
     flexDirection: 'column',
     alignItems: 'flex-end',
-    gap: 6,
+    gap: Space.xs,
     backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
     borderRadius: Radius.lg,
   },
   coverErrorText: {
@@ -269,20 +269,20 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   coverErrorActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Space.sm,
   },
   coverErrorBtn: {
-    paddingHorizontal: 12,
+    paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.15)',
-    minHeight: 44,
+    minHeight: Control.hit,
     justifyContent: 'center',
   },
   coverErrorBtnText: {
-    fontSize: Type.captionElevated.size,
+    fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: '#fff',
+    color: colors.scrimTextPrimary,
   },
   avatarRow: {
     flexDirection: 'row',
@@ -293,7 +293,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: Radius.full,
-    borderWidth: 4,
+    borderWidth: Stroke.emphasis * 2,
     borderColor: colors.background,
     backgroundColor: colors.surface,
     overflow: 'hidden',
@@ -311,15 +311,15 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   editAvatarBtn: {
     position: 'absolute',
-    right: 2,
-    bottom: 2,
+    right: Space.xs / 2,
+    bottom: Space.xs / 2,
     width: 28,
     height: 28,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.background,
   },
 });

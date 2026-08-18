@@ -144,7 +144,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
               uri={firstFrame.mediaUrl}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
-              containerStyle={{ borderRadius: 0, overflow: 'hidden' }}
+              containerStyle={{ borderRadius: Radius.none, overflow: 'hidden' }}
             />
           ) : (
             <View style={[styles.cardPlaceholder, { backgroundColor: firstFrame?.backgroundColor ?? colors.surfaceAlt }]}>

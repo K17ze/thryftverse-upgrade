@@ -485,12 +485,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     },
     confidenceBar: {
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.full,
       overflow: 'hidden',
     },
     confidenceFill: {
       height: '100%',
-      borderRadius: 2,
+      borderRadius: Radius.full,
     },
 
     // Reasons
@@ -529,13 +529,13 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     },
     reasonWeightBar: {
       height: 3,
-      borderRadius: 1.5,
+      borderRadius: Radius.full,
       backgroundColor: colors.border,
       overflow: 'hidden',
     },
     reasonWeightFill: {
       height: '100%',
-      borderRadius: 1.5,
+      borderRadius: Radius.full,
     },
 
     // Actions

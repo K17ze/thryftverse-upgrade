@@ -159,7 +159,7 @@ export function CoOwnPortfolioStorytelling({
 
       {/* Stale mark warning */}
       {isStaleMark && (
-        <View style={[styles.staleWarning, { backgroundColor: colors.warning + '12' }]}>
+        <View style={[styles.staleWarning, { backgroundColor: colors.warningSubtle }]}>
           <Ionicons name="time-outline" size={12} color={colors.warning} />
           <Text style={[styles.staleWarningText, { color: colors.warning }]}>
             Mark is stale ({markAgeLabel}). The last trade was more than 24h ago — treat the price with caution.

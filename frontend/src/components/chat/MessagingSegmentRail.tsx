@@ -143,7 +143,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: Space.xs,
     right: Space.xs,
     height: 2,
-    borderRadius: 1,
+    borderRadius: Radius.full,
     backgroundColor: 'transparent',
   },
   indicatorActive: {

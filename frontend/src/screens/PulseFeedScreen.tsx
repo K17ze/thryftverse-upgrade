@@ -205,13 +205,10 @@ function createStyles(colors: ThemeColors) {
     card: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
-      marginBottom: Space.sm,
+      paddingVertical: Space.md,
       gap: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
     cardImage: {
       width: Space.xxl + Space.xl,

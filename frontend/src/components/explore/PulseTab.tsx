@@ -268,6 +268,19 @@ export default function PulseTab() {
             actionLabel="See all"
             onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
           />
+          <HorizontalRail contentContainerStyle={styles.trendingScroll}>
+            {trendingListings.map((item) => (
+              <TrendingRailItem
+                key={item.id}
+                item={item}
+                onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'Pulse' }); }}
+                styles={styles}
+                formatPrice={formatPrice}
+              />
+            ))}
+          </HorizontalRail>
+          {/* Window tabs below the first rail so the first viewport shows
+              media, not chrome (audit §3.4, §4.5). */}
           <View style={styles.windowTabs}>
             {(['24h', '7d', '30d'] as const).map((w) => {
               const isActive = trendingWindow === w;
@@ -285,17 +298,6 @@ export default function PulseTab() {
               );
             })}
           </View>
-          <HorizontalRail contentContainerStyle={styles.trendingScroll}>
-            {trendingListings.map((item) => (
-              <TrendingRailItem
-                key={item.id}
-                item={item}
-                onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'Pulse' }); }}
-                styles={styles}
-                formatPrice={formatPrice}
-              />
-            ))}
-          </HorizontalRail>
         </View>
       )}
 
@@ -322,17 +324,6 @@ export default function PulseTab() {
           </HorizontalRail>
         </View>
       )}
-
-      {/* Live Pulse Banner */}
-      <View>
-        <AnimatedPressable style={styles.pulseBanner} onPress={handleViewAll} activeOpacity={0.92}>
-          <View>
-            <Text style={styles.pulseBannerTitle}>Marketplace Live</Text>
-            <Text style={styles.pulseBannerSub}>{activities.length} active events · {liveAuctions.length} live auctions</Text>
-          </View>
-          <Ionicons name="arrow-forward" size={18} color={colors.brand} />
-        </AnimatedPressable>
-      </View>
 
       {/* Activity feed */}
       <View style={{ marginTop: Space.lg }}>
@@ -429,32 +420,6 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.xs,
   },
 
-  /* Pulse Banner */
-  pulseBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  pulseBannerTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  pulseBannerSub: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
-
   /* Trending */
   trendRow: {
     flexDirection: 'row',
@@ -498,7 +463,7 @@ function createStyles(colors: ThemeColors) {
   sellerAvatar: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
   },
   sellerName: {
@@ -541,13 +506,10 @@ function createStyles(colors: ThemeColors) {
   activityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: Space.md,
-    marginBottom: Space.sm,
+    paddingVertical: Space.md,
     gap: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   activityImage: {
     width: 80,

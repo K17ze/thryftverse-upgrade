@@ -139,12 +139,6 @@ export default function PersonalisationScreen() {
         <FlagshipHeader
           title="Personalisation"
           onBack={() => navigation.goBack()}
-          rightAction={
-            <View style={styles.headerRight}>
-              <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-              <Text style={styles.headerSaved}>Saved</Text>
-            </View>
-          }
         />
       }
       scrollEnabled={false}
@@ -171,10 +165,6 @@ export default function PersonalisationScreen() {
                 <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
                   {brandsPref === 'Any' && membersPref === 'Everyone' ? 'Default discovery' : 'Custom discovery'}
                 </Text>
-              </View>
-              <View style={[styles.heroBadge, { backgroundColor: colors.success + '15' }]}>
-                <Ionicons name="checkmark-circle" size={12} color={colors.success} />
-                <Text style={[styles.heroBadgeText, { color: colors.success }]}>Saved</Text>
               </View>
             </View>
           </View>
@@ -248,17 +238,6 @@ export default function PersonalisationScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    headerRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-    },
-    headerSaved: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.success,
-    },
-
     // Scroll
     scrollContent: {
       paddingHorizontal: Space.md,
@@ -294,18 +273,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       marginTop: Space.xs / 2,
-    },
-    heroBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-    },
-    heroBadgeText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
     },
 
     // Section

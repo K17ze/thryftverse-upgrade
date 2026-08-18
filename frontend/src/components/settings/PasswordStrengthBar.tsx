@@ -153,7 +153,7 @@ export function PasswordStrengthBar({ password, showChecklist = true }: Password
                 <View
                   style={[
                     styles.checklistIcon,
-                    { backgroundColor: met ? colors.success + '18' : colors.surfaceAlt },
+                    { backgroundColor: met ? colors.successSubtle : colors.surfaceAlt },
                   ]}
                 >
                   <Ionicons

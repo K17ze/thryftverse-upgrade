@@ -317,7 +317,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           accessibilityRole="button"
                           accessibilityLabel={`View asset, triggered alert ${alert.condition} ${formatGbp(alert.targetPriceGbpMinor)}`}
                         >
-                          <View style={[styles.conditionBadge, { backgroundColor: colors.warning + '18' }]}>
+                          <View style={[styles.conditionBadge, { backgroundColor: colors.warningSubtle }]}>
                             <Ionicons name="checkmark" size={16} color={colors.warning} />
                           </View>
                           <View style={styles.alertText}>
