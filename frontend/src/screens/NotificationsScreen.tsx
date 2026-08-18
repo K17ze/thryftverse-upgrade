@@ -619,7 +619,6 @@ export default function NotificationsScreen() {
         <View
           style={[
             styles.notifCard,
-            !item.read && styles.notifCardUnread,
             item.attention === 'critical' && styles.notifCardCritical,
             item.attention === 'action' && !item.read && styles.notifCardAction,
           ]}
@@ -808,7 +807,7 @@ export default function NotificationsScreen() {
             <View style={styles.unreadSummaryBadge}>
               <View style={styles.unreadSummaryDot} />
               <Text style={styles.unreadSummaryText}>
-                {unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
+                {unreadCount > 99 ? '99+' : unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
               </Text>
             </View>
           ) : null}
@@ -997,73 +996,6 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
 
-  filterTabsRow: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  filterTabsContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    gap: Space.lg,
-  },
-  filterTab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: Control.hit + 2,
-    position: 'relative',
-  },
-  filterTabActive: {
-    backgroundColor: 'transparent',
-  },
-  filterTabContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1,
-  },
-  filterTabText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
-  filterTabCount: {
-    minWidth: Space.md + 2,
-    height: Space.md + 2,
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.xs + 1,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  filterTabCountActive: {
-    backgroundColor: `${colors.brand}20`,
-    borderColor: `${colors.brand}40`,
-  },
-  filterTabCountText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.semibold,
-    color: colors.textMuted,
-  },
-  filterTabCountTextActive: {
-    color: colors.brand,
-  },
-  filterTabTextActive: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  filterTabIndicator: {
-    position: 'absolute',
-    bottom: -StyleSheet.hairlineWidth,
-    left: 0,
-    right: 0,
-    height: Stroke.emphasis,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.brand,
-  },
-
   activeFilterChipRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1210,9 +1142,6 @@ function createStyles(colors: ThemeColors) {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  notifCardUnread: {
-    backgroundColor: colors.surfaceAlt,
-  },
   notifCardCritical: {
     backgroundColor: `${colors.danger}0A`,
   },
@@ -1256,8 +1185,6 @@ function createStyles(colors: ThemeColors) {
     width: Space.xxl + Space.xs, height: Space.xxl + Space.xs, borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
   },
   notifImageShared: {
     ...StyleSheet.absoluteFill,
@@ -1280,7 +1207,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.regular,
     lineHeight: Type.body.lineHeight, marginBottom: Space.sm,
   },
-  notifTextUnread: { color: colors.textPrimary, fontFamily: Typography.family.medium },
+  notifTextUnread: { color: colors.textPrimary },
 
   notifMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   notifTime: { fontSize: Type.caption.size, color: colors.textMuted, fontFamily: Typography.family.regular },
@@ -1374,7 +1301,7 @@ function createStyles(colors: ThemeColors) {
   },
   overflowSheetTitle: {
     fontSize: Type.title.size,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     marginBottom: Space.sm,
   },

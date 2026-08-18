@@ -90,7 +90,6 @@ export default function AIPreferencesScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Listing suggestions"
-          subtitle="Preferences"
           onBack={() => navigation.goBack()}
         />
       }
@@ -109,21 +108,14 @@ export default function AIPreferencesScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Hero summary — posture with active count ── */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: masterEnabled && activeCount > 0 ? colors.brand : colors.surfaceAlt }]}>
-              <Ionicons name="settings-outline" size={20} color={masterEnabled && activeCount > 0 ? colors.textInverse : colors.textMuted} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {masterEnabled ? `${activeCount} of 6 features on` : 'All features off'}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {activeCount === 6 ? 'All features enabled' : activeCount === 0 ? 'No features active' : 'Some features paused'}
-              </Text>
-            </View>
-          </View>
+      {/* ── Summary — flat intro block with active count ── */}
+        <View style={styles.summaryBlock}>
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
+            {masterEnabled ? `${activeCount} of 6 features on` : 'All features off'}
+          </Text>
+          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+            {activeCount === 6 ? 'All features enabled' : activeCount === 0 ? 'No features active' : 'Some features paused'}
+          </Text>
           <View style={styles.progressRow}>
             <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
               <View
@@ -251,34 +243,21 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       flex: 1,
     },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    summaryBlock: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
       marginBottom: Space.md,
     },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl,
-      height: Space.xxl,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
+    summaryTitle: {
       fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
-    heroSubtitle: {
+    summarySubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       marginTop: Space.xs / 2,
+      letterSpacing: Type.caption.letterSpacing,
     },
     progressRow: {
       flexDirection: 'row',

@@ -257,6 +257,18 @@ export async function updateChatPrivacy(updates: Partial<ChatPrivacySettings>): 
   return payload.chatPrivacy;
 }
 
+/* ─── Privacy Preferences ─── */
+
+export interface PrivacyPreferences {
+  activityStatusVisible: boolean;
+  searchVisibility: 'visible' | 'hidden';
+}
+
+export async function fetchPrivacyPreferences(): Promise<PrivacyPreferences> {
+  const payload = await fetchJson<{ ok: true; privacyPreferences: PrivacyPreferences }>('/users/me/privacy-preferences');
+  return payload.privacyPreferences;
+}
+
 /* ─── Activity Status ─── */
 
 export async function updateActivityStatus(visible: boolean): Promise<boolean> {

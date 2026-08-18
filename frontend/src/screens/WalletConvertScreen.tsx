@@ -4,11 +4,9 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  StatusBar,
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
@@ -16,6 +14,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -40,9 +39,9 @@ import {
   Radius,
   Type,
   Stroke,
-  Elevation,
   Control,
   LetterSpacing,
+  IconGrammar,
 } from '../theme/designTokens';
 
 // ── Platform fee rate for 1ZE → fiat conversion (2%) ──
@@ -377,24 +376,16 @@ export default function WalletConvertScreen() {
   // ── Loading skeleton ──
   if (isHydratingBalance) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar
-          barStyle={!isDark ? 'dark-content' : 'light-content'}
-          backgroundColor={colors.background}
-        />
-        <View style={styles.header}>
-          <AnimatedPressable
-            style={styles.backBtn}
-            onPress={handleBack}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            accessibilityHint="Returns to the previous screen"
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.headerTitle}>Convert 1ZE</Text>
-          <View style={{ width: 44 }} />
-        </View>
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Convert 1ZE"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
         <View style={styles.skeletonContainer}>
           <SkeletonLoader
             width="60%"
@@ -416,37 +407,81 @@ export default function WalletConvertScreen() {
           />
           <SkeletonLoader width="100%" height={56} borderRadius={Radius.md} />
         </View>
-      </SafeAreaView>
+      </FlagshipScreen>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle={!isDark ? 'dark-content' : 'light-content'}
-        backgroundColor={colors.background}
-      />
-
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <AnimatedPressable
-          style={styles.backBtn}
-          onPress={handleBack}
-          disabled={isExecuting}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the previous screen"
-        >
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={isExecuting ? colors.textMuted : colors.textPrimary}
+  // ── Footer actions per step ──
+  const renderFooter = () => {
+    if (step === 'amount') {
+      return (
+        <AppButton
+          title="Review conversion"
+          onPress={handleReview}
+          disabled={!canReview}
+          variant="primary"
+          style={[styles.primaryBtn, !canReview && styles.primaryBtnDisabled]}
+          titleStyle={styles.primaryText}
+          accessibilityLabel="Review conversion"
+          accessibilityHint="Proceeds to the conversion review step"
+          hapticFeedback="medium"
+        />
+      );
+    }
+    if (step === 'review') {
+      return (
+        <>
+          <AppButton
+            title="Confirm"
+            onPress={handleConfirm}
+            variant="primary"
+            style={styles.primaryBtn}
+            titleStyle={styles.primaryText}
+            accessibilityLabel="Confirm conversion"
+            accessibilityHint="Triggers biometric authentication then executes the conversion"
+            hapticFeedback="medium"
           />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Convert 1ZE</Text>
-        <View style={{ width: 44 }} />
-      </View>
+          <AppButton
+            title="Back to edit"
+            onPress={handleBackToAmount}
+            variant="secondary"
+            style={[styles.secondaryBtn, { marginTop: Space.sm }]}
+            accessibilityLabel="Back to edit amount"
+            accessibilityHint="Returns to the amount input step"
+            hapticFeedback="light"
+          />
+        </>
+      );
+    }
+    if (step === 'receipt') {
+      return (
+        <AppButton
+          title="Done"
+          onPress={handleDone}
+          variant="primary"
+          style={styles.primaryBtn}
+          titleStyle={styles.primaryText}
+          accessibilityLabel="Done"
+          accessibilityHint="Returns to the wallet screen"
+          hapticFeedback="light"
+        />
+      );
+    }
+    return null;
+  };
 
+  return (
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Convert 1ZE"
+          onBack={handleBack}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      stickyFooter={renderFooter()}
+    >
       {isOffline && step === 'amount' && (
         <View
           style={[
@@ -454,7 +489,7 @@ export default function WalletConvertScreen() {
             { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border },
           ]}
         >
-          <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
+          <Ionicons name="cloud-offline-outline" size={IconGrammar.metadata} color={colors.danger} />
           <Text style={[styles.offlineBannerText, { color: colors.textPrimary }]}>
             {COPY.offline}
           </Text>
@@ -778,63 +813,7 @@ export default function WalletConvertScreen() {
           </View>
         )}
       </KeyboardAwareScrollView>
-
-      {/* ── Footer actions per step ── */}
-      {step === 'amount' && (
-        <View style={styles.footer}>
-          <AppButton
-            title="Review conversion"
-            onPress={handleReview}
-            disabled={!canReview}
-            variant="primary"
-            style={[styles.primaryBtn, !canReview && styles.primaryBtnDisabled]}
-            titleStyle={styles.primaryText}
-            accessibilityLabel="Review conversion"
-            accessibilityHint="Proceeds to the conversion review step"
-            hapticFeedback="medium"
-          />
-        </View>
-      )}
-
-      {step === 'review' && (
-        <View style={styles.footer}>
-          <AppButton
-            title="Confirm"
-            onPress={handleConfirm}
-            variant="primary"
-            style={styles.primaryBtn}
-            titleStyle={styles.primaryText}
-            accessibilityLabel="Confirm conversion"
-            accessibilityHint="Triggers biometric authentication then executes the conversion"
-            hapticFeedback="medium"
-          />
-          <AppButton
-            title="Back to edit"
-            onPress={handleBackToAmount}
-            variant="secondary"
-            style={[styles.secondaryBtn, { marginTop: Space.sm }]}
-            accessibilityLabel="Back to edit amount"
-            accessibilityHint="Returns to the amount input step"
-            hapticFeedback="light"
-          />
-        </View>
-      )}
-
-      {step === 'receipt' && (
-        <View style={styles.footer}>
-          <AppButton
-            title="Done"
-            onPress={handleDone}
-            variant="primary"
-            style={styles.primaryBtn}
-            titleStyle={styles.primaryText}
-            accessibilityLabel="Done"
-            accessibilityHint="Returns to the wallet screen"
-            hapticFeedback="light"
-          />
-        </View>
-      )}
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -928,14 +907,13 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md + Space.xs,
     },
 
-    // ── Hero card ──
+    // ── Hero card (flat canvas + hairline — no shadow) ──
     heroCard: {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       padding: Space.md,
       marginTop: Space.md,
       marginBottom: Space.lg,
-      ...Elevation.subtle,
     },
     heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
     heroIcon: {
@@ -1017,7 +995,6 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
       marginTop: Space.md,
       gap: Space.xs,
-      ...Elevation.subtle,
     },
     reviewHeader: {
       flexDirection: 'row',
@@ -1159,7 +1136,6 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       padding: Space.md,
-      ...Elevation.subtle,
     },
 
     // ── Footer ──

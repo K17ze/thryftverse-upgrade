@@ -181,9 +181,6 @@ export default function WalletScreen({ navigation }: Props) {
   const isWalletOperational = balance.reconciliationState === 'reconciled' && !isOffline;
 
   // ── Derived sub-balance values (preserving reconciliation truth) ──
-  const settledClaim =
-    balance.settledCustomerClaim ??
-    (balance.available + balance.reservedForOrders + balance.redemptionInProgress + balance.otherHolds);
   const withdrawable = balance.withdrawable ?? balance.available;
   const hasPendingAttention = balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0;
 
@@ -533,54 +530,44 @@ export default function WalletScreen({ navigation }: Props) {
           />
         )}
 
-        {/* ── Sub-balances — flat rows, below the fold (spec 17 viewport 2) ── */}
-        <View style={styles.subBalanceSection}>
-          <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>Settled claim</Text>
-          {settledClaim === 0 ? (
-            <Text style={[styles.subBalanceEmpty, { color: colors.textMuted }]}>
-              No settled 1ZE yet.
-            </Text>
-          ) : (
-            <>
-              <SubBalanceRow label="Available" value={balance.available} formatBalance={formatBalance} colors={colors} emphasis />
-              {balance.reservedForOrders > 0 && (
-                <SubBalanceRow label="Reserved for orders" value={balance.reservedForOrders} formatBalance={formatBalance} colors={colors} />
-              )}
-              {balance.redemptionInProgress > 0 && (
-                <SubBalanceRow label="Redemption pending" value={balance.redemptionInProgress} formatBalance={formatBalance} colors={colors} />
-              )}
-              {balance.otherHolds > 0 && (
-                <SubBalanceRow label="Other holds" value={balance.otherHolds} formatBalance={formatBalance} colors={colors} />
-              )}
-              <View style={[styles.subBalanceTotalRow, { borderTopColor: colors.border }]}>
-                <Text style={[styles.subBalanceTotalLabel, { color: colors.textPrimary }]}>Settled claim</Text>
-                <Text style={[styles.subBalanceTotalValue, { color: colors.textPrimary }]}>
-                  {formatBalance(settledClaim)}
-                  <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
+        {/* ── Sub-balances — restrained, below the fold (spec 17 viewport 2) ── */}
+        {(balance.reservedForOrders > 0 || balance.redemptionInProgress > 0 || balance.otherHolds > 0) && (
+          <View style={styles.subBalanceSection}>
+            <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>My 1ZE</Text>
+            {balance.reservedForOrders > 0 && (
+              <SubBalanceRow label="Reserved for orders" value={balance.reservedForOrders} formatBalance={formatBalance} colors={colors} />
+            )}
+            {balance.redemptionInProgress > 0 && (
+              <SubBalanceRow label="Redemption pending" value={balance.redemptionInProgress} formatBalance={formatBalance} colors={colors} />
+            )}
+            {balance.otherHolds > 0 && (
+              <SubBalanceRow label="Other holds" value={balance.otherHolds} formatBalance={formatBalance} colors={colors} />
+            )}
+          </View>
+        )}
 
         {/* ── Pending section (not yet settled) ── */}
         {(balance.pendingDeposit > 0 || balance.unsettledSaleProceeds > 0) && (
           <View style={styles.subBalanceSection}>
             <Text style={[styles.subBalanceSectionLabel, { color: colors.textMuted }]}>Pending</Text>
-            <SubBalanceRow label="Pending deposit" value={balance.pendingDeposit} formatBalance={formatBalance} colors={colors} />
-            <SubBalanceRow label="Unsettled sale proceeds" value={balance.unsettledSaleProceeds} formatBalance={formatBalance} colors={colors} />
+            {balance.pendingDeposit > 0 && (
+              <SubBalanceRow label="Pending deposit" value={balance.pendingDeposit} formatBalance={formatBalance} colors={colors} />
+            )}
+            {balance.unsettledSaleProceeds > 0 && (
+              <SubBalanceRow label="Unsettled sale proceeds" value={balance.unsettledSaleProceeds} formatBalance={formatBalance} colors={colors} />
+            )}
           </View>
         )}
 
         {/* ── Withdrawable ── */}
         <View style={[styles.withdrawableRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
           <View style={styles.withdrawableLeft}>
-            <Ionicons name="arrow-down-circle-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
-            <Text style={[styles.withdrawableLabel, { color: colors.textSecondary }]}>Withdrawable</Text>
+            <Ionicons name="arrow-down-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
+            <Text style={[styles.withdrawableLabel, { color: colors.textMuted }]}>Withdrawable</Text>
           </View>
-          <Text style={[styles.withdrawableValue, { color: colors.textPrimary }]}>
+          <Text style={[styles.withdrawableValue, { color: colors.textSecondary }]}>
             {formatBalance(withdrawable)}
-            <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+            <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
           </Text>
         </View>
 
@@ -669,19 +656,17 @@ export default function WalletScreen({ navigation }: Props) {
 
 // ── Helper sub-components ──
 
-/** Flat sub-balance row — label left, tabular-nums value right. */
+/** Flat sub-balance row — muted label left, tabular-nums value right. */
 function SubBalanceRow({
   label,
   value,
   formatBalance,
   colors,
-  emphasis,
 }: {
   label: string;
   value: number;
   formatBalance: (v: number) => string;
   colors: ReturnType<typeof useAppTheme>['colors'];
-  emphasis?: boolean;
 }) {
   return (
     <View
@@ -690,24 +675,16 @@ function SubBalanceRow({
       accessibilityLabel={`${label}: ${formatBalance(value)} 1ZE`}
     >
       <Text
-        style={[
-          styles.subBalanceLabel,
-          { color: emphasis ? colors.textPrimary : colors.textSecondary },
-          emphasis && { fontFamily: Typography.family.semibold },
-        ]}
+        style={[styles.subBalanceLabel, { color: colors.textMuted }]}
         numberOfLines={1}
       >
         {label}
       </Text>
       <Text
-        style={[
-          styles.subBalanceValue,
-          { color: colors.textPrimary },
-          emphasis && { fontFamily: Typography.family.semibold },
-        ]}
+        style={[styles.subBalanceValue, { color: colors.textSecondary }]}
       >
         {formatBalance(value)}
-        <Text style={[styles.subBalanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
+        <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
       </Text>
     </View>
   );
@@ -810,7 +787,7 @@ const styles = StyleSheet.create({
 
   // ── Seller earnings summary row (now FlagshipNavigationRow) ──
 
-  // ── Sub-balance flat rows ──
+  // ── Sub-balance flat rows (restrained — muted, smaller) ──
   subBalanceSection: {
     marginTop: Space.lg,
   },
@@ -821,12 +798,6 @@ const styles = StyleSheet.create({
     letterSpacing: Type.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: Space.xs + 2,
-  },
-  subBalanceEmpty: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    paddingVertical: Space.sm,
   },
   subBalanceRow: {
     flexDirection: 'row',
@@ -842,40 +813,18 @@ const styles = StyleSheet.create({
     letterSpacing: Type.body.letterSpacing,
   },
   subBalanceValue: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.bodyStrong.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
   },
   subBalanceUnit: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
   },
-  subBalanceTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: Space.sm + 2,
-    marginTop: Space.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: Space.md,
-  },
-  subBalanceTotalLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-  subBalanceTotalValue: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: Type.priceList.letterSpacing,
-  },
 
-  // ── Withdrawable ──
+  // ── Withdrawable (restrained — muted) ──
   withdrawableRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -895,15 +844,15 @@ const styles = StyleSheet.create({
   withdrawableLabel: {
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontFamily: Typography.family.regular,
     letterSpacing: Type.body.letterSpacing,
   },
   withdrawableValue: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.medium,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.bodyStrong.letterSpacing,
+    letterSpacing: Type.body.letterSpacing,
   },
 
   // ── Transaction history ──

@@ -1,0 +1,23 @@
+Wave 4: Trust surfaces — wallet/settings/notifications/auctions upgrades
+
+- WalletScreen: removed redundant settledClaim sum, restrained sub-balances
+  (muted hierarchy), conditional rendering for non-zero values
+- WalletConvertScreen: replaced duplicate SafeAreaView/StatusBar with
+  FlagshipScreen/FlagshipHeader canonical pattern
+- DataPrivacyScreen: flattened card-on-card hero to SettingsSection/SettingsRow,
+  removed decorative hero icon circle, demo banner ships in production
+- NotificationsScreen: removed dead filter tab styles, decorative borders,
+  card-on-card unread background, added 99+ count cap
+- SustainabilityPreferencesScreen: replaced hero card with flat summary block
+- AuctionCountdown: tabular-nums via fontVariant (removed invalid fontFeatureSettings)
+- AuctionCard: token compliance fixes
+- Settings/AIPreferences/ActiveSessions/PrivacySettings/NotificationPreferences:
+  card-on-card flattening, token compliance, decorative chrome removal
+- accountApi: added missing types
+
+All deletions are decorative chrome / dead code / duplicate patterns per
+AGENTS.md §4 (anti-AI-made design). No functionality reduced.
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

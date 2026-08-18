@@ -421,13 +421,6 @@ export default function SettingsScreen({ navigation }: Props) {
               onPress={() => navigation.navigate('DataExport')}
             />
             <SettingsRow
-              icon="trash-outline"
-              title="Delete account"
-              subtitle="Permanently erase your account"
-              danger
-              onPress={() => navigation.navigate('DeleteAccount')}
-            />
-            <SettingsRow
               icon="eye-outline"
               title="Privacy & safety"
               subtitle="Visibility, blocked users"
@@ -700,6 +693,22 @@ export default function SettingsScreen({ navigation }: Props) {
           <View style={{ marginTop: Space.lg, marginBottom: Space.md }}>
             <SettingsSignOutRow username={currentUser?.username} onSignOut={handleLogout} />
           </View>
+
+          {/* ── DELETE ACCOUNT — destructive zone, separated from benign rows ── */}
+          {/* Per AGENTS.md §4 and App Store 5.1.1(v): destructive actions sit
+              at the bottom of the settings list, separated from benign rows by
+              a section break. The label is verbatim "Delete account". */}
+          <SettingsSection title="Account" noCard>
+            <SettingsRow
+              icon="trash-outline"
+              title="Delete account"
+              subtitle="Permanently erase your account"
+              danger
+              onPress={() => navigation.navigate('DeleteAccount')}
+              isFirst
+              isLast
+            />
+          </SettingsSection>
           </>
       )}
 

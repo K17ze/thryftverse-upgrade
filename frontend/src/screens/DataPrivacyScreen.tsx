@@ -39,8 +39,9 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 
-// Demo mode flag — privacy controls are persisted locally in this build.
-const DATA_PRIVACY_DEMO_MODE = __DEV__;
+// Privacy controls are persisted locally in this build. The banner ships in
+// production (not just dev) so users always know the controls are device-local.
+const DATA_PRIVACY_DEMO_MODE = true;
 
 const DATA_CATEGORIES: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; description: string }[] = [
   { icon: 'person-outline', label: 'Profile', description: 'Username, display name, bio, avatar' },
@@ -81,7 +82,6 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Data & Privacy"
-          subtitle="Privacy settings"
           onBack={() => navigation.goBack()}
         />
       }
@@ -100,35 +100,19 @@ export default function DataPrivacyScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Your data — explanation block ── */}
-      <View>
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.commerceTrust }]}>
-              <Ionicons name="lock-closed" size={20} color={colors.textInverse} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Your data</Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                What we collect and how it is used
-              </Text>
-            </View>
-          </View>
-          <View style={styles.dataList}>
-            {DATA_CATEGORIES.map((category) => (
-              <View key={category.label} style={styles.dataItem}>
-                <View style={[styles.dataIcon, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name={category.icon} size={16} color={colors.textSecondary} />
-                </View>
-                <View style={styles.dataText}>
-                  <Text style={[styles.dataLabel, { color: colors.textPrimary }]}>{category.label}</Text>
-                  <Text style={[styles.dataDescription, { color: colors.textMuted }]}>{category.description}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
+      {/* ── Your data — flat category rows (no card wrapper) ── */}
+      <SettingsSection title="Your data" noCard>
+        {DATA_CATEGORIES.map((category, i) => (
+          <SettingsRow
+            key={category.label}
+            icon={category.icon}
+            title={category.label}
+            subtitle={category.description}
+            isFirst={i === 0}
+            isLast={i === DATA_CATEGORIES.length - 1}
+          />
+        ))}
+      </SettingsSection>
 
       {/* ── Data actions — export & delete ── */}
       <View>
@@ -266,65 +250,6 @@ function createStyles(colors: ThemeColors) {
       lineHeight: Type.caption.lineHeight,
       color: colors.textSecondary,
       flex: 1,
-    },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
-    },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl,
-      height: Space.xxl,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
-    dataList: {
-      marginTop: Space.md,
-      gap: Space.sm,
-    },
-    dataItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    dataIcon: {
-      width: Space.xl,
-      height: Space.xl,
-      borderRadius: Radius.md,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    dataText: {
-      flex: 1,
-    },
-    dataLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    dataDescription: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
     },
     infoBlock: {
       paddingHorizontal: Space.md,

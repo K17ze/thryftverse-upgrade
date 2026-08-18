@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { getWalletLedger, type WalletLedgerItem } from '../../services/walletApi';
 import { formatRelativeTime, formatDayLabel } from '../../utils/dateFormat';
@@ -110,7 +110,7 @@ export function WalletTransactionHistory({
     return (
       <View style={styles.txRow} accessibilityRole="text" accessibilityLabel={`${kindInfo.label}, ${amountText}, ${formatRelativeTime(item.createdAt)}`}>
         <View style={[styles.txIconWrap, { backgroundColor: iconBg }]}>
-          <Ionicons name={kindInfo.icon} size={18} color={iconColor} />
+          <Ionicons name={kindInfo.icon} size={IconGrammar.metadata} color={iconColor} />
         </View>
         <View style={styles.txContent}>
           <Text style={styles.txLabel} numberOfLines={1}>{kindInfo.label}</Text>

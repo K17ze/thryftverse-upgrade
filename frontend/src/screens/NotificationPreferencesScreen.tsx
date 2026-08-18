@@ -92,7 +92,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Notifications"
-          subtitle="Choose what reaches you"
           onBack={() => navigation.goBack()}
         />
       }
@@ -111,21 +110,14 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Posture hero ── */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: enabledCount > 0 ? colors.brand : colors.surfaceAlt }]}>
-              <Ionicons name="notifications" size={20} color={enabledCount > 0 ? colors.textInverse : colors.textMuted} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {enabledCount === 0 ? 'All notifications off' : `${enabledCount} of ${pushTotalCount} categories on`}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {enabledCount === pushTotalCount ? 'All alerts enabled' : enabledCount === 0 ? "You won't receive any alerts" : 'Some alerts are paused'}
-              </Text>
-            </View>
-          </View>
+      {/* ── Summary — flat intro block ── */}
+        <View style={styles.summaryBlock}>
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
+            {enabledCount === 0 ? 'All notifications off' : `${enabledCount} of ${pushTotalCount} categories on`}
+          </Text>
+          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+            {enabledCount === pushTotalCount ? 'All alerts enabled' : enabledCount === 0 ? "You won't receive any alerts" : 'Some alerts are paused'}
+          </Text>
           <View style={styles.progressRow}>
             <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
               <View
@@ -335,34 +327,21 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       flex: 1,
     },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    summaryBlock: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
       marginBottom: Space.md,
     },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xl + Space.sm,
-      height: Space.xl + Space.sm,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
+    summaryTitle: {
       fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
+      letterSpacing: Type.bodyStrong.letterSpacing,
     },
-    heroSubtitle: {
+    summarySubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
       marginTop: Space.xs / 2,
+      letterSpacing: Type.caption.letterSpacing,
     },
     progressRow: {
       flexDirection: 'row',

@@ -82,7 +82,6 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Sustainability"
-          subtitle="Your goals and preferences"
           onBack={() => navigation.goBack()}
         />
       }
@@ -101,19 +100,12 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Impact summary hero ── */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.success }]}>
-              <Ionicons name="leaf" size={20} color={colors.textInverse} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Your impact</Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {co2SavedKg} kg CO₂ saved · {itemsRescued} items kept from landfill
-              </Text>
-            </View>
-          </View>
+      {/* ── Impact summary — flat intro block ── */}
+        <View style={styles.summaryBlock}>
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Your impact</Text>
+          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
+            {co2SavedKg} kg CO₂ saved · {itemsRescued} items kept from landfill
+          </Text>
           <View style={styles.statsRow}>
             <View style={[styles.statCell, { backgroundColor: colors.surfaceAlt }]}>
               <Text style={[styles.statValue, { color: colors.success }]}>{co2SavedKg}</Text>
@@ -253,33 +245,21 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       flex: 1,
     },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    summaryBlock: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.md,
       marginBottom: Space.md,
     },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl,
-      height: Space.xxl,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
+    summaryTitle: {
       fontSize: Type.bodyStrong.size,
       fontFamily: Typography.family.semibold,
       letterSpacing: Type.body.letterSpacing,
     },
-    heroSubtitle: {
+    summarySubtitle: {
       fontSize: Type.caption.size,
       fontFamily: Typography.family.regular,
+      lineHeight: Type.caption.lineHeight,
       marginTop: Space.xs / 2,
     },
     statsRow: {

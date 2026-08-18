@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
@@ -40,7 +40,7 @@ interface AuctionCardProps {
 
 function LiveDot({ color }: { color: string }) {
   return (
-    <View style={{ width: 6, height: 6, borderRadius: Radius.sm, backgroundColor: color }} />
+    <View style={{ width: Space.xs - 2, height: Space.xs - 2, borderRadius: Radius.sm, backgroundColor: color }} />
   );
 }
 
@@ -245,13 +245,10 @@ export const AuctionCard = React.memo(AuctionCardBase);
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
+    marginBottom: 0,
   },
   imageWrap: {
     position: 'relative',
@@ -273,14 +270,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
   },
   liveDot: {
-    width: 6,
-    height: 6,
+    width: Space.xs - 2,
+    height: Space.xs - 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.danger,
   },
@@ -291,13 +288,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(220,38,38,0.9)',
+    backgroundColor: `${colors.danger}E6`,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
   },
   liveText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: Type.meta.size - 2,
   },
   outbidBadge: {
@@ -307,7 +304,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(255,68,68,0.9)',
+    backgroundColor: `${colors.danger}E6`,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
@@ -319,7 +316,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(0,180,80,0.9)',
+    backgroundColor: `${colors.success}E6`,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
@@ -331,18 +328,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: 'rgba(255,170,0,0.9)',
+    backgroundColor: `${colors.warning}E6`,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
   },
   viewerBadgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: Type.meta.size - 3,
-    fontWeight: '700',
+    fontFamily: Typography.family.bold,
   },
   body: {
     padding: Space.md,
+    paddingBottom: Space.md + Space.xs,
   },
   topRow: {
     flexDirection: 'row',
@@ -368,8 +366,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
   },
   sellerMessageBtn: {
-    width: 32,
-    height: 32,
+    width: Control.iconCompact + Space.xs + 2,
+    height: Control.iconCompact + Space.xs + 2,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
@@ -405,13 +403,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.caption.size,
   },
   progressTrack: {
-    height: 4,
+    height: Space.xs - 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
     marginBottom: Space.sm,
   },
   progressFill: {
-    height: 4,
+    height: Space.xs - 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.brand,
   },
