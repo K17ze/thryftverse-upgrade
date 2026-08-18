@@ -29,6 +29,7 @@ import Reanimated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../../theme/designTokens';
+import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import {
@@ -171,7 +172,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
   useEffect(() => {
     if (reduceMotion) return;
     shimmerSV.value = 0;
-    shimmerSV.value = withTiming(1, { duration: 1200 });
+    shimmerSV.value = withTiming(1, { duration: Motion.duration.crawl });
   }, [reduceMotion, shimmerSV]);
 
   const style = useAnimatedStyle(() => ({

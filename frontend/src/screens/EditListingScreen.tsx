@@ -12,7 +12,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -335,7 +334,7 @@ export default function EditListingScreen() {
     const item = mediaItems.find((m) => m.id === itemId);
     if (!item) return;
     if (item.source === 'remote') return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
     uploadQueueRef.current.removeItem(itemId);
     setMediaItems((prev) => prev.filter((m) => m.id !== itemId));
   }, [mediaItems]);
@@ -349,9 +348,9 @@ export default function EditListingScreen() {
           m.id === itemId ? { ...m, status: 'pending', error: undefined } : m
         )
       );
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.tap();
     } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptics.warning();
     }
   }, []);
 
@@ -360,7 +359,7 @@ export default function EditListingScreen() {
       const itemMap = new Map(prev.map((m) => [m.id, m]));
       return newOrderedIds.map((id) => itemMap.get(id)).filter(Boolean) as ListingMediaDraftItem[];
     });
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
   }, []);
 
   const canRemoveItem = useCallback((itemId: string) => {
@@ -445,7 +444,7 @@ export default function EditListingScreen() {
     if (error) {
       setErrorMsg(error);
       setSaveStage('failed_recoverable');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptics.error();
       return;
     }
     if (!isOwner) {
@@ -496,7 +495,7 @@ export default function EditListingScreen() {
         if (failedItems.length > 0) {
           setSaveStage('failed_recoverable');
           setErrorMsg('Some media failed to upload. Retry before saving.');
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          haptics.error();
           return;
         }
 
@@ -622,7 +621,7 @@ export default function EditListingScreen() {
     if (pickerMode === 'Size') setSize(val);
     if (pickerMode === 'Condition') setCondition(val);
     setPickerMode(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.selection();
   }, [pickerMode]);
 
   /* ── computed values ── */

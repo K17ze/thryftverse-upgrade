@@ -11,6 +11,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { Motion } from '../../theme/motionTokens';
 import { Space, Radius, Type, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -73,8 +74,8 @@ function InboxConversationRowBase({
 
     typingOpacity.value = withRepeat(
       withSequence(
-        withTiming(0.4, { duration: 700 }),
-        withTiming(1, { duration: 700 }),
+        withTiming(0.4, { duration: Motion.duration.slower }),
+        withTiming(1, { duration: Motion.duration.slower }),
       ),
       -1,
       false,

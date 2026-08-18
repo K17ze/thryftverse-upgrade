@@ -52,6 +52,7 @@ import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion as useHookReducedMotion } from '../../../hooks/useReducedMotion';
+import { Motion } from '../../../theme/motionTokens';
 import {
   VoiceoverRecorder,
   VoiceoverDependencyError,
@@ -544,12 +545,12 @@ function RecordButton({
 
   const handlePressIn = useCallback(() => {
     if (disabled) return;
-    pressedSV.value = withTiming(1, { duration: 100 });
+    pressedSV.value = withTiming(1, { duration: Motion.duration.fast });
   }, [disabled, pressedSV]);
 
   const handlePressOut = useCallback(() => {
     if (disabled) return;
-    pressedSV.value = withTiming(0, { duration: 100 });
+    pressedSV.value = withTiming(0, { duration: Motion.duration.fast });
   }, [disabled, pressedSV]);
 
   const handlePress = useCallback(() => {

@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -126,7 +125,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   // -- Option selection ----------------------------------------------------
   const handleSelectOption = useCallback(
     (option: EnhancementOption) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       haptic.patterns.tabSwitch();
       setSelectedOptionId(option.id);
       setSelectedPresetId(null);
@@ -140,7 +138,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   );
 
   const handleSelectPreset = useCallback((preset: EnhancementPreset) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     haptic.patterns.tabSwitch();
     setSelectedPresetId(preset.id);
     setSelectedOptionId(null);
@@ -148,7 +145,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   }, [haptic]);
 
   const handleSelectScene = useCallback((scene: BackgroundScene) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     haptic.patterns.tabSwitch();
     setSelectedSceneId(scene.id);
   }, [haptic]);
@@ -158,7 +154,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
     if (!imageUri) return;
     if (isOffline) {
       setError('You appear to be offline. Check your connection and try again.');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      haptic.error();
       return;
     }
     setIsApplying(true);
@@ -178,7 +174,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
       setResult(res);
       setShowAfter(true);
       setPhase('applied');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       haptic.patterns.save();
     } catch (e: unknown) {
       const msg =
@@ -187,7 +182,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
           : 'Enhancement failed. Try again.';
       setError(msg);
       setPhase('error');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      haptic.error();
     } finally {
       setIsApplying(false);
     }
@@ -196,7 +191,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   // -- Revert --------------------------------------------------------------
   const handleRevert = useCallback(async () => {
     if (!result) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     haptic.patterns.toggle();
     setShowAfter(false);
     setResult(null);
@@ -205,7 +199,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
 
   // -- Save (return to listing flow) ---------------------------------------
   const handleSave = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.light();
     // In demo mode, no real enhancement was applied — we return the original
     // URI truthfully. The listing flow continues with the original image.
     navigation.goBack();
@@ -213,7 +207,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
 
   // -- Comparison toggle ---------------------------------------------------
   const handleToggleCompare = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.light();
     setShowAfter((prev) => !prev);
   }, []);
 

@@ -30,6 +30,7 @@ import { CreatorCanvas } from './CreatorCanvas';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { createLookOnApi, updateLookOnApi } from '../services/looksApi';
 import { createPosterStory, scheduleCreatorDocument } from '../services/postersApi';
 import { CreatorAnalytics } from './creatorAnalytics';
@@ -211,8 +212,8 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId }: Creator
     const fraction = 0.15 + uploadManager.progress * 0.55;
     progressWidth.value = reduceMotion
       ? fraction
-      : withSpring(fraction, { ...spring.entrance, damping: 24 });
-  }, [stage, uploadManager.progress, uploadManager.totalBytes, reduceMotion, spring.entrance, progressWidth]);
+      : withSpring(fraction, Motion.spring.settle);
+  }, [stage, uploadManager.progress, uploadManager.totalBytes, reduceMotion, progressWidth]);
 
   // Haptic feedback when entering the success state
   useEffect(() => {
@@ -630,8 +631,8 @@ function ErrorStateView({
       scale.value = 1;
       opacity.value = 1;
     } else {
-      scale.value = withSpring(1, { ...springCfg, damping: 16 });
-      opacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+      scale.value = withSpring(1, Motion.spring.lift);
+      opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
     }
   }, [reduceMotion, springCfg, scale, opacity]);
 
@@ -697,8 +698,8 @@ function ScheduleFailedView({
       scale.value = 1;
       opacity.value = 1;
     } else {
-      scale.value = withSpring(1, { ...springCfg, damping: 16 });
-      opacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+      scale.value = withSpring(1, Motion.spring.lift);
+      opacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
     }
   }, [reduceMotion, springCfg, scale, opacity]);
 
@@ -785,7 +786,7 @@ function QuietSuccessView({
     if (reduceMotion) {
       contentOpacity.value = 1;
     } else {
-      contentOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+      contentOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
     }
   }, [reduceMotion, contentOpacity, springCfg]);
 
@@ -871,9 +872,9 @@ function PublishReview({
     if (reduceMotion) {
       segmentTranslateX.value = activeAudienceIndex;
     } else {
-      segmentTranslateX.value = withSpring(activeAudienceIndex, { ...spring.entrance, damping: 18 });
+      segmentTranslateX.value = withSpring(activeAudienceIndex, Motion.spring.indicator);
     }
-  }, [activeAudienceIndex, reduceMotion, spring.entrance, segmentTranslateX]);
+  }, [activeAudienceIndex, reduceMotion, segmentTranslateX]);
 
   const segmentIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: segmentTranslateX.value * segmentWidth.value }],
@@ -902,12 +903,12 @@ function PublishReview({
         errorOpacity.value = 1;
         errorTranslateY.value = 0;
       } else {
-        errorOpacity.value = withSpring(1, { ...spring.entrance, damping: 18 });
-        errorTranslateY.value = withSpring(0, { ...spring.entrance, damping: 18 });
+        errorOpacity.value = withSpring(1, Motion.spring.entrance);
+        errorTranslateY.value = withSpring(0, Motion.spring.entrance);
       }
     } else {
-      errorOpacity.value = reduceMotion ? 0 : withTiming(0, { duration: 150 });
-      errorTranslateY.value = reduceMotion ? -8 : withTiming(-8, { duration: 150 });
+      errorOpacity.value = reduceMotion ? 0 : withTiming(0, { duration: Motion.duration.fast });
+      errorTranslateY.value = reduceMotion ? -8 : withTiming(-8, { duration: Motion.duration.fast });
     }
   }, [captionError, reduceMotion, spring.entrance, errorOpacity, errorTranslateY]);
 

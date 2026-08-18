@@ -63,6 +63,7 @@ import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
+import { Motion } from '../../../theme/motionTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import Reanimated, {
   useSharedValue,
@@ -152,7 +153,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
   useEffect(() => {
     if (reduceMotion) return;
     shimmerSV.value = 0;
-    shimmerSV.value = withTiming(1, { duration: 1200 });
+    shimmerSV.value = withTiming(1, { duration: Motion.duration.crawl });
   }, [reduceMotion, shimmerSV]);
 
   const style = useAnimatedStyle(() => ({

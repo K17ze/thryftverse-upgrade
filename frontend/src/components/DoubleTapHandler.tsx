@@ -10,7 +10,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface DoubleTapHandlerProps {
@@ -22,6 +22,7 @@ export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProp
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
   const reducedMotion = useReducedMotion();
+  const haptic = useHaptic();
 
   const triggerAnimation = useCallback(() => {
     if (reducedMotion) return;
@@ -39,11 +40,11 @@ export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProp
     );
   }, [scale, opacity, reducedMotion]);
 
-  const onDoubleTapJS = useCallback(async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const onDoubleTapJS = useCallback(() => {
+    haptic.patterns.like();
     triggerAnimation();
     onDoubleTap();
-  }, [onDoubleTap, triggerAnimation]);
+  }, [onDoubleTap, triggerAnimation, haptic]);
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)

@@ -12,6 +12,8 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 
 interface Props {
   scrollY: SharedValue<number>;
@@ -21,25 +23,39 @@ interface Props {
 
 export function RefreshIndicator({ scrollY, isRefreshing, topInset = 60 }: Props) {
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const rotation = useSharedValue(0);
 
   useEffect(() => {
     if (isRefreshing) {
-      rotation.value = withRepeat(
-        withTiming(360, { duration: 800, easing: Easing.linear }),
-        -1
-      );
+      // Reduced motion: collapse the continuous spin (rotation) to zero
+      // travel — keep the indicator visible via opacity (§2.5).
+      rotation.value = reducedMotion
+        ? 0
+        : withRepeat(
+            withTiming(360, { duration: Motion.duration.slower, easing: Easing.linear }),
+            -1
+          );
     } else {
       rotation.value = 0;
     }
-  }, [isRefreshing]);
+  }, [isRefreshing, reducedMotion, rotation]);
 
   const animStyle = useAnimatedStyle(() => {
     // When pulldown Y is negative
     const pullRotation = interpolate(scrollY.value, [-100, 0], [360, 0], Extrapolation.CLAMP);
     const scale = interpolate(scrollY.value, [-100, -20, 0], [1.2, 0.8, 0], Extrapolation.CLAMP);
     const opacity = interpolate(scrollY.value, [-40, -10], [1, 0], Extrapolation.CLAMP);
+
+    // Reduced motion: remove rotation and scale (§2.5), keep opacity for
+    // state-change communication.
+    if (reducedMotion) {
+      return {
+        opacity: isRefreshing ? 1 : opacity,
+        transform: [{ rotate: '0deg' }, { scale: 1 }],
+      };
+    }
 
     return {
       opacity: isRefreshing ? 1 : opacity,

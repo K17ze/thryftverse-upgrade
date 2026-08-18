@@ -13,7 +13,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import * as Haptics from 'expo-haptics';
 import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
@@ -36,14 +35,9 @@ import {
 } from '../services/shippingProviderRegistry';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { haptics } from '../utils/haptics';
 
 type SellerFulfilmentRoute = RouteProp<{ SellerFulfilment: { orderId: string } }, 'SellerFulfilment'>;
-
-const haptics = {
-  tap: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
-  heavyPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy),
-  selection: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid),
-};
 
 // Carriers offered only for MANUAL shipping (when the buyer did NOT purchase
 // an integrated service). For integrated purchases, the buyer-selected

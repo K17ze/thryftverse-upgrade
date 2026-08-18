@@ -1411,22 +1411,22 @@ function ParticleHeart({ config }: { config: ParticleConfig }) {
 
     // Vertical: initial upward, then gravity pulls down (two-phase)
     translateY.value = withTiming(config.velY * 0.5, {
-      duration: 1200,
+      duration: Motion.duration.crawl,
       easing: ReEasing.out(ReEasing.cubic),
     });
     const gravityTimer = setTimeout(() => {
       translateY.value = withTiming(GRAVITY * 0.3, {
-        duration: 1300,
+        duration: Motion.duration.crawl,
         easing: ReEasing.in(ReEasing.cubic),
       });
-    }, 1200);
+    }, Motion.duration.crawl);
 
     // Rotation: constant angular velocity
     rotation.value = withTiming(config.rotSpeed, { duration: LIFETIME_MS });
 
     // Fade out after 1.5s
     const fadeTimer = setTimeout(() => {
-      opacity.value = withTiming(0, { duration: 1000 });
+      opacity.value = withTiming(0, { duration: Motion.duration.crawl });
     }, FADE_DELAY_MS);
 
     return () => {
@@ -1458,9 +1458,9 @@ function ReducedMotionHeart({ x, y }: { x: number; y: number }) {
   const scale = useSharedValue(0.8);
 
   React.useEffect(() => {
-    scale.value = withTiming(1, { duration: 200 });
+    scale.value = withTiming(1, { duration: Motion.duration.normal });
     const timer = setTimeout(() => {
-      opacity.value = withTiming(0, { duration: 400 });
+      opacity.value = withTiming(0, { duration: Motion.duration.slower });
     }, 200);
     return () => clearTimeout(timer);
   }, [scale, opacity]);

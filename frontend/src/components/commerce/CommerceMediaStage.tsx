@@ -36,6 +36,7 @@ import { AnimatedHeart } from '../AnimatedHeart';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { Motion } from '../../theme/motionTokens';
 import { SharedTransitionImage } from '../SharedTransitionImage';
 import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
 
@@ -155,8 +156,8 @@ function MediaPage({
       if (zoom <= 1) {
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
-        translateX.value = withSpring(0, { damping: 18, stiffness: 220 });
-        translateY.value = withSpring(0, { damping: 18, stiffness: 220 });
+        translateX.value = withSpring(0, Motion.spring.settle);
+        translateY.value = withSpring(0, Motion.spring.settle);
         return;
       }
       const maxX = (width * (zoom - 1)) / 2;
@@ -165,15 +166,15 @@ function MediaPage({
       const ty = clamp(translateY.value + e.velocityY * 0.08, -maxY, maxY);
       savedTranslateX.value = tx;
       savedTranslateY.value = ty;
-      translateX.value = withSpring(tx, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityX });
-      translateY.value = withSpring(ty, { damping: 17, stiffness: 200, velocity: reducedMotion ? 0 : e.velocityY });
+      translateX.value = withSpring(tx, { ...Motion.spring.press, velocity: reducedMotion ? 0 : e.velocityX });
+      translateY.value = withSpring(ty, { ...Motion.spring.press, velocity: reducedMotion ? 0 : e.velocityY });
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
       if (scale.value > 1) {
-        scale.value = withSpring(1, { damping: 15 });
+        scale.value = withSpring(1, Motion.spring.press);
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
         savedScale.value = 1;
@@ -182,7 +183,7 @@ function MediaPage({
         runOnJS(setIsZoomed)(false);
       } else {
         const target = reducedMotion ? 2 : 2.5;
-        scale.value = withSpring(target, { damping: 12 });
+        scale.value = withSpring(target, Motion.spring.success);
         savedScale.value = target;
         runOnJS(setIsZoomed)(true);
         if (onDoubleTap) runOnJS(onDoubleTap)();
@@ -788,7 +789,7 @@ export function CommerceMediaStage({
   const dismissZoomHint = useCallback(() => {
     if (zoomHintDismissed.current) return;
     zoomHintDismissed.current = true;
-    zoomHintOpacity.value = withTiming(0, { duration: 400 });
+    zoomHintOpacity.value = withTiming(0, { duration: Motion.duration.slower });
   }, [zoomHintOpacity]);
   const mediaItems = React.useMemo<ProductMediaItem[]>(() => {
     if (media) return media.filter((item) => !!item.uri);
@@ -810,7 +811,7 @@ export function CommerceMediaStage({
   }, [images, media, videoUris, category]);
   React.useEffect(() => {
     if (reducedMotion || mediaItems.length === 0) return;
-    zoomHintOpacity.value = withTiming(0.7, { duration: 300 });
+    zoomHintOpacity.value = withTiming(0.7, { duration: Motion.duration.slow });
     const timer = setTimeout(() => dismissZoomHint(), 2800);
     return () => clearTimeout(timer);
   }, [reducedMotion, mediaItems.length, zoomHintOpacity, dismissZoomHint]);

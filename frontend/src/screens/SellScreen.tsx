@@ -13,7 +13,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
-import * as Haptics from 'expo-haptics';
 
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, FontFamily, DockConstants, Stroke, Control } from '../theme/designTokens';
@@ -221,7 +220,7 @@ export default function SellScreen() {
     if (autofillSuggestion.brand && !brand) setBrand(autofillSuggestion.brand);
     if (autofillSuggestion.category && !category) setCategory(autofillSuggestion.category);
     setAutofillDismissed(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
   }, [autofillSuggestion, title, brand, category]);
 
   // Sold comparables for pricing guidance -- derived from real backend data
@@ -428,7 +427,7 @@ export default function SellScreen() {
     const next = [...new Set([...tags, ...parts])].slice(0, 8);
     setTags(next);
     setTagInput('');
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
   }, [tagInput, tags]);
 
   const removeTag = useCallback((tag: string) => {
@@ -555,7 +554,7 @@ export default function SellScreen() {
       setPhotos((ps) => ps.filter((u) => u !== removedUri));
       return prev.filter((m) => m.id !== itemId);
     });
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
   }, []);
 
   const handleRetryItem = useCallback((itemId: string) => {
@@ -567,9 +566,9 @@ export default function SellScreen() {
           m.id === itemId ? { ...m, status: 'pending', error: undefined } : m
         )
       );
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.tap();
     } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptics.warning();
     }
   }, []);
 
@@ -580,7 +579,7 @@ export default function SellScreen() {
       setPhotos(reordered.map((m) => m.publicUrl || m.uri));
       return reordered;
     });
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
   }, []);
 
   // ── Set as cover ──
@@ -598,7 +597,7 @@ export default function SellScreen() {
       setPhotos(next.map((m) => m.publicUrl || m.uri));
       return next;
     });
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptics.press();
   }, []);
 
   const handlePriceChange = useCallback((text: string) => {
@@ -954,11 +953,11 @@ export default function SellScreen() {
       const newMode = getListingModeFromLabel(val);
       setListingMode(newMode);
       updateSellDraft({ listingMode: newMode });
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptics.press();
     }
     setPickerMode(null);
     if (pickerMode !== 'Format') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.tap();
     }
   }, [pickerMode, updateSellDraft]);
 
@@ -1233,7 +1232,7 @@ export default function SellScreen() {
           <View style={styles.sectionSpacing}>
             <ListingModeSelector
               mode={listingMode}
-              onChange={() => { setPickerMode('Format'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              onChange={() => { setPickerMode('Format'); haptics.tap(); }}
             />
           </View>
 
@@ -1386,7 +1385,7 @@ export default function SellScreen() {
                           onPress={() => {
                             if (!price) {
                               handlePriceChange(soldComps.medianPrice!.toFixed(2));
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              haptics.tap();
                             }
                           }}
                           accessibilityRole="button"
@@ -1732,7 +1731,7 @@ export default function SellScreen() {
             )}
 
             <Pressable
-              onPress={() => { setShippingSheetOpen(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              onPress={() => { setShippingSheetOpen(true); haptics.tap(); }}
               style={({ pressed }) => [styles.shippingSummaryRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
               accessibilityRole="button"
               accessibilityLabel="Configure delivery"
@@ -1769,7 +1768,7 @@ export default function SellScreen() {
                     <Text style={[styles.shippingSheetTitle, { color: colors.textPrimary }]}>Delivery</Text>
                     <Pressable
                       hitSlop={Control.hit}
-                      onPress={() => { setShippingSheetOpen(false); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                      onPress={() => { setShippingSheetOpen(false); haptics.tap(); }}
                       accessibilityRole="button"
                       accessibilityLabel="Close delivery options"
                     >
@@ -1786,7 +1785,7 @@ export default function SellScreen() {
                     <Pressable
                       key={m}
                       style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
-                      onPress={() => { setShippingMethod(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                      onPress={() => { setShippingMethod(m); haptics.selection(); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping method to ${m}`}
                       accessibilityState={{ selected: active }}
@@ -1810,7 +1809,7 @@ export default function SellScreen() {
                     <Pressable
                       key={p}
                       style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
-                      onPress={() => { setShippingPayer(p); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                      onPress={() => { setShippingPayer(p); haptics.selection(); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Set shipping payer to ${p}`}
                       accessibilityState={{ selected: active }}

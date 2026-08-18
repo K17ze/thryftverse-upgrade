@@ -57,6 +57,7 @@ import Reanimated, {
 import { Space, Radius, Type, Typography, FontFamily, Stroke, IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
+import { Motion } from '../../theme/motionTokens';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
 import {
   removeBackground,
@@ -93,7 +94,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
   useEffect(() => {
     if (reduceMotion) return;
     shimmerSV.value = 0;
-    shimmerSV.value = withTiming(1, { duration: 1200 });
+    shimmerSV.value = withTiming(1, { duration: Motion.duration.crawl });
   }, [reduceMotion, shimmerSV]);
 
   const style = useAnimatedStyle(() => ({

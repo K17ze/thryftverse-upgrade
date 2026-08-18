@@ -12,7 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
@@ -21,6 +21,7 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBreakpoint } from '../hooks/useBreakpoint';
+import { Motion } from '../theme/motionTokens';
 import { haptics } from '../utils/haptics';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useCurrencyContext } from '../context/CurrencyContext';
@@ -785,7 +786,10 @@ export default function AuctionDetailScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Reanimated.View
+      entering={reducedMotion ? FadeIn.duration(0) : FadeIn.duration(Motion.transitions.mediaLoad.duration)}
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* ── Collapsed scrolling header ──
@@ -1766,7 +1770,7 @@ export default function AuctionDetailScreen() {
         url={`https://thryftverse.com/auction/${auction.id}`}
         title={auction.title}
       />
-    </View>
+    </Reanimated.View>
   );
 }
 

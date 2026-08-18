@@ -17,7 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as Haptics from 'expo-haptics';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -37,6 +36,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useAIListingSuggestion } from '../hooks/useAIListingSuggestion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
@@ -141,7 +141,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     // Price is NOT auto-filled — the suggested range is shown as guidance so
     // the seller picks their own price (communicates uncertainty honestly).
     setTags(suggestion.suggestedTags);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
   }, [suggestion]);
 
   // -- Auto-analyze whenever the photo set changes --------------------------
@@ -160,7 +160,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
   // -- Photo capture / pick ------------------------------------------------
   const handlePickFromLibrary = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
@@ -187,7 +187,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   }, [showError]);
 
   const handlePickFromCamera = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
@@ -212,14 +212,14 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   }, [showError]);
 
   const handleRemovePhoto = useCallback((uri: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
     setPhotos((prev) => prev.filter((p) => p.uri !== uri));
   }, []);
 
   // -- Enhance photo (navigate to AI Photo Enhancement) --------------------
   const handleEnhancePhoto = useCallback(
     (uri: string) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.tap();
       navigation.navigate('AIPhotoEnhancement', { imageUri: uri });
     },
     [navigation],
@@ -235,11 +235,11 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     }
     setTags((prev) => [...prev, trimmed]);
     setTagInput('');
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
   }, [tagInput, tags]);
 
   const handleRemoveTag = useCallback((tag: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tap();
     setTags((prev) => prev.filter((t) => t !== tag));
   }, []);
 
@@ -255,7 +255,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       if (pickerMode === 'Category') setCategory(val);
       if (pickerMode === 'Condition') setCondition(val);
       setPickerMode(null);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.selection();
     },
     [pickerMode],
   );
@@ -950,16 +950,16 @@ function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayPro
     if (reducedMotion) return;
     scanY.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
       true,
     );
     dotOpacity.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 500 }),
-        withTiming(0.3, { duration: 500 }),
+        withTiming(1, { duration: Motion.duration.slower }),
+        withTiming(0.3, { duration: Motion.duration.slower }),
       ),
       -1,
       true,

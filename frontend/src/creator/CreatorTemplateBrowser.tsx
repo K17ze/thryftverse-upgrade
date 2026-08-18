@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   getTemplatesByCategory,
@@ -41,7 +42,7 @@ function CategoryTab({ label, isActive, onPress, colors }: CategoryTabProps) {
   const underlineOpacity = useSharedValue(isActive ? 1 : 0);
 
   useEffect(() => {
-    underlineOpacity.value = withSpring(isActive ? 1 : 0, { damping: 20, stiffness: 300 });
+    underlineOpacity.value = withSpring(isActive ? 1 : 0, Motion.spring.indicator);
   }, [isActive, underlineOpacity]);
 
   const underlineStyle = useAnimatedStyle(() => ({

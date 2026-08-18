@@ -55,7 +55,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
   useEffect(() => {
     if (reduceMotion) return;
     shimmerSV.value = 0;
-    shimmerSV.value = withTiming(1, { duration: 1200 });
+    shimmerSV.value = withTiming(1, { duration: Motion.duration.crawl });
   }, [reduceMotion, shimmerSV]);
 
   const style = useAnimatedStyle(() => ({
@@ -124,7 +124,7 @@ function FilterTab({ label, isActive, onPress, colors, icon, accessibilityLabel 
   const underlineOpacity = useSharedValue(isActive ? 1 : 0);
 
   useEffect(() => {
-    underlineOpacity.value = withSpring(isActive ? 1 : 0, { damping: 20, stiffness: 300 });
+    underlineOpacity.value = withSpring(isActive ? 1 : 0, Motion.spring.indicator);
   }, [isActive, underlineOpacity]);
 
   const underlineStyle = useAnimatedStyle(() => ({
@@ -211,12 +211,12 @@ export function CreatorDraftListScreen() {
 
   const showToast = useCallback(() => {
     toastTranslateY.value = withSpring(0, spring.entrance);
-    toastOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+    toastOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
   }, [toastTranslateY, toastOpacity, spring.entrance]);
 
   const hideToast = useCallback(() => {
-    toastTranslateY.value = withTiming(100, { duration: 180, easing: Easing.in(Easing.ease) });
-    toastOpacity.value = withTiming(0, { duration: 180 });
+    toastTranslateY.value = withTiming(100, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+    toastOpacity.value = withTiming(0, { duration: Motion.duration.normal });
   }, [toastTranslateY, toastOpacity]);
 
   const loadDrafts = useCallback(async () => {
@@ -732,7 +732,7 @@ function DraftCard({
     const delay = Math.min(index * 50, 400);
     const timer = setTimeout(() => {
       cardScale.value = withSpring(1, springCfg);
-      cardOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+      cardOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
     }, delay);
     return () => clearTimeout(timer);
   }, [cardScale, cardOpacity, reduceMotion, springCfg, index]);
@@ -904,15 +904,15 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
         backdropOpacity.value = 1;
       } else {
         translateY.value = withSpring(0, Motion.spring.entrance);
-        backdropOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
+        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
       }
     } else if (mounted.current) {
       if (reduceMotion) {
         translateY.value = 400;
         backdropOpacity.value = 0;
       } else {
-        translateY.value = withTiming(400, { duration: 180, easing: Easing.in(Easing.ease) });
-        backdropOpacity.value = withTiming(0, { duration: 160 });
+        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }
   }, [draft, reduceMotion, translateY, backdropOpacity]);

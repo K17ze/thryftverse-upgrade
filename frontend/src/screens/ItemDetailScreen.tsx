@@ -17,6 +17,7 @@ import Reanimated, {
   withSpring,
   withSequence,
   runOnJS,
+  FadeIn,
   type SharedValue,
 } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
@@ -749,7 +750,10 @@ export default function ItemDetailScreen() {
 
   return (
     <GestureDetector gesture={dismissPan}>
-    <Reanimated.View style={[styles.container, { backgroundColor: colors.background }, dismissContainerStyle]}>
+    <Reanimated.View
+      entering={reducedMotion ? FadeIn.duration(0) : FadeIn.duration(Motion.transitions.mediaLoad.duration)}
+      style={[styles.container, { backgroundColor: colors.background }, dismissContainerStyle]}
+    >
       <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* ── Collapsed scrolling header ──

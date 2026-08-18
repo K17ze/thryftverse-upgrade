@@ -18,6 +18,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { PressScale } from './CreatorAnimations';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import Reanimated, {
   useSharedValue,
@@ -120,9 +121,9 @@ export function CreatorCropSheet({
         gridOpacitySV.value = 0.3;
       } else {
         sheetYSV.value = withSpring(0, spring.entrance);
-        backdropOpacitySV.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
+        backdropOpacitySV.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
         // Grid lines fade in after sheet settles
-        gridOpacitySV.value = withDelay(200, withTiming(0.3, { duration: 200 }));
+        gridOpacitySV.value = withDelay(Motion.duration.normal, withTiming(0.3, { duration: Motion.duration.normal }));
       }
     } else if (mountedRef.current) {
       if (reduceMotion) {
@@ -130,9 +131,9 @@ export function CreatorCropSheet({
         backdropOpacitySV.value = 0;
         gridOpacitySV.value = 0;
       } else {
-        sheetYSV.value = withTiming(SCREEN_W * 1.2, { duration: 180, easing: Easing.in(Easing.ease) });
-        backdropOpacitySV.value = withTiming(0, { duration: 160 });
-        gridOpacitySV.value = withTiming(0, { duration: 120 });
+        sheetYSV.value = withTiming(SCREEN_W * 1.2, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        backdropOpacitySV.value = withTiming(0, { duration: Motion.duration.normal });
+        gridOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
       }
     }
   }, [visible, reduceMotion, sheetYSV, backdropOpacitySV, gridOpacitySV, spring]);

@@ -10,6 +10,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { markInteractive } from '../platform/monitoring';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
@@ -58,8 +59,8 @@ export default function LoginScreen() {
       return;
     }
     errorPulse.value = withSequence(
-      withTiming(0.95, { duration: 120 }),
-      withTiming(1, { duration: 180 })
+      withTiming(0.95, { duration: Motion.duration.fast }),
+      withTiming(1, { duration: Motion.duration.normal })
     );
   };
 

@@ -30,6 +30,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { Video, ResizeMode } from '../components/compat/Video';
 import type { CreatorLayer, CreatorDocument, CreatorPage } from './composition';
 import { getVisibleLayersSorted } from './composition';
@@ -352,8 +353,8 @@ function EmptyCanvasState({ colors }: { colors: ReturnType<typeof useAppTheme>['
     }
     // One-time entrance: fade in + scale from 0.9 → 1.0, then stop.
     // No continuous pulsing (AGENTS.md §17).
-    scaleSV.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
-    opacitySV.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+    scaleSV.value = withTiming(1, { duration: Motion.duration.slower, easing: Easing.out(Easing.cubic) });
+    opacitySV.value = withTiming(1, { duration: Motion.duration.slow, easing: Easing.out(Easing.ease) });
     return () => {
       cancelAnimation(scaleSV);
       cancelAnimation(opacitySV);
@@ -1306,13 +1307,13 @@ function TextLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tex
       return;
     }
     if (animation === 'fade') {
-      animOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) });
+      animOpacity.value = withTiming(1, { duration: Motion.duration.crawl, easing: Easing.out(Easing.ease) });
       setTypewriterText(payload.text);
     } else if (animation === 'slide') {
       animTranslateY.value = 24;
       animOpacity.value = 0;
-      animOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
-      animTranslateY.value = withTiming(0, { duration: 500, easing: Easing.out(Easing.exp) });
+      animOpacity.value = withTiming(1, { duration: Motion.duration.slower, easing: Easing.out(Easing.ease) });
+      animTranslateY.value = withTiming(0, { duration: Motion.duration.slower, easing: Easing.out(Easing.exp) });
       setTypewriterText(payload.text);
     } else if (animation === 'bounce') {
       animOpacity.value = 1;

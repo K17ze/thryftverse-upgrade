@@ -9,6 +9,7 @@ import Reanimated, {
   withSequence,
   runOnJS,
 } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { width, height } = Dimensions.get('window');
 
@@ -86,6 +87,7 @@ function Particle({ x, y, color, delay }: ParticleProps) {
 }
 
 export function Confetti({ count = 40 }: { count?: number }) {
+  const reducedMotion = useReducedMotion();
   const particles = Array.from({ length: count }).map((_, i) => ({
     id: i,
     x: (Math.random() - 0.5) * width,
@@ -101,7 +103,12 @@ export function Confetti({ count = 40 }: { count?: number }) {
     return () => clearTimeout(t);
   }, []);
 
-  if (!active) return null;
+  // Reduced motion: confetti is purely decorative celebratory motion
+  // involving scaling, rotation, and translation — all prohibited under
+  // reduced motion (§2.5: "remove parallax/scaling/rotation"). Render
+  // nothing so the success moment is communicated via haptics and UI
+  // state changes instead.
+  if (!active || reducedMotion) return null;
 
   return (
     <View style={{ position: 'absolute', top: height * 0.4, left: width / 2, zIndex: 100 }} pointerEvents="none">

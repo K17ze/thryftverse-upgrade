@@ -608,15 +608,15 @@ function LayerOverflowActionSheet({
         backdropOpacity.value = 1;
       } else {
         translateY.value = withSpring(0, Motion.spring.entrance);
-        backdropOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
+        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
       }
     } else if (mounted.current) {
       if (reduceMotion) {
         translateY.value = 400;
         backdropOpacity.value = 0;
       } else {
-        translateY.value = withTiming(400, { duration: 180, easing: Easing.in(Easing.ease) });
-        backdropOpacity.value = withTiming(0, { duration: 160 });
+        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }
   }, [layer, reduceMotion, translateY, backdropOpacity]);

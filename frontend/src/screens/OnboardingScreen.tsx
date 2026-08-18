@@ -20,6 +20,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { useStore } from '../store/useStore';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
@@ -94,8 +95,8 @@ function OnboardingDot({ index, activeIndex }: OnboardingDotProps) {
   const { colors } = useAppTheme();
   const animatedStyle = useAnimatedStyle(() => {
     const isActive = index === activeIndex;
-    const width = withTiming(isActive ? 28 : 8, { duration: 280 });
-    const opacity = withTiming(isActive ? 1 : 0.32, { duration: 280 });
+    const width = withTiming(isActive ? 28 : 8, { duration: Motion.duration.slow });
+    const opacity = withTiming(isActive ? 1 : 0.32, { duration: Motion.duration.slow });
     return { width, opacity };
   });
 

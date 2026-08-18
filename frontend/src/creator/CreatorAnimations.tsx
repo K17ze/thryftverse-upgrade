@@ -25,6 +25,7 @@ import Reanimated, {
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 
 // ── Timing presets ─────────────────────────────────────────────────
@@ -178,7 +179,7 @@ export function SheetContainer({
         // Spring back to rest.
         translateY.value = reduceMotion
           ? withTiming(0, { duration: 0 })
-          : withSpring(0, { damping: 28, stiffness: 380 });
+          : withSpring(0, Motion.spring.glide);
       }
     });
 

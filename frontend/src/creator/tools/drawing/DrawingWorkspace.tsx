@@ -497,8 +497,8 @@ export function DrawingWorkspace({
         canvasOpacity.value = 1;
       } else {
         panelTranslateY.value = withTiming(0, SNAP_TIMING);
-        panelOpacity.value = withTiming(1, { duration: 160 });
-        canvasOpacity.value = withTiming(1, { duration: 200 });
+        panelOpacity.value = withTiming(1, { duration: Motion.duration.normal });
+        canvasOpacity.value = withTiming(1, { duration: Motion.duration.normal });
       }
     } else {
       panelTranslateY.value = 400;

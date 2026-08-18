@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps, type RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -455,7 +456,7 @@ const BulkRow = React.memo(function BulkRow({
   const rotate = useSharedValue(expanded ? 1 : 0);
 
   React.useEffect(() => {
-    rotate.value = withTiming(expanded ? 1 : 0, { duration: 200 });
+    rotate.value = withTiming(expanded ? 1 : 0, { duration: Motion.duration.normal });
   }, [expanded, rotate]);
 
   const chevronStyle = useAnimatedStyle(() => ({

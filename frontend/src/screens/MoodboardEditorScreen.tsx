@@ -57,6 +57,7 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import {
   fetchMoodboardDetail,
   fetchMoodboardThemes,
@@ -156,16 +157,16 @@ const CanvasItem = React.memo(function CanvasItem({
     const expectedX = normToPx(item.position.x, canvasWidth);
     const expectedY = normToPx(item.position.y, canvasHeight);
     if (Math.abs(translateX.value - expectedX) > 1) {
-      translateX.value = reducedMotion ? expectedX : withSpring(expectedX, { damping: 26, stiffness: 220 });
+      translateX.value = reducedMotion ? expectedX : withSpring(expectedX, Motion.spring.sharedElement);
     }
     if (Math.abs(translateY.value - expectedY) > 1) {
-      translateY.value = reducedMotion ? expectedY : withSpring(expectedY, { damping: 26, stiffness: 220 });
+      translateY.value = reducedMotion ? expectedY : withSpring(expectedY, Motion.spring.sharedElement);
     }
     if (Math.abs(scale.value - item.position.scale) > 0.01) {
-      scale.value = reducedMotion ? item.position.scale : withSpring(item.position.scale, { damping: 26, stiffness: 220 });
+      scale.value = reducedMotion ? item.position.scale : withSpring(item.position.scale, Motion.spring.sharedElement);
     }
     if (Math.abs(rotation.value - item.position.rotation) > 0.5) {
-      rotation.value = reducedMotion ? item.position.rotation : withSpring(item.position.rotation, { damping: 26, stiffness: 220 });
+      rotation.value = reducedMotion ? item.position.rotation : withSpring(item.position.rotation, Motion.spring.sharedElement);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.position.x, item.position.y, item.position.scale, item.position.rotation, canvasWidth, canvasHeight, reducedMotion]);
@@ -176,8 +177,8 @@ const CanvasItem = React.memo(function CanvasItem({
       const halfPx = halfBase * finalScale;
       const clampedX = clampCenter(finalX, canvasWidth, halfPx);
       const clampedY = clampCenter(finalY, canvasHeight, halfPx);
-      translateX.value = reducedMotion ? clampedX : withSpring(clampedX, { damping: 26, stiffness: 220 });
-      translateY.value = reducedMotion ? clampedY : withSpring(clampedY, { damping: 26, stiffness: 220 });
+      translateX.value = reducedMotion ? clampedX : withSpring(clampedX, Motion.spring.sharedElement);
+      translateY.value = reducedMotion ? clampedY : withSpring(clampedY, Motion.spring.sharedElement);
       const position: MoodboardItemPosition = {
         x: pxToNorm(clampedX, canvasWidth),
         y: pxToNorm(clampedY, canvasHeight),

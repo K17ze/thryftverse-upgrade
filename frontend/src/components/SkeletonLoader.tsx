@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ActiveTheme, Colors } from '../constants/colors';
 
 import { Space } from '../theme/designTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 // ELEVATED: Flagship shimmer with brand tint
 const IS_LIGHT = ActiveTheme === 'light';
 const BASE_BG = Colors.surface;
@@ -36,7 +37,11 @@ interface SkeletonProps {
   reducedMotion?: boolean;
 }
 
-export function SkeletonLoader({ width, height, borderRadius = 8, style, reducedMotion = false }: SkeletonProps) {
+export function SkeletonLoader({ width, height, borderRadius = 8, style, reducedMotion: reducedMotionProp = false }: SkeletonProps) {
+  // OR the prop with the system/in-app setting so all consumers automatically
+  // get reduced-motion compliance even when they don't pass the prop (§2.5).
+  const systemReducedMotion = useReducedMotion();
+  const reducedMotion = reducedMotionProp || systemReducedMotion;
   const translateX = useSharedValue(-400);
   const breathe = useSharedValue(1);
   const brandTranslate = useSharedValue(-400);

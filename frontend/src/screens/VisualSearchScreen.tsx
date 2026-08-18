@@ -85,13 +85,13 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         RNAnimated.sequence([
           RNAnimated.timing(scanLineAnim, {
             toValue: 1,
-            duration: 1200,
+            duration: Motion.duration.crawl,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: false,
           }),
           RNAnimated.timing(scanLineAnim, {
             toValue: 0,
-            duration: 800,
+            duration: Motion.duration.slower,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: false,
           }),

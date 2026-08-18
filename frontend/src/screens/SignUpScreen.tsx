@@ -12,6 +12,7 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 
 import { Type, Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
@@ -63,8 +64,8 @@ export default function SignUpScreen() {
       return;
     }
     errorPulse.value = withSequence(
-      withTiming(0.95, { duration: 120 }),
-      withTiming(1, { duration: 180 })
+      withTiming(0.95, { duration: Motion.duration.fast }),
+      withTiming(1, { duration: Motion.duration.normal })
     );
   };
 

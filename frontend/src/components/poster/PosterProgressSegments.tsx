@@ -14,6 +14,7 @@ import Reanimated, {
 import { Space } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { Motion } from '../../theme/motionTokens';
 
 /** Spring config shape returned by useMotionConfig().spring.* */
 type SpringConfig = { damping: number; stiffness: number; mass: number };
@@ -104,7 +105,7 @@ export function PosterProgressSegments({
         completedStepSV.value = prevIndexRef.current;
         if (isEnabled) {
           stepScaleSV.value = withSpring(1.4, spring.success as SpringConfig);
-          stepScaleSV.value = withSpring(1, { ...spring.entrance as SpringConfig, damping: 20 });
+          stepScaleSV.value = withSpring(1, Motion.spring.settle as SpringConfig);
         }
         haptic.medium();
       }

@@ -19,6 +19,7 @@ import { haptics } from '../utils/haptics';
 import { Typography, Radius, Type, Space } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { REDUCED_SPRING } from '../theme/motionTokens';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = 80;
@@ -122,7 +123,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     () => index,
     (currIndex) => {
       if (!isDragging.value) {
-        position.value = withSpring(currIndex * TOTAL_SIZE, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press);
+        position.value = withSpring(currIndex * TOTAL_SIZE, reducedMotion ? REDUCED_SPRING : spring.press);
       }
     },
     [index, reducedMotion, spring]
@@ -140,7 +141,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     .onEnd((e) => {
       const newIndex = Math.max(0, Math.min(total - 1, Math.round(position.value / TOTAL_SIZE)));
       isDragging.value = false;
-      position.value = withSpring(newIndex * TOTAL_SIZE, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press, () => {
+      position.value = withSpring(newIndex * TOTAL_SIZE, reducedMotion ? REDUCED_SPRING : spring.press, () => {
         zIndex.value = 0;
       });
 
@@ -161,9 +162,9 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
       zIndex: zIndex.value,
       transform: [
         { translateX: position.value },
-        { scale: withSpring(isDragging.value ? 1.1 : 1, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press) }
+        { scale: withSpring(isDragging.value ? 1.1 : 1, reducedMotion ? REDUCED_SPRING : spring.press) }
       ],
-      shadowOpacity: withSpring(isDragging.value ? 0.3 : 0, reducedMotion ? { damping: 100, stiffness: 1000 } : spring.press),
+      shadowOpacity: withSpring(isDragging.value ? 0.3 : 0, reducedMotion ? REDUCED_SPRING : spring.press),
     };
   });
 

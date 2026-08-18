@@ -26,6 +26,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { PressScale } from './CreatorAnimations';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import Reanimated, {
   useSharedValue,
@@ -132,15 +133,15 @@ export function CreatorCutoutSheet({
         backdropOpacitySV.value = 1;
       } else {
         sheetYSV.value = withSpring(0, spring.entrance);
-        backdropOpacitySV.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.ease) });
+        backdropOpacitySV.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
       }
     } else if (mountedRef.current) {
       if (reduceMotion) {
         sheetYSV.value = SCREEN_W * 1.2;
         backdropOpacitySV.value = 0;
       } else {
-        sheetYSV.value = withTiming(SCREEN_W * 1.2, { duration: 180, easing: Easing.in(Easing.ease) });
-        backdropOpacitySV.value = withTiming(0, { duration: 160 });
+        sheetYSV.value = withTiming(SCREEN_W * 1.2, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        backdropOpacitySV.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }
   }, [visible, reduceMotion, sheetYSV, backdropOpacitySV, spring]);
@@ -246,7 +247,7 @@ export function CreatorCutoutSheet({
       subjectHighlightSV.value = 1;
     } else {
       subjectHighlightSV.value = withSequence(
-        withTiming(1, { duration: 150 }),
+        withTiming(1, { duration: Motion.duration.fast }),
         withSpring(0, spring.tap),
       );
     }

@@ -149,10 +149,10 @@ export function PosterReactionReplyBar({
       setShowReactions(true);
       // Spring in — Reanimated with spring config
       trayScaleSV.value = withSpring(1, spring.entrance as SpringConfig);
-      trayOpacitySV.value = withTiming(1, { duration: 150, easing: ReEasing.out(ReEasing.ease) });
+      trayOpacitySV.value = withTiming(1, { duration: Motion.duration.fast, easing: ReEasing.out(ReEasing.ease) });
     } else {
       // Fade out then hide — use setTimeout to hide after the animation completes
-      trayOpacitySV.value = withTiming(0, { duration: 120 });
+      trayOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
       setTimeout(() => {
         setShowReactions(false);
         trayScaleSV.value = 0;

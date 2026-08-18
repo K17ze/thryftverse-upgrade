@@ -7,7 +7,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
 import { createUserAddress } from '../../services/commerceApi';
-import * as Haptics from 'expo-haptics';
+import { useHaptic } from '../../hooks/useHaptic';
 
 interface Props {
   visible: boolean;
@@ -37,6 +37,7 @@ const COMMON_COUNTRIES = [
 
 export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
   const { colors } = useAppTheme();
+  const haptic = useHaptic();
   const [name, setName] = useState('');
   const [streetAddress, setStreetAddress] = useState('');
   const [apartment, setApartment] = useState('');
@@ -75,7 +76,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
   const handleSave = async () => {
     if (!isFormValid || isSaving) return;
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic.medium();
 
     const nextAddress = {
       name: name.trim(),
@@ -114,11 +115,11 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
         isDefault: saved.isDefault,
       });
       show('Delivery address saved', 'success');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptic.success();
     } catch {
       saveAddress(nextAddress);
       show('Address saved locally. Backend sync unavailable.', 'info');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      haptic.warning();
     } finally {
       setIsSaving(false);
       onDismiss();
@@ -266,7 +267,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
           ]}
           onPress={() => {
             setIsDefaultAddress(!isDefaultAddress);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            haptic.light();
           }}
           accessibilityRole="switch"
           accessibilityState={{ checked: isDefaultAddress }}

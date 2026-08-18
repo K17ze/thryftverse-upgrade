@@ -10,6 +10,7 @@ import Reanimated, {
   Easing,
 } from 'react-native-reanimated';
 import { Typography, Type, Space } from '../theme/designTokens';
+import { Motion } from '../theme/motionTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -35,8 +36,8 @@ export function BrandedSplash({ onFinish }: BrandedSplashProps) {
 
     pulse.value = withRepeat(
       withSequence(
-        withTiming(1.06, { duration: 850, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 850, easing: Easing.inOut(Easing.ease) })
+        withTiming(1.06, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) })
       ),
       -1,
       true
@@ -50,8 +51,8 @@ export function BrandedSplash({ onFinish }: BrandedSplashProps) {
     transform: [{ scale: pulse.value }],
   }));
 
-  const wrapperEnterAnimation = reducedMotionEnabled ? undefined : FadeIn.duration(350);
-  const taglineEnterAnimation = reducedMotionEnabled ? undefined : FadeIn.delay(520).duration(420);
+  const wrapperEnterAnimation = reducedMotionEnabled ? undefined : FadeIn.duration(Motion.duration.slow);
+  const taglineEnterAnimation = reducedMotionEnabled ? undefined : FadeIn.delay(520).duration(Motion.duration.slower);
 
   return (
     <View style={styles.container}>

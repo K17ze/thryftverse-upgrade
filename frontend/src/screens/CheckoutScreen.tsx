@@ -37,6 +37,7 @@ import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
@@ -1712,8 +1713,8 @@ function PulsingDot({
     if (reducedMotion) return;
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.3, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.3, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
       false,
@@ -1761,8 +1762,8 @@ function PaymentStateBanner({
     if (stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating' || stage === 'awaiting_payment') {
       dotOpacity.value = withRepeat(
         withSequence(
-          withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.3, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
         ),
         -1,
         false,
@@ -1905,7 +1906,7 @@ function CheckoutProgressOverlay({
     if (reducedMotion) return;
     progressX.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
         withTiming(-1, { duration: 0 }),
       ),
       -1,

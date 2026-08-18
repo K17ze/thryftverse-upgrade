@@ -25,6 +25,7 @@ import { makeStableId } from '../utils/createStableId';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
+import { Motion } from '../theme/motionTokens';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -258,8 +259,8 @@ export default function CreatorCamera({
       return;
     }
     bracketOpacity.value = withSequence(
-      withTiming(0, { duration: 100, easing: Easing.inOut(Easing.ease) }),
-      withTiming(1, { duration: 100, easing: Easing.inOut(Easing.ease) }),
+      withTiming(0, { duration: Motion.duration.fast, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1, { duration: Motion.duration.fast, easing: Easing.inOut(Easing.ease) }),
     );
   }, [captureMode, reducedMotion, bracketOpacity]);
 
@@ -488,8 +489,8 @@ export default function CreatorCamera({
         // Capture flash — white overlay
         if (!reducedMotion) {
           captureFlash.value = withSequence(
-            withTiming(0.8, { duration: 80, easing: Easing.out(Easing.cubic) }),
-            withTiming(0, { duration: 120, easing: Easing.in(Easing.cubic) }),
+            withTiming(0.8, { duration: Motion.duration.touch, easing: Easing.out(Easing.cubic) }),
+            withTiming(0, { duration: Motion.duration.fast, easing: Easing.in(Easing.cubic) }),
           );
         }
         setCapturedKind('video');
@@ -525,8 +526,8 @@ export default function CreatorCamera({
         countdownOpacity.value = 0;
         countdownScale.value = withSpring(1, spring.lift);
         countdownOpacity.value = withSequence(
-          withTiming(1, { duration: 100 }),
-          withDelay(700, withTiming(0, { duration: 200 })),
+          withTiming(1, { duration: Motion.duration.fast }),
+          withDelay(700, withTiming(0, { duration: Motion.duration.normal })),
         );
       } else {
         countdownScale.value = 1;
@@ -559,7 +560,7 @@ export default function CreatorCamera({
     if (!reducedMotion) {
       zoomIndicatorOpacity.value = withSpring(1, spring.tap);
       zoomIndicatorScale.value = withSpring(1, spring.lift);
-      zoomIndicatorOpacity.value = withDelay(1200, withTiming(0, { duration: 200 }));
+      zoomIndicatorOpacity.value = withDelay(1200, withTiming(0, { duration: Motion.duration.normal }));
       zoomIndicatorScale.value = withDelay(1200, withSpring(0.8, spring.entrance));
     }
   }, [reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
@@ -615,8 +616,8 @@ export default function CreatorCamera({
           countdownOpacity.value = 0;
           countdownScale.value = withSpring(1, spring.lift);
           countdownOpacity.value = withSequence(
-            withTiming(1, { duration: 100 }),
-            withDelay(700, withTiming(0, { duration: 200 })),
+            withTiming(1, { duration: Motion.duration.fast }),
+            withDelay(700, withTiming(0, { duration: Motion.duration.normal })),
           );
         } else {
           countdownScale.value = 1;
@@ -641,8 +642,8 @@ export default function CreatorCamera({
         // Capture flash — white overlay 0→0.8→0 over 200ms
         if (!reducedMotion) {
           captureFlash.value = withSequence(
-            withTiming(0.8, { duration: 80, easing: Easing.out(Easing.cubic) }),
-            withTiming(0, { duration: 120, easing: Easing.in(Easing.cubic) })
+            withTiming(0.8, { duration: Motion.duration.touch, easing: Easing.out(Easing.cubic) }),
+            withTiming(0, { duration: Motion.duration.fast, easing: Easing.in(Easing.cubic) })
           );
         }
         setCapturedKind('image');

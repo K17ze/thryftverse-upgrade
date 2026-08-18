@@ -14,7 +14,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import * as Haptics from 'expo-haptics';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Typography, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -24,12 +23,9 @@ import { getOrder, type CommerceOrder } from '../services/commerceApi';
 import { CachedImage } from '../components/CachedImage';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../components/orders/orderCapabilities';
+import { haptics } from '../utils/haptics';
 
 type OrderReceiptRoute = RouteProp<{ OrderReceipt: { orderId: string } }, 'OrderReceipt'>;
-
-const haptics = {
-  tap: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
-};
 
 function formatReceiptDate(iso: string): string {
   const date = new Date(iso);
