@@ -31,9 +31,16 @@ export function FlagshipHeroSection({
   return (
     <View style={[styles.root, { width, height }]}>
       {imageUri ? (
-        <CachedImage uri={imageUri} style={{ width, height }} contentFit="cover" transition={Motion.transitions.mediaLoad.duration} />
+        <CachedImage
+          uri={imageUri}
+          style={{ width, height }}
+          contentFit="cover"
+          transition={Motion.transitions.mediaLoad.duration}
+          accessibilityRole="image"
+          accessibilityLabel={title}
+        />
       ) : (
-        <View style={[styles.imageFallback, { width, height }]} />
+        <View style={[styles.imageFallback, { width, height }]} accessibilityElementsHidden />
       )}
 
       {/* Authored scrim — bottom-weighted for text legibility */}
@@ -41,6 +48,7 @@ export function FlagshipHeroSection({
         colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.65)']}
         locations={[0.3, 0.6, 1.0]}
         style={[StyleSheet.absoluteFill, { width, height }]}
+        accessibilityElementsHidden
       />
 
       <View style={styles.textWrap}>

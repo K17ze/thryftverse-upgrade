@@ -43,6 +43,10 @@ export interface VideoProps {
   onError?: (error: unknown) => void;
   /** Legacy `expo-av` prop — toggles native playback controls on/off. */
   useNativeControls?: boolean;
+  /** Accessibility role for screen readers (e.g. 'image'). */
+  accessibilityRole?: 'image' | 'button' | 'link' | 'none';
+  /** Accessibility label describing the video for screen readers. */
+  accessibilityLabel?: string;
 }
 
 function resolveSourceUri(source: VideoProps['source']): string | null {
@@ -96,6 +100,8 @@ export const Video: React.FC<VideoProps> = ({
   onReadyForDisplay,
   onError,
   useNativeControls = false,
+  accessibilityRole,
+  accessibilityLabel,
 }) => {
   const sourceUri = useMemo(() => resolveSourceUri(source), [source]);
 

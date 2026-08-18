@@ -38,17 +38,32 @@ export function FlagshipAssetCard({
   const statusColor =
     status === 'active' ? colors.success : status === 'pending' ? colors.textSecondary : status === 'sold' ? colors.textMuted : colors.textSecondary;
 
+  const cardLabel = `${name}, ${unitPrice} per unit, ${yourUnits} of ${totalUnits} units owned (${ownershipPct}%)`;
+
   return (
-    <Pressable onPress={onPress} style={styles.root}>
+    <Pressable
+      onPress={onPress}
+      style={styles.root}
+      accessibilityRole="button"
+      accessibilityLabel={cardLabel}
+      accessibilityHint="View asset details"
+    >
       <View style={styles.imageWrap}>
         {imageUri ? (
-          <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={Motion.transitions.mediaLoad.duration} />
+          <CachedImage
+            uri={imageUri}
+            style={styles.image}
+            contentFit="cover"
+            transition={Motion.transitions.mediaLoad.duration}
+            accessibilityRole="image"
+            accessibilityLabel={name}
+          />
         ) : (
-          <View style={[styles.image, styles.imageFallback]}>
+          <View style={[styles.image, styles.imageFallback]} accessibilityElementsHidden>
             <Ionicons name="image-outline" size={IconGrammar.hero} color={colors.textMuted} />
           </View>
         )}
-        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+        <View style={[styles.statusDot, { backgroundColor: statusColor }]} accessibilityElementsHidden />
       </View>
 
       <View style={styles.content}>
@@ -61,7 +76,7 @@ export function FlagshipAssetCard({
           <Text style={styles.perUnit}>/ unit</Text>
         </View>
 
-        <View style={styles.ownershipRow}>
+        <View style={styles.ownershipRow} accessibilityElementsHidden>
           <View style={styles.ownershipBarBg}>
             <View
               style={[
@@ -70,14 +85,20 @@ export function FlagshipAssetCard({
               ]}
             />
           </View>
-          <Text style={styles.ownershipText}>
-            {yourUnits} / {totalUnits} ({ownershipPct}%)
-          </Text>
         </View>
+        <Text style={styles.ownershipText}>
+          {yourUnits} / {totalUnits} ({ownershipPct}%)
+        </Text>
       </View>
 
       {onAction && actionLabel && (
-        <Pressable onPress={(e) => { e.stopPropagation(); onAction(); }} style={styles.actionBtn}>
+        <Pressable
+          onPress={(e) => { e.stopPropagation(); onAction(); }}
+          style={styles.actionBtn}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          accessibilityHint={`Perform ${actionLabel.toLowerCase()} on ${name}`}
+        >
           <Text style={styles.actionLabel}>{actionLabel}</Text>
         </Pressable>
       )}

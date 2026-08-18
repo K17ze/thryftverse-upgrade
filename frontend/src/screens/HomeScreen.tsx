@@ -53,6 +53,8 @@ import { useViewabilityPlayback } from '../hooks/useViewabilityPlayback';
 import { HorizontalRail } from '../components/HorizontalRail';
 // Phase 3: Removed SyncStatusPill (status indicator clutter reduced)
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { HomeDiscoveryCard } from '../components/discover/HomeDiscoveryCard';
@@ -431,6 +433,7 @@ export default function HomeScreen() {
   const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
   const followingFeed = useFollowingFeed();
   const forYouFeed = useForYouFeed();
+  const { isOffline } = useConnectivity();
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<HomeDiscoveryItemVM | null>(null);
@@ -1233,6 +1236,10 @@ export default function HomeScreen() {
                 telemetryContext="home_feed_sync"
                 containerStyle={styles.feedStatusBanner}
               />
+            ) : null}
+
+            {isOffline && feedGridData.length > 0 ? (
+              <OfflineBanner onRetry={() => void handleRefresh()} />
             ) : null}
 
             {showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading ? (

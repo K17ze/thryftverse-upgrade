@@ -47,8 +47,18 @@ export function FlagshipProductCard({
   const saved = isSaved || isWishlisted;
   const enter = reducedMotion ? undefined : FadeIn.duration(Motion.transitions.listItem.duration);
 
+  const cardLabel = sellerName
+    ? `${title}, ${price}, ${sellerName}`
+    : `${title}, ${price}`;
+
   return (
-    <Pressable onPress={onPress} style={[styles.root, { width: cardW }, style]}>
+    <Pressable
+      onPress={onPress}
+      style={[styles.root, { width: cardW }, style]}
+      accessibilityRole="button"
+      accessibilityLabel={cardLabel}
+      accessibilityHint="View item details"
+    >
       <View style={[styles.imageWrap, { width: cardW, height: cardH }]}>
         <CachedImage
           uri={imageUri}
@@ -56,6 +66,8 @@ export function FlagshipProductCard({
           contentFit="cover"
           transition={Motion.transitions.mediaLoad.duration}
           priority="normal"
+          accessibilityRole="image"
+          accessibilityLabel={title}
         />
 
         {/* Top-right save button — 44pt hit area, transparent by default */}
@@ -69,6 +81,8 @@ export function FlagshipProductCard({
             hitSlop={12}
             accessibilityLabel={saved ? 'Remove from saved' : 'Save item'}
             accessibilityRole="button"
+            accessibilityState={{ selected: saved }}
+            accessibilityHint={saved ? 'Removes this item from your saved list' : 'Saves this item to your saved list'}
           >
             <Ionicons
               name={saved ? 'heart' : 'heart-outline'}
@@ -80,7 +94,7 @@ export function FlagshipProductCard({
 
         {/* Video indicator — compact, only when media is video */}
         {hasVideo && (
-          <View style={styles.videoBadge}>
+          <View style={styles.videoBadge} accessibilityElementsHidden>
             <Ionicons name="videocam" size={IconGrammar.badge} color={colors.scrimTextPrimary} />
           </View>
         )}

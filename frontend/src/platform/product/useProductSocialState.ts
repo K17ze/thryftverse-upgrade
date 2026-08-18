@@ -57,10 +57,13 @@ export function useProductSocialState(
     // Optimistic update via store; store is the source of truth so rollback
     // is simply re-toggling on failure — here the store action is synchronous
     // and local-persisted, so no network failure path exists for wishlist.
+    // The wishlist is local-only (no server sync), so the toast is 'info'
+    // not 'success' — per AGENTS.md §11, the UI must not claim an operation
+    // succeeded when only local temporary state changed.
     toggleWishlist(objectId);
     haptic.medium();
     options?.onLikeAnalytics?.();
-    show(wasLiked ? 'Removed from wishlist' : 'Added to wishlist', 'success');
+    show(wasLiked ? 'Removed from wishlist' : 'Added to wishlist', 'info');
   }, [vm, objectId, isWishlisted, toggleWishlist, haptic, show, options]);
 
   const openCollectionPicker = useCallback(() => {

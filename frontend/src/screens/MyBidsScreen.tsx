@@ -9,6 +9,8 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { TradeHeader } from '../components/trade';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -122,6 +124,7 @@ export default function MyBidsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
   const { goldRates, displayMode } = useCurrencyContext();
+  const { isOffline } = useConnectivity();
 
   const [filter, setFilter] = React.useState<BidFilter>('all');
   const [endingSoonest, setEndingSoonest] = React.useState(false);
@@ -342,6 +345,10 @@ export default function MyBidsScreen() {
           )}
         </ScrollView>
 
+      {isOffline && sortedItems.length > 0 ? (
+        <OfflineBanner onRetry={() => void handleRefresh()} />
+      ) : null}
+
       <FlashList
         data={sortedItems}
         keyExtractor={(item) => item.id}
@@ -360,8 +367,8 @@ export default function MyBidsScreen() {
           ) : error ? (
             <EmptyState
               icon="cloud-offline-outline"
-              title="Couldn't load bids"
-              subtitle={error}
+              title={isOffline ? 'You are offline' : "Couldn't load bids"}
+              subtitle={isOffline ? 'Check your connection and try again.' : error}
               ctaLabel="Retry"
               onCtaPress={() => { setError(null); setLoading(true); void fetchItems(filter); }}
             />

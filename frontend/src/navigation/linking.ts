@@ -101,6 +101,11 @@ export const linking: LinkingOptions<RootStackParamList> = {
 
       // Galleria collections
       GalleriaCollectionDetail: 'galleria/collections/:collectionId',
+
+      // Live shopping — live stream viewer is deep-linkable from push
+      // notifications ("Seller is live now") and shared stream URLs.
+      LiveShopping: 'live',
+      LiveStreamViewer: 'live/:sessionId',
     },
   },
 };

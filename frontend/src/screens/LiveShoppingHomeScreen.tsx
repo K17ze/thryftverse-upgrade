@@ -75,18 +75,24 @@ function ViewerChip({ count, compact = false }: { count: number; compact?: boole
 const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
   session,
   formatBid,
+  onPress,
 }: {
   session: LiveSession;
   formatBid: (gbp: number) => string;
+  onPress: () => void;
 }) {
   const styles = useStyles();
+  const { colors } = useAppTheme();
   const bidLabel = session.currentBid != null ? formatBid(session.currentBid) : null;
 
   return (
-    <View
+    <AnimatedPressable
       style={[styles.featuredCard, { width: FEATURED_CARD_WIDTH }]}
-      accessibilityRole="image"
-      accessibilityLabel={`${session.title} by ${session.sellerName}. ${session.viewerCount} viewers${bidLabel ? `, current bid ${bidLabel}` : ''}.`}
+      onPress={onPress}
+      activeOpacity={0.9}
+      scaleValue={0.98}
+      accessibilityRole="button"
+      accessibilityLabel={`${session.title} by ${session.sellerName}. ${session.viewerCount} viewers${bidLabel ? `, current bid ${bidLabel}` : ''}. Tap to watch.`}
     >
       <View style={styles.featuredMediaWrap}>
         <CachedImage
@@ -131,7 +137,7 @@ const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
           )}
         </View>
       </View>
-    </View>
+    </AnimatedPressable>
   );
 });
 
@@ -404,27 +410,13 @@ export default function LiveShoppingHomeScreen() {
           <View style={styles.headerLeft}>
             <Text style={styles.headerTitle}>Live</Text>
             <LivePulse size={10} color={colors.danger} />
+            {LIVE_SHOPPING_DEMO_MODE && (
+              <View style={styles.demoPill}>
+                <Text style={styles.demoPillText}>DEMO</Text>
+              </View>
+            )}
           </View>
-          <AnimatedPressable
-            style={styles.headerSearchBtn}
-            onPress={() => haptic.light()}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Search live sessions"
-          >
-            <Ionicons name="search-outline" size={20} color={colors.textPrimary} />
-          </AnimatedPressable>
         </View>
-
-        {/* ── Demo mode banner (truthful UI — §11) ── */}
-        {LIVE_SHOPPING_DEMO_MODE && (
-          <View style={styles.demoBanner}>
-            <Ionicons name="flask-outline" size={16} color={colors.warning} />
-            <Text style={styles.demoBannerText}>
-              Demo mode — live streams are simulated.
-            </Text>
-          </View>
-        )}
 
         {/* ── Category filter ── */}
         <HorizontalRail
@@ -502,6 +494,7 @@ export default function LiveShoppingHomeScreen() {
                       key={session.id}
                       session={session}
                       formatBid={formatBid}
+                      onPress={() => navigation.navigate('LiveStreamViewer', { sessionId: session.id })}
                     />
                   ))}
                 </HorizontalRail>
@@ -589,6 +582,20 @@ function useStyles() {
           fontFamily: Typography.family.bold,
           letterSpacing: -0.8,
           color: colors.textPrimary,
+        },
+        demoPill: {
+          paddingHorizontal: Space.xs + 2,
+          paddingVertical: 2,
+          borderRadius: Radius.sm,
+          backgroundColor: colors.warningSubtle,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.warning + '40',
+        },
+        demoPillText: {
+          fontSize: Type.meta.size - 2,
+          fontFamily: Typography.family.bold,
+          letterSpacing: Type.label.letterSpacing,
+          color: colors.warning,
         },
         headerSearchBtn: {
           width: Control.hit,

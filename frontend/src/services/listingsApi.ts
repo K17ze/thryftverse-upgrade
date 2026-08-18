@@ -365,6 +365,13 @@ export type ListingReportReason =
   | 'unresponsive'
   | 'harassment'
   | 'off_platform'
+  | 'hate_speech'
+  | 'prohibited'
+  | 'scam'
+  | 'misinformation'
+  | 'privacy'
+  | 'impersonation'
+  | 'minor_safety'
   | 'other';
 
 export interface ListingCommerceServerContext {

@@ -17,6 +17,9 @@ export type ResolvedRoute =
   | { screen: 'NotificationsList' }
   | { screen: 'UserProfile'; params: { userId: string } }
   | { screen: 'Chat'; params: { conversationId: string; partnerUserId?: string } }
+  | { screen: 'LiveStreamViewer'; params: { sessionId: string } }
+  | { screen: 'AssetDetail'; params: { assetId: string } }
+  | { screen: 'CollectionDetail'; params: { collectionId: string } }
   | { screen: ScreenName; params?: Record<string, unknown> }
   | null;
 
@@ -75,6 +78,15 @@ export function resolveNotificationRoute(
           partnerUserId: typeof params.partnerUserId === 'string' ? params.partnerUserId : undefined,
         },
       };
+    }
+    if (screen === 'LiveStreamViewer' && typeof params.sessionId === 'string') {
+      return { screen: 'LiveStreamViewer', params: { sessionId: params.sessionId } };
+    }
+    if (screen === 'AssetDetail' && typeof params.assetId === 'string') {
+      return { screen: 'AssetDetail', params: { assetId: params.assetId } };
+    }
+    if (screen === 'CollectionDetail' && typeof params.collectionId === 'string') {
+      return { screen: 'CollectionDetail', params: { collectionId: params.collectionId } };
     }
     if (screen === 'AuctionDetail' && typeof params.auctionId === 'string') {
       return {
@@ -150,6 +162,16 @@ export function resolveNotificationRoute(
     const listingId = typeof payload.listingId === 'string' ? payload.listingId : null;
     if (listingId) {
       return { screen: 'ItemDetail', params: { itemId: listingId } };
+    }
+
+    const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId : null;
+    if (sessionId) {
+      return { screen: 'LiveStreamViewer', params: { sessionId } };
+    }
+
+    const collectionId = typeof payload.collectionId === 'string' ? payload.collectionId : null;
+    if (collectionId) {
+      return { screen: 'CollectionDetail', params: { collectionId } };
     }
   }
 

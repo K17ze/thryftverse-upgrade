@@ -16532,7 +16532,11 @@ app.post('/users/:userId/report', async (request, reply) => {
   }
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const bodySchema = z.object({
-    reason: z.enum(['spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment', 'other']),
+    reason: z.enum([
+      'spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment',
+      'off_platform', 'hate_speech', 'prohibited', 'scam', 'misinformation',
+      'privacy', 'impersonation', 'minor_safety', 'other',
+    ]),
     details: z.string().min(1).max(2000).optional(),
   });
   const { userId } = paramsSchema.parse(request.params);
@@ -21516,7 +21520,11 @@ app.post('/listings/:listingId/report', async (request, reply) => {
   }
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const bodySchema = z.object({
-    reason: z.enum(['spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment', 'other']),
+    reason: z.enum([
+      'spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment',
+      'off_platform', 'hate_speech', 'prohibited', 'scam', 'misinformation',
+      'privacy', 'impersonation', 'minor_safety', 'other',
+    ]),
     details: z.string().trim().max(500).optional(),
   });
   const { listingId } = paramsSchema.parse(request.params);

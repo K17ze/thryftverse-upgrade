@@ -80,6 +80,12 @@ interface CachedImageProps {
    * retain the transition that `SharedTransitionImage` provides.
    */
   sharedTransitionTag?: string;
+  /** Accessibility role for screen readers (e.g. 'image'). */
+  accessibilityRole?: 'image' | 'button' | 'link' | 'none';
+  /** Accessibility label describing the image for screen readers. */
+  accessibilityLabel?: string;
+  /** When true, hides this element and its descendants from the screen reader. */
+  accessibilityElementsHidden?: boolean;
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
@@ -105,6 +111,9 @@ export function CachedImage({
   showPlayBadge = false,
   downscaleWidth,
   sharedTransitionTag,
+  accessibilityRole,
+  accessibilityLabel,
+  accessibilityElementsHidden,
 }: CachedImageProps) {
   const { colors } = useAppTheme();
   const [loaded, setLoaded] = useState(false);
@@ -254,7 +263,12 @@ export function CachedImage({
   // Honest placeholder for missing images — no blank rectangles
   if (!uri) {
     return (
-      <View style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}>
+      <View
+        style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}
+        accessibilityRole={accessibilityRole}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityElementsHidden={accessibilityElementsHidden}
+      >
         <ImageEmptyGraphic
           label={emptyLabel}
           icon={emptyIcon}
@@ -265,7 +279,12 @@ export function CachedImage({
   }
 
   return (
-    <View style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}>
+    <View
+      style={[styles.container, style as StyleProp<ViewStyle>, { backgroundColor: colors.surface }, containerStyle]}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityElementsHidden={accessibilityElementsHidden}
+    >
       {/* Premium fallback for failed loads (404, network error, etc.) —
           never leaves a broken/blank image rectangle. */}
       {failed ? (

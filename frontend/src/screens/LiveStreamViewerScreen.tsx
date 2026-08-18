@@ -8,13 +8,18 @@
  *
  * Per AGENTS.md §11 (Truthful UI):
  * - Demo mode is clearly labeled — we never fabricate that a stream is live
- * - Viewer counts and bids come from real data or are clearly simulated
+ * - Viewer counts, chat, and bids come from the real-time service layer
+ *   (connectToStream + subscribeTo*). No fabricated viewer-count drift, no
+ *   fabricated chat messages, no fabricated "someone just bought" toasts.
  *
  * Per AGENTS.md §4 (Push to maximum quality):
  * - Full-screen immersive experience
  * - Dark background (video-focused)
  * - Three distinct zones with clear visual hierarchy
  * - Video dominates, product is actionable, chat is ambient
+ *
+ * Per AGENTS.md §14 (State coverage):
+ * - Connecting, live, error (reconnect), stream ended, offline states
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -34,6 +39,7 @@ import {
   KeyboardAvoidingView,
   Share,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,67 +49,34 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFollowMutation } from '../platform/server';
-import { Space, Radius, Type, Elevation, Control, Typography, Stroke, FontFamily } from '../theme/designTokens';
+import { Space, Radius, Type, Control, Typography, Stroke } from '../theme/designTokens';
 import {
-  LiveSession,
-  LiveChatMessage,
+  LiveStream,
+  LiveLot,
+  LiveStreamChatMessage,
+  StreamEndEventPayload,
   LIVE_SHOPPING_DEMO_MODE,
+  connectToStream,
+  disconnectFromStream,
+  subscribeToStreamEvents,
+  subscribeToChat,
+  subscribeToViewerCount,
+  subscribeToBids,
+  subscribeToLotChanges,
+  placeStreamBid,
+  buyNowDuringStream,
+  sendStreamChatMessage,
+  likeStream,
+  fetchStreamChatHistory,
 } from '../services/liveShoppingApi';
-
-// ---------------------------------------------------------------------------
-// Mock data for demo mode
-// ---------------------------------------------------------------------------
-
-const DEMO_SESSION: LiveSession = {
-  id: 'demo_stream_1',
-  sellerId: 'seller_demo',
-  sellerName: 'Vintage Vault',
-  sellerAvatar: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=100',
-  sellerVerified: true,
-  title: 'Rare Vintage Finds — Live Auction',
-  thumbnail: 'https://images.unsplash.com/photo-1556905055-3f3946c98f89?w=400',
-  category: 'Fashion',
-  viewerCount: 247,
-  likeCount: 89,
-  status: 'live',
-  startedAt: new Date().toISOString(),
-  currentItemId: 'item_1',
-  currentItemTitle: 'Vintage Leather Jacket — 1970s',
-  currentItemImage: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400',
-  currentBid: 45,
-  bidCount: 12,
-  itemTimeRemainingSec: 45,
-  watchers: 247,
-  isFollowing: false,
-  isDemo: true,
-};
-
-const DEMO_CHAT_SEED: LiveChatMessage[] = [
-  { id: 'm1', senderId: 'u1', senderName: 'Sarah', senderAvatar: '', text: 'Love this jacket!', timestamp: new Date(Date.now() - 60000).toISOString() },
-  { id: 'm2', senderId: 'u2', senderName: 'Mike', senderAvatar: '', text: '£50 bid', timestamp: new Date(Date.now() - 45000).toISOString() },
-  { id: 'm3', senderId: 'system', senderName: 'System', senderAvatar: '', text: 'Mike placed a bid of £50', isSystem: true, timestamp: new Date(Date.now() - 44000).toISOString() },
-  { id: 'm4', senderId: 'u3', senderName: 'Emma', senderAvatar: '', text: 'Is there a buy now?', timestamp: new Date(Date.now() - 30000).toISOString() },
-  { id: 'm5', senderId: 'seller', senderName: 'Vintage Vault', senderAvatar: '', text: 'Yes! Buy now at £120', isSeller: true, timestamp: new Date(Date.now() - 25000).toISOString() },
-];
-
-const DEMO_CHAT_RESPONSES = [
-  'Nice piece!',
-  'Going for £60',
-  'Any sizing info?',
-  'Condition looks great',
-  'I\'ll bid £70',
-  'Wow, rare find',
-  'Following!',
-  'Can you show the back?',
-  'What\'s the material?',
-  '£80 bid',
-];
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 type LiveStreamViewerRoute = RouteProp<RootStackParamList, 'LiveStreamViewer'>;
+
+type ConnectionState = 'connecting' | 'live' | 'error' | 'ended' | 'offline';
 
 export function LiveStreamViewerScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -114,137 +87,207 @@ export function LiveStreamViewerScreen() {
   const { show } = useToast();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [session, setSession] = useState<LiveSession>(DEMO_SESSION);
-  const [messages, setMessages] = useState<LiveChatMessage[]>(DEMO_CHAT_SEED);
+  const sessionId = route.params.sessionId;
+
+  // ── Real-time state ──
+  const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
+  const [stream, setStream] = useState<LiveStream | null>(null);
+  const [messages, setMessages] = useState<LiveStreamChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [bidSheetVisible, setBidSheetVisible] = useState(false);
-  const [currentBid, setCurrentBid] = useState(DEMO_SESSION.currentBid ?? 0);
-  const [timeRemaining, setTimeRemaining] = useState(DEMO_SESSION.itemTimeRemainingSec ?? 0);
-  const [viewerCount, setViewerCount] = useState(DEMO_SESSION.viewerCount);
+  const [itemSheetVisible, setItemSheetVisible] = useState(false);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [likeCount, setLikeCount] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(DEMO_SESSION.likeCount);
-  const [isFollowing, setIsFollowing] = useState(DEMO_SESSION.isFollowing);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [bidPending, setBidPending] = useState(false);
+  const [buyNowPending, setBuyNowPending] = useState(false);
+  const [streamEndSummary, setStreamEndSummary] = useState<StreamEndEventPayload | null>(null);
+  const [currentLot, setCurrentLot] = useState<LiveLot | null>(null);
 
-  const chatListRef = useRef<FlatList<LiveChatMessage>>(null);
-  const isDemo = session.isDemo || LIVE_SHOPPING_DEMO_MODE;
+  const chatListRef = useRef<FlatList<LiveStreamChatMessage>>(null);
+  const isDemo = stream?.isDemo ?? LIVE_SHOPPING_DEMO_MODE;
 
   // Follow / unfollow — wired to the real profile social API. In demo mode the
-  // session carries a placeholder sellerId ('seller_demo'), not a real user, so
-  // we truthfully surface that the action is unavailable rather than firing a
-  // request against a non-existent user.
-  const followMutation = useFollowMutation(session.sellerId);
+  // session may carry a placeholder sellerId, so we truthfully surface that the
+  // action is unavailable rather than firing a request against a non-existent user.
+  const followMutation = useFollowMutation(stream?.sellerId ?? '');
 
-  // Timer for auction countdown
+  // ── Connect to stream on mount ──
   useEffect(() => {
-    if (timeRemaining <= 0) return;
-    const interval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          // Lot ended — simulate next lot
-          setCurrentBid(35);
-          return 60;
+    let cancelled = false;
+    let unsubChat: (() => void) | null = null;
+    let unsubViewer: (() => void) | null = null;
+    let unsubBids: (() => void) | null = null;
+    let unsubLotChanges: (() => void) | null = null;
+    let unsubStreamEnd: (() => void) | null = null;
+
+    (async () => {
+      try {
+        const connected = await connectToStream(sessionId);
+        if (cancelled) return;
+        if (!connected) {
+          setConnectionState('error');
+          return;
         }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [timeRemaining]);
 
-  // Simulate viewer count fluctuation (demo only)
-  useEffect(() => {
-    if (!isDemo) return;
-    const interval = setInterval(() => {
-      setViewerCount((prev) => prev + Math.floor(Math.random() * 5) - 2);
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [isDemo]);
+        setStream(connected);
+        setViewerCount(connected.viewerCount);
+        setLikeCount(connected.likeCount);
+        setIsFollowing(false);
+        const lot = connected.lots[connected.currentLotIndex] ?? null;
+        setCurrentLot(lot);
+        setConnectionState('live');
 
-  // Simulate incoming chat messages (demo only)
-  useEffect(() => {
-    if (!isDemo) return;
-    const interval = setInterval(() => {
-      const response = DEMO_CHAT_RESPONSES[Math.floor(Math.random() * DEMO_CHAT_RESPONSES.length)];
-      const names = ['Alex', 'Jordan', 'Taylor', 'Riley', 'Casey'];
-      const name = names[Math.floor(Math.random() * names.length)];
-      const newMsg: LiveChatMessage = {
-        id: `msg_${Date.now()}`,
-        senderId: `u_${Math.random()}`,
-        senderName: name,
-        senderAvatar: '',
-        text: response,
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev.slice(-50), newMsg]);
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [isDemo]);
+        // Load chat history
+        const history = await fetchStreamChatHistory(sessionId);
+        if (cancelled) return;
+        setMessages(history);
 
-  const handleSendChat = useCallback(() => {
-    if (!chatInput.trim()) return;
-    const newMsg: LiveChatMessage = {
-      id: `msg_${Date.now()}`,
-      senderId: 'me',
-      senderName: 'You',
-      senderAvatar: '',
-      text: chatInput.trim(),
-      timestamp: new Date().toISOString(),
+        // Subscribe to real-time chat
+        unsubChat = subscribeToChat(sessionId, (payload) => {
+          setMessages((prev) => [...prev.slice(-80), payload.message]);
+        });
+
+        // Subscribe to viewer count (real backend events — no fabrication)
+        unsubViewer = subscribeToViewerCount(sessionId, (payload) => {
+          setViewerCount(payload.count);
+        });
+
+        // Subscribe to bid updates
+        unsubBids = subscribeToBids(sessionId, (payload) => {
+          setCurrentLot((prev) => {
+            if (!prev || prev.id !== payload.lotId) return prev;
+            return {
+              ...prev,
+              currentPrice: payload.newCurrentPrice,
+              bidCount: payload.newBidCount,
+            };
+          });
+        });
+
+        // Subscribe to lot changes
+        unsubLotChanges = subscribeToLotChanges(sessionId, (payload) => {
+          setCurrentLot({ ...payload.lot });
+          setStream((prev) => prev ? { ...prev, currentLotIndex: payload.newLotIndex } : prev);
+        });
+
+        // Subscribe to stream end and lot_sold/purchase events
+        unsubStreamEnd = subscribeToStreamEvents(sessionId, (event) => {
+          if (event.type === 'stream_end') {
+            const summary = event.payload as StreamEndEventPayload;
+            setStreamEndSummary(summary);
+            setConnectionState('ended');
+          }
+        });
+      } catch {
+        if (!cancelled) {
+          setConnectionState('error');
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubChat?.();
+      unsubViewer?.();
+      unsubBids?.();
+      unsubLotChanges?.();
+      unsubStreamEnd?.();
+      disconnectFromStream(sessionId);
     };
-    setMessages((prev) => [...prev, newMsg]);
+  }, [sessionId]);
+
+  const handleSendChat = useCallback(async () => {
+    if (!chatInput.trim()) return;
+    const text = chatInput.trim();
     setChatInput('');
     haptic.light();
-  }, [chatInput, haptic]);
-
-  const handleBid = useCallback((amount: number) => {
-    setCurrentBid(amount);
-    setBidSheetVisible(false);
-    const systemMsg: LiveChatMessage = {
-      id: `bid_${Date.now()}`,
-      senderId: 'system',
-      senderName: 'System',
-      senderAvatar: '',
-      text: `You placed a bid of £${amount}`,
-      isSystem: true,
-      timestamp: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, systemMsg]);
-    haptic.medium();
-  }, [haptic]);
-
-  const handleLike = useCallback(() => {
-    setHasLiked((prev) => {
-      if (!prev) setLikeCount((c) => c + 1);
-      else setLikeCount((c) => c - 1);
-      return !prev;
-    });
-    haptic.light();
-  }, [haptic]);
-
-  const handleBuyNow = useCallback(() => {
-    haptic.medium();
-    if (session.currentItemId) {
-      navigation.navigate('Checkout', { itemId: session.currentItemId });
-    } else {
-      show('No item available to purchase', 'info');
+    try {
+      await sendStreamChatMessage(sessionId, text);
+    } catch {
+      show('Could not send message', 'error');
     }
-  }, [haptic, session.currentItemId, navigation, show]);
+  }, [chatInput, haptic, sessionId, show]);
+
+  const handleBid = useCallback(async (amount: number) => {
+    if (!currentLot) return;
+    setBidPending(true);
+    haptic.medium();
+    try {
+      const result = await placeStreamBid(sessionId, currentLot.id, amount);
+      if (result.success && result.lot) {
+        setCurrentLot({ ...result.lot });
+      } else {
+        show(result.error ?? 'Bid failed', 'error');
+      }
+    } catch {
+      show('Could not place bid', 'error');
+    } finally {
+      setBidPending(false);
+      setBidSheetVisible(false);
+    }
+  }, [currentLot, haptic, sessionId, show]);
+
+  const handleLike = useCallback(async () => {
+    if (hasLiked) {
+      haptic.light();
+      return;
+    }
+    setHasLiked(true);
+    setLikeCount((c) => c + 1);
+    haptic.light();
+    try {
+      const result = await likeStream(sessionId);
+      if (result.success) {
+        setLikeCount(result.totalLikes);
+      }
+    } catch {
+      // Revert on failure
+      setHasLiked(false);
+      setLikeCount((c) => Math.max(0, c - 1));
+    }
+  }, [hasLiked, haptic, sessionId]);
+
+  const handleBuyNow = useCallback(async () => {
+    if (!currentLot) return;
+    setBuyNowPending(true);
+    haptic.medium();
+    try {
+      const result = await buyNowDuringStream(sessionId, currentLot.id);
+      if (result.success) {
+        show('Purchase complete — check your inbox', 'success');
+      } else {
+        show(result.error ?? 'Could not complete purchase', 'error');
+      }
+    } catch {
+      show('Could not complete purchase', 'error');
+    } finally {
+      setBuyNowPending(false);
+    }
+  }, [currentLot, haptic, sessionId, show]);
 
   const handleShare = useCallback(async () => {
     haptic.light();
     try {
       await Share.share({
-        message: `Watch ${session.sellerName}'s live stream on ThryftVerse`,
+        message: `Watch ${stream?.sellerName ?? 'this seller'}'s live stream on ThryftVerse`,
       });
     } catch {
       // User cancelled the share sheet — no error toast needed.
     }
-  }, [haptic, session.sellerName]);
+  }, [haptic, stream?.sellerName]);
 
   const handleFollowToggle = useCallback(() => {
     haptic.light();
     if (isDemo) {
-      // Demo session uses a placeholder sellerId, not a real user record.
+      // Demo session may use a placeholder sellerId, not a real user record.
       // Following would call the API against a non-existent user; be truthful.
       show('Follow unavailable in demo mode', 'info');
+      return;
+    }
+    if (!stream?.sellerId) {
+      show('Follow unavailable', 'info');
       return;
     }
     followMutation.mutate(!isFollowing, {
@@ -256,7 +299,36 @@ export function LiveStreamViewerScreen() {
         show('Could not update follow status', 'error');
       },
     });
-  }, [haptic, isDemo, followMutation, isFollowing, show]);
+  }, [haptic, isDemo, followMutation, isFollowing, show, stream?.sellerId]);
+
+  const handleRetry = useCallback(() => {
+    setConnectionState('connecting');
+    setStream(null);
+    setMessages([]);
+    setStreamEndSummary(null);
+    // Re-trigger the connect effect by forcing a re-render.
+    // The effect depends on sessionId which doesn't change, so we use a
+    // manual reconnect by calling the connect logic directly.
+    (async () => {
+      try {
+        const connected = await connectToStream(sessionId);
+        if (!connected) {
+          setConnectionState('error');
+          return;
+        }
+        setStream(connected);
+        setViewerCount(connected.viewerCount);
+        setLikeCount(connected.likeCount);
+        const lot = connected.lots[connected.currentLotIndex] ?? null;
+        setCurrentLot(lot);
+        setConnectionState('live');
+        const history = await fetchStreamChatHistory(sessionId);
+        setMessages(history);
+      } catch {
+        setConnectionState('error');
+      }
+    })();
+  }, [sessionId]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -264,14 +336,16 @@ export function LiveStreamViewerScreen() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  const minNextBid = currentBid + 5;
+  const minNextBid = (currentLot?.currentPrice ?? 0) + 5;
+  const buyNowPrice = currentLot?.buyNowPrice ?? 0;
+  const timeRemaining = currentLot?.timeRemaining ?? 0;
 
-  const renderChatMessage = useCallback(({ item }: { item: LiveChatMessage }) => {
-    if (item.isSystem) {
+  const renderChatMessage = useCallback(({ item }: { item: LiveStreamChatMessage }) => {
+    if (item.type === 'system' || item.type === 'bid' || item.type === 'purchase') {
       return (
         <View style={styles.systemMessage}>
           <Text style={[styles.systemMessageText, { color: colors.textSecondary }]}>
-            {item.text}
+            {item.message}
           </Text>
         </View>
       );
@@ -284,15 +358,102 @@ export function LiveStreamViewerScreen() {
           </View>
         )}
         <Text style={[styles.chatSender, { color: item.isSeller ? colors.brand : colors.textPrimary }]}>
-          {item.senderName}
+          {item.userName}
         </Text>
         <Text style={[styles.chatText, { color: colors.textPrimary }]}>
-          {item.text}
+          {item.message}
         </Text>
       </View>
     );
-  }, [colors]);
+  }, [colors, styles]);
 
+  // ── Connecting state ──
+  if (connectionState === 'connecting') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.stateContainer}>
+          <ActivityIndicator size="large" color={colors.brand} />
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Connecting to stream</Text>
+          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>Setting up real-time connection</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Error state ──
+  if (connectionState === 'error') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.stateContainer}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} />
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Couldn't connect to stream</Text>
+          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>The stream may have ended or your connection dropped.</Text>
+          <Pressable
+            onPress={handleRetry}
+            style={({ pressed }) => [styles.retryBtn, { backgroundColor: colors.danger }, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Reconnect to stream"
+          >
+            <Text style={styles.retryBtnText}>Reconnect</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>Go back</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Stream ended state ──
+  if (connectionState === 'ended') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.stateContainer}>
+          <View style={[styles.endedIcon, { backgroundColor: colors.successSubtle }]}>
+            <Ionicons name="checkmark-done-circle" size={48} color={colors.success} />
+          </View>
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Stream Ended</Text>
+          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>Thanks for watching</Text>
+          {streamEndSummary && (
+            <View style={[styles.endedStats, { backgroundColor: colors.surface }]}>
+              <View style={styles.endedStatItem}>
+                <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>{streamEndSummary.totalViewers}</Text>
+                <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>Viewers</Text>
+              </View>
+              <View style={[styles.endedStatDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.endedStatItem}>
+                <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>{streamEndSummary.lotsSold}</Text>
+                <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>Lots Sold</Text>
+              </View>
+              <View style={[styles.endedStatDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.endedStatItem}>
+                <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>£{streamEndSummary.totalSales}</Text>
+                <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>Total Sales</Text>
+              </View>
+            </View>
+          )}
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [styles.retryBtn, { backgroundColor: colors.danger }, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Done"
+          >
+            <Text style={styles.retryBtnText}>Done</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Live state ──
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" />
@@ -303,9 +464,9 @@ export function LiveStreamViewerScreen() {
         <View style={styles.videoArea}>
           {isDemo ? (
             <View style={styles.demoVideoPlaceholder}>
-              <Ionicons name="videocam-outline" size={48} color="rgba(255,255,255,0.3)" />
+              <Ionicons name="videocam-outline" size={48} color={colors.textMuted} />
               <Text style={styles.demoVideoText}>Demo Mode</Text>
-              <Text style={styles.demoVideoSubtext}>Live video stream will appear here</Text>
+              <Text style={styles.demoVideoSubtext}>Live video will appear here in production</Text>
             </View>
           ) : (
             <View style={styles.videoPlaceholder}>
@@ -320,10 +481,12 @@ export function LiveStreamViewerScreen() {
               <Text style={styles.liveBadgeText}>LIVE</Text>
             </View>
 
-            <View style={styles.viewerBadge}>
-              <Ionicons name="eye-outline" size={14} color="white" />
-              <Text style={styles.viewerBadgeText}>{viewerCount}</Text>
-            </View>
+            {viewerCount > 0 && (
+              <View style={styles.viewerBadge}>
+                <Ionicons name="eye-outline" size={14} color={colors.scrimTextPrimary} />
+                <Text style={styles.viewerBadgeText}>{viewerCount}</Text>
+              </View>
+            )}
 
             <View style={styles.videoOverlayRight}>
               <Pressable
@@ -332,7 +495,7 @@ export function LiveStreamViewerScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={hasLiked ? 'Unlike stream' : 'Like stream'}
               >
-                <Ionicons name={hasLiked ? 'heart' : 'heart-outline'} size={22} color={hasLiked ? colors.danger : colors.textPrimary} />
+                <Ionicons name={hasLiked ? 'heart' : 'heart-outline'} size={22} color={hasLiked ? colors.danger : colors.scrimTextPrimary} />
               </Pressable>
               <Pressable
                 onPress={handleShare}
@@ -340,7 +503,7 @@ export function LiveStreamViewerScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Share stream"
               >
-                <Ionicons name="share-outline" size={22} color="white" />
+                <Ionicons name="share-outline" size={22} color={colors.scrimTextPrimary} />
               </Pressable>
               <Pressable
                 onPress={() => navigation.goBack()}
@@ -348,7 +511,7 @@ export function LiveStreamViewerScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Close stream"
               >
-                <Ionicons name="close" size={24} color="white" />
+                <Ionicons name="close" size={24} color={colors.scrimTextPrimary} />
               </Pressable>
             </View>
           </View>
@@ -356,15 +519,15 @@ export function LiveStreamViewerScreen() {
 
         {/* Seller info bar */}
         <View style={styles.sellerBar}>
-          <Image source={{ uri: session.sellerAvatar }} style={styles.sellerAvatar} />
+          <Image source={{ uri: stream?.sellerAvatar }} style={styles.sellerAvatar} />
           <View style={styles.sellerInfo}>
             <View style={styles.sellerNameRow}>
-              <Text style={styles.sellerName} numberOfLines={1}>{session.sellerName}</Text>
-              {session.sellerVerified && (
+              <Text style={styles.sellerName} numberOfLines={1}>{stream?.sellerName}</Text>
+              {stream?.sellerVerified && (
                 <Ionicons name="checkmark-circle" size={14} color={colors.brand} />
               )}
             </View>
-            <Text style={styles.streamTitle} numberOfLines={1}>{session.title}</Text>
+            <Text style={styles.streamTitle} numberOfLines={1}>{stream?.title}</Text>
           </View>
           <Pressable
             onPress={handleFollowToggle}
@@ -387,47 +550,68 @@ export function LiveStreamViewerScreen() {
         </View>
       </View>
 
-      {/* ── Product plane (middle) ── */}
-      <View style={styles.productPlane}>
-        <Image source={{ uri: session.currentItemImage }} style={styles.productImage} />
-        <View style={styles.productInfo}>
-          <Text style={styles.productTitle} numberOfLines={2}>{session.currentItemTitle}</Text>
-          <View style={styles.priceRow}>
-            <View>
-              <Text style={styles.priceLabel}>Current Bid</Text>
-              <Text style={styles.priceValue}>£{currentBid}</Text>
+      {/* ── Product plane (middle) — pinned, tappable ── */}
+      {currentLot && (
+        <Pressable
+          onPress={() => setItemSheetVisible(true)}
+          style={({ pressed }) => [styles.productPlane, pressed && { opacity: 0.92 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${currentLot.title} details`}
+        >
+          <Image source={{ uri: currentLot.imageUri }} style={styles.productImage} />
+          <View style={styles.productInfo}>
+            <Text style={styles.productTitle} numberOfLines={2}>{currentLot.title}</Text>
+            <View style={styles.priceRow}>
+              <View>
+                <Text style={styles.priceLabel}>Current Bid</Text>
+                <Text style={styles.priceValue}>£{currentLot.currentPrice}</Text>
+              </View>
+              <View style={styles.bidCountBadge}>
+                <Ionicons name="pricetag" size={12} color={colors.textSecondary} />
+                <Text style={styles.bidCountText}>{currentLot.bidCount} bids</Text>
+              </View>
             </View>
-            <View style={styles.bidCountBadge}>
-              <Ionicons name="pricetag" size={12} color={colors.textSecondary} />
-              <Text style={styles.bidCountText}>{session.bidCount} bids</Text>
-            </View>
+            {timeRemaining > 0 && (
+              <View style={styles.timeRow}>
+                <Ionicons name="time-outline" size={14} color={timeRemaining <= 10 ? colors.danger : colors.textSecondary} />
+                <Text style={[styles.timeText, { color: timeRemaining <= 10 ? colors.danger : colors.textSecondary }]}>
+                  {formatTime(timeRemaining)}
+                </Text>
+              </View>
+            )}
           </View>
-          <View style={styles.timeRow}>
-            <Ionicons name="time-outline" size={14} color={timeRemaining <= 10 ? colors.danger : colors.textSecondary} />
-            <Text style={[styles.timeText, { color: timeRemaining <= 10 ? colors.danger : colors.textSecondary }]}>
-              {formatTime(timeRemaining)}
-            </Text>
+          <View style={styles.productActions}>
+            <Pressable
+              onPress={() => setBidSheetVisible(true)}
+              disabled={bidPending}
+              style={({ pressed }) => [styles.bidBtn, pressed && { opacity: 0.85 }, bidPending && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Place a bid"
+            >
+              {bidPending ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Text style={styles.bidBtnText}>Bid £{minNextBid}+</Text>
+              )}
+            </Pressable>
+            {buyNowPrice > 0 && (
+              <Pressable
+                onPress={handleBuyNow}
+                disabled={buyNowPending}
+                style={({ pressed }) => [styles.buyNowBtn, pressed && { opacity: 0.85 }, buyNowPending && { opacity: 0.6 }]}
+                accessibilityRole="button"
+                accessibilityLabel={`Buy now for £${buyNowPrice}`}
+              >
+                {buyNowPending ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <Text style={styles.buyNowBtnText}>Buy Now £{buyNowPrice}</Text>
+                )}
+              </Pressable>
+            )}
           </View>
-        </View>
-        <View style={styles.productActions}>
-          <Pressable
-            onPress={() => setBidSheetVisible(true)}
-            style={({ pressed }) => [styles.bidBtn, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Place a bid"
-          >
-            <Text style={styles.bidBtnText}>Bid £{minNextBid}+</Text>
-          </Pressable>
-          <Pressable
-            onPress={handleBuyNow}
-            style={({ pressed }) => [styles.buyNowBtn, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Buy now for £120"
-          >
-            <Text style={styles.buyNowBtnText}>Buy Now £120</Text>
-          </Pressable>
-        </View>
-      </View>
+        </Pressable>
+      )}
 
       {/* ── Chat plane (bottom) ── */}
       <KeyboardAvoidingView
@@ -448,7 +632,7 @@ export function LiveStreamViewerScreen() {
           <TextInput
             style={styles.chatInput}
             placeholder="Send a message..."
-            placeholderTextColor="rgba(255,255,255,0.4)"
+            placeholderTextColor={colors.textMuted}
             value={chatInput}
             onChangeText={setChatInput}
             onSubmitEditing={handleSendChat}
@@ -466,13 +650,78 @@ export function LiveStreamViewerScreen() {
             accessibilityRole="button"
             accessibilityLabel="Send message"
           >
-            <Ionicons name="send" size={18} color="white" />
+            <Ionicons name="send" size={18} color={colors.scrimTextPrimary} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
 
+      {/* ── Item detail sheet (in-stream, not navigation away) ── */}
+      {itemSheetVisible && currentLot && (
+        <Pressable style={styles.bidSheetOverlay} onPress={() => setItemSheetVisible(false)}>
+          <Pressable
+            style={[styles.bidSheet, { backgroundColor: colors.surface }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.bidSheetHandle} />
+            <Image source={{ uri: currentLot.imageUri }} style={styles.itemSheetImage} />
+            <Text style={[styles.bidSheetTitle, { color: colors.textPrimary }]}>{currentLot.title}</Text>
+            <View style={styles.itemSheetPriceRow}>
+              <View>
+                <Text style={[styles.bidSheetCurrentLabel, { color: colors.textSecondary }]}>Current bid</Text>
+                <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>£{currentLot.currentPrice}</Text>
+              </View>
+              <View style={styles.itemSheetBidCount}>
+                <Ionicons name="pricetag" size={14} color={colors.textSecondary} />
+                <Text style={[styles.itemSheetBidCountText, { color: colors.textSecondary }]}>{currentLot.bidCount} bids</Text>
+              </View>
+            </View>
+            {timeRemaining > 0 && (
+              <View style={styles.timeRow}>
+                <Ionicons name="time-outline" size={14} color={timeRemaining <= 10 ? colors.danger : colors.textSecondary} />
+                <Text style={[styles.timeText, { color: timeRemaining <= 10 ? colors.danger : colors.textSecondary }]}>
+                  {formatTime(timeRemaining)}
+                </Text>
+              </View>
+            )}
+            <View style={styles.productActions}>
+              <Pressable
+                onPress={() => { setItemSheetVisible(false); setBidSheetVisible(true); }}
+                style={({ pressed }) => [styles.bidBtn, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Place a bid"
+              >
+                <Text style={styles.bidBtnText}>Bid £{minNextBid}+</Text>
+              </Pressable>
+              {buyNowPrice > 0 && (
+                <Pressable
+                  onPress={() => { setItemSheetVisible(false); handleBuyNow(); }}
+                  disabled={buyNowPending}
+                  style={({ pressed }) => [styles.buyNowBtn, pressed && { opacity: 0.85 }, buyNowPending && { opacity: 0.6 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Buy now for £${buyNowPrice}`}
+                >
+                  {buyNowPending ? (
+                    <ActivityIndicator size="small" color={colors.textPrimary} />
+                  ) : (
+                    <Text style={styles.buyNowBtnText}>Buy Now £{buyNowPrice}</Text>
+                  )}
+                </Pressable>
+              )}
+            </View>
+            <Pressable
+              onPress={() => setItemSheetVisible(false)}
+              style={({ pressed }) => [styles.cancelBidBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Close item details"
+            >
+              <Text style={[styles.cancelBidText, { color: colors.textSecondary }]}>Close</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      )}
+
       {/* ── Bid sheet ── */}
-      {bidSheetVisible && (
+      {bidSheetVisible && currentLot && (
         <Pressable style={styles.bidSheetOverlay} onPress={() => setBidSheetVisible(false)}>
           <Pressable
             style={[styles.bidSheet, { backgroundColor: colors.surface }]}
@@ -484,7 +733,7 @@ export function LiveStreamViewerScreen() {
               Current bid
             </Text>
             <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>
-              £{currentBid}
+              £{currentLot.currentPrice}
             </Text>
             <Text style={[styles.bidSheetMinLabel, { color: colors.textMuted }]}>
               Minimum next bid £{minNextBid}
@@ -494,10 +743,12 @@ export function LiveStreamViewerScreen() {
                 <Pressable
                   key={amount}
                   onPress={() => handleBid(amount)}
+                  disabled={bidPending}
                   style={({ pressed }) => [
                     styles.quickBidBtn,
                     { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
                     pressed && { opacity: 0.7 },
+                    bidPending && { opacity: 0.5 },
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={`Bid £${amount}`}
@@ -532,6 +783,81 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
   },
+  // ── State containers (connecting, error, ended) ──
+  stateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.xl,
+    gap: Space.md,
+  },
+  stateTitle: {
+    fontSize: Type.subtitle.size,
+    lineHeight: Type.subtitle.lineHeight,
+    fontFamily: Typography.family.bold,
+    textAlign: 'center',
+  },
+  stateSubtitle: {
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+    fontFamily: Typography.family.regular,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    paddingHorizontal: Space.xl,
+    paddingVertical: Space.md,
+    borderRadius: Radius.xxl,
+    minHeight: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Space.sm,
+  },
+  retryBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.bold,
+    color: colors.textPrimary,
+  },
+  secondaryBtn: {
+    paddingVertical: Space.sm,
+  },
+  secondaryBtnText: {
+    fontSize: Type.body.size,
+    fontFamily: Typography.family.regular,
+  },
+  endedIcon: {
+    width: Space.xxl + Space.xxl + Space.xs,
+    height: Space.xxl + Space.xxl + Space.xs,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endedStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: Radius.lg,
+    paddingVertical: Space.lg,
+    paddingHorizontal: Space.md,
+    width: '100%',
+    marginTop: Space.sm,
+  },
+  endedStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Space.xs / 2,
+  },
+  endedStatValue: {
+    fontSize: Type.title.size,
+    fontFamily: Typography.family.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  endedStatLabel: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.regular,
+  },
+  endedStatDivider: {
+    width: Stroke.hairline,
+    height: Space.xxl + Space.xs,
+  },
   // ── Video plane ──
   videoPlane: {
     backgroundColor: colors.background,
@@ -551,12 +877,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   demoVideoText: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.textSecondary,
   },
   demoVideoSubtext: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.3)',
+    color: colors.textMuted,
   },
   videoPlaceholder: {
     flex: 1,
@@ -566,7 +892,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   videoPlaceholderText: {
     fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.textSecondary,
   },
   videoOverlay: {
     position: 'absolute',
@@ -603,7 +929,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.sm,
@@ -611,7 +937,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   viewerBadgeText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
+    color: colors.scrimTextPrimary,
     fontVariant: ['tabular-nums'],
   },
   videoOverlayRight: {
@@ -624,7 +950,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -663,7 +988,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: Type.caption.size,
     lineHeight: Type.caption.lineHeight,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textSecondary,
   },
   followBtn: {
     paddingHorizontal: Space.md,
@@ -683,7 +1008,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    backgroundColor: '#161616',
+    backgroundColor: colors.surface,
   },
   productImage: {
     width: Space.xxl + Space.xl + Space.sm,
@@ -709,7 +1034,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   priceLabel: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.textSecondary,
   },
   priceValue: {
     fontSize: Type.priceList.size,
@@ -723,7 +1048,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.sm,
@@ -731,7 +1056,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   bidCountText: {
     fontSize: Type.meta.size,
     fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
   },
   timeRow: {
@@ -768,7 +1093,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md + 2,
     paddingVertical: Space.sm,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.surfaceAlt,
     minHeight: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
@@ -831,14 +1156,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingTop: Space.sm,
     backgroundColor: colors.surface,
     borderTopWidth: Stroke.hairline,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopColor: colors.border,
   },
   chatInput: {
     flex: 1,
     height: Space.xl + Space.xs + 4,
     paddingHorizontal: Space.md,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surfaceAlt,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
     color: colors.textPrimary,
@@ -852,6 +1177,29 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ── Item detail sheet ──
+  itemSheetImage: {
+    width: '100%',
+    height: Space.xxl * 3,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surfaceAlt,
+    resizeMode: 'cover',
+  },
+  itemSheetPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  itemSheetBidCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs / 2,
+  },
+  itemSheetBidCountText: {
+    fontSize: Type.caption.size,
+    fontFamily: Typography.family.medium,
+    fontVariant: ['tabular-nums'],
+  },
   // ── Bid sheet ──
   bidSheetOverlay: {
     position: 'absolute',
@@ -859,7 +1207,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 0,
     right: 0,
     top: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   bidSheet: {
@@ -874,7 +1222,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: Space.xxl + Space.xs,
     height: Space.xs / 2 + 1,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.border,
     alignSelf: 'center',
   },
   bidSheetTitle: {

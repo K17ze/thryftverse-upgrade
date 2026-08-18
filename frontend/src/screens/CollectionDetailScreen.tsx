@@ -35,6 +35,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { ShareSheet } from '../components/ShareSheet';
 import { Type, Space, Radius, DockConstants, Typography, Stroke, Control } from '../theme/designTokens';
@@ -82,6 +84,7 @@ export default function CollectionDetailScreen() {
   const collections = useStore((state) => state.collections);
   const deleteCollectionOnApi = useStore((state) => state.deleteCollectionOnApi);
   const { listings, refreshListings } = useBackendData();
+  const { isOffline } = useConnectivity();
 
   const collection = useMemo(
     () => collections.find((c) => c.id === collectionId),
@@ -387,6 +390,11 @@ export default function CollectionDetailScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </AnimatedPressable>
         )}
+
+        {/* Offline banner — cached items are still visible but cannot refresh */}
+        {isOffline && count > 0 ? (
+          <OfflineBanner onRetry={() => void handleRefresh()} />
+        ) : null}
 
         {/* Grid — 3-column media mosaic with 3:4 portrait thumbnails */}
         {count > 0 && (

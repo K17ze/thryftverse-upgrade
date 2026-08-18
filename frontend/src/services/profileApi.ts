@@ -154,6 +154,13 @@ export type ReportReason =
   | 'unresponsive'
   | 'harassment'
   | 'off_platform'
+  | 'hate_speech'
+  | 'prohibited'
+  | 'scam'
+  | 'misinformation'
+  | 'privacy'
+  | 'impersonation'
+  | 'minor_safety'
   | 'other';
 
 export async function reportUser(

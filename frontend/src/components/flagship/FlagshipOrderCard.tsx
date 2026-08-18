@@ -44,9 +44,17 @@ export function FlagshipOrderCard({
       : 'pending';
 
   const actorLabel = buyerName ? `To ${buyerName}` : sellerName ? `From ${sellerName}` : '';
+  const cardLabel = [listingTitle, price, status, actorLabel, orderDate].filter(Boolean).join(', ');
 
   return (
-    <AnimatedPressable onPress={onPress} style={styles.root} {...PressPresets.listRow}>
+    <AnimatedPressable
+      onPress={onPress}
+      style={styles.root}
+      {...PressPresets.listRow}
+      accessibilityRole="button"
+      accessibilityLabel={cardLabel}
+      accessibilityHint="View order details"
+    >
       {/* Product Image */}
       <View style={styles.imageWrap}>
         {imageUri ? (
@@ -55,9 +63,11 @@ export function FlagshipOrderCard({
             style={styles.image}
             contentFit="cover"
             transition={Motion.transitions.mediaLoad.duration}
+            accessibilityRole="image"
+            accessibilityLabel={listingTitle}
           />
         ) : (
-          <View style={[styles.image, styles.imageFallback]}>
+          <View style={[styles.image, styles.imageFallback]} accessibilityElementsHidden>
             <Ionicons name="cube-outline" size={IconGrammar.hero} color={colors.textMuted} />
           </View>
         )}
@@ -83,7 +93,7 @@ export function FlagshipOrderCard({
       </View>
 
       {/* Chevron */}
-      <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} style={styles.chevron} />
+      <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} style={styles.chevron} accessibilityElementsHidden />
     </AnimatedPressable>
   );
 }

@@ -51,6 +51,15 @@ export interface SettingsPreferences {
    * biometrics are unreliable or they prefer password-only auth.
    */
   biometricEnabled: boolean;
+  /**
+   * Device-local privacy preferences. These toggles are persisted to
+   * AsyncStorage so they survive app restarts. They are not synced to a
+   * backend account profile — the banner in DataPrivacyScreen is truthful
+   * about this device-local scope.
+   */
+  personalizedAds: boolean;
+  recommendationPersonalization: boolean;
+  thirdPartySharing: boolean;
 }
 
 export interface PushNotificationDefinition {
@@ -112,6 +121,9 @@ export const DEFAULT_SETTINGS_PREFERENCES: SettingsPreferences = {
   analyticsOptOut: false,
   developerMode: false,
   biometricEnabled: true,
+  personalizedAds: false,
+  recommendationPersonalization: true,
+  thirdPartySharing: false,
 };
 
 export function buildDefaultPushNotificationToggles(keys: readonly string[]): PushNotificationToggles {
@@ -182,6 +194,18 @@ export async function getStoredSettingsPreferences(): Promise<SettingsPreference
         typeof parsed.biometricEnabled === 'boolean'
           ? parsed.biometricEnabled
           : DEFAULT_SETTINGS_PREFERENCES.biometricEnabled,
+      personalizedAds:
+        typeof parsed.personalizedAds === 'boolean'
+          ? parsed.personalizedAds
+          : DEFAULT_SETTINGS_PREFERENCES.personalizedAds,
+      recommendationPersonalization:
+        typeof parsed.recommendationPersonalization === 'boolean'
+          ? parsed.recommendationPersonalization
+          : DEFAULT_SETTINGS_PREFERENCES.recommendationPersonalization,
+      thirdPartySharing:
+        typeof parsed.thirdPartySharing === 'boolean'
+          ? parsed.thirdPartySharing
+          : DEFAULT_SETTINGS_PREFERENCES.thirdPartySharing,
     };
   } catch {
     return DEFAULT_SETTINGS_PREFERENCES;

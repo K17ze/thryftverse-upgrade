@@ -8,7 +8,7 @@
  * - Camera preview is a placeholder until real WebRTC is wired
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -21,14 +21,28 @@ import {
   Dimensions,
   StatusBar,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import type { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { Space, Radius, Type, Control, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
-import { LIVE_SHOPPING_DEMO_MODE } from '../services/liveShoppingApi';
+import {
+  LIVE_SHOPPING_DEMO_MODE,
+  connectToStream,
+  disconnectFromStream,
+  subscribeToViewerCount,
+  subscribeToStreamEvents,
+  advanceToNextLot,
+  endCurrentLot,
+  endLiveStream,
+  createLiveStream,
+  type StreamEndEventPayload,
+  type LotSoldEventPayload,
+} from '../services/liveShoppingApi';
 
 type SellerPhase = 'setup' | 'live' | 'summary';
 
@@ -47,8 +61,11 @@ const DEMO_LOTS: LotItem[] = [
   { id: 'lot_4', title: 'Silk Scarf', imageUri: 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?w=200', startingPrice: 15, status: 'upcoming' },
 ];
 
+type LiveStreamSellerRoute = RouteProp<RootStackParamList, 'LiveStreamSeller'>;
+
 export function LiveStreamSellerScreen() {
   const navigation = useNavigation();
+  const route = useRoute<LiveStreamSellerRoute>();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
@@ -63,38 +80,138 @@ export function LiveStreamSellerScreen() {
   const [liveDuration, setLiveDuration] = useState(0);
   const [totalSales, setTotalSales] = useState(0);
   const [lotsSold, setLotsSold] = useState(0);
+  const [goingLive, setGoingLive] = useState(false);
+  const [endingStream, setEndingStream] = useState(false);
+  const [lotActionPending, setLotActionPending] = useState(false);
 
-  const handleGoLive = useCallback(() => {
-    haptic.medium();
-    setPhase('live');
-    setViewerCount(1);
-  }, [haptic]);
+  const streamIdRef = useRef<string | null>(null);
 
-  const handleEndStream = useCallback(() => {
+  // ── Duration timer — ticks every second while live ──
+  useEffect(() => {
+    if (phase !== 'live') return;
+    const interval = setInterval(() => {
+      setLiveDuration((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  // ── Real-time subscriptions during live phase ──
+  useEffect(() => {
+    if (phase !== 'live' || !streamIdRef.current) return;
+    const sid = streamIdRef.current;
+
+    const unsubViewer = subscribeToViewerCount(sid, (payload) => {
+      setViewerCount(payload.count);
+    });
+
+    const unsubEvents = subscribeToStreamEvents(sid, (event) => {
+      if (event.type === 'lot_sold') {
+        const payload = event.payload as LotSoldEventPayload;
+        setTotalSales((prev) => prev + payload.finalPrice);
+        setLotsSold((prev) => prev + 1);
+      }
+    });
+
+    return () => {
+      unsubViewer();
+      unsubEvents();
+    };
+  }, [phase]);
+
+  // ── Cleanup on unmount ──
+  useEffect(() => {
+    return () => {
+      if (streamIdRef.current) {
+        disconnectFromStream(streamIdRef.current);
+      }
+    };
+  }, []);
+
+  const handleGoLive = useCallback(async () => {
     haptic.medium();
+    setGoingLive(true);
+    try {
+      // Create a stream via the service layer, then connect to it.
+      const result = await createLiveStream({
+        sellerId: 'me',
+        sellerName: 'You',
+        title: title.trim() || 'Live Auction',
+        lotListingIds: lots.map((l) => l.id),
+      });
+      if (!result.success || !result.stream) {
+        setGoingLive(false);
+        return;
+      }
+      streamIdRef.current = result.stream.id;
+      await connectToStream(result.stream.id);
+      setPhase('live');
+      setViewerCount(0);
+    } catch {
+      setGoingLive(false);
+    }
+  }, [haptic, title, lots]);
+
+  const handleEndStream = useCallback(async () => {
+    haptic.medium();
+    if (!streamIdRef.current) {
+      setPhase('summary');
+      return;
+    }
+    setEndingStream(true);
+    try {
+      const result = await endLiveStream(streamIdRef.current);
+      if (result.success && result.summary) {
+        setViewerCount(result.summary.totalViewers);
+        setLotsSold(result.summary.lotsSold);
+        setTotalSales(result.summary.totalSales);
+      }
+    } catch {
+      // Fall back to accumulated local data
+    }
+    setEndingStream(false);
     setPhase('summary');
   }, [haptic]);
 
-  const handleNextLot = useCallback(() => {
-    setLots((prev) => prev.map((lot, i) => {
-      if (i === currentLotIndex) return { ...lot, status: 'sold' as const };
-      if (i === currentLotIndex + 1) return { ...lot, status: 'active' as const };
-      return lot;
-    }));
-    setCurrentLotIndex((i) => Math.min(i + 1, lots.length - 1));
-    setLotsSold((c) => c + 1);
-    setTotalSales((s) => s + 45);
+  const handleNextLot = useCallback(async () => {
+    if (!streamIdRef.current) return;
+    setLotActionPending(true);
     haptic.light();
+    try {
+      // Sell the current lot, then advance to the next.
+      await endCurrentLot(streamIdRef.current);
+      const advanceResult = await advanceToNextLot(streamIdRef.current);
+      if (advanceResult.success) {
+        setLots((prev) => prev.map((lot, i) => {
+          if (i === currentLotIndex) return { ...lot, status: 'sold' as const };
+          if (i === currentLotIndex + 1) return { ...lot, status: 'active' as const };
+          return lot;
+        }));
+        setCurrentLotIndex((i) => Math.min(i + 1, lots.length - 1));
+      }
+    } catch {
+      // Service error — don't mutate local state
+    }
+    setLotActionPending(false);
   }, [currentLotIndex, lots.length, haptic]);
 
-  const handleSkipLot = useCallback(() => {
-    setLots((prev) => prev.map((lot, i) => {
-      if (i === currentLotIndex) return { ...lot, status: 'passed' as const };
-      if (i === currentLotIndex + 1) return { ...lot, status: 'active' as const };
-      return lot;
-    }));
-    setCurrentLotIndex((i) => Math.min(i + 1, lots.length - 1));
+  const handleSkipLot = useCallback(async () => {
+    if (!streamIdRef.current) return;
+    setLotActionPending(true);
     haptic.light();
+    try {
+      const result = await advanceToNextLot(streamIdRef.current);
+      if (result.success) {
+        setLots((prev) => prev.map((lot, i) => {
+          if (i === currentLotIndex) return { ...lot, status: 'passed' as const };
+          if (i === currentLotIndex + 1) return { ...lot, status: 'active' as const };
+          return lot;
+        }));
+        setCurrentLotIndex((i) => Math.min(i + 1, lots.length - 1));
+      }
+    } catch {
+      // Service error — don't mutate local state
+    }
+    setLotActionPending(false);
   }, [currentLotIndex, haptic]);
 
   // ── Setup phase ──
@@ -174,14 +291,20 @@ export function LiveStreamSellerScreen() {
           <View style={[styles.setupFooter, { paddingBottom: insets.bottom || Space.md }]}>
             <Pressable
               onPress={handleGoLive}
-              disabled={lots.length === 0}
-              style={({ pressed }) => [styles.goLiveBtn, lots.length === 0 && styles.goLiveBtnDisabled, pressed && { opacity: 0.85 }]}
+              disabled={lots.length === 0 || goingLive}
+              style={({ pressed }) => [styles.goLiveBtn, (lots.length === 0 || goingLive) && styles.goLiveBtnDisabled, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
               accessibilityLabel="Go live now"
-              accessibilityState={{ disabled: lots.length === 0 }}
+              accessibilityState={{ disabled: lots.length === 0 || goingLive, busy: goingLive }}
             >
-              <View style={styles.liveDot} />
-              <Text style={styles.goLiveBtnText}>Go Live Now</Text>
+              {goingLive ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.goLiveBtnText}>Go Live Now</Text>
+                </>
+              )}
             </Pressable>
           </View>
         </SafeAreaView>
@@ -198,7 +321,7 @@ export function LiveStreamSellerScreen() {
         <View style={{ paddingTop: insets.top }}>
           {/* Camera preview (small) */}
           <View style={styles.sellerCameraPreview}>
-            <Ionicons name="videocam" size={24} color="rgba(255,255,255,0.5)" />
+            <Ionicons name="videocam" size={24} color={colors.textMuted} />
             <Text style={styles.sellerCameraText}>Broadcasting</Text>
             <View style={styles.liveBadgeSmall}>
               <View style={styles.liveDot} />
@@ -209,20 +332,26 @@ export function LiveStreamSellerScreen() {
           {/* Stats bar */}
           <View style={styles.sellerStatsBar}>
             <View style={styles.sellerStat}>
-              <Ionicons name="eye-outline" size={14} color="rgba(255,255,255,0.6)" />
+              <Ionicons name="eye-outline" size={14} color={colors.textSecondary} />
               <Text style={styles.sellerStatText}>{viewerCount} viewers</Text>
             </View>
             <View style={styles.sellerStat}>
-              <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.6)" />
+              <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
               <Text style={styles.sellerStatText}>{Math.floor(liveDuration / 60)}:{(liveDuration % 60).toString().padStart(2, '0')}</Text>
             </View>
             <Pressable
               onPress={handleEndStream}
-              style={({ pressed }) => [styles.endStreamBtn, pressed && { opacity: 0.7 }]}
+              disabled={endingStream}
+              style={({ pressed }) => [styles.endStreamBtn, pressed && { opacity: 0.7 }, endingStream && { opacity: 0.6 }]}
               accessibilityRole="button"
               accessibilityLabel="End stream"
+              accessibilityState={{ busy: endingStream }}
             >
-              <Text style={styles.endStreamBtnText}>End</Text>
+              {endingStream ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Text style={styles.endStreamBtnText}>End</Text>
+              )}
             </Pressable>
           </View>
 
@@ -239,19 +368,27 @@ export function LiveStreamSellerScreen() {
           <View style={styles.sellerLotActions}>
             <Pressable
               onPress={handleSkipLot}
-              style={({ pressed }) => [styles.skipLotBtn, pressed && { opacity: 0.7 }]}
+              disabled={lotActionPending}
+              style={({ pressed }) => [styles.skipLotBtn, pressed && { opacity: 0.7 }, lotActionPending && { opacity: 0.5 }]}
               accessibilityRole="button"
               accessibilityLabel="Skip current lot"
+              accessibilityState={{ busy: lotActionPending }}
             >
               <Text style={styles.skipLotBtnText}>Skip</Text>
             </Pressable>
             <Pressable
               onPress={handleNextLot}
-              style={({ pressed }) => [styles.nextLotBtn, pressed && { opacity: 0.85 }]}
+              disabled={lotActionPending}
+              style={({ pressed }) => [styles.nextLotBtn, pressed && { opacity: 0.85 }, lotActionPending && { opacity: 0.6 }]}
               accessibilityRole="button"
               accessibilityLabel="Sell and go to next lot"
+              accessibilityState={{ busy: lotActionPending }}
             >
-              <Text style={styles.nextLotBtnText}>Sell & Next →</Text>
+              {lotActionPending ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Text style={styles.nextLotBtnText}>Sell & Next →</Text>
+              )}
             </Pressable>
           </View>
 
@@ -368,7 +505,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -480,7 +617,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   sellerCameraText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.textMuted,
   },
   liveBadgeSmall: {
     position: 'absolute',
@@ -515,7 +652,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   sellerStatText: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.medium,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
   },
   endStreamBtn: {
     marginLeft: 'auto',
@@ -535,7 +672,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: '#161616',
+    backgroundColor: colors.surface,
   },
   sellerLotImage: {
     width: Space.xxl + Space.xl,
@@ -564,7 +701,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     paddingVertical: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     minHeight: Control.hit,
     justifyContent: 'center',
@@ -591,7 +728,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   upcomingLabel: {
     fontSize: Type.caption.size,
     fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.textMuted,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
@@ -615,12 +752,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     fontSize: Type.body.size,
     fontFamily: Typography.family.regular,
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.textPrimary,
   },
   upcomingLotPrice: {
     fontSize: Type.body.size,
     fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textSecondary,
   },
   // ── Summary ──
   summaryContainer: {

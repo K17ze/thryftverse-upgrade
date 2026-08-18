@@ -23,6 +23,8 @@ import {
   type ListUserOrdersParams,
 } from '../services/commerceApi';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { OrdersTabRail, OrdersTab } from '../components/orders/OrdersTabRail';
 import { OrderLedgerRow, OrderViewModel } from '../components/orders/OrderLedgerRow';
@@ -83,6 +85,7 @@ export default function MyOrdersScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
+  const { isOffline } = useConnectivity();
 
   const [activeTab, setActiveTab] = useState<OrdersTab>('buying');
   const [orders, setOrders] = useState<CommerceUserOrder[]>([]);
@@ -393,8 +396,8 @@ export default function MyOrdersScreen() {
   const renderError = useCallback(() => (
     <View style={styles.errorContainer}>
       <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
-      <Text style={styles.errorTitle}>Orders could not be loaded</Text>
-      <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
+      <Text style={styles.errorTitle}>{isOffline ? 'You are offline' : 'Orders could not be loaded'}</Text>
+      <Text style={styles.errorSubtitle}>{isOffline ? 'Check your connection and try again.' : 'We couldn\'t load your orders. Tap below to try again.'}</Text>
       <Pressable
         style={styles.retryBtn}
         onPress={() => {
@@ -409,7 +412,7 @@ export default function MyOrdersScreen() {
         <Text style={styles.retryBtnText}>Retry</Text>
       </Pressable>
     </View>
-  ), [fetchOrders]);
+  ), [fetchOrders, isOffline, colors.textMuted]);
 
   const renderListFooter = useCallback(() => {
     if (isLoadingMore) {
@@ -555,6 +558,10 @@ export default function MyOrdersScreen() {
         </View>
       ) : null}
 
+      {isOffline && orders.length > 0 ? (
+        <OfflineBanner onRetry={() => void handleRefresh()} />
+      ) : null}
+
       <FlashList
         data={groupedOrders}
         keyExtractor={(group) => group.key}
@@ -616,10 +623,10 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
+    fontSize: Type.screenTitle.size,
+    lineHeight: Type.screenTitle.lineHeight,
     fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
+    letterSpacing: Type.screenTitle.letterSpacing,
     color: colors.textPrimary,
   },
   headerFilterBtn: {
@@ -713,7 +720,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
   },
   errorTitle: {
-    fontSize: Type.subtitle.size,
+    fontSize: Type.sectionTitle.size,
     fontFamily: Typography.family.semibold,
     color: colors.textPrimary,
   },

@@ -157,6 +157,7 @@ export function FlagshipState({
             scaleValue={0.97}
             hapticFeedback="none"
             accessibilityRole="button"
+            accessibilityLabel={actionLabel}
             accessibilityHint={isErrorish ? 'Tries loading this again' : undefined}
             style={[styles.actionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
           >
@@ -171,6 +172,7 @@ export function FlagshipState({
             scaleValue={0.98}
             hapticFeedback="none"
             accessibilityRole="button"
+            accessibilityLabel={secondaryActionLabel}
             style={styles.secondaryBtn}
           >
             <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>

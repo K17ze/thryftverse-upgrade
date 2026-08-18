@@ -71,6 +71,8 @@ export function FlagshipProfileMedia({
             shouldPlay
             isLooping
             isMuted
+            accessibilityRole="image"
+            accessibilityLabel="Profile cover video"
           />
         ) : hasCover ? (
           <CachedImage
@@ -79,6 +81,8 @@ export function FlagshipProfileMedia({
             contentFit="cover"
             transition={Motion.transitions.mediaLoad.duration}
             cacheBuster={cacheBuster}
+            accessibilityRole="image"
+            accessibilityLabel="Profile cover photo"
           />
         ) : (
           <ImageEmptyGraphic
@@ -86,6 +90,7 @@ export function FlagshipProfileMedia({
             width={screenWidth}
             height={coverHeight}
             style={styles.coverFallback}
+            accessibilityElementsHidden
           />
         )}
 
@@ -93,6 +98,7 @@ export function FlagshipProfileMedia({
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.45)']}
           style={styles.coverGradient}
+          accessibilityElementsHidden
         />
 
         {/* Edit cover control — compact camera icon button */}
@@ -105,6 +111,7 @@ export function FlagshipProfileMedia({
             disabled={isUploadingCover}
             accessibilityLabel="Change profile cover"
             accessibilityRole="button"
+            accessibilityHint="Opens your photo library to choose a new cover image"
           >
             <View style={styles.editCoverVisible}>
               {isUploadingCover ? (
@@ -160,9 +167,11 @@ export function FlagshipProfileMedia({
                 transition={Motion.transitions.mediaLoad.duration}
                 focalPoint={FACE_FOCAL_POINT}
                 cacheBuster={cacheBuster}
+                accessibilityRole="image"
+                accessibilityLabel="Profile avatar"
               />
             ) : (
-              <View style={[styles.avatarImage, styles.avatarFallback]}>
+              <View style={[styles.avatarImage, styles.avatarFallback]} accessibilityElementsHidden>
                 <LinearGradient
                   colors={ActiveTheme === 'light'
                     ? ['#F0EBE6', '#E2DDD6']
@@ -189,6 +198,7 @@ export function FlagshipProfileMedia({
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityLabel="Change profile avatar"
                 accessibilityRole="button"
+                accessibilityHint="Opens your camera or photo library to choose a new avatar"
               >
                 {isUploadingAvatar ? (
                   <ActivityIndicator size="small" color={colors.scrimTextPrimary} />

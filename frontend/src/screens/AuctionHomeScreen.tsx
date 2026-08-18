@@ -43,6 +43,8 @@ import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { Space, Radius, Typography, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { toIze, formatIzeAmount, formatFiatAmount } from '../utils/currency';
@@ -333,6 +335,7 @@ export default function AuctionHomeScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { currencyCode, displayMode, goldRates } = useFormattedPrice();
   const { width } = useWindowDimensions();
+  const { isOffline } = useConnectivity();
   const [homeData, setHomeData] = React.useState<HomeData>(EMPTY_HOME_DATA);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -1265,8 +1268,8 @@ export default function AuctionHomeScreen() {
         />
         <EmptyState
           icon="cloud-offline-outline"
-          title="Unable to load"
-          subtitle="Pull to refresh"
+          title={isOffline ? 'You are offline' : 'Unable to load'}
+          subtitle={isOffline ? 'Check your connection and try again.' : 'Pull to refresh'}
           ctaLabel="Retry"
           onCtaPress={() => void fetchHome()}
         />
@@ -1826,6 +1829,11 @@ export default function AuctionHomeScreen() {
           </View>
         )}
 
+        {/* Offline banner — cached auctions are still visible but cannot refresh */}
+        {isOffline && hasAnyContent ? (
+          <OfflineBanner onRetry={() => void handleRefresh()} />
+        ) : null}
+
         {/* Selected scope composition */}
         <SegmentContentTransition segmentKey={browseState.scope}>
           {renderComposition()}
@@ -2238,10 +2246,10 @@ function createStyles(colors: ThemeColors) {
 
   // ── Section title (no subtitle) ──
   sectionTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
+    fontSize: Type.sectionTitle.size,
+    lineHeight: Type.sectionTitle.lineHeight,
     fontWeight: '700',
-    letterSpacing: Type.subtitle.letterSpacing,
+    letterSpacing: Type.sectionTitle.letterSpacing,
     color: colors.textPrimary,
     fontFamily: Typography.family.bold,
     marginBottom: Space.md,

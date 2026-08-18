@@ -39,10 +39,6 @@ import { Space, Radius, Type, Typography } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 
-// Privacy controls are persisted locally in this build. The banner ships in
-// production (not just dev) so users always know the controls are device-local.
-const DATA_PRIVACY_DEMO_MODE = true;
-
 const DATA_CATEGORIES: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; description: string }[] = [
   { icon: 'person-outline', label: 'Profile', description: 'Username, display name, bio, avatar' },
   { icon: 'pricetag-outline', label: 'Listings', description: 'Items you have listed for sale' },
@@ -56,13 +52,17 @@ export default function DataPrivacyScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { show } = useToast();
-  const { analyticsOptOut, setAnalyticsOptOut } = useSettingsPreferences();
+  const {
+    analyticsOptOut,
+    setAnalyticsOptOut,
+    personalizedAds,
+    setPersonalizedAds,
+    recommendationPersonalization,
+    setRecommendationPersonalization,
+    thirdPartySharing,
+    setThirdPartySharing,
+  } = useSettingsPreferences();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-
-  // Local preference state — persisted to AsyncStorage in a real implementation.
-  const [personalizedAds, setPersonalizedAds] = React.useState(false);
-  const [recommendationPersonalization, setRecommendationPersonalization] = React.useState(true);
-  const [thirdPartySharing, setThirdPartySharing] = React.useState(false);
 
   const handleOpenExternal = async (url: string) => {
     try {
@@ -72,7 +72,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
     }
   };
 
-  const toggleWithHaptic = (setter: React.Dispatch<React.SetStateAction<boolean>>) => (v: boolean) => {
+  const toggleWithHaptic = (setter: (v: boolean) => void) => (v: boolean) => {
     haptic.selection();
     setter(v);
   };
@@ -86,19 +86,18 @@ export default function DataPrivacyScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {DATA_PRIVACY_DEMO_MODE && (
-        <View
-          style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Demo mode"
-        >
-          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.demoBannerText}>
-            Privacy controls are saved on this device only in demo mode.
-          </Text>
-        </View>
-      )}
+      {/* ── Device-local indicator (truthful UI per AGENTS.md §11) ── */}
+      <View
+        style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
+        accessibilityRole="header"
+        accessibilityLabel="Device-local privacy controls"
+      >
+        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.demoBannerText}>
+          These privacy controls are saved on this device and stay in effect
+          across app restarts.
+        </Text>
+      </View>
 
       {/* ── Your data — flat category rows (no card wrapper) ── */}
       <SettingsSection title="Your data" noCard>

@@ -9,8 +9,9 @@ import {
   FlagshipHeader,
   FlagshipScreen,
 } from '../components/flagship';
-import { reportUser, type ReportReason } from '../services/profileApi';
+import { reportUser, blockUser, type ReportReason } from '../services/profileApi';
 import { reportListing, type ListingReportReason } from '../services/listingsApi';
+import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
@@ -32,14 +33,49 @@ const REPORT_REASONS: Array<{
     description: 'Threatening, abusive or targeted unwanted contact',
   },
   {
+    key: 'hate_speech',
+    label: 'Hate speech',
+    description: 'Slurs, dehumanizing language, or attacks on protected groups',
+  },
+  {
     key: 'counterfeit',
     label: 'Fake item',
     description: 'Counterfeit goods or misleading authenticity claims',
   },
   {
+    key: 'prohibited',
+    label: 'Prohibited item',
+    description: 'Weapons, drugs, wildlife, or other prohibited categories',
+  },
+  {
     key: 'off_platform',
     label: 'Off-platform request',
     description: 'Asked to transact outside Thryftverse, against policy',
+  },
+  {
+    key: 'scam',
+    label: 'Scam or fraud',
+    description: 'Attempted financial fraud, phishing, or impersonation',
+  },
+  {
+    key: 'misinformation',
+    label: 'Misleading content',
+    description: 'False or misleading claims about an item',
+  },
+  {
+    key: 'privacy',
+    label: 'Privacy violation',
+    description: 'Shared private information without consent',
+  },
+  {
+    key: 'impersonation',
+    label: 'Impersonation',
+    description: 'Pretending to be someone else',
+  },
+  {
+    key: 'minor_safety',
+    label: 'Minor safety',
+    description: 'Content or behavior endangering minors',
   },
   {
     key: 'other',
@@ -53,11 +89,17 @@ export default function ReportScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { type, targetId } = route.params;
+  const toggleBlocked = useStore((s) => s.toggleBlockedUser);
+  const isBlocked = useStore((s) =>
+    targetId ? s.blockedUsers.includes(targetId) : false
+  );
   const [selectedReason, setSelectedReason] =
     React.useState<ReportReason | null>(null);
   const [details, setDetails] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSubmitted, setIsSubmitted] = React.useState(false);
+  const [isBlocking, setIsBlocking] = React.useState(false);
+  const [hasBlocked, setHasBlocked] = React.useState(false);
 
   const canSubmit =
     Boolean(targetId) &&
@@ -85,7 +127,23 @@ export default function ReportScreen({ navigation, route }: Props) {
     }
   };
 
+  const handleBlockUser = async () => {
+    if (!targetId || isBlocking || hasBlocked || isBlocked) return;
+    setIsBlocking(true);
+    try {
+      await blockUser(targetId);
+      toggleBlocked(targetId);
+      setHasBlocked(true);
+      show('Account blocked', 'success');
+    } catch {
+      show('Could not block this account. Try again.', 'error');
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
   if (isSubmitted) {
+    const showBlockButton = type === 'user' && !isBlocked && !hasBlocked;
     return (
       <FlagshipScreen
         header={
@@ -103,9 +161,46 @@ export default function ReportScreen({ navigation, route }: Props) {
           />
           <Text style={styles.completeTitle}>Report submitted</Text>
           <Text style={styles.completeBody}>
-            The moderation team received your report. Blocking is available
-            separately if you no longer want contact from this account.
+            The moderation team received your report. We review every report
+            and will take action if a policy is violated.
           </Text>
+          {showBlockButton ? (
+            <AnimatedPressable
+              style={styles.blockAction}
+              onPress={handleBlockUser}
+              activeOpacity={0.78}
+              scaleValue={0.98}
+              disabled={isBlocking}
+              accessibilityRole="button"
+              accessibilityLabel="Block this user"
+              accessibilityState={{ busy: isBlocking, disabled: isBlocking }}
+            >
+              {isBlocking ? (
+                <ActivityIndicator size="small" color={colors.textInverse} />
+              ) : (
+                <>
+                  <Ionicons
+                    name="ban-outline"
+                    size={16}
+                    color={colors.textInverse}
+                  />
+                  <Text style={styles.blockActionText}>Block this user</Text>
+                </>
+              )}
+            </AnimatedPressable>
+          ) : null}
+          {(isBlocked || hasBlocked) && type === 'user' ? (
+            <View style={styles.blockedNote}>
+              <Ionicons
+                name="checkmark-circle"
+                size={16}
+                color={colors.success}
+              />
+              <Text style={styles.blockedNoteText}>
+                This account is blocked and cannot contact you.
+              </Text>
+            </View>
+          ) : null}
           <AnimatedPressable
             style={styles.doneAction}
             onPress={() => navigation.goBack()}
@@ -405,6 +500,40 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     fontSize: Type.body.size,
     lineHeight: Type.body.lineHeight,
+  },
+  blockAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs,
+    minWidth: 160,
+    minHeight: Control.hit,
+    marginTop: Space.md,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+    borderColor: colors.danger,
+    backgroundColor: colors.danger,
+  },
+  blockActionText: {
+    color: colors.textInverse,
+    fontFamily: Typography.family.semibold,
+    fontSize: Type.body.size,
+    lineHeight: Type.body.lineHeight,
+  },
+  blockedNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.md,
+    maxWidth: 300,
+  },
+  blockedNoteText: {
+    flex: 1,
+    color: colors.success,
+    fontFamily: Typography.family.medium,
+    fontSize: Type.caption.size,
+    lineHeight: Type.caption.lineHeight + 2,
   },
   secondaryDoneAction: {
     minWidth: 140,

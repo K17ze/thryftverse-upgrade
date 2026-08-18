@@ -15,6 +15,8 @@ interface Props {
   style?: object;
   /** Optional content rendered below the label (e.g. a retry control). */
   children?: React.ReactNode;
+  /** When true, hides this element and its descendants from the screen reader. */
+  accessibilityElementsHidden?: boolean;
 }
 
 const GRADIENT_PAIRS: [string, string][] = ActiveTheme === 'light'
@@ -38,6 +40,7 @@ export function ImageEmptyGraphic({
   height: h,
   style,
   children,
+  accessibilityElementsHidden,
 }: Props) {
   const pairIndex = (label?.length ?? 0) % GRADIENT_PAIRS.length;
   const [gradStart, gradEnd] = GRADIENT_PAIRS[pairIndex];
@@ -50,6 +53,7 @@ export function ImageEmptyGraphic({
         h ? { height: h } : { aspectRatio: 1 },
         style,
       ]}
+      accessibilityElementsHidden={accessibilityElementsHidden}
     >
       <LinearGradient
         colors={[gradStart, gradEnd]}

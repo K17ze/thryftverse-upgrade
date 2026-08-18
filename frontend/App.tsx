@@ -53,6 +53,7 @@ import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences
 import { getStoredAuthSnapshot } from './src/preferences/authSnapshot';
 import type { RootStackParamList } from './src/navigation/types';
 import { extractGroupInviteToken } from './src/utils/groupInviteLink';
+import { linking } from './src/navigation/linking';
 import { usePushNotificationTap, setNavigationReady } from './src/hooks/usePushNotificationTap';
 import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
 import { trackScreenView } from './src/lib/telemetry';
@@ -491,6 +492,7 @@ export default function App() {
                       <NavigationContainer
                         ref={navigationRef}
                         theme={premiumNavigationTheme}
+                        linking={linking}
                         onStateChange={onNavigationStateChange}
                         onReady={() => {
                           setNavigationReady(true);

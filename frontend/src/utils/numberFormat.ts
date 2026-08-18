@@ -52,8 +52,11 @@ export function formatCompactCount(value: number): string {
  *
  * "1,234" — grouped thousands, no compact suffix.
  * Used in accessibilityLabel so screen readers announce the exact number.
+ *
+ * @param value   The raw count.
+ * @param locale  Optional locale for grouping (defaults to 'en-GB').
  */
-export function formatFullCount(value: number): string {
+export function formatFullCount(value: number, locale: string = 'en-GB'): string {
   if (!Number.isFinite(value) || value < 0) return '0';
-  return Math.floor(value).toLocaleString('en-GB');
+  return Math.floor(value).toLocaleString(locale);
 }
