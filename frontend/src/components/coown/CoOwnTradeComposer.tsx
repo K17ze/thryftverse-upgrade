@@ -142,7 +142,7 @@ export function CoOwnTradeComposer({
           <Text style={[styles.productTitle, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
           <Text style={[styles.productPrice, { color: colors.textSecondary }]} numberOfLines={1}>{unitPriceLabel} / unit</Text>
         </View>
-        <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUp + '22' : colors.coownDown + '22' }]}>
+        <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUpSubtle : colors.coownDownSubtle }]}>
           <Text style={[styles.sideText, { color: isBuy ? colors.coownUp : colors.coownDown }]} numberOfLines={1}>
             {isBuy ? 'BUY' : 'SELL'}
           </Text>

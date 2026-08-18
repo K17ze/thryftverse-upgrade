@@ -170,7 +170,7 @@ export default function BundleBagScreen() {
                 </Text>
               </View>
               {discountPercent > 0 && (
-                <View style={[styles.heroBadge, { backgroundColor: colors.brand + '18' }]}>
+                <View style={[styles.heroBadge, { backgroundColor: colors.brandSubtle }]}>
                   <Text style={[styles.heroBadgeText, { color: colors.brand }]}>{discountPercent}% off</Text>
                 </View>
               )}

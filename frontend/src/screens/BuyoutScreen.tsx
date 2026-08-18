@@ -218,7 +218,7 @@ export default function BuyoutScreen() {
 
         {/* Status message */}
         {ownsAll ? (
-          <View style={[styles.statusCard, { backgroundColor: colors.successSubtle, borderColor: colors.success + '40' }]}>
+          <View style={[styles.statusCard, { backgroundColor: colors.successSubtle, borderColor: colors.successBorder }]}>
             <View style={[styles.statusIconWrap, { backgroundColor: colors.successSubtle }]}>
               <Ionicons name="checkmark-circle" size={28} color={colors.success} />
             </View>

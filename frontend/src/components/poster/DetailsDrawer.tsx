@@ -444,7 +444,7 @@ function createStyles(colors: any) {
   },
   expiryPillActive: {
     borderColor: colors.brand,
-    backgroundColor: colors.brand + '15',
+    backgroundColor: colors.brandSubtle,
   },
   expiryPillText: {
     fontSize: Type.caption.size,

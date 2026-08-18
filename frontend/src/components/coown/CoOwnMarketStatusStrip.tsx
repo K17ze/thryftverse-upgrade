@@ -148,7 +148,7 @@ export function CoOwnMarketStatusStrip({
       {/* Data stale badge — shown when dataAgeSeconds > stalenessThresholdSeconds */}
       {dataStale && (
         <View
-          style={[styles.staleBadge, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '40' }]}
+          style={[styles.staleBadge, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}
           accessibilityLabel={`Data stale${dataStaleAgeLabel ? `, last updated ${dataStaleAgeLabel}` : ''}`}
         >
           <Ionicons name="time-outline" size={10} color={colors.warning} />

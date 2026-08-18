@@ -329,7 +329,7 @@ export function AddMoneySheet({
                     style={({ pressed }) => [
                       styles.sourceRow,
                       { borderColor: selected ? colors.brand : colors.border },
-                      selected && { backgroundColor: colors.brand + '0D' },
+                      selected && { backgroundColor: colors.brandSubtle },
                       pressed && { opacity: 0.7 },
                     ]}
                     onPress={() => {

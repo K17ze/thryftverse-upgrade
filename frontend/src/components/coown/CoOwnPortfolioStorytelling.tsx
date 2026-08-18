@@ -115,14 +115,14 @@ export function CoOwnPortfolioStorytelling({
           styles.premiumBadge,
           {
             backgroundColor: isPositivePremium
-              ? colors.coownUp + '12'
+              ? colors.coownUpSubtle
               : isNegativePremium
-                ? colors.coownDown + '12'
+                ? colors.coownDownSubtle
                 : colors.surfaceAlt,
             borderColor: isPositivePremium
-              ? colors.coownUp + '40'
+              ? colors.coownUpBorder
               : isNegativePremium
-                ? colors.coownDown + '40'
+                ? colors.coownDownBorder
                 : colors.border,
           },
         ]}>

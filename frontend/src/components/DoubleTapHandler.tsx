@@ -12,6 +12,7 @@ import Reanimated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 
 interface DoubleTapHandlerProps {
   children: React.ReactNode;
@@ -31,12 +32,12 @@ export function DoubleTapHandler({ children, onDoubleTap }: DoubleTapHandlerProp
 
     // Pop up fast, stay a bit, then quickly dissolve and shrink
     scale.value = withSequence(
-      withTiming(1, { duration: 140 }),
-      withDelay(400, withTiming(0.8, { duration: 150 }))
+      withTiming(1, { duration: Motion.duration.fast }),
+      withDelay(400, withTiming(0.8, { duration: Motion.duration.normal }))
     );
     opacity.value = withSequence(
-      withTiming(1, { duration: 100 }),
-      withDelay(400, withTiming(0, { duration: 150 }))
+      withTiming(1, { duration: Motion.duration.fast }),
+      withDelay(400, withTiming(0, { duration: Motion.duration.normal }))
     );
   }, [scale, opacity, reducedMotion]);
 

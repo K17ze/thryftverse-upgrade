@@ -224,7 +224,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
         <View style={styles.topCenter}>
           <Text style={[styles.topLabel, { color: colors.textInverse }]}>Preview</Text>
           {pageCount > 1 && (
-            <Text style={[styles.pageIndicator, { color: colors.textInverse + 'B3' }]}>
+            <Text style={[styles.pageIndicator, { color: colors.scrimTextSecondary }]}>
               {pageIndex + 1} / {pageCount}
             </Text>
           )}
@@ -264,7 +264,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
                 key={p.id}
                 style={[
                   styles.pageDot,
-                  { backgroundColor: colors.textInverse + '66' },
+                  { backgroundColor: colors.scrimTextTertiary },
                   i === pageIndex && styles.pageDotActive,
                   i === pageIndex && { backgroundColor: colors.textInverse },
                 ]}

@@ -427,7 +427,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
     backgroundColor: colors.successSubtle,
     borderWidth: Stroke.standard,
-    borderColor: colors.success + '33',
+    borderColor: colors.successBorder,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,

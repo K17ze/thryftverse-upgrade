@@ -28,7 +28,7 @@ export function CoOwnOfflineBanner({ isOffline, lastSyncedLabel }: CoOwnOfflineB
 
   return (
     <View
-      style={[styles.container, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '30' }]}
+      style={[styles.container, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}
       accessible
       accessibilityRole="alert"
       accessibilityLabel={`Offline. ${lastSyncedLabel ? `Last synced ${lastSyncedLabel}.` : ''} Showing cached data.`}

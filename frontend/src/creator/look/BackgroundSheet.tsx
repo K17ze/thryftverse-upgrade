@@ -57,6 +57,7 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
+import { Motion } from '../../theme/motionTokens';
 import type { CreatorBackground, CreatorLayer } from '../composition';
 
 // ── Presets ───────────────────────────────────────────────────────────
@@ -161,7 +162,6 @@ export function BackgroundSheet({
   const typeTabLayouts = useRef<Map<BgType, { x: number; width: number }>>(new Map());
   const typeUnderlineXSV = useSharedValue(0);
   const typeUnderlineWSV = useSharedValue(0);
-  const TYPE_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 
   useEffect(() => {
     if (visible) {
@@ -192,8 +192,8 @@ export function BackgroundSheet({
     // Animate underline to the selected tab.
     const layout = typeTabLayouts.current.get(type);
     if (layout) {
-      typeUnderlineXSV.value = withSpring(layout.x, TYPE_UNDERLINE_SPRING);
-      typeUnderlineWSV.value = withSpring(layout.width, TYPE_UNDERLINE_SPRING);
+      typeUnderlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+      typeUnderlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
     }
     setDraft((prev) => {
       const next: CreatorBackground = { ...prev, type };

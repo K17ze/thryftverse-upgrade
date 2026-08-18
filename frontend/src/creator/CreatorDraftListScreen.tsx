@@ -786,7 +786,7 @@ function DraftCard({
                   </View>
                 </View>
               ) : (
-                <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discovery + '20' : colors.bronze + '20' }]}>
+                <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discoverySubtle : colors.bronzeSubtle }]}>
                   <Ionicons
                     name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
                     size={36}
@@ -1112,10 +1112,10 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
   },
   typeBadgeLook: {
-    backgroundColor: colors.discovery + '20',
+    backgroundColor: colors.discoverySubtle,
   },
   typeBadgePoster: {
-    backgroundColor: colors.bronze + '20',
+    backgroundColor: colors.bronzeSubtle,
   },
   typeBadgeText: {
     fontFamily: Typography.family.medium,

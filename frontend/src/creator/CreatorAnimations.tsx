@@ -29,8 +29,8 @@ import { Motion } from '../theme/motionTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 
 // ── Timing presets ─────────────────────────────────────────────────
-const TIMING_SNAP = { duration: 120, easing: Easing.out(Easing.cubic) };
-const TIMING_SHEET = { duration: 280, easing: Easing.out(Easing.cubic) };
+const TIMING_SNAP = { duration: Motion.duration.fast, easing: Easing.out(Easing.cubic) };
+const TIMING_SHEET = { duration: Motion.duration.slow, easing: Easing.out(Easing.cubic) };
 
 // ── PressScale ─────────────────────────────────────────────────────
 // Wraps a Pressable with spring-based scale-on-press feedback.

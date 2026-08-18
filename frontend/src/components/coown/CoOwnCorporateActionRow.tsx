@@ -106,7 +106,7 @@ export function CoOwnCorporateActionRow({
       accessibilityLabel={`${actionCfg.label}, ${statusCfg.label}, ${dateLabel}. ${effectLabel}${amountLabel ? `, ${amountLabel}` : ''}${recordDateLabel ? `, ${recordDateLabel}` : ''}${paymentDateLabel ? `, ${paymentDateLabel}` : ''}`}
     >
       {/* Icon */}
-      <View style={[styles.iconWrap, { backgroundColor: colors.brand + '12' }]}>
+      <View style={[styles.iconWrap, { backgroundColor: colors.brandSubtle }]}>
         <Ionicons name={actionCfg.icon} size={16} color={colors.brand} />
       </View>
 

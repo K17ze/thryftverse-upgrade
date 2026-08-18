@@ -14,6 +14,7 @@ import Reanimated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { isVideoUri } from '../utils/media';
 import { ImageEmptyGraphic } from './ImageEmptyGraphic';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -139,7 +140,7 @@ function CachedImageComponent({
 
     shimmerX.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
         withTiming(-1, { duration: 0 })
       ),
       -1,
@@ -256,7 +257,7 @@ function CachedImageComponent({
     setFailed(true);
     setLoaded(true);
     imageOpacity.value = withTiming(1, { duration: 0 });
-    previewOpacity.value = withTiming(0, { duration: 80 });
+    previewOpacity.value = withTiming(0, { duration: Motion.duration.touch });
     onError?.();
   }, [imageOpacity, previewOpacity, onError]);
 

@@ -1331,7 +1331,7 @@ function createStyles(colors: any) {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
-    backgroundColor: colors.textMuted + '60',
+    backgroundColor: colors.border,
   },
   searchWrap: {
     flexDirection: 'row',

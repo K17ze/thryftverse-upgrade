@@ -104,7 +104,7 @@ export function CoOwnConciergeCTA({
     <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <View style={[styles.iconWrap, { backgroundColor: colors.brand + '12' }]}>
+        <View style={[styles.iconWrap, { backgroundColor: colors.brandSubtle }]}>
           <Ionicons name={config.icon} size={20} color={colors.brand} />
         </View>
         <View style={styles.headerText}>
@@ -144,7 +144,7 @@ export function CoOwnConciergeCTA({
 
       {/* Auction info */}
       {nextAuctionLabel && (
-        <View style={[styles.auctionCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '40' }]}>
+        <View style={[styles.auctionCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
           <View style={styles.auctionHeader}>
             <Ionicons name="time-outline" size={14} color={colors.warning} />
             <Text style={[styles.auctionTitle, { color: colors.warning }]}>Next call auction</Text>

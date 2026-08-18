@@ -40,7 +40,7 @@ export function CoOwnReconciliationBanner({
   if (!isActive) return null;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '30' }]}>
+    <View style={[styles.container, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
       <View style={styles.iconWrap}>
         <Ionicons name="sync-circle-outline" size={18} color={colors.warning} />
       </View>
@@ -57,7 +57,7 @@ export function CoOwnReconciliationBanner({
       {onContactSupport && (
         <Pressable
           onPress={onContactSupport}
-          style={[styles.contactBtn, { borderColor: colors.warning + '40' }]}
+          style={[styles.contactBtn, { borderColor: colors.warningBorder }]}
           accessibilityRole="button"
           accessibilityLabel="Contact support about reconciliation"
         >

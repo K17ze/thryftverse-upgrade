@@ -392,7 +392,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityHint="Create a new group conversation with multiple people"
             accessibilityRole="button"
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
+            <View style={[styles.quickActionIcon, { backgroundColor: colors.brandSubtle }]}>
               <Ionicons name="people-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>
@@ -416,7 +416,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             accessibilityHint="Start a conversation with an AI shopping, styling, or negotiation assistant"
             accessibilityRole="button"
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: colors.brand + '14' }]}>
+            <View style={[styles.quickActionIcon, { backgroundColor: colors.brandSubtle }]}>
               <Ionicons name="chatbubbles-outline" size={20} color={colors.brand} />
             </View>
             <View style={styles.quickActionBody}>

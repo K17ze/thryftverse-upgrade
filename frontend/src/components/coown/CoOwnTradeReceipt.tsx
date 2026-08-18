@@ -135,7 +135,7 @@ export function CoOwnTradeReceipt({
         <View style={styles.productBody}>
           <Text style={[styles.productTitle, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
           <View style={styles.productMeta}>
-            <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUp + '22' : colors.coownDown + '22' }]}>
+            <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUpSubtle : colors.coownDownSubtle }]}>
               <Text style={[styles.sideText, { color: isBuy ? colors.coownUp : colors.coownDown }]} numberOfLines={1}>
                 {isBuy ? 'BUY' : 'SELL'}
               </Text>
@@ -220,7 +220,7 @@ export function CoOwnTradeReceipt({
 
         {/* Max reserved — prominent (full obligation from computeReservation) */}
         {maxReservedLabel && (
-          <View style={[styles.maxReservedRow, { backgroundColor: colors.brand + '12', borderColor: colors.brand + '40' }]}>
+          <View style={[styles.maxReservedRow, { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder }]}>
             <Ionicons name="lock-closed" size={14} color={colors.brand} />
             <Text style={[styles.maxReservedLabel, { color: colors.textMuted }]} numberOfLines={1}>
               {isBuy ? 'MAX 1ZE RESERVED' : 'UNITS RESERVED'}
@@ -258,7 +258,7 @@ export function CoOwnTradeReceipt({
 
       {/* Market & liquidity warning */}
       {marketWarning && (
-        <View style={[styles.warningCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '40' }]}>
+        <View style={[styles.warningCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
           <View style={styles.warningRow}>
             <Ionicons name="warning-outline" size={14} color={colors.warning} />
             <Text style={[styles.warningTitle, { color: colors.warning }]}>Market & liquidity</Text>

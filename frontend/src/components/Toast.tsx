@@ -8,6 +8,7 @@ import { Typography, Radius, Space, Type } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, Easing } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { BottomSheet } from './BottomSheet';
 import { AppButton } from './ui/AppButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -45,8 +46,8 @@ function ToastItem({ id, message, type }: ToastItemProps) {
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    translateY.value = withTiming(0, { duration: reducedMotion ? 0 : 280, easing: Easing.out(Easing.quad) });
-    opacity.value = withTiming(1, { duration: reducedMotion ? 0 : 150 });
+    translateY.value = withTiming(0, { duration: reducedMotion ? 0 : Motion.duration.slow, easing: Easing.out(Easing.quad) });
+    opacity.value = withTiming(1, { duration: reducedMotion ? 0 : Motion.duration.fast });
 
     const timer = setTimeout(() => {
       handleDismiss();
@@ -56,8 +57,8 @@ function ToastItem({ id, message, type }: ToastItemProps) {
   }, [reducedMotion]);
 
   const handleDismiss = () => {
-    translateY.value = withTiming(-60, { duration: reducedMotion ? 0 : 250 });
-    opacity.value = withTiming(0, { duration: reducedMotion ? 0 : 200 }, (finished) => {
+    translateY.value = withTiming(-60, { duration: reducedMotion ? 0 : Motion.duration.slow });
+    opacity.value = withTiming(0, { duration: reducedMotion ? 0 : Motion.duration.normal }, (finished) => {
       if (finished) {
         runOnJS(dismiss)(id);
       }

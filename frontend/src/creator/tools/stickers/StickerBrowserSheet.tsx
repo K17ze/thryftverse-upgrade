@@ -54,6 +54,7 @@ import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { Motion } from '../../../theme/motionTokens';
 import {
   STICKER_CATEGORIES,
   AUTO_STICKER_CATEGORY,
@@ -149,14 +150,14 @@ export function StickerBrowserSheet({
         Animated.spring(underlineLeft, {
           toValue: layout.x,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
         Animated.spring(underlineWidth, {
           toValue: layout.width,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
       ]).start();
     },

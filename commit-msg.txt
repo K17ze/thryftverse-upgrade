@@ -1,0 +1,28 @@
+Validation fixes: hex-alpha elimination, viewer drift removal, offline states, motion tokens
+
+Hex-alpha color elimination (subagent a77358bf):
+- Added 13 new semantic tokens to ThemeContext + colors.ts:
+  Fill: commerceTrustSubtle, discoverySubtle, bronzeSubtle, coownUpSubtle, coownDownSubtle
+  Border: brandBorder, warningBorder, dangerBorder, successBorder, coownUpBorder,
+    coownDownBorder, commerceTrustBorder
+  Scrim: scrimTextTertiary
+- Replaced all 66 hex-alpha concatenation patterns across 30 files with semantic tokens
+- Zero remaining `colors.* + '` patterns in src/
+
+Viewer drift removal + offline/error states (subagent 8c476d0c):
+- liveShoppingApi.ts: removed Math.random() viewer count drift (AGENTS.md §11 violation);
+  now emits initial count once and stays static
+- Added OfflineBanner to 5 screens: LiveShoppingHome, Closet, Settings, OrderDetail,
+  SellerAuctionCentre
+- NotificationsScreen: converted hasShownSyncErrorRef to state, added visible SyncRetryBanner
+- ClosetScreen: added error state for collections sync failure with retry CTA
+
+Motion token discipline (subagent 0817352d):
+- Replaced hardcoded durations in 9 files with Motion.duration.* tokens
+- Replaced hardcoded spring configs in 7 files with Motion.spring.* presets
+- Migrated 3 legacy Animated.spring files to use Motion.spring.indicator values
+- SkeletonLoader shimmer durations left as-is (1600-1800ms) with documented reason
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

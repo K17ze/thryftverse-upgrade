@@ -15,6 +15,7 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -385,7 +386,7 @@ export default function NotificationsScreen() {
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [cursor, setCursor] = React.useState<string | null>(null);
   const [hasMore, setHasMore] = React.useState(false);
-  const hasShownSyncErrorRef = React.useRef(false);
+  const [hasSyncError, setHasSyncError] = React.useState(false);
   const [activeFilter, setActiveFilter] = React.useState<NotificationFilter>('all');
   const [overflowVisible, setOverflowVisible] = React.useState(false);
   const swipeableRefs = React.useRef<Record<string, Swipeable | null>>({});
@@ -404,9 +405,9 @@ export default function NotificationsScreen() {
         setNotifications(items.map(mapEventToCard));
         setCursor(nextCursor);
         setHasMore(!!nextCursor);
-        hasShownSyncErrorRef.current = false;
+        setHasSyncError(false);
       } catch {
-        hasShownSyncErrorRef.current = true;
+        setHasSyncError(true);
       } finally {
         if (!options?.silent) {
           setIsLoading(false);
@@ -453,9 +454,9 @@ export default function NotificationsScreen() {
       setNotifications(items.map(mapEventToCard));
       setCursor(nextCursor);
       setHasMore(!!nextCursor);
-      hasShownSyncErrorRef.current = false;
+      setHasSyncError(false);
     } catch {
-      hasShownSyncErrorRef.current = true;
+      setHasSyncError(true);
     } finally {
       setIsRefreshing(false);
     }
@@ -829,6 +830,18 @@ export default function NotificationsScreen() {
         <OfflineBanner onRetry={() => void handleRefresh()} />
       ) : null}
 
+      {/* Sync error banner — visible when refresh fails but cached notifications exist */}
+      {hasSyncError && notifications.length > 0 ? (
+        <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>
+          <SyncRetryBanner
+            message="Couldn't refresh notifications. Showing cached items."
+            onRetry={() => void syncNotifications()}
+            isRetrying={isLoading}
+            telemetryContext="notifications_sync"
+          />
+        </View>
+      ) : null}
+
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
@@ -879,7 +892,7 @@ export default function NotificationsScreen() {
                 </View>
               ))}
             </View>
-          ) : hasShownSyncErrorRef.current && notifications.length === 0 ? (
+          ) : hasSyncError && notifications.length === 0 ? (
             <EmptyState
               density="compact"
               icon="cloud-offline-outline"

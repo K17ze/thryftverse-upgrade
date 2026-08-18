@@ -504,7 +504,7 @@ export default function MyOrdersScreen() {
 
       {needsActionCount > 0 && !debouncedQuery.trim() && filter.classification === 'all' && (
         <Pressable
-          style={[styles.needsActionBanner, { backgroundColor: colors.brand + '12' }]}
+          style={[styles.needsActionBanner, { backgroundColor: colors.brandSubtle }]}
           onPress={() => setFilter({ classification: 'needs_action', year: null })}
           accessibilityRole="button"
           accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}

@@ -48,7 +48,7 @@ export function CommerceDetailFreshnessBanner({
           styles.container,
           {
             backgroundColor: colors.dangerSubtle,
-            borderColor: colors.danger + '30',
+            borderColor: colors.dangerBorder,
           },
           pressed && { opacity: 0.6 },
         ]}
@@ -105,7 +105,7 @@ export function CommerceDetailFreshnessBanner({
           styles.container,
           {
             backgroundColor: colors.warningSubtle,
-            borderColor: colors.warning + '30',
+            borderColor: colors.warningBorder,
           },
         ]}
       >

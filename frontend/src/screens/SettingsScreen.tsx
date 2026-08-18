@@ -33,6 +33,7 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { FlatRow } from '../components/ui/FlatRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 
@@ -319,6 +320,9 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       }
     >
+      {/* ── Offline banner ── */}
+      <OfflineBanner />
+
       {/* ── INLINE SEARCH — filters settings in-place ── */}
       <View style={{ marginBottom: Space.md }}>
         <AppSearchBar

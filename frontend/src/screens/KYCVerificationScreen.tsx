@@ -293,9 +293,9 @@ export default function KYCVerificationScreen({ navigation }: Props) {
             ("what happens to my data?") before they encounter the camera.
             Research (FinAuth 2026): "Say what you do with the data. Verification
             asks for trust; visible privacy practice earns it back." */}
-        <View style={[styles.privacyBanner, { backgroundColor: colors.commerceTrust + '12', borderBottomColor: colors.commerceTrust + '20' }]}>
+        <View style={[styles.privacyBanner, { backgroundColor: colors.commerceTrustSubtle, borderBottomColor: colors.commerceTrustBorder }]}>
           <View style={styles.privacyBannerContent}>
-            <View style={[styles.privacyIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
+            <View style={[styles.privacyIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
               <Ionicons name="lock-closed" size={16} color={colors.commerceTrust} />
             </View>
             <View style={styles.privacyTextWrap}>

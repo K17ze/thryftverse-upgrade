@@ -233,7 +233,6 @@ export function CutoutPreviewSheet({
   const modeUnderlineXSV = useSharedValue(0);
   const modeUnderlineWSV = useSharedValue(0);
   const modeUnderlineOpacitySV = useSharedValue(0);
-  const UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 
   // ── Reset state when the sheet opens ──────────────────────────────
   useEffect(() => {
@@ -367,12 +366,12 @@ export function CutoutPreviewSheet({
       if (next) {
         const layout = modeTabLayouts.current.get(next);
         if (layout) {
-          modeUnderlineXSV.value = withSpring(layout.x, UNDERLINE_SPRING);
-          modeUnderlineWSV.value = withSpring(layout.width, UNDERLINE_SPRING);
-          modeUnderlineOpacitySV.value = withSpring(1, UNDERLINE_SPRING);
+          modeUnderlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+          modeUnderlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
+          modeUnderlineOpacitySV.value = withSpring(1, Motion.spring.indicator);
         }
       } else {
-        modeUnderlineOpacitySV.value = withSpring(0, UNDERLINE_SPRING);
+        modeUnderlineOpacitySV.value = withSpring(0, Motion.spring.indicator);
       }
       return next;
     });
@@ -387,7 +386,7 @@ export function CutoutPreviewSheet({
         // Leaving refine mode — clear in-progress drawing state.
         setBrushMode(null);
         setCurrentPoints([]);
-        modeUnderlineOpacitySV.value = withSpring(0, UNDERLINE_SPRING);
+        modeUnderlineOpacitySV.value = withSpring(0, Motion.spring.indicator);
       }
       return next;
     });

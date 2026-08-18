@@ -37,7 +37,7 @@ export function CommerceDetailOfflineBanner({
         styles.container,
         {
           backgroundColor: colors.warningSubtle,
-          borderColor: colors.warning + '30',
+          borderColor: colors.warningBorder,
         },
       ]}
     >

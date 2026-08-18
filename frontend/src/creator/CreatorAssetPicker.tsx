@@ -4830,7 +4830,7 @@ function createStyles(colors: ThemeColors) {
   productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, paddingVertical: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   productTabBarContent: { gap: Space.xs, paddingVertical: Space.xs },
   productTab: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingVertical: Space.sm - 2, paddingHorizontal: Space.md, borderRadius: Radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
-  productTabActive: { borderColor: colors.brand, backgroundColor: colors.brand + '14' },
+  productTabActive: { borderColor: colors.brand, backgroundColor: colors.brandSubtle },
   productTabLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
   });
 }

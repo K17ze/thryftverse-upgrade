@@ -113,7 +113,7 @@ export function CoOwnActivityRow({
           <Text style={[styles.amount, { color: colors.textPrimary }]}>{amountLabel}</Text>
         </View>
         <View style={styles.metaRow}>
-          <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUp + '18' : colors.coownDown + '18' }]}>
+          <View style={[styles.sidePill, { backgroundColor: isBuy ? colors.coownUpSubtle : colors.coownDownSubtle }]}>
             <Text style={[styles.sideText, { color: isBuy ? colors.coownUp : colors.coownDown }]}>
               {isBuy ? 'BUY' : 'SELL'}
             </Text>

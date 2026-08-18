@@ -299,7 +299,7 @@ export default function BulkListingScreen({ navigation }: Props) {
             <Text style={[styles.bulkActionText, { color: canPublish ? colors.success : colors.textMuted }]}>Publish all</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.bulkAction, { borderColor: colors.danger + '40' }, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.bulkAction, { borderColor: colors.dangerBorder }, pressed && { opacity: 0.6 }]}
             onPress={clearAll}
             disabled={isPublishing}
             accessibilityRole="button"

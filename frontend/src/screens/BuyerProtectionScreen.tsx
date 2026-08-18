@@ -167,7 +167,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Coverage summary */}
-          <View style={[styles.coverageCard, { backgroundColor: colors.surface, borderColor: isCovered ? colors.success + '40' : colors.border }]}>
+          <View style={[styles.coverageCard, { backgroundColor: colors.surface, borderColor: isCovered ? colors.successBorder : colors.border }]}>
             <View style={styles.coverageHeader}>
               <View style={[styles.coverageIcon, { backgroundColor: isCovered ? colors.successSubtle : colors.surfaceAlt }]}>
                 <Ionicons name="checkmark-circle" size={24} color={isCovered ? colors.success : colors.textMuted} />

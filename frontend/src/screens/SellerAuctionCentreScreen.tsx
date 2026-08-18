@@ -32,6 +32,7 @@ import { CachedImage } from '../components/CachedImage';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { RetryState } from '../components/RetryState';
 import { Space, Radius, Typography, Type, Stroke, Control } from '../theme/designTokens';
 import {
@@ -706,6 +707,9 @@ export default function SellerAuctionCentreScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Offline banner */}
+      <OfflineBanner onRetry={() => void fetchAuctions(false)} />
 
       {/* Single authoritative virtualised list:
           - ListHeaderComponent: summary (scrolls away)

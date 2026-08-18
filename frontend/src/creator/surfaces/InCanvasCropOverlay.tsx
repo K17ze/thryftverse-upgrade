@@ -37,6 +37,7 @@ import Reanimated, {
 import { Space, Radius, Type, FontFamily, Control, Stroke, ZIndex } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
+import { Motion } from '../../theme/motionTokens';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -83,10 +84,6 @@ const HANDLE_VISIBLE = 14;
 const HANDLE_HIT = Control.hit;
 /** Minimum crop region size in normalized coords — prevents collapse. */
 const MIN_CROP = 0.05;
-/** Spring config for ratio-preset snap. */
-const SNAP_SPRING = { damping: 26, stiffness: 380, mass: 0.8 } as const;
-/** Spring for the underline tab indicator. */
-const UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 const TIMING_FADE = { duration: 180, easing: Easing.out(Easing.ease) } as const;
 
 // ── Handle identifiers ───────────────────────────────────────────────
@@ -186,8 +183,8 @@ export function InCanvasCropOverlay({
           underlineXSV.value = layout.x;
           underlineWSV.value = layout.width;
         } else {
-          underlineXSV.value = withSpring(layout.x, UNDERLINE_SPRING);
-          underlineWSV.value = withSpring(layout.width, UNDERLINE_SPRING);
+          underlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+          underlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
         }
       }
 
@@ -252,10 +249,10 @@ export function InCanvasCropOverlay({
       cropW.value = w;
       cropH.value = h;
     } else {
-      cropX.value = withSpring(x, SNAP_SPRING);
-      cropY.value = withSpring(y, SNAP_SPRING);
-      cropW.value = withSpring(w, SNAP_SPRING);
-      cropH.value = withSpring(h, SNAP_SPRING);
+      cropX.value = withSpring(x, Motion.spring.glide);
+      cropY.value = withSpring(y, Motion.spring.glide);
+      cropW.value = withSpring(w, Motion.spring.glide);
+      cropH.value = withSpring(h, Motion.spring.glide);
     }
   };
 

@@ -233,7 +233,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
                       >
                         <View style={styles.orderHeader}>
                           {/* Frequency badge — visual identity */}
-                          <View style={[styles.freqBadge, { backgroundColor: colors.brand + '18' }]}>
+                          <View style={[styles.freqBadge, { backgroundColor: colors.brandSubtle }]}>
                             <Text style={styles.freqBadgeText}>
                               {FREQUENCY_SHORT[order.frequency] ?? order.frequency}
                             </Text>

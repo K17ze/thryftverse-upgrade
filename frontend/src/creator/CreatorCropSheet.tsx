@@ -92,7 +92,6 @@ export function CreatorCropSheet({
   const ratioTabLayouts = useRef<Map<string, { x: number; width: number }>>(new Map());
   const ratioUnderlineXSV = useSharedValue(0);
   const ratioUnderlineWSV = useSharedValue(0);
-  const RATIO_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 
   // ── Load image dimensions on open ────────────────────────────────
   useEffect(() => {
@@ -172,8 +171,8 @@ export function CreatorCropSheet({
         ratioUnderlineXSV.value = layout.x;
         ratioUnderlineWSV.value = layout.width;
       } else {
-        ratioUnderlineXSV.value = withSpring(layout.x, RATIO_UNDERLINE_SPRING);
-        ratioUnderlineWSV.value = withSpring(layout.width, RATIO_UNDERLINE_SPRING);
+        ratioUnderlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+        ratioUnderlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
       }
     }
 

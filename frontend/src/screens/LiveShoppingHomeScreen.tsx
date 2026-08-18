@@ -19,6 +19,7 @@ import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { HorizontalRail } from '../components/HorizontalRail';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { EmptyState } from '../components/EmptyState';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useHaptic } from '../hooks/useHaptic';
@@ -405,6 +406,9 @@ export default function LiveShoppingHomeScreen() {
           />
         }
       >
+        {/* ── Offline banner ── */}
+        <OfflineBanner onRetry={handleRetry} />
+
         {/* ── Header ── */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
@@ -589,7 +593,7 @@ function useStyles() {
           borderRadius: Radius.sm,
           backgroundColor: colors.warningSubtle,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.warning + '40',
+          borderColor: colors.warningBorder,
         },
         demoPillText: {
           fontSize: Type.meta.size - 2,
@@ -614,7 +618,7 @@ function useStyles() {
           borderRadius: Radius.md,
           backgroundColor: colors.warningSubtle,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.warning + '40',
+          borderColor: colors.warningBorder,
         },
         demoBannerText: {
           flex: 1,

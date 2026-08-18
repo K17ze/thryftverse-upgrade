@@ -338,7 +338,7 @@ export default function LoginScreen() {
               {requiresTwoFactor && (
                 <View style={styles.twoFactorGroup}>
                   <View style={styles.twoFactorHeader}>
-                    <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrust + '18' }]}>
+                    <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
                       <Ionicons name="shield-checkmark-outline" size={16} color={colors.commerceTrust} />
                     </View>
                     <Text style={styles.twoFactorTitle} maxFontSizeMultiplier={1.3}>Two-factor authentication</Text>

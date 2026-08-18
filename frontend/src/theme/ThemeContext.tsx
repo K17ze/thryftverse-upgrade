@@ -36,16 +36,31 @@ export interface ThemeColors {
   warning: string;
   /** Subtle warning tint — cautionary surface backgrounds, warning badges. Replaces hex-alpha. */
   warningSubtle: string;
+  /** Border-tint variants for status-colored borders. Replaces hex-alpha border concatenation. */
+  brandBorder: string;
+  warningBorder: string;
+  dangerBorder: string;
+  successBorder: string;
+  coownUpBorder: string;
+  coownDownBorder: string;
+  commerceTrustBorder: string;
   /** Co-Own financial truth — up/down movement only. Per Design.md
    * proposed-semantic: coown-up #1C5631, coown-down #5F1616.
    * Used for price deltas, position P/L, and market direction. */
   coownUp: string;
   coownDown: string;
+  /** Subtle coownUp/coownDown tints — side pills, premium/discount fills. Replaces hex-alpha. */
+  coownUpSubtle: string;
+  coownDownSubtle: string;
   /** Semantic accent colors from Design.md proposed-semantic section.
    * Used for category icon badges and contextual accents — never decorative. */
   social: string;
   discovery: string;
   commerceTrust: string;
+  /** Subtle accent tints — icon-badge fills, category backgrounds. Replaces hex-alpha. */
+  commerceTrustSubtle: string;
+  discoverySubtle: string;
+  bronzeSubtle: string;
   /** Premium accent from Design.md proposed-luxury. Used sparingly for
    * verified status, authenticated value, or curated distinction. */
   antiqueGold: string;
@@ -56,6 +71,8 @@ export interface ThemeColors {
   scrimTextPrimary: string;
   /** Secondary text over media scrims — slightly translucent white. */
   scrimTextSecondary: string;
+  /** Tertiary text/decor over media scrims — low-opacity white for inactive dots. */
+  scrimTextTertiary: string;
   overlay: string;
   input: string;
   inputText: string;
@@ -89,15 +106,28 @@ const DARK_COLORS: ThemeColors = {
   successSubtle: 'rgba(33,86,52,0.10)',
   warning: '#D49454', // Distinct from antiqueGold — warm amber, not gold
   warningSubtle: 'rgba(212,148,84,0.12)',
+  brandBorder: 'rgba(244,240,232,0.20)',
+  warningBorder: 'rgba(212,148,84,0.25)',
+  dangerBorder: 'rgba(155,2,2,0.20)',
+  successBorder: 'rgba(33,86,52,0.20)',
+  coownUpBorder: 'rgba(28,86,49,0.20)',
+  coownDownBorder: 'rgba(95,22,22,0.20)',
+  commerceTrustBorder: 'rgba(74,122,196,0.20)',
   coownUp: '#1C5631',
   coownDown: '#5F1616',
+  coownUpSubtle: 'rgba(28,86,49,0.12)',
+  coownDownSubtle: 'rgba(95,22,22,0.12)',
   social: '#9A6B7A',
   discovery: '#B85566',
   commerceTrust: '#4A7AC4',
+  commerceTrustSubtle: 'rgba(74,122,196,0.10)',
+  discoverySubtle: 'rgba(184,85,102,0.12)',
+  bronzeSubtle: 'rgba(138,106,63,0.12)',
   antiqueGold: '#C9A46A',
   bronze: '#8A6A3F',
   scrimTextPrimary: '#FFFFFF',
   scrimTextSecondary: 'rgba(255,255,255,0.88)',
+  scrimTextTertiary: 'rgba(255,255,255,0.40)',
   overlay: 'rgba(0,0,0,0.6)',
   input: '#1A1A1A',
   inputText: '#FFFFFF',
@@ -131,15 +161,28 @@ const LIGHT_COLORS: ThemeColors = {
   successSubtle: 'rgba(33,86,52,0.08)',
   warning: '#B8742E', // Distinct from antiqueGold — warm amber, not gold
   warningSubtle: 'rgba(184,116,46,0.10)',
+  brandBorder: 'rgba(17,17,17,0.16)',
+  warningBorder: 'rgba(184,116,46,0.20)',
+  dangerBorder: 'rgba(155,2,2,0.16)',
+  successBorder: 'rgba(33,86,52,0.16)',
+  coownUpBorder: 'rgba(28,86,49,0.16)',
+  coownDownBorder: 'rgba(95,22,22,0.16)',
+  commerceTrustBorder: 'rgba(6,72,154,0.16)',
   coownUp: '#1C5631',
   coownDown: '#5F1616',
+  coownUpSubtle: 'rgba(28,86,49,0.10)',
+  coownDownSubtle: 'rgba(95,22,22,0.10)',
   social: '#6B3245',
   discovery: '#7B0E1E',
   commerceTrust: '#06489A',
+  commerceTrustSubtle: 'rgba(6,72,154,0.08)',
+  discoverySubtle: 'rgba(123,14,30,0.10)',
+  bronzeSubtle: 'rgba(138,106,63,0.10)',
   antiqueGold: '#C9A46A',
   bronze: '#8A6A3F',
   scrimTextPrimary: '#FFFFFF',
   scrimTextSecondary: 'rgba(255,255,255,0.88)',
+  scrimTextTertiary: 'rgba(255,255,255,0.40)',
   overlay: 'rgba(0,0,0,0.4)',
   input: '#FFFFFF',
   inputText: '#000000',

@@ -49,6 +49,7 @@ import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { Motion } from '../../../theme/motionTokens';
 import { FontChooserRail } from './FontChooserRail';
 import { CURATED_FONTS, resolveFontPreviewStyle } from './FontRegistry';
 import {
@@ -199,14 +200,14 @@ export function TextEditorSheet({
         Animated.spring(leftVal, {
           toValue: layout.x,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
         Animated.spring(widthVal, {
           toValue: layout.width,
           useNativeDriver: false,
-          stiffness: 300,
-          damping: 30,
+          stiffness: Motion.spring.indicator.stiffness,
+          damping: Motion.spring.indicator.damping,
         }),
       ]).start();
     },

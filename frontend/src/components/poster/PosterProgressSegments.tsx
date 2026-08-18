@@ -117,8 +117,8 @@ export function PosterProgressSegments({
     if (isLoading && !reducedMotion) {
       shimmerSV.value = withRepeat(
         withSequence(
-          withTiming(0.7, { duration: 700, easing: ReEasing.inOut(ReEasing.ease) }),
-          withTiming(0.3, { duration: 700, easing: ReEasing.inOut(ReEasing.ease) }),
+          withTiming(0.7, { duration: Motion.duration.slower, easing: ReEasing.inOut(ReEasing.ease) }),
+          withTiming(0.3, { duration: Motion.duration.slower, easing: ReEasing.inOut(ReEasing.ease) }),
         ),
         -1, // infinite
         false,
@@ -141,11 +141,7 @@ export function PosterProgressSegments({
       activeFillSV.value = 0.5;
     } else if (isEnabled) {
       // Use spring for smooth fill transitions
-      activeFillSV.value = withSpring(clampedProgress, {
-        ...spring.tap as SpringConfig,
-        damping: 26,
-        stiffness: 300,
-      });
+      activeFillSV.value = withSpring(clampedProgress, Motion.spring.indicator as SpringConfig);
     } else {
       activeFillSV.value = clampedProgress;
     }

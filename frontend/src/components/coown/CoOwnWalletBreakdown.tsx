@@ -140,7 +140,7 @@ export function CoOwnWalletBreakdown({
             Settled claim
           </Text>
           {safeguardingPartner && (
-            <View style={[styles.safeguardChip, { backgroundColor: colors.brand + '12' }]}>
+            <View style={[styles.safeguardChip, { backgroundColor: colors.brandSubtle }]}>
               <Ionicons name="lock-closed-outline" size={11} color={colors.brand} />
               <Text style={[styles.safeguardChipText, { color: colors.brand }]} numberOfLines={1}>
                 Safeguarded at {safeguardingPartner}

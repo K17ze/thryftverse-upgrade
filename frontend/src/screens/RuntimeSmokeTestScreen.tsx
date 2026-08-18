@@ -368,7 +368,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.danger + '40',
+    borderColor: colors.dangerBorder,
     marginBottom: Space.md,
     gap: Space.xs,
   },

@@ -32,6 +32,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
+import { Motion } from '../../../theme/motionTokens';
 import { Typography, Type, FontFamily, Space, Radius } from '../../../theme/designTokens';
 import type { CaptionSegment, CaptionStyle, CaptionTrack } from './CaptionTypes';
 
@@ -214,7 +215,7 @@ export const CaptionRenderer = React.memo(function CaptionRenderer({
         opacitySV.value = 1;
       } else {
         opacitySV.value = withTiming(1, {
-          duration: 200,
+          duration: Motion.duration.normal,
           easing: Easing.out(Easing.ease),
         });
       }
@@ -223,7 +224,7 @@ export const CaptionRenderer = React.memo(function CaptionRenderer({
         opacitySV.value = 0;
       } else {
         opacitySV.value = withTiming(0, {
-          duration: 160,
+          duration: Motion.duration.normal,
           easing: Easing.in(Easing.ease),
         });
       }

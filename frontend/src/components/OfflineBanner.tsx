@@ -24,6 +24,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Type, Typography } from '../theme/designTokens';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 
 export interface OfflineBannerProps {
   /** Override the message text */
@@ -51,7 +52,7 @@ export function OfflineBanner({
     }
     return {
       opacity: withTiming(isOffline ? 1 : 0, {
-        duration: 220,
+        duration: Motion.duration.normal,
         easing: Easing.out(Easing.ease),
       }),
     };
@@ -68,7 +69,7 @@ export function OfflineBanner({
           styles.compact,
           {
             backgroundColor: colors.warningSubtle,
-            borderColor: colors.warning + '30',
+            borderColor: colors.warningBorder,
           },
           opacityStyle,
         ]}
@@ -107,8 +108,8 @@ export function OfflineBanner({
         styles.container,
         {
           backgroundColor: colors.warningSubtle,
-          borderTopColor: colors.warning + '30',
-          borderBottomColor: colors.warning + '30',
+          borderTopColor: colors.warningBorder,
+          borderBottomColor: colors.warningBorder,
         },
         opacityStyle,
       ]}

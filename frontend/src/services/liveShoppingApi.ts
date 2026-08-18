@@ -803,14 +803,11 @@ export async function connectToStream(streamId: string): Promise<LiveStream | nu
     }, 6000);
     connection.timers.push(chatTimer);
 
-    // Viewer count drift every 10 seconds (small realistic changes)
-    const viewerTimer = setInterval(() => {
-      if (!connection.isActive) return;
-      const delta = Math.floor(Math.random() * 11) - 3; // -3 to +7
-      connection.viewerCount = Math.max(0, connection.viewerCount + delta);
-      emitEvent(connection, 'viewer_count', { count: connection.viewerCount });
-    }, 10000);
-    connection.timers.push(viewerTimer);
+    // Emit the initial viewer count once — no fabricated drift (AGENTS.md §11).
+    // The demo mode banner already tells users this is simulated; the count
+    // stays static at the session's initial value rather than fabricating
+    // engagement with random changes.
+    emitEvent(connection, 'viewer_count', { count: connection.viewerCount });
 
     // Lot timer countdown every 1 second (for the active lot)
     const lotTimer = setInterval(() => {

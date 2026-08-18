@@ -323,7 +323,7 @@ const createStyles = (
       width: 40,
       height: 5,
       borderRadius: Radius.sm,
-      backgroundColor: colors.textMuted + '80',
+      backgroundColor: colors.border,
     },
     contentWrap: {
       flex: 1,

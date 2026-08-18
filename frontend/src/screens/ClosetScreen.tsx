@@ -29,6 +29,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
 import { FlagshipEmptyGraphic, FlagshipHeader } from '../components/flagship';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { MasonryGrid } from '../components/ProductCardV2';
@@ -488,6 +489,17 @@ export default function ClosetScreen() {
 
     const renderCollectionsContent = () => {
     if (collectionsLoading && collections.length === 0) return renderCollectionsSkeleton();
+    if (collectionsSyncError && collections.length === 0) {
+      return (
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Couldn't load collections"
+          subtitle="Your collections couldn't be synced. Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => void handleRefresh()}
+        />
+      );
+    }
     if (filteredCollections.length === 0) {
       return (
         <EmptyState
@@ -657,6 +669,9 @@ export default function ClosetScreen() {
           />
         }
       >
+        {/* Offline banner */}
+        <OfflineBanner onRetry={() => void handleRefresh()} />
+
         {/* Error banner */}
         {(lastError || collectionsSyncError) && (
           <View style={{ paddingHorizontal: Space.md, marginBottom: Space.sm }}>

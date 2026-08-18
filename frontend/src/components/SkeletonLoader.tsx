@@ -56,6 +56,11 @@ export function SkeletonLoader({ width, height, borderRadius = 8, style, reduced
     }
 
     // Primary wave sweep
+    // NOTE: 1600ms/1800ms durations are intentional long-loop shimmer cycles.
+    // Motion.duration.crawl (600ms) is too fast for a full sweep across the
+    // skeleton width — it would strobe. These remain as documented exceptions
+    // to the motion token system (AGENTS.md §17: "No local magic values unless
+    // interaction physics require them and are documented").
     translateX.value = withRepeat(
       withSequence(
         withTiming(500, { duration: 1600, easing: Easing.inOut(Easing.ease) }),

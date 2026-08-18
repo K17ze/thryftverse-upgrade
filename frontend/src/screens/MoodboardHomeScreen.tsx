@@ -695,7 +695,7 @@ function useStyles() {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
-          backgroundColor: colors.brand + '14',
+          backgroundColor: colors.brandSubtle,
           paddingHorizontal: Space.sm + 2,
           paddingVertical: Space.sm,
           borderRadius: Radius.full,

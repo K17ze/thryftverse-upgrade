@@ -165,7 +165,7 @@ export function CoOwnAssetTile({
               <Text style={[styles.imageFallbackText, { color: colors.textMuted }]}>No photo yet</Text>
             </View>
           )}
-          <View style={[styles.statusPill, { backgroundColor: colors.background + 'E6' }]}>
+          <View style={[styles.statusPill, { backgroundColor: colors.surface }]}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusText, { color: colors.textPrimary }]} numberOfLines={1}>{statusLabel}</Text>
           </View>

@@ -63,7 +63,7 @@ export default function WalletActivityScreen({ navigation }: Props) {
               key={filter.value}
               style={({ pressed }) => [
                 styles.filterChip,
-                selected && { borderColor: colors.brand, backgroundColor: colors.brand + '12' },
+                selected && { borderColor: colors.brand, backgroundColor: colors.brandSubtle },
                 pressed && { opacity: 0.7 },
               ]}
               onPress={() => {

@@ -26,6 +26,7 @@ import {
 } from '../../theme/designTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
+import { Motion } from '../../theme/motionTokens';
 
 export type DiscoveryMode = 'discover' | 'pulse' | 'looks';
 
@@ -90,16 +91,8 @@ export function DiscoveryModeNav({
         indicatorX.value = withTiming(layout.x, { duration: 0 });
         indicatorWidth.value = withTiming(layout.width, { duration: 0 });
       } else {
-        indicatorX.value = withSpring(layout.x, {
-          damping: 24,
-          stiffness: 240,
-          mass: 0.9,
-        });
-        indicatorWidth.value = withSpring(layout.width, {
-          damping: 24,
-          stiffness: 240,
-          mass: 0.9,
-        });
+        indicatorX.value = withSpring(layout.x, Motion.spring.indicator);
+        indicatorWidth.value = withSpring(layout.width, Motion.spring.indicator);
       }
     },
     [reducedMotion, indicatorX, indicatorWidth]

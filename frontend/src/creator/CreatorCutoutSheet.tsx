@@ -106,7 +106,6 @@ export function CreatorCutoutSheet({
   const toolTabLayouts = useRef<Map<Tool, { x: number; width: number }>>(new Map());
   const toolUnderlineXSV = useSharedValue(0);
   const toolUnderlineWSV = useSharedValue(0);
-  const TOOL_UNDERLINE_SPRING = { damping: 20, stiffness: 320, mass: 0.7 } as const;
 
   // ── Load image dimensions ────────────────────────────────────────
   useEffect(() => {
@@ -163,8 +162,8 @@ export function CreatorCutoutSheet({
         toolUnderlineXSV.value = layout.x;
         toolUnderlineWSV.value = layout.width;
       } else {
-        toolUnderlineXSV.value = withSpring(layout.x, TOOL_UNDERLINE_SPRING);
-        toolUnderlineWSV.value = withSpring(layout.width, TOOL_UNDERLINE_SPRING);
+        toolUnderlineXSV.value = withSpring(layout.x, Motion.spring.indicator);
+        toolUnderlineWSV.value = withSpring(layout.width, Motion.spring.indicator);
       }
     }
   }, [tool, haptic, toolHighlightSV, reduceMotion, spring, toolUnderlineXSV, toolUnderlineWSV]);

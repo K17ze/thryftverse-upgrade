@@ -36,6 +36,7 @@ import { parseApiError } from '../lib/apiClient';
 import { getListingCoverUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
 import { CachedImage } from '../components/CachedImage';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { OrderDetailSummary } from '../components/orders/OrderDetailSummary';
 import { OrderTrackingTimeline, TimelineEntry } from '../components/orders/OrderTrackingTimeline';
 import { OrderActionFooter, OrderActionConfig } from '../components/orders/OrderActionFooter';
@@ -1652,6 +1653,9 @@ export default function OrderDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: footerActions.primary || footerActions.secondary ? 100 + insets.bottom : 40 + insets.bottom }]}
       >
+        {/* Offline banner */}
+        <OfflineBanner onRetry={() => { haptics.tap(); void refreshOrder(false); }} />
+
         {/* 2. Current order status and order number */}
         <View style={styles.statusHeader}>
           <Text style={[styles.orderNumber, t.orderNumber]}>ORDER #{shortOrderId}</Text>

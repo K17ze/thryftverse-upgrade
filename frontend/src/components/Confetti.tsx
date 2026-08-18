@@ -10,6 +10,7 @@ import Reanimated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,32 +32,32 @@ function Particle({ x, y, color, delay }: ParticleProps) {
 
   useEffect(() => {
     // Pop out
-    scale.value = withDelay(delay, withTiming(1, { duration: 200 }));
+    scale.value = withDelay(delay, withTiming(1, { duration: Motion.duration.normal }));
 
     // Spread and fall
     translateX.value = withDelay(
       delay,
-      withTiming(x, { duration: 800, easing: Easing.out(Easing.cubic) })
+      withTiming(x, { duration: Motion.duration.crawl, easing: Easing.out(Easing.cubic) })
     );
 
     translateY.value = withDelay(
       delay,
       withSequence(
-        withTiming(-y, { duration: 300, easing: Easing.out(Easing.quad) }),
-        withTiming(height, { duration: 1500, easing: Easing.in(Easing.quad) })
+        withTiming(-y, { duration: Motion.duration.slow, easing: Easing.out(Easing.quad) }),
+        withTiming(height, { duration: Motion.duration.crawl, easing: Easing.in(Easing.quad) })
       )
     );
 
     // Spin
     rotate.value = withDelay(
       delay,
-      withTiming(Math.random() * 720, { duration: 1800 })
+      withTiming(Math.random() * 720, { duration: Motion.duration.crawl })
     );
 
     // Fade out
     opacity.value = withDelay(
       delay + 1000,
-      withTiming(0, { duration: 800 })
+      withTiming(0, { duration: Motion.duration.crawl })
     );
   }, []);
 

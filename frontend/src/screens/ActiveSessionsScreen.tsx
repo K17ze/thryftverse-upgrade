@@ -171,7 +171,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
           </View>
 
         {error && (
-            <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.danger + '30' }]}>
+            <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
               <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
             </View>

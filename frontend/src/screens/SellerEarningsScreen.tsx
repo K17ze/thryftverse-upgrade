@@ -150,7 +150,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
               <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
                 Sale proceeds
               </Text>
-              <View style={[styles.summaryChip, { backgroundColor: colors.brand + '12' }]}>
+              <View style={[styles.summaryChip, { backgroundColor: colors.brandSubtle }]}>
                 <Ionicons name="pricetag-outline" size={11} color={colors.brand} />
                 <Text style={[styles.summaryChipText, { color: colors.brand }]}>Seller balance</Text>
               </View>

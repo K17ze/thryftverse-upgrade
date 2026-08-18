@@ -28,8 +28,8 @@ function resolveTone(tone: StatusPillTone, colors: ThemeColors) {
     case 'active':
     case 'paid':
       return {
-        bg: colors.brand + '12',
-        border: colors.brand + '28',
+        bg: colors.brandSubtle,
+        border: colors.brandBorder,
         text: colors.brand,
         dot: colors.brand,
       };
@@ -38,14 +38,14 @@ function resolveTone(tone: StatusPillTone, colors: ThemeColors) {
     case 'success':
       return {
         bg: colors.successSubtle,
-        border: colors.success + '28',
+        border: colors.successBorder,
         text: colors.success,
         dot: colors.success,
       };
     case 'shipped':
       return {
-        bg: colors.brand + '0A',
-        border: colors.brand + '1A',
+        bg: colors.brandSubtle,
+        border: colors.brandBorder,
         text: colors.textPrimary,
         dot: colors.brand,
       };
@@ -53,7 +53,7 @@ function resolveTone(tone: StatusPillTone, colors: ThemeColors) {
     case 'error':
       return {
         bg: colors.dangerSubtle,
-        border: colors.danger + '25',
+        border: colors.dangerBorder,
         text: colors.danger,
         dot: colors.danger,
       };
